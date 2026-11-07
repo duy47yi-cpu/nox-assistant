@@ -509,9 +509,11 @@
   function initOrb() {
     if (typeof window.JarvisOrb !== 'function') return;
     // Шар 32 px в шапке: плотность ниже, чтобы облако точек не сливалось в пятно (раздел 12 спецификации).
-    const saved = store.get('orbVariant', 'sphere');
+    // Старое имя вида reactor тихо открывает «Ядро».
+    const raw = store.get('orbVariant', null);
+    const saved = raw === 'reactor' ? 'core' : raw;
     const opts = $$('[data-orb-opt]');
-    const variant = opts.some((b) => b.dataset.orbOpt === saved) ? saved : 'sphere';
+    const variant = opts.some((b) => b.dataset.orbOpt === saved) ? saved : defaultOrb();
     orb = new window.JarvisOrb($('#orb'), { density: 0.5, variant });
     const stage = $('#stage');
     // Состояние шара следует за сценой: один источник правды, data-state.
@@ -527,13 +529,15 @@
       b.addEventListener('click', () => setOrbVariant(b.dataset.orbOpt));
     }
     segRadioKeys($('#orbPick'), (b) => setOrbVariant(b.dataset.orbOpt));
-    setOrbVariant(variant);
+    setOrbVariant(variant, false);
     applyOrbAnimation();
     if (reduceMotion && reduceMotion.addEventListener) reduceMotion.addEventListener('change', applyOrbAnimation);
   }
 
-  function setOrbVariant(id) {
-    store.set('orbVariant', id);
+  // Шар по умолчанию — Ядро. Вид, выбранный владельцем, сохраняется и важнее; старая «Обмотка» падает на Ядро.
+  function defaultOrb() { return 'core'; }
+  function setOrbVariant(id, save = true) {
+    if (save) store.set('orbVariant', id);
     if (orb) orb.setVariant(id);
     for (const m of themeOrbs) m.setVariant(id);
     $('#stage').dataset.orb = id; // contour.js перерисовывает вырез по этому атрибуту
@@ -1117,6 +1121,7 @@
     store.set('theme', next);
     const swap = () => {
       window.JarvisTheme.apply(next);
+      if (orb && store.get('orbVariant', null) === null) setOrbVariant(defaultOrb(), false);
       renderTheme();
       refreshOrbColors();
     };
@@ -1796,7 +1801,7 @@
     hideThinking();
     C.thinking = el('div', { class: 'thinking' },
       el('span', { class: 'dots', 'aria-hidden': 'true' }, el('span'), el('span'), el('span')),
-      el('span', { text: 'Думаю' }));
+      el('span', { text: 'Думаю…' }));
     addToTurn(C.thinking);
   }
 
@@ -2264,6 +2269,16 @@
     $('#chatInput').focus();
   }
 
+  // «Объясни, что я обвёл»: ядро прячет окно и даёт обвести рамкой (Esc — отмена), потом вопрос уходит в чат.
+  async function explainRegion() {
+    if (tracker.busy || linkDown()) return;
+    let res;
+    try { res = await call('pickRegion'); } catch (e) { toast('Область не выбрана: ' + errText(e), 'error'); return; }
+    if (!res || res.cancelled) return;
+    if (!res.ok) { toast('Область не выбрана: ' + (res.error || 'ошибка'), 'error'); return; }
+    await sendMessage(`Объясни, что я обвёл на экране (${res.label}): что это и как решить?`);
+  }
+
   // ── Диктовка ──────────────────────────────────────────────────
   // Кнопка микрофона у поля ввода. Мост: dictation:start/stop и события dictation:event
   // ({type:'state'|'text'|'error'}). Распознанное только дописывается в поле — отправляет человек.
@@ -2350,6 +2365,16 @@
     if (DICT.recording) setRecordingHint(); // пересчёт состояний поля мог спрятать подсказку
   }
 
+  // Обращение «Джарвис» без кнопки: сказанное сразу уходит в чат, если Джарвис свободен.
+  function wakeCommand(command) {
+    const cmd = String(command || '').trim();
+    if (!cmd) { toast('Слушаю. Скажите команду после имени.'); return; }
+    if (tracker.busy) { toast('Джарвис занят — голосовая команда не отправлена', 'error'); return; }
+    const ta = $('#chatInput');
+    if (ta) { ta.value = cmd; ta.dispatchEvent(new Event('input', { bubbles: true })); }
+    sendMessage(cmd);
+  }
+
   function onDictationEvent(ev) {
     if (!ev || typeof ev !== 'object') return;
     if (ev.type === 'state' && ev.state === 'listening') setRecordingUI(true);
@@ -2358,6 +2383,7 @@
       setRecordingUI(false); // ошибка запуска приходит без события stopped
       toast(String(ev.message || 'Диктовка не удалась'), 'error');
     } else if (ev.type === 'text') dictationText(ev.text);
+    else if (ev.type === 'wake') wakeCommand(ev.command);
   }
 
   function initDictation() {
@@ -2495,6 +2521,10 @@
       }
     });
     $('#attachBtn').addEventListener('click', pickFiles);
+    if (has('pickRegion')) {
+      const why = 'Объясни, что я обвёл: обвести область экрана';
+      $('#attachBtn').after(el('button', { class: 'icon-btn icon-btn-sm', type: 'button', id: 'regionBtn', title: why, 'aria-label': why, onclick: explainRegion }, icon('target')));
+    }
     $('#feedMore').addEventListener('click', showOlder);
     $('#toBottom').addEventListener('click', () => { C.stick = true; scrollFeed(true); $('#chatInput').focus(); });
     $('#feed').addEventListener('scroll', () => { if (nearBottom()) $('#toBottom').hidden = true; }, { passive: true });
@@ -3087,6 +3117,55 @@
     if (K.draft) renderSteps();
   }
 
+  // Паки: список из ядра, «Установить» ставит команды пака по клику.
+  async function renderPacks() {
+    if (!has('installPack')) return;
+    let box = $('#cmdPacks');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'cmdPacks';
+      box.className = 'set-section';
+      $('#panelMine').appendChild(box);
+    }
+    let packs = [];
+    try {
+      const r = await call('installPack');
+      packs = r && r.ok && Array.isArray(r.packs) ? r.packs : [];
+    } catch (_) { /* список паков не обязателен */ }
+    box.hidden = !packs.length;
+    box.replaceChildren();
+    const h = document.createElement('h2');
+    h.className = 'field-label';
+    h.textContent = 'Паки';
+    box.appendChild(h);
+    for (const p of packs) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const text = document.createElement('p');
+      text.className = 'note';
+      text.textContent = `${p.title} · ${p.total} команд. ${p.description}`;
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-secondary btn-sm';
+      btn.type = 'button';
+      btn.textContent = 'Установить';
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const r = await call('installPack', p.id);
+          if (!r || !r.ok) throw new Error((r && r.error) || 'не получилось');
+          toast(r.added ? `Установлено ${r.added} команд` : 'Уже установлено', r.added ? 'ok' : undefined);
+          await loadCommands();
+        } catch (e) {
+          toast('Не получилось: ' + errText(e), 'error');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+      row.append(text, btn);
+      box.appendChild(row);
+    }
+  }
+
   async function loadCommands() {
     const note = $('#cmdApiNote');
     note.hidden = true;
@@ -3107,6 +3186,7 @@
     }
     $('#cmdNew').disabled = !has('saveCommand');
     renderCmdList();
+    if (!$('#cmdPacks')) renderPacks();
     if (!K.draft) renderEditor();
   }
 

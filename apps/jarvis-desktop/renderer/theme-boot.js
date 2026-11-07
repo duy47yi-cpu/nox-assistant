@@ -4,15 +4,17 @@
 (() => {
   'use strict';
 
-  const IDS = ['dark', 'light', 'graphite', 'lime', 'paper', 'forest', 'wine', 'cobalt', 'aurora', 'ember', 'dawn', 'system'];
+  const IDS = ['dark', 'light', 'graphite', 'lime', 'paper', 'forest', 'wine', 'cobalt', 'aurora', 'ember', 'dawn', 'glass',
+    'liquid', 'liquidday', 'frost', 'gradient', 'gradientday', 'midnight', 'neon', 'starry', 'moonlight', 'sunrise', 'system'];
   const resolve = (id) => {
+    // Убранные темы (archive, tablet, acrylic и их дневные) и мусор тихо открывают «Ночь».
     if (id !== 'system') return IDS.includes(id) ? id : 'dark';
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   };
   const apply = (id) => { document.documentElement.dataset.theme = resolve(id); applyAccent(); };
 
   // Цвета акцента: на тёмных темах светлее, на светлых темнее, чтобы текст и значки акцентом читались (от 4,5:1).
-  const LIGHT_THEMES = ['light', 'lime', 'paper', 'dawn'];
+  const LIGHT_THEMES = ['light', 'lime', 'paper', 'dawn', 'liquidday', 'frost', 'gradientday'];
   const ACCENTS = [
     { id: 'theme', name: 'Как в теме' },
     { id: 'blue', name: 'Синий', dark: '#6AA6FF', light: '#2554C7' },
@@ -20,8 +22,20 @@
     { id: 'green', name: 'Зелёный', dark: '#5EE0A0', light: '#17703F' },
     { id: 'pink', name: 'Розовый', dark: '#FF86BC', light: '#A82B63' },
     { id: 'orange', name: 'Оранжевый', dark: '#FFA55E', light: '#9A4E00' },
+    { id: 'teal', name: 'Бирюзовый', dark: '#4FD6C8', light: '#0E6B63' },
+    { id: 'silver', name: 'Серебро', dark: '#D3DAE2', light: '#3E4752' },
   ];
+  // Значение акцента: id из ACCENTS или свой цвет '#RRGGBB'. Всё прочее — «Как в теме».
+  const normHex = (v) => {
+    const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(v || '').trim());
+    if (!m) return null;
+    const h = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1];
+    return '#' + h.toUpperCase();
+  };
+  const normAccent = (v) => (typeof v === 'string' && ACCENTS.some((x) => x.id === v) ? v : (normHex(v) || 'theme'));
   let accent = 'theme';
+  // Что получилось при последнем применении: просили, поставили, сдвинут ли цвет ради контраста.
+  let accentInfo = { requested: null, applied: null, adjusted: false, direction: null };
 
   // ── Читаемость акцента ────────────────────────────────────────────────
   // Свой цвет не должен уронить контраст: если на фоне выбранной темы акцент как текст
@@ -67,25 +81,32 @@
 
   function applyAccent() {
     const root = document.documentElement;
-    const a = ACCENTS.find((x) => x.id === accent);
+    const custom = normHex(accent);
+    const a = custom ? { id: 'custom', dark: custom, light: custom } : ACCENTS.find((x) => x.id === accent);
     if (!a || a.id === 'theme') {
       root.removeAttribute('data-accent');
       root.style.removeProperty('--user-hue');
       root.style.removeProperty('--user-ink');
+      accentInfo = { requested: null, applied: null, adjusted: false, direction: null };
       return;
     }
     const light = LIGHT_THEMES.includes(root.dataset.theme);
-    const hue = readable(light ? a.light : a.dark, themeBacks());
+    const want = (light ? a.light : a.dark).toUpperCase();
+    const hue = readable(want, themeBacks()).toUpperCase();
     const hueRgb = hexToRgb(hue);
+    const adjusted = hue !== want;
+    accentInfo = { requested: want, applied: hue, adjusted, direction: adjusted ? (luminance(hueRgb) > luminance(hexToRgb(want)) ? 'lighter' : 'darker') : null };
     root.dataset.accent = a.id;
     root.style.setProperty('--user-hue', hue);
     root.style.setProperty('--user-ink', hueRgb ? inkOn(hueRgb) : (light ? '#FFFFFF' : '#0B1018'));
   }
+  // id из ACCENTS или свой цвет HEX. Возвращает, что применилось (accentInfo).
   function setAccent(id) {
-    accent = ACCENTS.some((x) => x.id === id) ? id : 'theme';
+    accent = normAccent(id);
     try { localStorage.setItem('jarvis.accent', JSON.stringify(accent)); } catch { /* нет хранилища */ }
     applyAccent();
     document.dispatchEvent(new Event('jarvis:accent'));
+    return { ...accentInfo };
   }
 
   // ── Свой вид: шрифты, размер текста, скругление, прозрачность панелей, свет за окном, размер шара ──
@@ -112,10 +133,10 @@
   };
   const SIZES = { s: ['Мелкий', 0.92], m: ['Обычный', 1], l: ['Крупный', 1.08], xl: ['Очень крупный', 1.16] };
   const ROUNDS = { s: ['Острое', 0.5], m: ['Обычное', 1], l: ['Мягкое', 1.5] };
-  const PANELS = { s: ['Лёгкие', 2.5], m: ['Обычные', 4], l: ['Плотные', 7], xl: ['Матовые', 11] };
+  const PANELS = { s: ['Лёгкие', 2.5], m: ['Как в теме', 4], l: ['Плотные', 7], xl: ['Матовые', 11] };
   const ORBS = { s: ['Меньше', 0.8], m: ['Обычный', 1], l: ['Больше', 1.15] };
   // Размытие стеклянных поверхностей (поле ввода, диалоги). «Стекло» включает размытие и у панелей.
-  const BLURS = { off: ['Без размытия', 0], m: ['Как сейчас', 20], l: ['Стекло', 28] };
+  const BLURS = { off: ['Без размытия', 0], m: ['Как в теме', 20], l: ['Стекло', 28] };
   // Фон окна: цвет темы с её градиентом или спокойный сплошной.
   const BGS = { theme: ['Как в теме', 'theme'], solid: ['Сплошной', 'solid'] };
   const FS = { '2xs': 11, xs: 12, sm: 13, md: 14, read: 15, lg: 16, xl: 20, '2xl': 24 };
@@ -156,9 +177,12 @@
     r.style.setProperty('--r-md', `${Math.round(8 * q)}px`);
     r.style.setProperty('--r-lg', `${Math.round(12 * q)}px`);
     r.style.setProperty('--r-xl', `${Math.round(16 * q)}px`);
-    r.style.setProperty('--panel-pct', `${(PANELS[look.panel] || PANELS.m)[1]}%`);
+    // «Как в теме» не пишется на корень: плотность панелей и размытие тогда задаёт тема (themes.css).
+    if (look.panel === 'm') r.style.removeProperty('--panel-pct');
+    else r.style.setProperty('--panel-pct', `${(PANELS[look.panel] || PANELS.m)[1]}%`);
     r.style.setProperty('--orb-scale', String((ORBS[look.orb] || ORBS.m)[1]));
-    r.style.setProperty('--glass-blur', `${(BLURS[look.blur] || BLURS.m)[1]}px`);
+    if (look.blur === 'm') r.style.removeProperty('--glass-blur');
+    else r.style.setProperty('--glass-blur', `${(BLURS[look.blur] || BLURS.m)[1]}px`);
     if (look.blur === 'off' || look.blur === 'l') r.dataset.glass = look.blur;
     else delete r.dataset.glass;
     if (look.bg === 'solid') r.dataset.bg = 'solid';
@@ -177,17 +201,22 @@
     applyLook();
     document.dispatchEvent(new Event('jarvis:look'));
   }
+  // «Сбросить к теме»: ручки и свой акцент очищаются, тема остаётся как есть.
+  function resetToTheme() {
+    resetLook();
+    setAccent('theme');
+  }
   try { look = sanitizeLook(JSON.parse(localStorage.getItem('jarvis.look'))); } catch { look = { ...LOOK_DEFAULT }; }
   applyLook();
 
   let saved = 'dark';
   try { saved = JSON.parse(localStorage.getItem('jarvis.theme')) || 'dark'; } catch { /* нет хранилища или мусор */ }
-  try { accent = JSON.parse(localStorage.getItem('jarvis.accent')) || 'theme'; } catch { /* нет хранилища или мусор */ }
+  try { accent = normAccent(JSON.parse(localStorage.getItem('jarvis.accent'))); } catch { /* нет хранилища или мусор */ }
   apply(saved);
   // Мини-окно и главное окно живут в одном хранилище: смена в Настройках доходит и сюда.
   window.addEventListener('storage', (e) => {
     if (e.key === 'jarvis.accent') {
-      try { accent = JSON.parse(e.newValue) || 'theme'; } catch { accent = 'theme'; }
+      try { accent = normAccent(JSON.parse(e.newValue)); } catch { accent = 'theme'; }
       applyAccent();
       document.dispatchEvent(new Event('jarvis:accent'));
       return;
@@ -197,8 +226,8 @@
   });
 
   window.JarvisTheme = {
-    IDS, resolve, apply, ACCENTS, setAccent, getAccent: () => accent,
+    IDS, resolve, apply, ACCENTS, setAccent, getAccent: () => accent, getAccentInfo: () => ({ ...accentInfo }), normHex, MIN_CONTRAST,
     FONTS, SIZES, ROUNDS, PANELS, ORBS, BLURS, BGS, LOOK_DEFAULT, sanitizeLook,
-    contrast, readable, getLook: () => ({ ...look }), setLook, resetLook,
+    contrast, readable, getLook: () => ({ ...look }), setLook, resetLook, resetToTheme,
   };
 })();

@@ -54,6 +54,7 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | Очередь действий на рабочем столе | `src/control/desktop-lock.js` |
 | Рабочий стол и виджеты | `src/desks/store.js`, `src/desks/templates.js`, `src/desks/data.js`, `renderer/desks.js`, каналы `desks:*` в `main.js` |
 | Расширения (буфер, вставки, загрузки) | `src/extensions/`, `renderer/extensions.js`, каналы `clipboard-history:*`, `snippets:*`, `downloads:*` в `main.js` |
+| Паки команд в один клик (Монтаж, Игры, Браузер) | `src/commands/packs.js`; канал `packs:install` в `main.js`, `installPack` в `preload.js`; блок «Паки» в «Командах» — `renderPacks` в `renderer/app.js`; ставятся только по кнопке, при старте не ставятся |
 | Голос: громкость, скорость, выбор голоса | `src/voice/tts.js` (`setOptions`), `renderer/app.js` (`initVoiceOptions`), настройки `voiceVolume`/`voiceRate`/`voiceSpeaker` |
 | Сравнить цены и замеры | `docs/business/plan.md` |
 
@@ -108,18 +109,20 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | `renderer/extensions.js` | Настройки → «Расширения»: история буфера, быстрые вставки, уборка загрузок (анализ и подтверждаемое удаление) |
 | `renderer/account.js` | Вход, лимиты в Настройках, сообщение о паузе |
 | `renderer/model-pick.js` | Выбор модели и мышления у поля ввода |
-| `renderer/orb.js`, `renderer/orb-variants.js` | Шар и его виды |
+| `renderer/orb.js`, `renderer/orb-variants.js` | Шар и его виды: `orb.js` — цикл, состояния, голос (`setVoice`), настройки (`setTune`) и Точечная сфера; `orb-variants.js` — Ядро (по умолчанию) и Диафрагма |
+| `renderer/orb-tune.js` | Настройки → Вид: свои настройки выбранного вида шара (свечение, скорость, движение, объём, голос, плотность точек) в `jarvis.orbTune`, событие `jarvis:orbtune` |
 | `renderer/contour.js` | Контурный фон |
 | `renderer/presence.css` | Вид настольного ассистента: рейка с подписями, крошки в шапке, мягкие панели, чат и сцена с шаром, команды и настройки с правой колонкой; последний слой, цвета из тем |
-| `renderer/accent.js` | Настройки → Вид: строка «Цвет акцента» (кружки), цвет поверх темы через `theme-boot.js` |
-| `renderer/look.js` | Настройки → Вид: шрифты, размер текста, скругление, панели, размер шара, свет за окном, размытие стекла, фон окна; значения хранит `theme-boot.js` (`jarvis.look`) |
+| `renderer/accent.js` | Настройки → Вид: строка «Цвет акцента» (7 кружков и поле HEX), цвет поверх темы через `theme-boot.js`; если контраст ниже 4,5:1, цвет сдвигается и строка под названием говорит, какой взят |
+| `renderer/look.js` | Настройки → Вид: шрифты, размер текста, скругление, панели, размер шара, свет за окном, размытие стекла, фон окна; кнопка «Сбросить к теме» (`resetToTheme`: ручки и свой акцент); значения хранит `theme-boot.js` (`jarvis.look`) |
 | `renderer/connections.js` | Раздел «Подключения»: сервисы MCP из `mcpServers`, добавление, выключение, удаление; вызовы `mcp:state`, `mcp:add`, `mcp:toggle`, `mcp:remove` в `main.js` |
 | `renderer/settings-nav.js` | Настройки: список разделов справа, строится из заголовков карточек |
-| `renderer/theme-boot.js` | Тема и свой цвет акцента (`jarvis.accent`) до первой отрисовки |
+| `renderer/theme-boot.js` | Тема и свой цвет акцента (`jarvis.accent`: id палитры или `#RRGGBB`) до первой отрисовки; убранные темы тихо открывают «Ночь» |
 | `renderer/styles.css` → `renderer/home.css` → `renderer/themes.css` | Стили, каждый следующий важнее |
 | `renderer/fonts/` | Шрифты Inter и IBM Plex Serif с лицензиями OFL; семейства, размеры и веса — в начале `renderer/themes.css` |
 | `renderer/mini.html`, `renderer/mini.js` | Мини-окно |
 | `renderer/dev-stub.js` | Подмена ядра для проверки в браузере |
+| `renderer/region.html`, `renderer/region.js` | Рамка «Объясни, что я обвёл» поверх основного экрана: выделение мышью, Esc — отмена; итог уходит заголовком страницы в `region:pick` (`main.js`) |
 | `renderer/hands.html`, `renderer/hands.css` | Надпись «Nox работает на вашем ПК · Esc — остановить»: плашка поверх окон и `#handsBanner` в главном окне, включает `showHands` в `main.js` |
 
 ### Ядро: `src/`
@@ -144,9 +147,9 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | `src/schedule/` | `src/schedule/scheduler.js`, `src/schedule/store.js` напоминания: список по пространству, правка/перенос, отмена, ежедневный повтор |
 | `src/shortcuts/` | `src/shortcuts/offline.js` короткие фразы без модели: громкость, свернуть окна, таймер, открыть сайт или программу |
 | `src/tasks/` | Исполнитель с мандатом: `src/tasks/executor.js` (отчёт: доказательства, изменения в файлах, тесты, оставшиеся проблемы), `src/tasks/runtime.js` сборка, `src/tasks/mandate.js` границы, `src/tasks/model.js`, `src/tasks/queue.js`, `src/tasks/store.js`, `src/tasks/tools.js`, `src/tasks/verify.js`, `src/tasks/criteria.js`, `src/tasks/attention.js`, `src/tasks/link.js`, `src/tasks/board.js` доска «Центр управления миссиями»: строки задач, сводка и порядок (чистые функции) |
-| `src/commands/` | `src/commands/runner.js` шаги через политику и проверку результата (`commandLabel` без «undefined», выключенная команда не запускается), `CommandRecorder` для записи действий с предупреждениями; `src/commands/store.js` схема команды v2 (папка, коллекции, горячая клавиша, происхождение), экспорт без секретов, импорт с предпросмотром/diff и подтверждением, лимиты; `src/commands/samples.js` готовые примеры |
+| `src/commands/` | `src/commands/runner.js` шаги через политику и проверку результата (`commandLabel` без «undefined», выключенная команда не запускается), `CommandRecorder` для записи действий с предупреждениями; `src/commands/store.js` схема команды v2 (папка, коллекции, горячая клавиша, происхождение), экспорт без секретов, импорт с предпросмотром/diff и подтверждением, лимиты; `src/commands/samples.js` готовые примеры (10: «Работа», «Игра», «Отбой» и группа «Windows» из 7 команд); `src/commands/builder.js` сборка сценария из описания словами (модель внедряется, опасные инструменты запрещены, план без сохранения); `src/commands/packs.js` паки команд (монтаж, игры, браузер) и `seedPackCommands` |
 | `src/library/` | `src/library/index.js`, `src/library/access.js`, `src/library/validator.js` библиотека Python-команд |
-| `src/desks/` | `src/desks/store.js` рабочие столы: раскладка виджетов на пространство в `desks.json`, сетка 12×12, лимиты и атомарная запись; `src/desks/templates.js` типы виджетов и шаблоны (пустой, работа, учёба, игры, медиа, аватар; без выдуманных источников); `src/desks/data.js` чистые состояния виджетов из внедрённых источников (`ok`/`empty`/`error`/`stale`) |
+| `src/desks/` | `src/desks/store.js` рабочие столы: раскладка виджетов на пространство в `desks.json`, сетка 12×12, лимиты и атомарная запись; `src/desks/templates.js` 16 типов виджетов (задачи, сегодня, музыка, погода, курсы, компьютер, программы, аватар, команды, цели, миссии, напоминания, заметки, загрузки, MCP, питомец) и 9 шаблонов (пустой, работа, учёба, игры, медиа, аватар, ночь, разработка, стрим; без выдуманных источников, питомец — только анимация); `src/desks/data.js` чистые состояния виджетов из внедрённых источников (`ok`/`empty`/`error`/`stale`) |
 | `src/extensions/` | `src/extensions/clipboard-history.js` история буфера: пароли, коды и карты не сохраняются, срок хранения, пауза, очистка; `src/extensions/snippets.js` быстрые вставки: уникальные триггеры и текст, вставка только по явному подтверждению; `src/extensions/downloads-cleanup.js` уборка загрузок: анализ и предпросмотр только чтением, удаление только с `confirm` и только внутри папки |
 | `src/inventory/` | `src/inventory/apps.js`, `src/inventory/usage.js`, `src/inventory/consent.js` программы владельца |
 | `src/music/` | `src/music/intent.js`, `src/music/play.js` |
@@ -156,10 +159,10 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | `src/telegram/` | `src/telegram/bridge.js` мост (текст, голосовые, фото, видео и файлы от владельца: скачивание во временную папку, расшифровка голосовых, если передан расшифровщик; ответы «печатает» с делением длинных сообщений; отправка фото и видео владельцу `sendPhoto`/`sendVideo`, `notify` для инициативных сообщений); `src/telegram/policy.js` что можно удалённо и кому можно писать (`mayWriteTo`) |
 | `src/notify/` | `src/notify/watch.js` поводы, о которых Джарвис говорит сам: новые файлы в `workspace/inbox`, зависшие приложения Windows, задачи и миссии, срок напоминания, расход у дневного лимита; тишина ночью и лимит в час |
 | `src/validate/` | `src/validate/connections.js` проверка связей |
-| `src/screen/` | `src/screen/agent.js` агент экрана: «сделай на экране: …», снимок → один шаг → проверка, до 20 шагов |
+| `src/screen/` | `src/screen/region.js` область, обведённая владельцем: проверка рамки (целые координаты, границы экрана, минимум 8×8), приведение к границам, перевод в пиксели снимка, описание словами; `src/screen/agent.js` агент экрана: «сделай на экране: …», снимок → один шаг → проверка, до 40 шагов; опасные шаги (отправить/оплатить/удалить/установить, Enter после ввода) выполняются только после подтверждения владельца, при отказе — `needs_human` без повтора |
 | `src/perception/` | `src/perception/scene.js` единый снимок сцены: окно, элементы с устойчивыми id, фокус, дельта между шагами; чистые функции без ввода-вывода |
-| `src/voice/` | `src/voice/tts.js` локальный голос Silero, повтор проигрывания и остановка; `src/voice/fish.js` голос Fish Audio по HTTP (mp3, ключ `FISH_API_KEY` в `.env`, проигрывание WPF MediaPlayer); `src/voice/dictation.js` диктовка: распознанная речь останавливает текущий ход и остаётся в поле ввода |
-| `src/mcp/` | `src/mcp/client.js` свой клиент MCP (stdio и http), инструменты серверов из `mcpServers` в настройках, без вопроса только имена из `mcpAllow` |
+| `src/voice/` | `src/voice/beep.js` звук «дзинь» после успешной команды окна (WAV через PowerShell, без ожидания ответа; громкость и тихий режим); `src/voice/tts.js` локальный голос Silero, повтор проигрывания и остановка; `src/voice/fish.js` голос Fish Audio по HTTP (mp3, ключ `FISH_API_KEY` в `.env`, проигрывание WPF MediaPlayer); `src/voice/dictation.js` диктовка: распознанная речь останавливает текущий ход и остаётся в поле ввода; `src/voice/wake.js` обращение «Джарвис» в начале сказанного: команда сразу уходит в чат, кулдаун, без дубля в поле ввода |
+| `src/mcp/` | `src/mcp/client.js` свой клиент MCP (stdio и http), инструменты серверов из `mcpServers` в настройках, без вопроса только имена из `mcpAllow`; `src/mcp/catalog.js` курируемый каталог MCP-серверов (36 записей, 11 категорий, без сети; `verified:false` — не проверено) |
 | `src/mail/` | `src/mail/gmail.js` зашифрованный доступ и Gmail API; `src/mail/oauth-loopback.js` — вход через системный браузер и локальный callback; учётные данные `NOX_GMAIL_CLIENT_ID`, `NOX_GMAIL_CLIENT_SECRET` |
 | `src/weather/` | `src/weather/open-meteo.js` погода open-meteo без ключей, кэш 30 минут |
 
@@ -176,13 +179,13 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | `src/tools/install.js` | `app_search`, `app_install`: поиск и установка программ через winget; установка всегда с вопросом (`isInstall` в `src/policy/modes.js`), только в чате |
 | `src/tools/ps-host.js` | Один живой PowerShell для `ui_*`: запрос ~10 мс вместо ~0,4 с на новый процесс |
 | `src/tools/mouse.js` | `mouse_click`, `mouse_scroll`; `units=physical` — настоящие пиксели (так нажимает `desktop_click`), иначе точки снимка |
-| `src/tools/windows.js` | `windows_list`, `windows_focus` |
+| `src/tools/windows.js` | `windows_list`, `windows_focus`, `windows_snap`: прикрепить окно к половине экрана, развернуть или свернуть по названию (title); окна Nox не трогает |
 | `src/tools/windows-close.js` | `windows_close_all`: закрыть окна программ как по крестику, кроме окон Джарвиса и оболочки Windows; только в чате |
 | `src/tools/youtube.js` | `youtube_play`: первое видео по запросу, `start` — с какой секунды (`t=16s`); только в чате |
 | `src/tools/disk.js` | `disk_free_space`, `disk_cleanup_suggest` |
 | `src/tools/desktop.js` | `wait`, `app_close`, `speak`, свернуть окна, выключить монитор |
 | `src/tools/wait.js` | `wait_for` |
-| `src/tools/screen.js` | `screen_look` |
+| `src/tools/screen.js` | `screen_look`; `screen_region_look`: область, которую владелец обвёл кнопкой у поля ввода, только в чате окна, снимок только в памяти |
 | `src/tools/clipboard.js` | Буфер обмена |
 | `src/tools/media.js` | `media_control`: плеер Windows (играть, пауза, следующий) |
 | `src/tools/ocr.js` | `image_read_text`: текст с картинки в рабочей папке (встроенное распознавание Windows); `image_look`: картинка целиком уходит модели — фото, схемы, графики, ошибки на экране (PNG, JPG, WebP, GIF; BMP/TIFF переводятся в JPEG) |
@@ -195,7 +198,7 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | `src/tools/memory.js` | `remember` (с необязательными `source` и `quote` — проверяемая ссылка на файл-источник), `recall` и `memory_about` (показывают источник и его состояние: не менялся, изменился, файла нет), `forget` |
 | `src/tools/reminders.js` | Напоминания |
 | `src/tools/missions.js` | `mission_*`, список, добавление и отмена в пределах текущего пространства |
-| `src/tools/commands.js` | `command_*`: создание из текста с `dryRun: true` (план без сохранения и запуска), каталог настоящих действий `command_list({withParameters:true})` |
+| `src/tools/commands.js` | `command_*`: создание из текста с `dryRun: true` (план без сохранения и запуска), сборка сценария по описанию словами `command_build` (план или сохранение), каталог настоящих действий `command_list({withParameters:true})` |
 | `src/tools/deals.js` | `deals_hanging`, `deal_add`, `deal_clear` |
 | `src/tools/inventory.js` | `apps_*` |
 | `src/tools/skills.js` | `skills_list`, `skill_read` |

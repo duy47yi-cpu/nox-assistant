@@ -17,8 +17,9 @@ function setup(reduced = false) {
   const canvas = { dataset: {}, getContext: () => ctx, closest: () => null,
     getBoundingClientRect: () => ({ width: 180, height: 180 }) };
   let frames = 0;
+  const sprite = () => ({ width: 0, height: 0, getContext: () => ctx });
   const sandbox = { window: { matchMedia: () => query },
-    document: { documentElement: {}, hidden: false, addEventListener() {}, removeEventListener() {} },
+    document: { documentElement: {}, hidden: false, addEventListener() {}, removeEventListener() {}, createElement: sprite },
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
     performance: { now: () => 0 }, requestAnimationFrame: () => ++frames, cancelAnimationFrame() {} };
   vm.runInNewContext(source, sandbox);
@@ -27,21 +28,23 @@ function setup(reduced = false) {
   return { Orb, orb, query, canvas, commands, sandbox, frames: () => frames };
 }
 
-test('сцена рисует точечный шар с орбитами, шаги дают бусины, другие виды доступны', () => {
+test('сцена рисует точечный шар спрайтами, шаги дают бусины, другие виды доступны', () => {
   const { orb, canvas, commands, sandbox, query } = setup();
   canvas.closest = (selector) => selector === '#stageOrb' ? {} : null;
   sandbox.document.body = {};
   orb.variant = 'sphere';
   const arcs = () => commands.filter(([name]) => name === 'arc');
+  const dots = () => commands.filter(([name]) => name === 'drawImage');
   commands.length = 0; orb._draw();
-  // Контурных эллипсов старой сцены нет: точки, орбита и свечение рисуются дугами.
+  // Точки — спрайты через drawImage, без arc на каждую; ореола и декоративной орбиты нет.
   assert.equal(commands.filter(([name]) => name === 'ellipse').length, 0);
-  assert.ok(arcs().length > 200);
+  assert.ok(dots().length > 200);
+  assert.equal(arcs().length, 0);
   query.matches = true; commands.length = 0; orb._onReduce();
-  const still = JSON.stringify(arcs());
+  const still = JSON.stringify(dots());
   const quiet = arcs().length;
   orb.t += 10; commands.length = 0; orb._draw();
-  assert.equal(JSON.stringify(arcs()), still);
+  assert.equal(JSON.stringify(dots()), still);
   // Кольцо шагов: каждый шаг — бусина с подложкой, без шагов кольца нет.
   commands.length = 0; orb.setSteps(['confirmed', 'running']);
   assert.ok(arcs().length > quiet + 100);

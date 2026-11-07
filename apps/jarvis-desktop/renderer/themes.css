@@ -37,6 +37,8 @@ body { font-optical-sizing: auto; }
 
 [data-theme] {
   --bg-image: none;
+  /* Прозрачность панелей и размытие — часть темы. Ручки в Настройках ставят свои значения на корень и перебивают эти. */
+  --panel-pct: 4%; --glass-blur: 20px;
   --hue-deals: var(--hue);
   --hue-journal: var(--hue);
   --hue-commands: var(--hue);
@@ -65,12 +67,13 @@ body, .theme-mini {
 /* ── Основные ──────────────────────────────────────────────── */
 [data-theme="dark"] {
   color-scheme: dark;
-  --g1: #0B1018; --g2: #0B1018; --g3: #0B1018;
-  --bg: #0B1018;
+  /* Тёплый графит: нейтрали с жёлто-бурым оттенком, акцент прежний (по нему окрашено ядро). */
+  --g1: #14120E; --g2: #14120E; --g3: #14120E;
+  --bg: #14120E;
   --bg-image: none;
-  --surface: #111B27; --surface-2: #162333; --surface-3: #223448; --border: #26394B;
-  --text: #F1F6FA; --text-2: #B9C9D7; --text-3: #9BAEC0;
-  --hue: #58D9E8; --accent-ink: #0B1018;
+  --surface: #1C1915; --surface-2: #23201B; --surface-3: #302B24; --border: #3B352C;
+  --text: #F4EFE6; --text-2: #CBC2B3; --text-3: #ABA192;
+  --hue: #58D9E8; --accent-ink: #14120E;
   --hue-deals: #58D9E8; --hue-journal: #58D9E8; --hue-commands: #58D9E8; --hue-settings: #58D9E8;
   --contour: #252C66; --contour-index: #5A68C4;
   --ok: #6EEFA8; --warn: #FFC24D; --err: #FF7F78; --on-stop: #0A0F12;
@@ -78,8 +81,8 @@ body, .theme-mini {
 
 [data-theme="light"] {
   color-scheme: light;
-  --bg: #F3F5F9; --surface: #FFFFFF; --surface-2: #EDF0F6; --surface-3: #E1E6EF; --border: #D6DCE7;
-  --text: #10201F; --text-2: #4A5365; --text-3: #5A6375;
+  --bg: #F4F1EB; --surface: #FFFDF9; --surface-2: #EFEBE3; --surface-3: #E4DED3; --border: #D9D1C3;
+  --text: #17140F; --text-2: #4B4439; --text-3: #5C5447;
   --hue: #2F5FD0; --accent-ink: #FFFFFF;
   --hue-deals: #6A45C9; --hue-journal: #16794F; --hue-commands: #0C6E8C; --hue-settings: #B4336A;
   --contour: #D5DCE8; --contour-index: #AEB9CC;
@@ -188,8 +191,241 @@ body, .theme-mini {
   --scrim: #2A1A2B55; --shadow-pop: 0 8px 24px #2A1A2B24; --shadow-dialog: 0 24px 64px #2A1A2B38;
 }
 
+/* ── Наборы по мотивам Luxify: цвета, фон, прозрачность и размытие одним выбором ──
+ * Цвета свои. Эффекты фона (звёзды, волны, лунный свет, тёплый рассвет) — в разделе «Эффекты фона» ниже. */
+[data-theme="liquid"] {
+  color-scheme: dark;
+  --g1: #070D1C; --g2: #0E2350; --g3: #0A1630;
+  --bg: #0A1428;
+  --bg-image: radial-gradient(70% 60% at 100% 100%, var(--g2), transparent 72%), linear-gradient(170deg, var(--g3), var(--g1) 60%);
+  --surface: #0F1A30; --surface-2: #15223B; --surface-3: #1F2E4A; --border: #2A3B5A;
+  --text: #EAF1FF; --text-2: #B9C7E3; --text-3: #9AABCB;
+  --hue: #7DB4FF; --accent-ink: #07101F;
+  --contour: #14244A; --contour-index: #3A5590;
+  --ok: #8EE8B2; --warn: #FFC24D; --err: #FF8C84; --on-stop: #07101F;
+  --panel-pct: 5%; --glass-blur: 30px;
+}
+
+[data-theme="liquidday"] {
+  color-scheme: light;
+  --g1: #E6EEFB; --g2: #CFE0FA; --g3: #EEF2FA;
+  --bg: #E4ECF8;
+  --bg-image: radial-gradient(70% 60% at 100% 100%, var(--g2), transparent 72%), linear-gradient(170deg, var(--g3), var(--g1) 60%);
+  --surface: #F8FBFF; --surface-2: #EDF2FA; --surface-3: #DCE5F2; --border: #C5D2E6;
+  --text: #0E1A2E; --text-2: #34445E; --text-3: #48586F;
+  --hue: #1F56C2; --accent-ink: #FFFFFF;
+  --contour: #D3DEEF; --contour-index: #A9BCDA;
+  --ok: #1B6E40; --warn: #8A5200; --err: #B0302A; --on-stop: #FFFFFF;
+  --scrim: #0E1A2E55; --shadow-pop: 0 8px 24px #0E1A2E24; --shadow-dialog: 0 24px 64px #0E1A2E38;
+  --panel-pct: 5%; --glass-blur: 30px;
+}
+
+[data-theme="frost"] {
+  color-scheme: light;
+  --g1: #DDE3EA; --g2: #EEF1F5; --g3: #D3DBE5;
+  --bg: #E2E7EE;
+  --bg-image: linear-gradient(150deg, var(--g2), var(--g1) 50%, var(--g3));
+  --surface: #F7F9FB; --surface-2: #ECEFF3; --surface-3: #DDE2E9; --border: #C9D1DB;
+  --text: #121820; --text-2: #3A4552; --text-3: #4E5967;
+  --hue: #2B5C9E; --accent-ink: #FFFFFF;
+  --contour: #D6DCE4; --contour-index: #B0BAC7;
+  --ok: #1D6B3C; --warn: #8F5000; --err: #AE2F2A; --on-stop: #FFFFFF;
+  --scrim: #12182055; --shadow-pop: 0 8px 24px #1218201F; --shadow-dialog: 0 24px 64px #12182033;
+  --panel-pct: 9%; --glass-blur: 40px;
+}
+
+[data-theme="gradient"] {
+  color-scheme: dark;
+  --g1: #140F2E; --g2: #3A1A5E; --g3: #0E3A5C;
+  --bg: #1F1640;
+  --bg-image: radial-gradient(80% 80% at 0% 0%, var(--g2), transparent 70%), radial-gradient(80% 90% at 100% 100%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
+  --surface: #1A1434; --surface-2: #231B42; --surface-3: #29214A; --border: #42386A;
+  --text: #F4F0FF; --text-2: #D3CBEC; --text-3: #B8AFD8;
+  --hue: #C3A2FF; --accent-ink: #160F2E;
+  --hue-deals: #FF9CD0; --hue-journal: #8EE8B2; --hue-commands: #8FD3FF; --hue-settings: #C3A2FF;
+  --contour: #2A2052; --contour-index: #5A4A94;
+  --ok: #8EE8B2; --warn: #FFC24D; --err: #FF9A90; --on-stop: #160F2E;
+}
+
+[data-theme="gradientday"] {
+  color-scheme: light;
+  --g1: #F3E8FF; --g2: #FFE1EE; --g3: #DDEBFF;
+  --bg: #F1E7F8;
+  --bg-image: radial-gradient(80% 80% at 0% 0%, var(--g2), transparent 70%), radial-gradient(80% 90% at 100% 100%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
+  --surface: #FFFFFF; --surface-2: #F6F0FB; --surface-3: #EAE0F3; --border: #D8CAE6;
+  --text: #1E1530; --text-2: #4A3E5E; --text-3: #5A4D6E;
+  --hue: #6A3FC4; --accent-ink: #FFFFFF;
+  --hue-deals: #A8306E; --hue-journal: #1B6E4A; --hue-commands: #1F5F9A; --hue-settings: #6A3FC4;
+  --contour: #E8DCF3; --contour-index: #C8B4DE;
+  --ok: #1B6E40; --warn: #8A4E00; --err: #AE2F2A; --on-stop: #FFFFFF;
+  --scrim: #1E153055; --shadow-pop: 0 8px 24px #1E153024; --shadow-dialog: 0 24px 64px #1E153038;
+}
+
+[data-theme="midnight"] {
+  color-scheme: dark;
+  --g1: #05070D; --g2: #0B1226; --g3: #05070D;
+  --bg: #070A14;
+  --bg-image: radial-gradient(90% 70% at 50% 0%, var(--g2), transparent 75%), linear-gradient(var(--g1), var(--g1));
+  --surface: #0D1220; --surface-2: #131A2B; --surface-3: #1C2438; --border: #273149;
+  --text: #E8ECF5; --text-2: #B3BCD0; --text-3: #95A0B8;
+  --hue: #8AA8FF; --accent-ink: #070A14;
+  --contour: #121A30; --contour-index: #2E3C64;
+  --ok: #8EE8B2; --warn: #FFC24D; --err: #FF8C84; --on-stop: #070A14;
+  --panel-pct: 3%;
+}
+
+[data-theme="neon"] {
+  color-scheme: dark;
+  --g1: #07050F; --g2: #1E0836; --g3: #032029;
+  --bg: #0A0714;
+  --bg-image: radial-gradient(60% 50% at 90% 10%, var(--g2), transparent 72%), radial-gradient(60% 60% at 0% 100%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
+  --surface: #110C1E; --surface-2: #181128; --surface-3: #231A36; --border: #3A2A55;
+  --text: #F5F2FF; --text-2: #CCC4E6; --text-3: #ACA3C9;
+  --hue: #FF6AD5; --accent-ink: #12051A;
+  --hue-deals: #45E6FF; --hue-journal: #7CFFB2; --hue-commands: #45E6FF; --hue-settings: #FF6AD5;
+  --contour: #24123E; --contour-index: #6A2A8C;
+  --ok: #7CFFB2; --warn: #FFD84A; --err: #FF7A8A; --on-stop: #12051A;
+}
+
+[data-theme="starry"] {
+  color-scheme: dark;
+  --g1: #0A1030; --g2: #1B2C6B; --g3: #0D1A40;
+  --bg: #0E1638;
+  --bg-image: radial-gradient(60% 45% at 75% 20%, var(--g2), transparent 70%), radial-gradient(70% 60% at 10% 90%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
+  --surface: #111A3C; --surface-2: #18234A; --surface-3: #222F5A; --border: #2F3E6E;
+  --text: #F1F3FF; --text-2: #C8CFEC; --text-3: #AEB7DC;
+  --hue: #A9C4FF; --accent-ink: #0A1030;
+  --contour: #17245A; --contour-index: #3A4E96;
+  --ok: #8EE8B2; --warn: #FFC24D; --err: #FF9A90; --on-stop: #0A1030;
+}
+
+[data-theme="moonlight"] {
+  color-scheme: dark;
+  --g1: #0B1018; --g2: #1E2A3A; --g3: #0E141E;
+  --bg: #0F1520;
+  --bg-image: radial-gradient(55% 50% at 85% 10%, var(--g2), transparent 72%), linear-gradient(180deg, var(--g3), var(--g1));
+  --surface: #131A26; --surface-2: #1A2230; --surface-3: #252F3F; --border: #313C4E;
+  --text: #EEF2F7; --text-2: #BDC6D3; --text-3: #A0ABBB;
+  --hue: #CFDDF0; --accent-ink: #0F1520;
+  --contour: #1A2333; --contour-index: #3E4C62;
+  --ok: #8EE8B2; --warn: #FFC24D; --err: #FF8C84; --on-stop: #0F1520;
+  --panel-pct: 5%; --glass-blur: 26px;
+}
+
+[data-theme="sunrise"] {
+  color-scheme: dark;
+  --g1: #1A1530; --g2: #4A2238; --g3: #7A3A22;
+  --bg: #2A1A30;
+  --bg-image: radial-gradient(90% 60% at 50% 110%, var(--g3), transparent 72%), radial-gradient(80% 60% at 50% 70%, var(--g2), transparent 80%), linear-gradient(var(--g1), var(--g1));
+  --surface: #22182C; --surface-2: #2C1F36; --surface-3: #3A2944; --border: #523A58;
+  --text: #FFF4EA; --text-2: #F6DFCF; --text-3: #EBCBB8;
+  --hue: #FF9F8C; --accent-ink: #22182C;
+  --contour: #3A2238; --contour-index: #7A4A4A;
+  --ok: #9EE6B4; --warn: #FFE066; --err: #FF8F86; --on-stop: #22182C;
+}
+
+/* Стекло: тот же характер, что «Ночь», но панели, рейка, поле ввода и диалоги — матовое стекло.
+ * Набор целиком: цвета, ровный фон без пятен, прозрачность панелей и размытие. Ручки «Панели» и «Размытие» в Настройках
+ * поверх темы его перебивают, «Как в теме» возвращает эти значения. */
+[data-theme="glass"] {
+  color-scheme: dark;
+  --g1: #0E1217; --g2: #141B24; --g3: #10161C;
+  --bg: #0E1217;
+  --bg-image: linear-gradient(160deg, var(--g2), var(--g1) 55%, var(--g3));
+  --surface: #151B23; --surface-2: #1B232D; --surface-3: #26313D; --border: #2E3A47;
+  --text: #EEF2F6; --text-2: #B7C2CE; --text-3: #98A5B3;
+  --hue: #8FC1F2; --accent-ink: #0E1217;
+  --contour: #1A222C; --contour-index: #3A4A5C;
+  --ok: #8EE8B2; --warn: #FFC24D; --err: #FF8C84; --on-stop: #0E1217;
+  --panel-pct: 6%; --glass-blur: 32px;
+}
+
 /* Фон окна: у градиентных тем цвет лежит на .app */
 .app { background: var(--bg-image), var(--bg); }
+
+/* ── Эффекты фона: свои рисунки на CSS, слабые, под панелями (.rail и .main выше по z-index) ──
+ * Звёзды — «Звёздная ночь», волны — «Жидкое стекло», мягкий свет — «Лунный свет», тёплое небо — «Рассвет»,
+ * медленный перелив — «Градиент», сетка — «Неон». Сплошной фон в «Виде» их убирает; движение выключают
+ * системное «уменьшить движение» и выключатель «Анимации». */
+.theme-fx { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; display: none; }
+.theme-fx::before, .theme-fx::after { content: ""; position: absolute; inset: 0; }
+html:is([data-theme="starry"], [data-theme="liquid"], [data-theme="liquidday"], [data-theme="moonlight"], [data-theme="sunrise"], [data-theme="gradient"], [data-theme="gradientday"], [data-theme="neon"]) .theme-fx { display: block; }
+html[data-bg="solid"] .theme-fx { display: none; }
+
+html[data-theme="starry"] .theme-fx::before {
+  background:
+    radial-gradient(circle at 20% 30%, #FFFFFFD9 0 1px, transparent 1.7px) 0 0 / 173px 151px,
+    radial-gradient(circle at 70% 65%, #FFE7A8CC 0 1.1px, transparent 1.9px) 0 0 / 241px 197px,
+    radial-gradient(circle at 45% 85%, #CFE0FFB3 0 0.8px, transparent 1.4px) 0 0 / 127px 113px;
+  opacity: .55; animation: fxTwinkle 6s ease-in-out infinite alternate;
+}
+html[data-theme="starry"] .theme-fx::after {
+  background:
+    radial-gradient(circle at 60% 20%, #FFFFFFCC 0 0.9px, transparent 1.5px) 0 0 / 211px 167px,
+    radial-gradient(circle at 15% 70%, #FFF3C4B3 0 1.3px, transparent 2.2px) 0 0 / 317px 263px;
+  opacity: .5; animation: fxTwinkle 8s ease-in-out -4s infinite alternate;
+}
+@keyframes fxTwinkle { from { opacity: .2; } to { opacity: .6; } }
+
+/* Волны: одна линия на 1200px, начало и конец совпадают — полоса бесшовно едет по кругу. */
+:root {
+  --fx-wave-dark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='240' viewBox='0 0 1200 240' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%237DB4FF' stroke-width='1.4'%3E%3Cpath stroke-opacity='.30' d='M0 120 C150 60 450 180 600 120 C750 60 1050 180 1200 120'/%3E%3Cpath stroke-opacity='.20' d='M0 150 C150 100 450 200 600 150 C750 100 1050 200 1200 150'/%3E%3Cpath stroke-opacity='.13' d='M0 180 C150 140 450 220 600 180 C750 140 1050 220 1200 180'/%3E%3C/g%3E%3Cpath fill='%233A6FD8' fill-opacity='.10' d='M0 200 C150 170 450 230 600 200 C750 170 1050 230 1200 200 L1200 240 L0 240Z'/%3E%3C/svg%3E");
+  --fx-wave-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='240' viewBox='0 0 1200 240' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%231F56C2' stroke-width='1.4'%3E%3Cpath stroke-opacity='.20' d='M0 120 C150 60 450 180 600 120 C750 60 1050 180 1200 120'/%3E%3Cpath stroke-opacity='.13' d='M0 150 C150 100 450 200 600 150 C750 100 1050 200 1200 150'/%3E%3Cpath stroke-opacity='.08' d='M0 180 C150 140 450 220 600 180 C750 140 1050 220 1200 180'/%3E%3C/g%3E%3Cpath fill='%231F56C2' fill-opacity='.06' d='M0 200 C150 170 450 230 600 200 C750 170 1050 230 1200 200 L1200 240 L0 240Z'/%3E%3C/svg%3E");
+}
+html:is([data-theme="liquid"], [data-theme="liquidday"]) .theme-fx::before {
+  top: auto; height: 42%;
+  background: var(--fx-wave-dark) repeat-x 0 100% / 1200px 100%;
+  animation: fxWave 60s linear infinite;
+}
+html:is([data-theme="liquid"], [data-theme="liquidday"]) .theme-fx::after {
+  top: auto; height: 30%; opacity: .7; transform: scaleX(-1);
+  background: var(--fx-wave-dark) repeat-x 0 100% / 1200px 100%;
+  animation: fxWave 85s linear infinite;
+}
+html[data-theme="liquidday"] .theme-fx::before, html[data-theme="liquidday"] .theme-fx::after { background-image: var(--fx-wave-light); }
+@keyframes fxWave { to { background-position-x: -1200px; } }
+
+/* Лунный свет: мягкое пятно света сверху справа и редкий косой луч; свет медленно дышит. */
+html[data-theme="moonlight"] .theme-fx::before {
+  background: radial-gradient(circle at 84% 12%, #E6EEFA33 0, #DDE7F81A 120px, transparent 420px);
+  animation: fxBreathe 14s ease-in-out infinite alternate;
+}
+html[data-theme="moonlight"] .theme-fx::after {
+  background: linear-gradient(205deg, transparent 30%, #DDE7F80D 42%, transparent 55%);
+}
+@keyframes fxBreathe { from { opacity: .65; } to { opacity: 1; } }
+
+/* Рассвет: тёплое зарево у нижнего края медленно поднимается и садится. */
+html[data-theme="sunrise"] .theme-fx::before {
+  background: radial-gradient(75% 45% at 50% 100%, #FF9A5A3D, #FF6A6A14 55%, transparent 75%);
+  animation: fxRise 20s ease-in-out infinite alternate;
+}
+html[data-theme="sunrise"] .theme-fx::after {
+  background: linear-gradient(0deg, #FFB0701A, transparent 35%);
+}
+@keyframes fxRise { from { transform: translateY(6%); opacity: .7; } to { transform: translateY(0); opacity: 1; } }
+
+/* Градиент: большое цветное пятно медленно плывёт по окну. */
+html:is([data-theme="gradient"], [data-theme="gradientday"]) .theme-fx::before {
+  inset: -20%;
+  background: radial-gradient(35% 35% at 50% 50%, color-mix(in srgb, var(--hue-deals) 16%, transparent), transparent 70%);
+  animation: fxDrift 30s ease-in-out infinite alternate;
+}
+@keyframes fxDrift { from { transform: translate(-18%, -12%); } to { transform: translate(18%, 14%); } }
+
+/* Неон: неподвижная тонкая сетка у нижнего края, гаснет кверху. */
+html[data-theme="neon"] .theme-fx::before {
+  top: 55%;
+  background:
+    linear-gradient(90deg, #FF6AD514 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(0deg, #45E6FF14 1px, transparent 1px) 0 0 / 48px 48px;
+  -webkit-mask-image: linear-gradient(transparent, #000); mask-image: linear-gradient(transparent, #000);
+}
+
+/* Выключатель «Анимации» в Настройках тоже включает reduce (main.js, applyMotion). */
+@media (prefers-reduced-motion: reduce) {
+  .theme-fx::before, .theme-fx::after { animation: none !important; }
+}
 
 /* ── Выбор темы: образец — это те же токены, что и в окне ─────── */
 .theme-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: var(--sp-2); margin-top: var(--sp-2); }
@@ -214,7 +450,22 @@ body, .theme-mini {
 
 /* ── Стекло панели чата ─ контур и фон видны сквозь матовую панель ─ */
 [data-theme] { --glass: 80%; --glass-edge: #FFFFFF24; }
-:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"]) { --glass: 86%; --glass-edge: #FFFFFF99; }
+:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"]) { --glass: 86%; --glass-edge: #FFFFFF99; }
+:is([data-theme="glass"]) { --glass: 64%; --glass-edge: #FFFFFF1F; }
+/* Стеклянные наборы: жидкое — прозрачнее, матовое — плотнее и сильнее размыто. */
+:is([data-theme="liquid"], [data-theme="moonlight"]) { --glass: 62%; --glass-edge: #FFFFFF26; }
+:is([data-theme="liquidday"]) { --glass: 70%; --glass-edge: #FFFFFFB3; }
+:is([data-theme="frost"]) { --glass: 78%; --glass-edge: #FFFFFFCC; }
+html:is([data-theme="liquid"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="moonlight"]):not([data-glass="off"]) {
+  --glass-composer: blur(var(--glass-blur)) saturate(150%);
+  --glass-panel: blur(var(--glass-blur)) saturate(150%);
+  --glass-dialog: blur(var(--glass-blur)) saturate(150%); }
+html:is([data-theme="liquid"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="moonlight"]) .rail { backdrop-filter: var(--glass-panel, none); -webkit-backdrop-filter: var(--glass-panel, none); }
+html[data-theme="glass"]:not([data-glass="off"]) {
+  --glass-composer: blur(var(--glass-blur)) saturate(140%);
+  --glass-panel: blur(var(--glass-blur)) saturate(140%);
+  --glass-dialog: blur(var(--glass-blur)) saturate(140%); }
+html[data-theme="glass"] .rail { backdrop-filter: var(--glass-panel, none); -webkit-backdrop-filter: var(--glass-panel, none); }
 .convo {
   background: color-mix(in srgb, var(--surface) var(--glass), transparent);
   border-color: var(--glass-edge);

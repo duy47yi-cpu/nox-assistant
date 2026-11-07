@@ -29,7 +29,7 @@ function setup(reduced = false) {
   let cancelled = 0;
   const sandbox = {
     window: { matchMedia: () => query },
-    document: { documentElement: {}, hidden: false, addEventListener() {}, removeEventListener() {} },
+    document: { documentElement: {}, hidden: false, addEventListener() {}, removeEventListener() {}, createElement: () => ({ getContext: () => ctx }) },
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
     performance: { now: () => 0 },
     requestAnimationFrame: () => ++frames,

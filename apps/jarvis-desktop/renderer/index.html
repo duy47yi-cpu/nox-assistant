@@ -19,6 +19,7 @@
   <script src="shared.js" defer></script>
   <script src="orb.js" defer></script>
   <script src="orb-variants.js" defer></script>
+  <script src="orb-tune.js" defer></script>
   <script src="contour.js" defer></script>
   <script src="cmd-steps.js" defer></script>
   <script src="desks.js" defer></script>
@@ -35,6 +36,8 @@
   <!-- Пока Джарвис управляет ПК (событие hands из main.js): надпись и подсказка Esc. -->
   <div class="hands-banner" id="handsBanner" hidden><div class="hands-pill" role="status"><span class="hands-dot" aria-hidden="true"></span><span class="hands-text">Nox работает на вашем ПК</span><span class="hands-sep" aria-hidden="true">·</span><kbd>Esc</kbd><span class="hands-hint">— остановить</span></div></div>
   <div class="app" id="app">
+    <!-- Эффект фона темы (звёзды, волны, лунный свет, рассвет): только рисунок, под панелями, правила в themes.css. -->
+    <div class="theme-fx" aria-hidden="true"></div>
 
     <!-- ── Левая панель: три раздела ──────────────────────────── -->
     <nav class="rail" aria-label="Разделы">
@@ -120,10 +123,14 @@
                 </svg>
                 <div id="stageOrb"></div>
               </div>
-              <div class="scene-chips" role="group" aria-label="Начать поручение"><button type="button" data-scene-draft="Помоги составить план на сегодня"><span data-icon="calendar" aria-hidden="true"></span>Планирую</button><button type="button" data-scene-draft="Найди информацию о "><span data-icon="search" aria-hidden="true"></span>Ищу</button><button type="button" data-scene-draft="Напомни мне "><span data-icon="clock" aria-hidden="true"></span>Напоминаю</button></div>
+              <ol class="scene-list" aria-label="Начать поручение">
+                <li><button type="button" data-scene-draft="Помоги составить план на сегодня"><span class="scene-idx" aria-hidden="true">01</span><span class="scene-act">Составить план на сегодня</span><span class="scene-go" aria-hidden="true">→</span></button></li>
+                <li><button type="button" data-scene-draft="Найди информацию о "><span class="scene-idx" aria-hidden="true">02</span><span class="scene-act">Найти информацию</span><span class="scene-go" aria-hidden="true">→</span></button></li>
+                <li><button type="button" data-scene-draft="Напомни мне "><span class="scene-idx" aria-hidden="true">03</span><span class="scene-act">Поставить напоминание</span><span class="scene-go" aria-hidden="true">→</span></button></li>
+              </ol>
               <div class="quick" id="quickChips" role="group" aria-label="Готовые фразы"></div>
             </div>
-            <p class="scene-name">ДЖАРВИС</p>
+            <p class="scene-name">Джарвис</p>
             <div id="stageStatus"><p class="status-main" id="sceneTitle">Готов помочь</p><p class="status-sub" id="sceneSubtitle">Ожидает задачу</p></div>
             <section class="scene-today" aria-labelledby="todayTitle"><h2 id="todayTitle">СЕГОДНЯ</h2><ul id="todayList"><li>Расписание появится из ваших поручений</li></ul></section>
             <ol class="chain" id="chain" aria-label="Шаги поручения"></ol>
@@ -197,8 +204,14 @@
               <div class="feed-col">
                 <button class="btn btn-ghost btn-sm feed-more" type="button" id="feedMore" hidden>Показать раньше</button>
                 <div class="chat-empty" id="chatEmpty">
+                  <p class="empty-kicker">Новый разговор</p>
                   <h2>С чего начнём?</h2>
                   <p>Поручите Джарвису задачу. Здесь появятся ответ, выполненные шаги и проверка результата.</p>
+                  <ol class="empty-legend" aria-label="Что появится в разговоре">
+                    <li><span class="empty-idx" aria-hidden="true">01</span><b>Ответ</b><span>что Джарвис сделал или нашёл</span></li>
+                    <li><span class="empty-idx" aria-hidden="true">02</span><b>Шаги</b><span>каждое действие по порядку</span></li>
+                    <li><span class="empty-idx" aria-hidden="true">03</span><b>Проверка</b><span>подтверждено дело или нет</span></li>
+                  </ol>
                   </div>
                 <div class="feed-list" id="feedList"></div>
               </div>
@@ -604,16 +617,27 @@
                   <button type="button" class="theme-opt" role="radio" data-theme-opt="cobalt" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="cobalt" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Кобальт</button>
                   <button type="button" class="theme-opt" role="radio" data-theme-opt="aurora" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="aurora" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Сияние</button>
                   <button type="button" class="theme-opt" role="radio" data-theme-opt="ember" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="ember" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Закат</button>
-                  <button type="button" class="theme-opt" role="radio" data-theme-opt="dawn" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="dawn" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Рассвет</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="dawn" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="dawn" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Пастель</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="glass" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="glass" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Стекло</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="liquid" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="liquid" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Жидкое стекло</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="liquidday" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="liquidday" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Жидкое стекло, день</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="frost" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="frost" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Матовое стекло</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="gradient" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="gradient" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Градиент</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="gradientday" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="gradientday" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Градиент, день</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="midnight" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="midnight" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Полночь</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="neon" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="neon" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Неон</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="starry" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="starry" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Звёздная ночь</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="moonlight" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="moonlight" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Лунный свет</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="sunrise" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="sunrise" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Рассвет</button>
                   <button type="button" class="theme-opt" role="radio" data-theme-opt="system" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="system" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Как в системе</button>
                 </div>
               </div>
               <div class="set-row orb-pick-row">
                 <span class="set-text"><span class="set-name" id="orbPickLabel">Вид шара</span><span class="set-hint">Только на этом компьютере</span></span>
                 <div class="orb-pick" id="orbPick" role="radiogroup" aria-labelledby="orbPickLabel">
-                  <button type="button" class="orb-opt" role="radio" data-orb-opt="sphere" aria-checked="false"><canvas aria-hidden="true"></canvas>Сфера</button>
+                  <button type="button" class="orb-opt" role="radio" data-orb-opt="core" aria-checked="false"><canvas aria-hidden="true"></canvas>Ядро</button>
                   <button type="button" class="orb-opt" role="radio" data-orb-opt="iris" aria-checked="false"><canvas aria-hidden="true"></canvas>Диафрагма</button>
-                  <button type="button" class="orb-opt" role="radio" data-orb-opt="coil" aria-checked="false"><canvas aria-hidden="true"></canvas>Обмотка</button>
+                  <button type="button" class="orb-opt" role="radio" data-orb-opt="sphere" aria-checked="false"><canvas aria-hidden="true"></canvas>Точечная сфера</button>
                 </div>
               </div>
               <label class="set-row">

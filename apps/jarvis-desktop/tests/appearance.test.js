@@ -90,8 +90,9 @@ test('сброс возвращает вид по умолчанию и убир
   T.resetLook();
   assert.equal(store.has('jarvis.look'), false);
   assert.equal(root.style.getPropertyValue('--fs-md'), '14px');
-  assert.equal(root.style.getPropertyValue('--panel-pct'), '4%');
-  assert.equal(root.style.getPropertyValue('--glass-blur'), '20px');
+  // «Как в теме»: плотность панелей и размытие не пишутся на корень, их задаёт тема.
+  assert.equal(root.style.getPropertyValue('--panel-pct'), '');
+  assert.equal(root.style.getPropertyValue('--glass-blur'), '');
   assert.equal(root.dataset.bg, undefined);
   assert.equal(root.dataset.glass, undefined);
   for (const key of ['ui', 'head', 'reply', 'size', 'round', 'panel', 'orb', 'blur', 'bg', 'glow']) {
@@ -148,4 +149,85 @@ test('свой акцент читается на каждой теме: тек�
     assert.equal(root.dataset.accent, undefined, 'возврат «как в теме» снимает подмену');
     assert.equal(props['--user-hue'], undefined);
   }
+});
+
+test('убранная тема (archive, tablet, acrylic) тихо открывает «Ночь»', () => {
+  for (const id of ['archive', 'archiveday', 'tablet', 'tabletday', 'acrylic', 'acrylicday']) {
+    const { T, root } = boot({ 'jarvis.theme': JSON.stringify(id) });
+    assert.equal(root.dataset.theme, 'dark', id);
+    assert.ok(!T.IDS.includes(id), id);
+  }
+});
+
+test('палитра акцента: от 6 до 8 цветов', () => {
+  const { T } = boot();
+  const colors = T.ACCENTS.filter((a) => a.id !== 'theme');
+  assert.ok(colors.length >= 6 && colors.length <= 8, String(colors.length));
+});
+
+test('свой цвет HEX: проверка кода, контраст от 4,5:1 на каждой теме и честное пояснение', () => {
+  const { T } = boot();
+  assert.equal(T.normHex('3a7bd5'), '#3A7BD5');
+  assert.equal(T.normHex('#abc'), '#AABBCC');
+  for (const bad of ['', '#12345', 'синий', '#GGGGGG', null]) assert.equal(T.normHex(bad), null, String(bad));
+  // Трудные цвета: почти чёрный, почти белый, жёлтый, средний серый, тёмно-синий.
+  const hard = ['#111111', '#FAFAFA', '#FFFF00', '#777777', '#000080', '#3A7BD5'];
+  for (const [id, tokens] of Object.entries(themes)) {
+    for (const want of hard) {
+      const { T: t, props, root, setTokens } = boot();
+      setTokens(id);
+      t.apply(id);
+      const info = t.setAccent(want);
+      const hue = props['--user-hue'];
+      assert.equal(root.dataset.accent, 'custom');
+      assert.equal(info.requested, want);
+      assert.equal(info.applied, hue.toUpperCase());
+      assert.equal(info.adjusted, hue.toUpperCase() !== want, `${id}/${want}: флаг сдвига`);
+      if (info.adjusted) assert.ok(['lighter', 'darker'].includes(info.direction));
+      for (const back of ['bg', 'surface', 'surface-2', 'surface-3']) {
+        if (!tokens[back]) continue;
+        const r = ratio(hue, tokens[back]);
+        assert.ok(r >= 4.5, `${id}/${want}: ${hue} на ${back} = ${r.toFixed(2)}`);
+      }
+      assert.ok(ratio(hue, props['--user-ink']) >= 4.5, `${id}/${want}: подпись на плашке`);
+    }
+  }
+  // Подходящий цвет не трогается.
+  const ok = boot();
+  ok.setTokens('dark');
+  ok.T.apply('dark');
+  const info = ok.T.setAccent('#9FD3FF');
+  assert.equal(info.adjusted, false);
+  assert.equal(ok.props['--user-hue'], '#9FD3FF');
+});
+
+test('свой цвет сохраняется, а мусор в хранилище — «Как в теме»', () => {
+  const { T, store } = boot();
+  T.setAccent('#3a7bd5');
+  assert.equal(JSON.parse(store.get('jarvis.accent')), '#3A7BD5');
+  const again = boot({ 'jarvis.accent': JSON.stringify('#3A7BD5') });
+  assert.equal(again.T.getAccent(), '#3A7BD5');
+  assert.equal(again.root.dataset.accent, 'custom');
+  const junk = boot({ 'jarvis.accent': JSON.stringify('нет-такого') });
+  assert.equal(junk.T.getAccent(), 'theme');
+  assert.equal(junk.root.dataset.accent, undefined);
+});
+
+test('«Сбросить к теме» очищает ручки и свой акцент, тема остаётся', () => {
+  const { T, root, store, props } = boot({ 'jarvis.theme': JSON.stringify('lime') });
+  T.setLook({ size: 'xl', panel: 'xl', blur: 'l', bg: 'solid', round: 's' });
+  T.setAccent('#FF0000');
+  assert.equal(root.dataset.accent, 'custom');
+  T.resetToTheme();
+  assert.equal(root.dataset.theme, 'lime', 'тема не меняется');
+  assert.equal(store.has('jarvis.look'), false);
+  assert.equal(JSON.parse(store.get('jarvis.accent')), 'theme');
+  assert.equal(root.dataset.accent, undefined);
+  assert.equal(props['--user-hue'], undefined);
+  assert.equal(props['--panel-pct'], undefined);
+  assert.equal(props['--glass-blur'], undefined);
+  assert.equal(root.dataset.glass, undefined);
+  assert.equal(root.dataset.bg, undefined);
+  assert.equal(props['--fs-md'], '14px');
+  assert.equal(T.getAccentInfo().applied, null);
 });

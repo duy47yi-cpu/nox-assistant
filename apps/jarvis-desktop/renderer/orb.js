@@ -1,4 +1,7 @@
-/* Джарвис — шар состояния: сфера из светящихся точек на canvas 2D, без колец.
+/* Джарвис — шар состояния на canvas 2D. Здесь общий цикл (состояния, переходы, кадры, голос, настройки)
+ * и вид «Точечная сфера» (ключ sphere): точки-спрайты (drawImage), объём даёт свет — ключевой сверху
+ * слева, блик и контровой край, задняя половина тусклая. Ядро и Диафрагма — в orb-variants.js.
+ * Голос: setVoice(0..1) — уровень от источника звука; настройки вида: setTune() и событие jarvis:orbtune.
  *
  * Состояния (ключи): idle, listening, thinking, searching, speaking, acting,
  * verifying, waiting_approval, success, cancelled, error. Планирование — это thinking,
@@ -103,6 +106,12 @@
   const TAU = Math.PI * 2;
   const WAVE_LIFE = 0.6;   // жизнь кольцевой волны, с
   const SETTLE = 0.13;     // постоянная времени перехода, с (~400 мс до 95 %)
+  // Настройки вида по умолчанию; свои значения владельца приходят из orb-tune.js (window.JarvisOrbTune).
+  const TUNE = { glow: 1, speed: 1, motion: 1, depth: 1, voice: true, voiceGain: 1, density: 1 };
+  const LV = 6;            // ступеней яркости у спрайта точки: от тени к блику
+  // Ключевой свет сверху слева и полувектор к зрителю для блика: объём точечной сферы.
+  const KEY = (() => { const v = [-0.5, -0.62, 0.6], d = Math.hypot(...v); return v.map((q) => q / d); })();
+  const HALF = (() => { const v = [KEY[0], KEY[1], KEY[2] + 1], d = Math.hypot(...v); return v.map((q) => q / d); })();
 
   const reduceQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 
@@ -122,16 +131,6 @@
   }
 
   const lerp = (a, b, k) => a + (b - a) * k;
-  // Поворот оттенка, как CSS hue-rotate: из одного цвета темы получается цветовая гамма шара.
-  function hueRotate(col, deg) {
-    const a = deg * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a);
-    const m = [
-      0.213 + cs * 0.787 - sn * 0.213, 0.715 - cs * 0.715 - sn * 0.715, 0.072 - cs * 0.072 + sn * 0.928,
-      0.213 - cs * 0.213 + sn * 0.143, 0.715 + cs * 0.285 + sn * 0.140, 0.072 - cs * 0.072 - sn * 0.283,
-      0.213 - cs * 0.213 - sn * 0.787, 0.715 - cs * 0.715 + sn * 0.715, 0.072 + cs * 0.928 + sn * 0.072,
-    ];
-    return [0, 1, 2].map((i) => Math.max(0, Math.min(255, col[0] * m[i * 3] + col[1] * m[i * 3 + 1] + col[2] * m[i * 3 + 2])));
-  }
   const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
   const smooth = (v) => v * v * (3 - 2 * v);
   const rgba = (r, g, b, a) => `rgba(${r | 0},${g | 0},${b | 0},${clamp01(a).toFixed(3)})`;
@@ -197,10 +196,16 @@
       for (const s of STATES) this.weights[s] = s === 'idle' ? 1 : 0;
       this.mix = { ...MOTION.idle };
 
+      this.voiceTarget = 0; // уровень голоса 0..1 от источника звука (setVoice)
+      this.voice = 0;       // сглаженный уровень
+      this.voiceAt = -10;
+
       this._frame = this._frame.bind(this);
       this._onVisibility = () => this._sync();
       this._onReduce = () => this._sync();
+      this._onTune = () => { this._loadTune(); this._draw(); };
 
+      this._loadTune();
       this._readColors();
       this.color = this.colors.idle.slice();
 
@@ -215,6 +220,7 @@
       if (this.io) this.io.observe(canvas);
 
       document.addEventListener('visibilitychange', this._onVisibility);
+      document.addEventListener('jarvis:orbtune', this._onTune);
       if (reduceQuery && reduceQuery.addEventListener) reduceQuery.addEventListener('change', this._onReduce);
 
       this._resize();
@@ -224,8 +230,36 @@
 
     setVariant(id) {
       this.variant = id;
+      this._loadTune();
       this._publishHole();
       this._draw();
+    }
+
+    // Свои настройки вида: свечение, скорость, сила движения, объём, голос, плотность точек.
+    setTune(next) {
+      const t = { ...TUNE, ...(next || {}) };
+      const rebuild = this.tune && t.density !== this.tune.density && this.w > 1;
+      this.tune = t;
+      if (rebuild) this._buildPoints();
+      this._draw();
+    }
+
+    _loadTune() {
+      const src = typeof window !== 'undefined' && window.JarvisOrbTune;
+      const own = src && typeof src.get === 'function' ? src.get(this.variant) : null;
+      if (!this.tune) this.tune = { ...TUNE, ...(own || {}) };
+      else this.setTune(own);
+    }
+
+    // Уровень голоса 0..1 от источника звука. Без новых значений 0,3 с уровень сам уходит в ноль.
+    setVoice(level) {
+      const v = Number(level);
+      this.voiceTarget = Number.isFinite(v) ? clamp01(v) : 0;
+      this.voiceAt = this.t;
+    }
+
+    _voiceOut() {
+      return this.tune.voice ? this.voice * this.tune.voiceGain : 0;
     }
 
     // Контурные линии (contour.js) вырезают под шаром ровно этот радиус.
@@ -323,6 +357,7 @@
       if (this.ro) this.ro.disconnect();
       if (this.io) this.io.disconnect();
       document.removeEventListener('visibilitychange', this._onVisibility);
+      document.removeEventListener('jarvis:orbtune', this._onTune);
       if (reduceQuery && reduceQuery.removeEventListener) reduceQuery.removeEventListener('change', this._onReduce);
     }
 
@@ -376,10 +411,11 @@
       this._sync();
     }
 
-    // Точки по спирали Фибоначчи; число зависит от размера холста.
+    // Точки по спирали Фибоначчи; число зависит от размера холста и настройки «Плотность точек».
+    // Точки крупные (спрайты 3–5 px на 180 px), поэтому их меньше, чем было: форму держит свет, а не дымка.
     _buildPoints() {
       const size = Math.min(this.w, this.h);
-      const n = Math.round(Math.max(180, Math.min(1300, (size * size) / 130)) * this.density);
+      const n = Math.round(Math.max(90, Math.min(700, (size * size) / 75)) * this.tune.density);
       const golden = Math.PI * (3 - Math.sqrt(5));
       const pts = new Array(n);
       for (let i = 0; i < n; i++) {
@@ -400,8 +436,7 @@
       this.points = pts;
       this.buf = {
         sx: new Float32Array(n), sy: new Float32Array(n), s: new Float32Array(n),
-        a: new Float32Array(n), hi: new Float32Array(n), z: new Float32Array(n),
-        r: new Float32Array(n), g: new Float32Array(n), b: new Float32Array(n),
+        a: new Float32Array(n), z: new Float32Array(n), lv: new Uint8Array(n),
       };
     }
 
@@ -448,21 +483,26 @@
         this.mix[key] = v / (sum || 1);
       }
 
-      this.ay += dt * this.mix.spin * TAU;
+      // «Скорость» из настроек ускоряет только движение; переходы цвета и состояний идут с прежним темпом.
+      const dm = dt * this.tune.speed;
+      this.ay += dm * this.mix.spin * TAU;
       const typing = this.state === 'idle' || this.state === 'listening' ? this.life.energy : 0;
-      this.breath += dt * TAU * (1 + typing * 1.4) / Math.max(0.6, this.mix.period);
-      this.gather += dt * TAU / 2.0;
-      this.actT += dt;
-      this.scanT += dt;
-      this.arcT += dt * (1.2 + 1.6 * this.weights.thinking);
+      this.breath += dm * TAU * (1 + typing * 1.4) / Math.max(0.6, this.mix.period);
+      this.gather += dm * TAU / 2.0;
+      this.actT += dm;
+      this.scanT += dm;
+      this.arcT += dm * (1.2 + 1.6 * this.weights.thinking);
       this.stepsAmt = lerp(this.stepsAmt, this.steps.length ? 1 : 0, 1 - Math.exp(-dt / 0.35));
 
-      // Между порциями текста волны редкие.
-      if (this.state === 'speaking' && this.t - this.lastWave > 1.5) this.pulse(0.45);
+      // Голос: быстрая атака, мягкий спад; источник замолчал — уровень уходит в ноль.
+      if (this.t - this.voiceAt > 0.3) this.voiceTarget = 0;
+      this.voice = lerp(this.voice, this.voiceTarget, 1 - Math.exp(-dt / (this.voiceTarget > this.voice ? 0.05 : 0.18)));
+
+      // Волны только от настоящих порций ответа (pulse); таймера «говорит» нет.
       this.waves = this.waves.filter((w) => this.t - w.t0 < WAVE_LIFE);
 
       this.kick *= Math.exp(-dt / 0.35);
-      this.clock += dt * (1 + 2.6 * this._work()) * (1 - this.weights.waiting_approval - this.weights.cancelled - this.weights.error);
+      this.clock += dm * (1 + 2.6 * this._work()) * (1 - this.weights.waiting_approval - this.weights.cancelled - this.weights.error);
 
       this._draw();
     }
@@ -561,81 +601,46 @@
       ctx.scale(1 - life.stretch * 0.5, 1 + life.stretch);
       ctx.translate(-cx, -cy);
 
-      // На главной сцене шар крупнее и окружён орбитами; остальные окна и миниатюры сохраняют выбранный вид.
-      const hero = Boolean(this.canvas.closest('#stageOrb')) && this.variant === 'sphere';
+      // На главной сцене шар чуть меньше: вокруг остаётся место кольцу шагов поручения.
+      const hero = isHero;
+      const tune = this.tune;
+      const vox = still ? 0 : this._voiceOut();
       const variant = window.JarvisOrbVariants && window.JarvisOrbVariants[this.variant];
       if (variant) {
         variant.paint(this, ctx, size, cx, cy, {
-          clock: still ? 1.3 : this.clock, work: this._work(), W, c: this.color, kick: this.kick, light: this.light,
+          clock: still ? 1.3 : this.clock, work: this._work(), W, c: this.color, kick: still ? 0 : this.kick, light: this.light,
+          tune, voice: vox, still,
         });
         return;
       }
 
+      const mot = tune.motion;
       const b = still ? 0.5 : 0.5 + 0.5 * Math.sin(this.breath);
       const wL = still ? 0 : W.listening;
-      // Проверка результата — та же работа ума: дуга-орбита и подсветка точек, только спокойнее.
+      // Проверка результата — та же работа ума: подсветка точек бегущей дугой, только спокойнее.
       const wT = still ? 0 : W.thinking + 0.6 * W.verifying;
       const wS = still ? 0 : W.searching;
       const wA = still ? 0 : W.acting;
       // Прислушивание: вдох-выдох к центру за 2 с.
       const gather = 0.5 - 0.5 * Math.cos(this.gather);
       const clock = still ? 1.3 : this.clock;
-      const swellAmp = isHero ? 0.03 : 0.035 + 0.065 * this._work() + life.energy * 0.085;
+      const swellAmp = mot * (isHero ? 0.02 : 0.03 + 0.05 * this._work() + life.energy * 0.08);
 
-      const base = size * (hero ? 0.335 : 0.43);
-      const R = base * m.radius * (1 + m.amp * (b - 0.5) * 2) * (1 - 0.05 * wL * gather);
-
-      // Свечение позади сферы: слабое, форму держат точки, а не ореол. На главной сцене света больше, и он тёплый снизу справа.
-      const glowA = (this.light ? 0.05 : 0.11) * (hero ? 1.9 : 1) * m.glow * (0.82 + 0.36 * b);
-      if (hero) {
-        const wx = cx + R * 0.55, wy = cy + R * 0.5;
-        const wg = ctx.createRadialGradient(wx, wy, 0, wx, wy, R * 1.1);
-        const wm = 1 - Math.min(1, W.waiting_approval + W.error);
-        wg.addColorStop(0, rgba(lerp(c[0], 255, 0.55 * wm), lerp(c[1], 150, 0.55 * wm), lerp(c[2], 112, 0.55 * wm), (this.light ? 0.12 : 0.17) * m.glow));
-        wg.addColorStop(1, rgba(c[0], c[1], c[2], 0));
-        ctx.fillStyle = wg;
-        ctx.beginPath(); ctx.arc(wx, wy, R * 1.1, 0, TAU); ctx.fill();
-      }
-      // Радиус свечения не выходит за холст, иначе видна резкая граница.
-      const glowR = Math.min(R * 1.9, size * 0.5 - 2);
-      const glow = ctx.createRadialGradient(cx, cy, R * 0.1, cx, cy, glowR);
-      glow.addColorStop(0, rgba(c[0], c[1], c[2], glowA));
-      glow.addColorStop(0.45, rgba(c[0], c[1], c[2], glowA * 0.42));
-      glow.addColorStop(1, rgba(c[0], c[1], c[2], 0));
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(cx, cy, glowR, 0, TAU);
-      ctx.fill();
-
-      // Тонкая граница собирает облако точек в цельное объёмное тело.
-      ctx.strokeStyle = rgba(c[0], c[1], c[2], this.light ? 0.16 : 0.22);
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.arc(cx, cy, R * 0.92, 0, TAU);
-      ctx.stroke();
-
-      // Тёмная сердцевина для глубины.
-      const coreG = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
-      coreG.addColorStop(0, rgba(this.core[0], this.core[1], this.core[2], 0.55));
-      coreG.addColorStop(1, rgba(this.core[0], this.core[1], this.core[2], 0));
-      ctx.fillStyle = coreG;
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, TAU);
-      ctx.fill();
+      const base = size * (hero ? 0.37 : 0.42);
+      const R = base * m.radius * (1 + mot * m.amp * (b - 0.5) * 2) * (1 - 0.05 * wL * gather) * (1 + 0.035 * vox);
 
       const ay = still ? 0.6 : this.ay + life.tilt;
-      const ax = 0.38 + (still ? 0 : 0.07 * Math.sin(t * 0.21) + life.energy * 0.08);
+      const ax = 0.38 + (still ? 0 : 0.07 * mot * Math.sin(t * 0.21) + life.energy * 0.08);
       const sinY = Math.sin(ay), cosY = Math.cos(ay);
       const sinX = Math.sin(ax), cosX = Math.cos(ax);
-      const dotBase = Math.max(0.85, size / 290) * (hero ? 0.82 : 1);
-      const scale = R * 1.62;
+      // Радиус спрайта точки: видимое ядро около 60 % от него, на 180 px это 2–4 px в диаметре.
+      const dotBase = Math.max(1.4, size / 88);
 
-      // Орбита (думает): большой круг, видимый чуть сверху как эллипс; нормаль слегка покачивается.
+      // Бегущая дуга (думает): большой круг, нормаль слегка покачивается; точки под ней светлеют.
       const nb = t * 0.35;
       let nx = 0.32 * Math.sin(nb), ny = 1, nz = 0.62 + 0.14 * Math.cos(nb * 0.8);
       const nl = Math.hypot(nx, ny, nz);
       nx /= nl; ny /= nl; nz /= nl;
-      // Базис плоскости орбиты: u ⟂ n, v = n × u.
       let ux = ny, uy = -nx, uz = 0;
       const ul = Math.hypot(ux, uy, uz) || 1;
       ux /= ul; uy /= ul; uz /= ul;
@@ -644,8 +649,7 @@
       const ARC_LEN = 2.5;
 
       // Луч (ищет): проходит слева направо за ~1,8 с, затем короткая пауза.
-      const scanPeriod = 2.2;
-      const scanPh = (this.scanT % scanPeriod) / 1.8;
+      const scanPh = (this.scanT % 2.2) / 1.8;
       const beamX = cx + (smooth(clamp01(scanPh)) * 2 - 1) * R * 1.35;
       const beamW = R * 0.24;
       const beamOn = scanPh <= 1 ? 1 : 0;
@@ -653,23 +657,16 @@
       // Импульс (выполняет): быстрый выброс наружу и плавный возврат, период 1,3 с.
       const actPh = (this.actT % 1.3) / 1.3;
 
-      // Волны (отвечает): фронт в долях радиуса.
+      // Волны (порции ответа): фронт в долях радиуса, видны только по точкам.
       const waves = still ? [] : this.waves.map((wv) => {
         const e = clamp01((this.t - wv.t0) / WAVE_LIFE);
         return { front: 0.15 + (1 - Math.pow(1 - e, 2)) * 1.25, fade: Math.pow(1 - e, 1.6) * wv.amp };
       });
 
-      const hiCol = [255, 255, 255];
-      // Источник света медленно ходит, и блик плывёт по точкам, хотя сама сфера вращается иначе.
-      const la = still ? 0 : 0.34 * Math.sin(t * 0.17);
-      const lx = -0.45 * Math.cos(la) - 0.55 * Math.sin(la);
-      const ly = -0.55 * Math.cos(la) + 0.45 * Math.sin(la);
+      const glo = Math.max(0.2, Math.min(2.2, tune.glow * m.glow));
+      const depth = tune.depth;
       const pts = this.points;
       const B = this.buf;
-      // Северное сияние из одного цвета темы: сдвиг оттенка вдоль поверхности и тёплый край у света.
-      const mono = Math.min(1, W.waiting_approval + W.cancelled + W.error);
-      const palB = hueRotate(c, hero ? 95 : 38), palC = hueRotate(c, hero ? 190 : 82);
-      const warm = this.light ? [236, 98, 150] : [255, 150, 112];
       for (let i = 0; i < pts.length; i++) {
         const p = pts[i];
         const x1 = p.x * cosY + p.z * sinY;
@@ -677,24 +674,18 @@
         const y2 = p.y * cosX - z1 * sinX;
         const z2 = p.y * sinX + z1 * cosX;
 
-        let r = still ? p.lift : p.lift + 0.012 * Math.sin(t * 0.9 + p.seed);
+        let r = still ? p.lift : p.lift + 0.012 * mot * Math.sin(t * 0.9 + p.seed);
         let boost = 0;
-        if (!still) {
-          // Вдох проходит по сфере сверху вниз, а не надувает её разом.
-          r += 0.014 * Math.sin(this.breath - p.y * 1.7);
-          // Редкая искра, как блик на зерне: только там, куда падает свет.
-          boost += 1.4 * Math.pow(Math.max(0, Math.sin(t * 0.31 * p.rate + p.seed * 9)), 90);
-        }
-
+        // Вдох проходит по сфере сверху вниз, а не надувает её разом.
+        if (!still) r += 0.014 * mot * Math.sin(this.breath - p.y * 1.7);
         if (wA > 0.01) {
           const ph = (actPh + p.seed * 0.012) % 1;
           const env = ph < 0.28 ? 1 - Math.pow(1 - ph / 0.28, 3) : 1 - smooth((ph - 0.28) / 0.72);
-          r += 0.09 * disp * env * wA * (0.75 + 0.25 * Math.sin(p.seed * 3));
+          r += 0.09 * disp * mot * env * wA * (0.75 + 0.25 * Math.sin(p.seed * 3));
           boost += 0.35 * env * wA;
         }
         if (wT > 0.01) {
-          r += 0.025 * disp * wT * Math.sin(t * 6.5 + p.seed * 3);
-          // Точки под бегущей дугой подсвечиваются хвостом кометы.
+          r += 0.025 * disp * mot * wT * Math.sin(t * 6.5 + p.seed * 3);
           const d = Math.abs(x1 * nx + y2 * ny + z2 * nz);
           if (d < 0.14) {
             const phi = Math.atan2(x1 * vx + y2 * vy + z2 * vz, x1 * ux + y2 * uy + z2 * uz);
@@ -703,181 +694,103 @@
             if (delta < ARC_LEN) boost += wT * (1 - d / 0.14) * (1 - delta / ARC_LEN) * 1.1;
           }
         }
-        if (wL > 0.01) {
-          // Редкие вспышки отдельных точек.
-          const fl = Math.pow(Math.max(0, Math.sin(t * 0.8 * p.rate + p.seed * 7)), 28);
-          boost += fl * wL * 1.2;
-        }
+        if (wL > 0.01) boost += Math.pow(Math.max(0, Math.sin(t * 0.8 * p.rate + p.seed * 7)), 28) * wL * 1.2;
         const rr = Math.hypot(x1, y2);
         for (const wv of waves) {
           const g = (rr - wv.front) / 0.16;
           const bump = Math.exp(-g * g) * wv.fade;
-          r += 0.07 * disp * bump;
+          r += 0.07 * disp * mot * bump;
           boost += 0.6 * bump;
         }
-
-        // Зыбь: по поверхности идут гребни, у сферы появляется рельеф вместо ровного шума.
+        // Голос: по поверхности идёт мелкая рябь, точки светлеют; дыхание при этом не меняется.
+        if (vox > 0.01) {
+          r += vox * 0.05 * mot * Math.sin(p.seed * 4 + t * 11 + p.y * 5);
+          boost += vox * 0.45;
+        }
         if (isHero) boost += life.energy * 0.7 + this.life.send * 0.8;
-        const swell = Math.sin(3.1 * p.x + clock * 0.8) * Math.sin(3.1 * p.y - clock * 0.55) * Math.sin(3.1 * p.z + clock * 0.67);
-        r += swellAmp * swell;
-        const depth = (z2 + 1) / 2;
-        // Свет сверху слева: объём читается по освещению, а не только по глубине.
-        const lit = Math.max(0, lx * x1 + ly * y2 + 0.7 * z2);
-        const persp = 1 / (1.9 - z2 * 0.45);
-        const sx = cx + x1 * scale * r * persp;
-        const sy = cy + y2 * scale * r * persp;
+        r += swellAmp * Math.sin(3.1 * p.x + clock * 0.8) * Math.sin(3.1 * p.y - clock * 0.55) * Math.sin(3.1 * p.z + clock * 0.67);
 
+        // Свет: ключевой сверху слева, блик по полувектору, контровой по нижнему правому краю.
+        const key = Math.max(0, KEY[0] * x1 + KEY[1] * y2 + KEY[2] * z2);
+        const spec = Math.pow(Math.max(0, HALF[0] * x1 + HALF[1] * y2 + HALF[2] * z2), 22);
+        const edge = 1 - Math.abs(z2);
+        const rim = edge * edge * edge * Math.max(0, 0.62 * x1 + 0.5 * y2);
+        let shade = 0.08 + 0.82 * key + 0.55 * rim;
+        shade = clamp01(0.5 + (shade - 0.5) * depth);
+        // Задняя половина за телом шара: тусклая, но видна, как сквозь тёмное стекло.
+        const vis = z2 >= 0 ? 1 : 0.16 + 0.22 * (1 + z2);
+        const persp = 1 + 0.12 * z2;
+        const sx = cx + x1 * R * r * persp;
+        const sy = cy + y2 * R * r * persp;
         if (wS > 0.01 && beamOn) {
           const d = Math.abs(sx - beamX) / beamW;
-          if (d < 1) boost += (1 - d) * (1 - d) * wS * 1.3 * (0.4 + 0.6 * depth);
+          if (d < 1) boost += (1 - d) * (1 - d) * wS * 1.3 * (z2 > 0 ? 1 : 0.4);
         }
-
         const tw = still ? 0.75 : 0.5 + 0.5 * Math.sin(t * m.twinkle * p.rate * 2.2 + p.seed);
-        // Бегущая светлая полоса: точки проходят сквозь неё при вращении.
-        const bandY = y2 - 0.28 * Math.sin(x1 * 3 + t * 0.55) - 0.12;
-        if (!still && mono < 0.5) boost += 0.55 * Math.exp(-bandY * bandY / 0.035) * m.glow * (1 - mono);
-        let a = (0.1 + 0.2 * depth + 0.75 * lit) * (1 - m.flicker + m.flicker * tw) * (1 + 0.75 * swell);
+        let a = (0.16 + 0.84 * shade) * vis * (1 - m.flicker + m.flicker * tw) * (0.55 + 0.45 * Math.min(1.4, glo));
         a = Math.min(1, a * (1 + boost));
-        const u = 0.5 + 0.5 * Math.sin(Math.atan2(x1, z2) + t * 0.15 + y2 * 1.6);
-        let cr, cg, cb;
-        if (u < 0.5) { const q = u * 2; cr = lerp(c[0], palB[0], q); cg = lerp(c[1], palB[1], q); cb = lerp(c[2], palB[2], q); }
-        else { const q = (u - 0.5) * 2; cr = lerp(palB[0], palC[0], q); cg = lerp(palB[1], palC[1], q); cb = lerp(palB[2], palC[2], q); }
-        const wf = Math.pow(Math.max(0, 0.62 * x1 + 0.52 * y2 + 0.58 * z2), 3) * 0.85 * (1 - mono);
-        cr = lerp(cr, warm[0], wf); cg = lerp(cg, warm[1], wf); cb = lerp(cb, warm[2], wf);
-        B.r[i] = lerp(cr, c[0], mono); B.g[i] = lerp(cg, c[1], mono); B.b[i] = lerp(cb, c[2], mono);
+        const lv = (shade * 0.8 + spec * 1.1 + boost * 0.4) * (0.55 + 0.45 * glo) * (LV - 1);
+        B.lv[i] = lv < 0 ? 0 : lv > LV - 1 ? LV - 1 : lv | 0;
         B.sx[i] = sx;
         B.sy[i] = sy;
         B.z[i] = z2;
         B.a[i] = a;
-        B.s[i] = dotBase * p.size * (0.5 + 0.55 * depth + 0.3 * lit) * (0.94 + 0.12 * b) * (1 + 0.45 * Math.min(1, boost));
-        B.hi[i] = this.light ? 0 : Math.min(0.85, lit * lit * 0.5 * tw + boost * 0.45) * (hero ? 0.55 : 1);
+        B.s[i] = dotBase * p.size * (0.78 + 0.22 * persp + 0.15 * shade) * (1 + 0.35 * Math.min(1, boost) + 0.4 * spec);
       }
 
-      // Кольцевые волны поверх свечения.
-      for (const wv of waves) {
-        if (wv.fade < 0.02) continue;
-        ctx.strokeStyle = rgba(lerp(c[0], 255, 0.35), lerp(c[1], 255, 0.35), lerp(c[2], 255, 0.35), 0.42 * wv.fade);
-        ctx.lineWidth = Math.max(1, size / 260) * (0.6 + wv.fade);
-        ctx.beginPath();
-        ctx.arc(cx, cy, Math.max(1, wv.front * R), 0, TAU);
-        ctx.stroke();
-      }
-
-      // Сканирующий луч: полупрозрачная вертикальная полоса в пределах сферы.
-      if (wS > 0.01 && beamOn) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, R * 0.98, 0, TAU);
-        ctx.clip();
-        const g = ctx.createLinearGradient(beamX - beamW * 1.6, 0, beamX + beamW * 1.6, 0);
-        g.addColorStop(0, rgba(c[0], c[1], c[2], 0));
-        g.addColorStop(0.5, rgba(lerp(c[0], 255, 0.3), lerp(c[1], 255, 0.3), lerp(c[2], 255, 0.3), 0.2 * wS));
-        g.addColorStop(1, rgba(c[0], c[1], c[2], 0));
-        ctx.fillStyle = g;
-        ctx.fillRect(beamX - beamW * 1.6, cy - R * 1.2, beamW * 3.2, R * 2.4);
-        ctx.restore();
-      }
-
-      // Орбиты вокруг шара (только главная сцена): тонкая постоянная и кольцо шагов поручения с бусинами.
+      // Кольцо шагов поручения с бусинами (только главная сцена, только когда есть шаги).
       const rings = [];
-      if (hero) {
-        const wm2 = 1 - mono;
-        rings.push({ Rr: R * 1.4, psi: 0.5, roll: 0.42, n: 220, head: -this.arcT * 0.5, base: 0.26, size: dotBase * 0.85, alpha: 0.55,
-          col: [lerp(c[0], warm[0], 0.6 * wm2), lerp(c[1], warm[1], 0.6 * wm2), lerp(c[2], warm[2], 0.6 * wm2)] });
-        if (this.stepsAmt > 0.01) {
-          const e = 1 - Math.pow(1 - this.stepsAmt, 3);
-          rings.push({ Rr: R * (1 + 0.28 * e), psi: 0.3, roll: -0.3, n: 300, head: -this.arcT, base: 0.5, size: dotBase * 1.15, alpha: this.stepsAmt,
-            col: [lerp(c[0], 255, 0.35), lerp(c[1], 255, 0.35), lerp(c[2], 255, 0.35)], steps: true });
-        }
+      if (hero && this.stepsAmt > 0.01) {
+        const e = 1 - Math.pow(1 - this.stepsAmt, 3);
+        rings.push({ Rr: R * (1 + 0.28 * e), psi: 0.3, roll: -0.3, n: 300, head: -this.arcT, base: 0.5, size: dotBase * 0.6, alpha: this.stepsAmt,
+          col: [lerp(c[0], 255, 0.35), lerp(c[1], 255, 0.35), lerp(c[2], 255, 0.35)], steps: true });
       }
       // На светлом фоне сложение цветов выбеливает точки до невидимости.
-      ctx.globalCompositeOperation = this.light ? 'source-over' : 'lighter';
+      const add = this.light ? 'source-over' : 'lighter';
+      ctx.globalCompositeOperation = add;
       for (const rg of rings) this._ring(ctx, cx, cy, rg, false, still);
+      const spr = this._sprites(c);
       for (let pass = 0; pass < 2; pass++) {
-        if (pass === 1) {
-          // Прозрачное тело между половинами: задние точки уходят в глубину, край ловит свет.
-          ctx.globalCompositeOperation = 'source-over';
-          const veil = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
-          veil.addColorStop(0, rgba(this.core[0], this.core[1], this.core[2], 0.36));
-          veil.addColorStop(0.8, rgba(this.core[0], this.core[1], this.core[2], 0.26));
-          veil.addColorStop(1, rgba(this.core[0], this.core[1], this.core[2], 0));
-          ctx.fillStyle = veil;
-          ctx.beginPath();
-          ctx.arc(cx, cy, R, 0, TAU);
-          ctx.fill();
-          const limb = ctx.createRadialGradient(cx - lx * R * 0.5, cy - ly * R * 0.5, R * 0.86, cx - lx * R * 0.1, cy - ly * R * 0.1, R * 1.02);
-          limb.addColorStop(0, rgba(c[0], c[1], c[2], 0));
-          limb.addColorStop(0.75, rgba(c[0], c[1], c[2], (this.light ? 0.05 : 0.08) * m.glow * (hero ? 2.6 : 1)));
-          limb.addColorStop(1, rgba(c[0], c[1], c[2], 0));
-          ctx.fillStyle = limb;
-          ctx.beginPath();
-          ctx.arc(cx, cy, R * 1.02, 0, TAU);
-          ctx.fill();
-          ctx.globalCompositeOperation = this.light ? 'source-over' : 'lighter';
-        }
         for (let i = 0; i < pts.length; i++) {
-          if ((pass === 0) !== (B.z[i] < 0)) continue;
-          const mh = B.hi[i];
-          ctx.fillStyle = rgba(lerp(B.r[i], hiCol[0], mh), lerp(B.g[i], hiCol[1], mh), lerp(B.b[i], hiCol[2], mh), B.a[i]);
-          ctx.beginPath();
-          ctx.arc(B.sx[i], B.sy[i], B.s[i], 0, TAU);
-          ctx.fill();
+          if ((B.z[i] >= 0) !== (pass === 1)) continue;
+          const s = B.s[i];
+          ctx.globalAlpha = B.a[i];
+          ctx.drawImage(spr[B.lv[i]], B.sx[i] - s, B.sy[i] - s, s * 2, s * 2);
         }
       }
-
+      ctx.globalAlpha = 1;
       for (const rg of rings) this._ring(ctx, cx, cy, rg, true, still);
       ctx.globalCompositeOperation = 'source-over';
       for (const rg of rings) if (rg.steps) this._beads(ctx, cx, cy, rg, size);
+    }
 
-      // Дуга-орбита (думает): тонкая светлая дуга по поверхности.
-      if (wT > 0.02) {
-        const segs = 36;
-        const rad = 1.07;
-        ctx.lineCap = 'round';
-        let prev = null;
-        for (let j = 0; j <= segs; j++) {
-          const f = j / segs;
-          const phi = arcHead - ARC_LEN * (1 - f);
-          const cp = Math.cos(phi), sp = Math.sin(phi);
-          const px = (ux * cp + vx * sp) * rad;
-          const py = (uy * cp + vy * sp) * rad;
-          const pz = (uz * cp + vz * sp) * rad;
-          const persp = 1 / (1.9 - pz * 0.45);
-          const pt = { x: cx + px * scale * persp, y: cy + py * scale * persp, z: pz };
-          if (prev) {
-            const front = (prev.z + pt.z) / 2 > 0 ? 1 : 0.3;
-            const k2 = f * f * wT * front;
-            // Широкий мягкий след и тонкая яркая линия поверх.
-            ctx.strokeStyle = rgba(c[0], c[1], c[2], 0.22 * k2);
-            ctx.lineWidth = Math.max(2, size / 90) * (0.5 + 0.8 * f);
-            ctx.beginPath();
-            ctx.moveTo(prev.x, prev.y);
-            ctx.lineTo(pt.x, pt.y);
-            ctx.stroke();
-            ctx.strokeStyle = rgba(lerp(c[0], 255, 0.7), lerp(c[1], 255, 0.7), lerp(c[2], 255, 0.7), 0.95 * k2);
-            ctx.lineWidth = Math.max(1.2, size / 200) * (0.6 + 0.9 * f);
-            ctx.beginPath();
-            ctx.moveTo(prev.x, prev.y);
-            ctx.lineTo(pt.x, pt.y);
-            ctx.stroke();
-          }
-          prev = pt;
-        }
-        // Светящаяся «голова» орбиты.
-        if (prev) {
-          const headA = (prev.z > 0 ? 0.9 : 0.35) * wT;
-          const hr = Math.max(3, size / 70);
-          const hg = ctx.createRadialGradient(prev.x, prev.y, 0, prev.x, prev.y, hr);
-          hg.addColorStop(0, rgba(255, 255, 255, headA));
-          hg.addColorStop(0.4, rgba(c[0], c[1], c[2], headA * 0.5));
-          hg.addColorStop(1, rgba(c[0], c[1], c[2], 0));
-          ctx.fillStyle = hg;
-          ctx.beginPath();
-          ctx.arc(prev.x, prev.y, hr, 0, TAU);
-          ctx.fill();
-        }
+    // Спрайты точки: LV ступеней от тени к блику одного цвета. Перерисовываются только при смене цвета.
+    _sprites(c) {
+      const key = `${c[0] >> 2},${c[1] >> 2},${c[2] >> 2},${this.light ? 1 : 0},${this.dpr}`;
+      if (this.spr && this.spr.key === key) return this.spr.list;
+      const px = Math.max(8, Math.round(14 * this.dpr));
+      const list = (this.spr && this.spr.px === px) ? this.spr.list : [];
+      for (let l = 0; l < LV; l++) {
+        const k = l / (LV - 1);
+        const shadow = c.map((v) => v * 0.38);
+        const col = this.light
+          ? shadow.map((v, i) => lerp(v, c[i], k))
+          : k < 0.55 ? shadow.map((v, i) => lerp(v, c[i], k / 0.55)) : c.map((v) => lerp(v, 255, ((k - 0.55) / 0.45) * 0.78));
+        let cv = list[l];
+        if (!cv) { cv = document.createElement('canvas'); cv.width = cv.height = px; list[l] = cv; }
+        const g2 = cv.getContext('2d');
+        const hh = px / 2;
+        g2.clearRect(0, 0, px, px);
+        const gr = g2.createRadialGradient(hh, hh, 0, hh, hh, hh);
+        gr.addColorStop(0, rgba(col[0], col[1], col[2], 1));
+        gr.addColorStop(0.4, rgba(col[0], col[1], col[2], 0.88));
+        gr.addColorStop(0.68, rgba(col[0], col[1], col[2], 0.22));
+        gr.addColorStop(1, rgba(col[0], col[1], col[2], 0));
+        g2.fillStyle = gr;
+        g2.fillRect(0, 0, px, px);
       }
-      ctx.globalCompositeOperation = 'source-over';
+      this.spr = { key, px, list };
+      return list;
     }
   }
 

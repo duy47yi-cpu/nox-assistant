@@ -79,18 +79,19 @@
   row('Шрифт ответов', 'Как Джарвис пишет ответы в чате', select('reply', replyMap, 'Шрифт ответов'));
   row('Размер текста', 'Меняет весь интерфейс сразу', seg('size', T.SIZES, 'Размер текста'));
   row('Скругление углов', 'Панели, кнопки и поля', seg('round', T.ROUNDS, 'Скругление углов'));
-  row('Панели', 'Насколько заметны карточки на фоне', seg('panel', T.PANELS, 'Панели'));
-  row('Размытие стекла', 'Поле ввода и диалоги. «Стекло» добавляет размытие панелям', seg('blur', T.BLURS, 'Размытие стекла'));
+  row('Панели', 'Насколько заметны карточки на фоне. «Как в теме» — как задумано темой', seg('panel', T.PANELS, 'Панели'));
+  row('Размытие стекла', '«Как в теме» — как задумано темой. «Стекло» размывает и панели', seg('blur', T.BLURS, 'Размытие стекла'));
   row('Фон окна', 'Как в теме — градиент темы; сплошной — ровный цвет', seg('bg', T.BGS, 'Фон окна'));
   row('Размер шара', 'Только на главной', seg('orb', T.ORBS, 'Размер шара'));
   row('Свет за окном', 'Цветное свечение фона, берёт цвет акцента', toggle('glow', 'Свет за окном'));
 
-  const reset = make('button', 'btn btn-secondary btn-sm', 'Вернуть как было');
+  const reset = make('button', 'btn btn-secondary btn-sm', 'Сбросить к теме');
   reset.type = 'button';
-  reset.addEventListener('click', () => { T.resetLook(); paint(); });
+  reset.id = 'lookResetTheme';
+  reset.addEventListener('click', () => { T.resetToTheme(); paint(); });
   const foot = make('div', 'set-row look-row');
   const ft = make('span', 'set-text');
-  ft.append(make('span', 'set-name', 'Сбросить внешний вид'), make('span', 'set-hint', 'Шрифты, размер, скругление, панели, размытие и фон. Тема и цвет акцента остаются'));
+  ft.append(make('span', 'set-name', 'Сбросить к теме'), make('span', 'set-hint', 'Шрифты, размер текста, скругление, панели, размытие, фон, размер шара и свой цвет акцента вернутся к выбранной теме. Тема и вид шара остаются'));
   foot.append(ft, reset);
   rows.push(foot);
 

@@ -1,14 +1,15 @@
 /* Nox: вид настольного ассистента. Рейка с подписями, крошки в шапке, мягкие панели, шар на сцене.
  * Цвета только из токенов темы (themes.css), подключается последним. */
-:root { --rail-w: 216px; --header-h: 64px; --pad: 28px; --panel-r: 16px;
-  --font-reply: var(--font-head);
+:root { --font-display: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --rail-w: 216px; --header-h: 64px; --pad: 28px; --panel-r: 16px;
+  --font-reply: var(--font);
   --panel: color-mix(in srgb, var(--text) var(--panel-pct, 4%), transparent);
   --panel-2: color-mix(in srgb, var(--text) calc(var(--panel-pct, 4%) * 1.75), transparent);
   --panel-line: color-mix(in srgb, var(--text) 10%, transparent);
   --hue-soft: color-mix(in srgb, var(--hue) 16%, transparent);
   /* Размытие стекла: «как сейчас» — только поле ввода, «стекло» — ещё панель чата и диалоги,
    * «без размытия» — выключено. Значение --glass-blur ставит theme-boot.js (look.blur). */
-  --glass-composer: blur(20px) saturate(1.5);
+  --glass-composer: none;
   --glass-panel: none;
   --glass-dialog: none; }
 :root[data-rail="collapsed"] { --rail-w: 76px; }
@@ -22,17 +23,22 @@ html[data-bg="solid"] .app, html[data-bg="solid"] .account-gate { background: va
 
 /* Свой цвет акцента (theme-boot.js ставит --user-hue и --user-ink на корень). */
 html[data-accent], html[data-accent] body { --hue: var(--user-hue); --accent-ink: var(--user-ink); }
-.accent-pick { display: flex; gap: 12px; align-items: center; }
+.accent-pick { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: flex-end; }
+.accent-swatches { display: flex; gap: 12px; align-items: center; }
+.accent-hex { width: 112px; font-family: var(--mono); text-transform: uppercase; }
+.accent-hex[aria-invalid="true"] { border-color: var(--err); }
+.accent-note:empty { display: none; }
 .accent-opt { position: relative; width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 1px solid var(--panel-line); background: var(--swatch, transparent); }
 .accent-opt[data-accent-opt="theme"] { background: repeating-linear-gradient(45deg, transparent 0 4px, var(--panel-2) 4px 8px); }
 .accent-opt[aria-checked="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text); }
 
-/* ── Каркас и свет за окном ──────────────────────────────────── */
+/* ── Каркас (свет за окном убран — плоский фон как у Luxify) ─────── */
 .app { position: relative; overflow: clip; }
-.app::before { content: ""; display: block !important; position: absolute; z-index: 0; pointer-events: none; top: auto; left: auto; right: -20%; bottom: -42%; width: 74%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--hue) 30%, transparent), transparent); opacity: .62; }
-.app::after { content: ""; position: absolute; z-index: 0; pointer-events: none; top: -36%; left: -12%; width: 56%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--hue) 9%, transparent), transparent); }
+.app::before, .app::after { display: none !important; }
+/* Материал: очень слабое бумажное зерно поверх цвета темы (около 4 %), без пятен света. Сплошной фон его убирает. */
+:root { --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .45 0 0 0 0 .38 0 0 0 .1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.app { background: var(--grain), var(--bg-image), var(--bg); background-size: 180px 180px, auto, auto; }
 .rail, .main { position: relative; z-index: 1; }
-html[data-glow="off"] .app::before, html[data-glow="off"] .app::after { display: none !important; }
 
 /* Сцена: только шар, слово состояния и подсказки. Доска, «сегодня», «требуют внимания», миссии и виджеты не показываются:
  * счётчик «Ждёт вас» остаётся в шапке, дела открываются по нему. */
@@ -54,8 +60,9 @@ html[data-glow="off"] .app::before, html[data-glow="off"] .app::after { display:
 
 /* ── Рейка ───────────────────────────────────────────────────── */
 .rail { width: var(--rail-w); align-items: stretch; padding: 24px 12px 16px; background: color-mix(in srgb, var(--bg) 62%, transparent); border-right: 1px solid var(--panel-line); }
-.rail-brand { display: flex; align-items: center; gap: 12px; height: 44px; margin: 0 8px 24px; font: var(--fw-strong) 20px/1 var(--font); color: var(--text); }
-.rail-mark { flex: none; width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 34% 28%, #fff 0 6%, color-mix(in srgb, var(--hue) 55%, #fff) 22%, var(--hue) 52%, color-mix(in srgb, var(--hue) 35%, #000) 100%); box-shadow: 0 0 20px color-mix(in srgb, var(--hue) 50%, transparent), inset 0 0 0 1px color-mix(in srgb, #fff 22%, transparent); }
+/* Знак «Nox»: плоский серп ночи (тень без размытия, без градиента и блика) и слово серифом. */
+.rail-brand { display: flex; align-items: center; gap: 12px; height: 44px; margin: 0 8px 24px; font: var(--fw-regular) 26px/1 var(--font-display); letter-spacing: -0.01em; color: var(--text); }
+.rail-mark { flex: none; width: 22px; height: 22px; border-radius: 50%; background: none; box-shadow: inset -6px -3px 0 0 var(--text); transform: rotate(-20deg); }
 .rail-list { gap: 4px; width: 100%; }
 .rail-item, .rail-toggle { position: relative; flex-direction: row; justify-content: flex-start; gap: 12px; width: 100%; height: 48px; padding: 0 12px; border-radius: 12px; font-size: var(--fs-md); color: var(--text-2); }
 .rail-item:hover, .rail-toggle:hover { background: var(--panel-2); color: var(--text); transform: none; }
@@ -79,10 +86,10 @@ html[data-glow="off"] .app::before, html[data-glow="off"] .app::after { display:
 .topbar::before { content: "Nox Assistant"; order: 0; font: 500 18px/1 var(--font); color: var(--text-2); white-space: nowrap; }
 .topbar::after { display: none !important; }
 .status-line { order: 1; flex: 1 1 auto; gap: 0; }
-.view-title { order: 0; margin: 0 0 0 16px; padding-left: 16px; border-left: 1px solid var(--panel-line); font: 400 22px/28px var(--font-head); color: var(--text); }
-.turn > .md { font-family: var(--font-reply); }
+.view-title { order: 0; margin: 0 0 0 16px; padding-left: 16px; border-left: 1px solid var(--panel-line); font: 500 16px/24px var(--font); color: var(--text); letter-spacing: 0; }
+.turn > .md { font-family: var(--font); }
 body[data-view="dialog"] .view-title { position: static; width: auto; height: auto; overflow: hidden; clip: auto; clip-path: none; margin: 0 0 0 16px; padding-left: 16px; border-left: 1px solid var(--panel-line); }
-.crumb { order: 1; font: 400 22px/28px var(--font-head); }
+.crumb { order: 1; font: 500 16px/24px var(--font); }
 .header-state { order: 2; margin-left: 16px; display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font-size: var(--fs-sm); }
 .header-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--hue); }
 .header-state[data-state="waiting_approval"] { color: var(--warn); }
@@ -125,8 +132,8 @@ body:not([data-view="dialog"]) .workspace-switch { display: none; }
 .set-section { padding: 20px 24px; gap: 0; }
 .set-title { font: var(--fw-strong) 16px/24px var(--font); margin-bottom: 8px; }
 
-/* ── Главная: чат слева, сцена с шаром справа ─────────────────── */
-.view-dialog { display: grid; grid-template-columns: minmax(0, 1fr) clamp(380px, 40%, 560px); grid-template-rows: minmax(0, 1fr); gap: 20px; overflow: hidden; padding: 0 var(--pad) var(--pad); }
+/* ── Главная: чат слева, сцена с шаром справа (320px — компактно) ─ */
+.view-dialog { display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: minmax(0, 1fr); gap: 20px; overflow: hidden; padding: 0 var(--pad) var(--pad); }
 .convo, .convo:has(.feed-list > *), .convo:not(:has(.feed-list > *)):not(:has(.wait-tray:not([hidden]))) { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; min-height: 0; height: 100%; max-height: 100%; margin: 0; padding: 0; border: 1px solid var(--panel-line); border-radius: var(--panel-r); background: var(--panel); box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent), 0 24px 60px -30px #000000A0; backdrop-filter: var(--glass-panel, none); -webkit-backdrop-filter: var(--glass-panel, none); overflow: hidden; }
 .convo::before { display: none; }
 .convo > .workspace-switch { padding: 16px 20px 0; }
@@ -136,13 +143,23 @@ body:not([data-view="dialog"]) .workspace-switch { display: none; }
 .chat-tab { min-height: 36px; border-radius: 12px; background: transparent; border: 1px solid transparent; color: var(--text-2); }
 .chat-tab:hover { background: var(--panel-2); color: var(--text); }
 .chat-tab[aria-selected="true"], .chat-tab[aria-current="true"], .chat-tab.is-active { background: var(--hue-soft); border-color: color-mix(in srgb, var(--hue) 40%, transparent); color: var(--text); }
-.chat-new { border-radius: 12px; background: var(--hue); color: var(--accent-ink); }
+/* Акцент точечно: выбранная вкладка и «новый чат» тихие, цвет остаётся ядру и активному разделу. */
+.chat-tab[aria-selected="true"], .chat-tab[aria-current="true"], .chat-tab.is-active { background: var(--panel-2); border-color: var(--panel-line); }
+.chat-new { border-radius: 12px; background: var(--panel-2); border: 1px solid var(--panel-line); color: var(--text); }
+.chat-new:hover { color: var(--hue); }
 .feed, .convo:not(:has(.feed-list > *)):not(:has(.wait-tray:not([hidden]))) .feed { flex: 1; min-height: 0; padding: 0 22px; }
 .feed-col { max-width: none; padding: 18px 0 20px; }
 .feed-list { gap: 24px; }
-.chat-empty { padding: 56px 8px; gap: 16px; }
-.chat-empty h2 { font: 400 32px/40px var(--font-head); }
-.chat-empty p { max-width: 400px; line-height: 24px; color: var(--text-2); }
+/* Пустой чат — титульный лист журнала: крупный сериф, подпись над ним, нумерованная легенда под линейкой. */
+.chat-empty { padding: 72px 20px 32px; gap: 0; max-width: 560px; }
+.chat-empty .empty-kicker { margin: 0 0 14px; font: var(--fw-medium) var(--fs-sm)/18px var(--font); color: var(--text-3); }
+.chat-empty h2 { margin: 0; font: var(--fw-regular) 52px/58px var(--font-display); letter-spacing: -0.02em; color: var(--text); }
+.chat-empty p { max-width: 440px; line-height: 24px; color: var(--text-2); }
+.chat-empty h2 + p { margin: 18px 0 0; font-size: var(--fs-read); }
+.empty-legend { list-style: none; margin: 36px 0 0; padding: 0; width: min(440px, 100%); border-top: 1px solid var(--panel-line); }
+.empty-legend li { display: grid; grid-template-columns: 40px 88px minmax(0, 1fr); align-items: baseline; padding: 11px 0; border-bottom: 1px solid var(--panel-line); font-size: var(--fs-sm); line-height: 18px; color: var(--text-2); }
+.empty-legend b { font-weight: var(--fw-strong); color: var(--text); }
+.empty-idx, .scene-idx { font: var(--fs-xs)/16px var(--mono); font-variant-numeric: tabular-nums; color: var(--text-3); }
 .chat-empty > .quick { position: static; display: flex; flex-wrap: wrap; justify-content: flex-start; width: auto; margin-top: 6px; }
 .chat-empty .quick-chip { position: static; transform: none; max-width: 100%; }
 .msg-user { align-self: flex-end; max-width: 80%; }
@@ -167,10 +184,10 @@ body:not([data-view="dialog"]) .workspace-switch { display: none; }
 .turn-acts[data-tone="unverified"] .acts-icon { color: var(--text-2); }
 .task-card::before { width: 1px; }
 .stage-dock { flex: none; padding: 16px 20px; background: transparent; border-top: 1px solid var(--panel-line); }
-.composer { padding: 8px; border-radius: 20px; background: linear-gradient(180deg, color-mix(in srgb, var(--text) 11%, transparent), color-mix(in srgb, var(--text) 4%, transparent)); border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); backdrop-filter: var(--glass-composer, blur(20px) saturate(1.5)); -webkit-backdrop-filter: var(--glass-composer, blur(20px) saturate(1.5)); box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent), 0 16px 40px -20px #000000B0; }
+.composer { padding: 8px; border-radius: 12px; background: var(--surface); border: 1px solid var(--panel-line); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
 .composer-input { background: transparent; }
 .stage-dock { background: transparent; border-top: 0; }
-.composer:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue) 22%, transparent); border-color: color-mix(in srgb, var(--hue) 60%, transparent); }
+.composer:focus-within { box-shadow: none; border-color: color-mix(in srgb, var(--text) 40%, transparent); }
 .composer-row { display: flex; align-items: center; gap: 8px; }
 .composer-input { min-height: 44px; font-size: var(--fs-read); line-height: 24px; padding: 10px 8px; }
 .composer .icon-btn { width: 44px; height: 44px; border-radius: 12px; }
@@ -185,20 +202,30 @@ body:not([data-view="dialog"]) .workspace-switch { display: none; }
 /* Сцена: шар, подпись, подсказки, «сегодня» */
 .stage { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; align-items: stretch; min-width: 0; min-height: 0; height: 100%; padding: 24px; gap: 16px; overflow: auto; border: 1px solid var(--panel-line); border-radius: var(--panel-r); background: var(--panel); box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent), 0 24px 60px -30px #000000A0; }
 .stage > * { flex-shrink: 0; }
-.stage-clock, .rings, .orbit-core::before, .said, .chain { display: none; }
+.rings, .orbit-core::before, .said, .chain { display: none; }
+/* Шапка записи: живое время моноширинным и дата, под ними волосяная линейка. */
+.stage-clock { order: -1; position: static; display: flex; align-items: baseline; gap: 12px; left: auto; top: auto; width: auto; height: auto; margin: 0 0 auto; padding: 0 2px 12px; border: 0; border-bottom: 1px solid var(--panel-line); border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; font: var(--fw-regular) var(--fs-lg)/20px var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.stage-clock .stage-date { display: inline; font: var(--fs-sm)/18px var(--font); color: var(--text-3); }
+.stage-clock .stage-date::first-letter { text-transform: uppercase; }
 .orbit { display: contents; }
-.orbit-core { order: 0; flex: none; align-self: center; position: relative; width: min(100%, calc(var(--orb-scale, 1) * 56vh)); aspect-ratio: 1; height: auto; animation: none; }
+.orbit-core { order: 0; flex: none; margin-top: 24px; align-self: center; position: relative; width: 216px; height: 216px; aspect-ratio: 1; animation: none; }
 #stageOrb { position: absolute; inset: 0; }
 #stageOrb .orb-wrap { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; }
-.scene-chips { order: 2; position: static; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; pointer-events: auto; inset: auto; }
-.scene-chips > button { position: static; display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 16px; border: 1px solid var(--panel-line); border-radius: 999px; background: var(--panel); color: var(--text); font-size: var(--fs-sm); }
-.scene-chips > button:hover { border-color: color-mix(in srgb, var(--hue) 55%, transparent); background: var(--hue-soft); }
-.scene-chips > button:disabled { opacity: .5; cursor: not-allowed; }
-.scene-name { order: 1; text-align: center; font: 500 var(--fs-sm)/18px var(--font); letter-spacing: 0; text-transform: none; color: var(--text-2); margin: 0; }
+/* Действия сцены — строки журнала: номер моноширинным, текст, стрелка; между строками волосяные линейки. */
+.scene-list { order: 2; list-style: none; margin: 8px 0 auto; padding: 0; border-top: 1px solid var(--panel-line); }
+.scene-list > li { border-bottom: 1px solid var(--panel-line); }
+.scene-list button { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: baseline; width: 100%; min-height: 44px; padding: 12px 4px; border: 0; border-radius: 0; background: transparent; color: var(--text); font-size: var(--fs-md); line-height: 20px; text-align: left; cursor: pointer; }
+.scene-go { color: var(--text-3); transition: transform 180ms var(--ease-out, ease), color 180ms var(--ease-out, ease); }
+.scene-list button:hover:not(:disabled) .scene-go, .scene-list button:focus-visible .scene-go { color: var(--hue); transform: translateX(3px); }
+.scene-list button:hover:not(:disabled) .scene-idx { color: var(--hue); }
+.scene-list button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.scene-list button:disabled { opacity: .5; cursor: not-allowed; }
+.scene-name { order: 1; text-align: center; font: 500 var(--fs-sm)/18px var(--font); letter-spacing: 0; text-transform: none; color: var(--text-2); margin: 8px 0 0; }
 #stageStatus { order: 1; border: 0; padding: 0 0 6px; background: none; text-align: center; }
 #stageStatus .status-text { display: flex; flex-direction: column; align-items: center; white-space: normal; gap: 8px; }
-#stageStatus .status-main { font: 400 32px/40px var(--font-head, var(--font)); white-space: normal; overflow-wrap: anywhere; }
-#stageStatus .status-sub { display: block; font: 400 var(--fs-md)/22px var(--font); color: var(--text-3); white-space: normal; overflow-wrap: anywhere; }
+#stageStatus .status-main { font: var(--fw-regular) 34px/40px var(--font-display); letter-spacing: -0.015em; white-space: normal; overflow-wrap: anywhere; }
+#stageStatus .status-sub { margin-top: 6px; }
+#stageStatus .status-sub { display: block; font: 400 var(--fs-sm)/18px var(--font); color: var(--text-2); white-space: normal; overflow-wrap: anywhere; }
 #statusSub:empty::before { content: "Ожидает задачу"; }
 .scene-today { order: 3; margin-top: auto; padding: 16px 20px; border: 1px solid var(--panel-line); border-radius: 16px; background: var(--panel); }
 .scene-today h2 { font: var(--fw-strong) var(--fs-sm)/18px var(--font); letter-spacing: 0; text-transform: none; color: var(--text-2); margin-bottom: 8px; }
@@ -243,6 +270,56 @@ html[data-glass="l"] .account-card { backdrop-filter: var(--glass-dialog, none);
 .dialog::backdrop { background: #05080EA6; }
 .dialog-actions .btn-primary { border-radius: 12px; }
 
+/* ── Свет главной: Nox живёт внутри окна ────────────────────────
+ * Один источник: тёплый ключевой луч сверху слева (золото) и заполняющий свет ядра (акцент темы) справа,
+ * там, где стоит шар. Свет зависит от состояния: в покое неподвижен, «думает» — дышит, «выполняет» —
+ * по верхнему краю бежит тонкая линия. «Свет за окном» выкл. или сплошной фон в «Виде» его убирают. */
+:root { --light-key: #E9B95C; --light-amt: 14%; --edge-hi: color-mix(in srgb, #fff 10%, transparent); }
+:root:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"]) { --light-key: #C9902E; --light-amt: 10%; --edge-hi: #FFFFFFD9; }
+body[data-view="dialog"] .main::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .8;
+  background:
+    linear-gradient(118deg, transparent 6%, color-mix(in srgb, var(--light-key) var(--light-amt), transparent) 20%, transparent 38%),
+    linear-gradient(118deg, transparent 30%, color-mix(in srgb, var(--light-key) calc(var(--light-amt) * .5), transparent) 40%, transparent 52%),
+    radial-gradient(34% 48% at 86% 40%, color-mix(in srgb, var(--hue) var(--light-amt), transparent), transparent 72%);
+  transition: opacity 600ms var(--ease-out, ease); }
+/* «Выполняет»: тонкая световая линия бежит по верхнему краю рабочей области. */
+body[data-view="dialog"] .main::after { content: ""; position: absolute; top: 0; left: 0; z-index: 2; width: 32%; height: 2px; pointer-events: none; opacity: 0;
+  background: linear-gradient(90deg, transparent, var(--hue), color-mix(in srgb, var(--light-key) 80%, var(--hue)), transparent); }
+body[data-view="dialog"] .main:has(#stage[data-state="acting"])::after { opacity: 1; animation: noxEdgeRun 2.6s linear infinite; }
+/* «Думает», ищет, проверяет: медленное дыхание света и ореола шара. */
+body[data-view="dialog"] .main:has(#stage:is([data-state="thinking"], [data-state="searching"], [data-state="verifying"]))::before { animation: noxBreath 4.8s ease-in-out infinite alternate; }
+body[data-view="dialog"] .main:has(#stage[data-state="acting"])::before { opacity: 1; }
+body[data-view="dialog"] .main:has(#stage:is([data-state="offline"], [data-state="stopped"], [data-state="error"]))::before { opacity: .35; }
+html:is([data-glow="off"], [data-bg="solid"]) .main::before { display: none; }
+@keyframes noxEdgeRun { from { transform: translateX(-100%); } to { transform: translateX(312.5%); } } /* 100% / 32%: линия проходит всю ширину */
+@keyframes noxBreath { from { opacity: .55; } to { opacity: 1; } }
+
+/* Ореол ядра: свет шара разливается только внутри сцены (сцена обрезает его своим краем). */
+.orbit-core { isolation: isolate; }
+.stage { overflow-x: hidden; } /* ореол шире шара: без горизонтальной прокрутки сцены */
+.orbit-core::after { content: ""; position: absolute; inset: -38%; z-index: -1; border-radius: 50%; pointer-events: none; opacity: .7;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--hue) 22%, transparent), color-mix(in srgb, var(--hue) 6%, transparent) 60%, transparent);
+  transition: opacity 600ms var(--ease-out, ease); }
+.stage:is([data-state="thinking"], [data-state="searching"], [data-state="verifying"]) .orbit-core::after { animation: noxBreath 4.8s ease-in-out infinite alternate; }
+.stage[data-state="acting"] .orbit-core::after { opacity: 1; }
+.stage:is([data-state="offline"], [data-state="stopped"], [data-state="error"]) .orbit-core::after { opacity: .2; }
+html[data-glow="off"] .orbit-core::after { display: none; }
+
+/* Стекло: панели пропускают свет, размытие — из настройки «Вид», сверху тонкий светлый край. */
+.rail { backdrop-filter: var(--glass-panel, none); -webkit-backdrop-filter: var(--glass-panel, none); }
+.stage { backdrop-filter: var(--glass-panel, none); -webkit-backdrop-filter: var(--glass-panel, none); }
+.convo, .convo:has(.feed-list > *), .convo:not(:has(.feed-list > *)):not(:has(.wait-tray:not([hidden]))), .stage { box-shadow: inset 0 1px 0 var(--edge-hi), 0 24px 60px -30px #000000A0; }
+
+/* Заголовки главной: один короткий светлый штрих под словами, не заливка и не градиент по тексту. */
+.chat-empty h2::after { content: ""; display: block; width: 56px; height: 2px; margin-top: 20px; border-radius: 2px; background: linear-gradient(90deg, var(--light-key), transparent); }
+#stageStatus .status-main::after { content: ""; display: block; width: 40px; height: 2px; margin: 12px auto 0; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--light-key), transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-view="dialog"] .main::before, body[data-view="dialog"] .main::after, .orbit-core::after { animation: none !important; transition: none !important; }
+  /* Без движения «выполняет» показывается неподвижной линией по всему верхнему краю. */
+  body[data-view="dialog"] .main:has(#stage[data-state="acting"])::after { width: 100%; transform: none; opacity: .6; }
+}
+
 /* ── Адаптивность ────────────────────────────────────────────── */
 @media (max-width: 1180px) {
   :root { --rail-w: 76px; }
@@ -279,7 +356,8 @@ html[data-glass="l"] .account-card { backdrop-filter: var(--glass-dialog, none);
   .workspace-switch select { max-width: 120px; }
   .banner-wrap { padding: 0 8px 8px; }
   .banner { flex-wrap: wrap; }
-  .scene-chips > button { font-size: var(--fs-xs); padding: 0 10px; min-height: 44px; }
+  .chat-empty h2 { font-size: 36px; line-height: 42px; }
+  .empty-legend li { grid-template-columns: 32px 76px minmax(0, 1fr); }
   .chat-tab-x { width: 44px; height: 44px; }
   .pick-trigger { min-height: 44px; }
   .chat-tab { min-height: 44px; }
