@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>Nox работает на вашем ПК</title>
+  <link rel="stylesheet" href="hands.css">
+</head>
+<!-- Надпись поверх всех окон, пока Джарвис управляет ПК. Окно без фокуса и не ловит мышь (main.js, showHands). -->
+<body class="hands-overlay">
+  <div class="hands-pill" role="status">
+    <span class="hands-dot" aria-hidden="true"></span>
+    <span class="hands-text">Nox работает на вашем ПК</span>
+    <span class="hands-sep" aria-hidden="true">·</span>
+    <kbd>Esc</kbd><span class="hands-hint">— остановить</span>
+  </div>
+</body>
+</html>

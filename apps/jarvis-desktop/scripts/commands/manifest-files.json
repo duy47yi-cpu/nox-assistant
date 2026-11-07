@@ -1,0 +1,232 @@
+[
+  {
+    "id": "open_downloads",
+    "title": "Открыть Загрузки",
+    "category": "файлы",
+    "phrases": ["открой загрузки", "покажи загрузки"],
+    "script": "files/open_downloads.py",
+    "args": [],
+    "risk": "T1",
+    "description": "Открывает папку Загрузки в проводнике"
+  },
+  {
+    "id": "open_documents",
+    "title": "Открыть Документы",
+    "category": "файлы",
+    "phrases": ["открой документы", "покажи документы"],
+    "script": "files/open_documents.py",
+    "args": [],
+    "risk": "T1",
+    "description": "Открывает папку Документы в проводнике"
+  },
+  {
+    "id": "open_desktop",
+    "title": "Открыть Рабочий стол",
+    "category": "файлы",
+    "phrases": ["открой рабочий стол", "покажи рабочий стол"],
+    "script": "files/open_desktop.py",
+    "args": [],
+    "risk": "T1",
+    "description": "Открывает папку Рабочий стол в проводнике (также если он в OneDrive)"
+  },
+  {
+    "id": "open_jarvis_workspace",
+    "title": "Открыть рабочую папку Jarvis",
+    "category": "файлы",
+    "phrases": ["открой папку jarvis", "открой рабочую папку джарвиса"],
+    "script": "files/open_jarvis_workspace.py",
+    "args": [],
+    "risk": "T1",
+    "description": "Открывает песочница workspace в проводнике, создаёт папку, если её нет"
+  },
+  {
+    "id": "open_jarvis_notes",
+    "title": "Открыть заметки Jarvis",
+    "category": "файлы",
+    "phrases": ["открой заметки", "покажи заметки"],
+    "script": "files/open_jarvis_notes.py",
+    "args": [],
+    "risk": "T1",
+    "description": "Открывает песочница workspace/notes в проводнике, создаёт папку, если её нет"
+  },
+  {
+    "id": "count_files",
+    "title": "Посчитать файлы",
+    "category": "файлы",
+    "phrases": ["сколько файлов в папке", "посчитай файлы в папке"],
+    "script": "files/count_files.py",
+    "args": ["path", "recursive"],
+    "risk": "T0",
+    "description": "Считает файлы в папке; путь необязателен (по умолчанию домашняя папка), --recursive включает вложенные"
+  },
+  {
+    "id": "folder_size",
+    "title": "Размер папки",
+    "category": "файлы",
+    "phrases": ["размер папки", "сколько весит папка"],
+    "script": "files/folder_size.py",
+    "args": ["path"],
+    "risk": "T0",
+    "description": "Показывает размер папки в мегабайтах и число файлов в ней"
+  },
+  {
+    "id": "disk_free",
+    "title": "Свободное место на диске",
+    "category": "файлы",
+    "phrases": ["сколько свободного места", "свободное место на диске"],
+    "script": "files/disk_free.py",
+    "args": ["path"],
+    "risk": "T0",
+    "description": "Показывает свободное и занятое место на диске"
+  },
+  {
+    "id": "recent_downloads",
+    "title": "Последние загрузки",
+    "category": "файлы",
+    "phrases": ["последние загрузки", "что я недавно скачал"],
+    "script": "files/recent_downloads.py",
+    "args": ["path"],
+    "risk": "T0",
+    "description": "Показывает 10 последних файлов в Загрузках по дате изменения"
+  },
+  {
+    "id": "large_files",
+    "title": "Большие файлы",
+    "category": "файлы",
+    "phrases": ["большие файлы", "найди большие файлы"],
+    "script": "files/large_files.py",
+    "args": ["path", "min_mb"],
+    "risk": "T0",
+    "description": "Ищет файлы больше N мегабайт в папке и вложенных папках (по умолчанию 100 МБ)"
+  },
+  {
+    "id": "find_duplicates",
+    "title": "Найти дубликаты",
+    "category": "файлы",
+    "phrases": ["найди дубликаты", "найди одинаковые файлы"],
+    "script": "files/find_duplicates.py",
+    "args": ["path"],
+    "risk": "T0",
+    "description": "Находит одинаковые файлы в папке: сравнивает размер, затем sha256"
+  },
+  {
+    "id": "find_file",
+    "title": "Найти файл",
+    "category": "файлы",
+    "phrases": ["найди файл", "поищи файл"],
+    "script": "files/find_file.py",
+    "args": ["name", "path", "max_depth", "limit"],
+    "risk": "T0",
+    "description": "Ищет файлы по части имени в домашней папке или указанной папке, глубина и число результатов ограничены"
+  },
+  {
+    "id": "file_info",
+    "title": "Информация о файле",
+    "category": "файлы",
+    "phrases": ["информация о файле", "покажи данные о файле"],
+    "script": "files/file_info.py",
+    "args": ["path"],
+    "risk": "T0",
+    "description": "Показывает размер, дату изменения и тип файла или папки"
+  },
+  {
+    "id": "read_text_file",
+    "title": "Прочитать текстовый файл",
+    "category": "файлы",
+    "phrases": ["прочитай файл", "покажи текст файла"],
+    "script": "files/read_text_file.py",
+    "args": ["path"],
+    "risk": "T0",
+    "description": "Выводит первые 2000 символов файла .txt, .md, .csv, .json или .log"
+  },
+  {
+    "id": "rename_bulk_preview",
+    "title": "Предпросмотр массового переименования",
+    "category": "файлы",
+    "phrases": ["предпросмотр переименования", "покажи как переименовать файлы"],
+    "script": "files/rename_bulk_preview.py",
+    "args": ["pattern", "path"],
+    "risk": "T0",
+    "description": "Показывает, как переименовались бы файлы по шаблону ({name} {ext} {n} {date}); ничего не переименовывает"
+  },
+  {
+    "id": "new_note",
+    "title": "Новая заметка",
+    "category": "файлы",
+    "phrases": ["создай заметку", "запиши заметку"],
+    "script": "files/new_note.py",
+    "args": ["text"],
+    "risk": "T1",
+    "description": "Создаёт заметку .md в песочница workspace/notes с датой в имени файла"
+  },
+  {
+    "id": "new_folder",
+    "title": "Новая папка",
+    "category": "файлы",
+    "phrases": ["создай папку", "новая папка"],
+    "script": "files/new_folder.py",
+    "args": ["name", "path"],
+    "risk": "T1",
+    "description": "Создаёт новую папку в указанной папке (по умолчанию домашней); существующую не трогает"
+  },
+  {
+    "id": "zip_folder",
+    "title": "Заархивировать папку",
+    "category": "файлы",
+    "phrases": ["заархивируй папку", "сделай архив папки"],
+    "script": "files/zip_folder.py",
+    "args": ["path"],
+    "risk": "T1",
+    "description": "Создаёт .zip рядом с папкой; существующий архив не перезаписывает"
+  },
+  {
+    "id": "unzip_here",
+    "title": "Распаковать архив",
+    "category": "файлы",
+    "phrases": ["распакуй архив", "распакуй zip"],
+    "script": "files/unzip_here.py",
+    "args": ["path"],
+    "risk": "T1",
+    "description": "Распаковывает .zip в папку рядом с архивом (имя папки совпадает с именем архива)"
+  },
+  {
+    "id": "open_file",
+    "title": "Открыть файл",
+    "category": "файлы",
+    "phrases": ["открой файл", "открой документ"],
+    "script": "files/open_file.py",
+    "args": ["path"],
+    "risk": "T1",
+    "description": "Открывает файл программой по умолчанию; исполняемые файлы (.exe, .bat, .ps1 и др.) не запускает"
+  },
+  {
+    "id": "sort_downloads_by_type",
+    "title": "Разложить загрузки по типу",
+    "category": "файлы",
+    "phrases": ["разложи загрузки", "наведи порядок в загрузках"],
+    "script": "files/sort_downloads_by_type.py",
+    "args": ["path", "confirm"],
+    "risk": "T2",
+    "description": "Раскладывает файлы Загрузок по папкам: картинки, документы, архивы, видео, прочее. Без --confirm только план"
+  },
+  {
+    "id": "clean_temp",
+    "title": "Очистить временные файлы",
+    "category": "файлы",
+    "phrases": ["очисти временные файлы", "почисти темп"],
+    "script": "files/clean_temp.py",
+    "args": ["confirm"],
+    "risk": "T2",
+    "description": "Отправляет в корзину файлы из TEMP старше 7 дней. Без --confirm только план"
+  },
+  {
+    "id": "empty_downloads_old",
+    "title": "Удалить старые загрузки",
+    "category": "файлы",
+    "phrases": ["удали старые загрузки", "почисти старые загрузки"],
+    "script": "files/empty_downloads_old.py",
+    "args": ["path", "confirm"],
+    "risk": "T2",
+    "description": "Отправляет в корзину файлы в Загрузках старше 90 дней. Без --confirm только план"
+  }
+]

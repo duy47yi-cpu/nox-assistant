@@ -1,0 +1,11 @@
+{
+  "name": "nox-assistant",
+  "private": true,
+  "description": "Корень проекта Nox Assistant. Скрипты запускают Джарвиса из apps/jarvis-desktop.",
+  "scripts": {
+    "start": "npm --prefix apps/jarvis-desktop start",
+    "test": "npm --prefix apps/jarvis-desktop test",
+    "check-brain": "npm --prefix apps/jarvis-desktop run check-brain",
+    "check-tools": "npm --prefix apps/jarvis-desktop run check-tools"
+  }
+}

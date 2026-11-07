@@ -1,0 +1,453 @@
+{
+ "queries": [
+  {
+   "id": "yt-cu-architecture",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:18.267Z"
+  },
+  {
+   "id": "yt-openai-operator",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:20.797Z"
+  },
+  {
+   "id": "yt-anthropic-cu",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:23.118Z"
+  },
+  {
+   "id": "yt-mariner",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:25.504Z"
+  },
+  {
+   "id": "yt-ufo",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:32.755Z"
+  },
+  {
+   "id": "yt-ui-tars",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:35.148Z"
+  },
+  {
+   "id": "yt-agent-s",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:37.961Z"
+  },
+  {
+   "id": "yt-omniparser",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:40.219Z"
+  },
+  {
+   "id": "yt-som",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:42.769Z"
+  },
+  {
+   "id": "yt-osworld",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:44.712Z"
+  },
+  {
+   "id": "yt-waa",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:46.905Z"
+  },
+  {
+   "id": "yt-a11y",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:49.462Z"
+  },
+  {
+   "id": "yt-grounding",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:52.293Z"
+  },
+  {
+   "id": "yt-opensource-cu",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:54.647Z"
+  },
+  {
+   "id": "yt-desktop-llm",
+   "engine": "youtube",
+   "at": "2026-11-04T17:51:57.036Z"
+  },
+  {
+   "id": "yt-self-operating",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:02.865Z"
+  },
+  {
+   "id": "yt-browser-use",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:05.379Z"
+  },
+  {
+   "id": "yt-long-horizon",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:08.470Z"
+  },
+  {
+   "id": "yt-memory-arch",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:15.951Z"
+  },
+  {
+   "id": "yt-memgpt",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:20.132Z"
+  },
+  {
+   "id": "yt-mem0",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:24.263Z"
+  },
+  {
+   "id": "yt-zep",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:29.027Z"
+  },
+  {
+   "id": "yt-episodic",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:30.886Z"
+  },
+  {
+   "id": "yt-longctx",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:33.573Z"
+  },
+  {
+   "id": "yt-memory-consolidation",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:36.285Z"
+  },
+  {
+   "id": "yt-reflection",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:38.495Z"
+  },
+  {
+   "id": "yt-voyager",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:42.102Z"
+  },
+  {
+   "id": "yt-self-improving",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:44.830Z"
+  },
+  {
+   "id": "yt-plan-execute",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:46.476Z"
+  },
+  {
+   "id": "yt-task-queue",
+   "engine": "youtube",
+   "at": "2026-11-04T17:52:53.475Z"
+  },
+  {
+   "id": "yt-openhands",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:09.069Z"
+  },
+  {
+   "id": "yt-manus",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:11.721Z"
+  },
+  {
+   "id": "yt-webarena",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:19.105Z"
+  },
+  {
+   "id": "yt-tutor",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:21.445Z"
+  },
+  {
+   "id": "yt-uia",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:23.695Z"
+  },
+  {
+   "id": "yt-pywinauto",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:29.850Z"
+  },
+  {
+   "id": "yt-ahk",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:33.497Z"
+  },
+  {
+   "id": "yt-powershell-ui",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:36.090Z"
+  },
+  {
+   "id": "yt-dpi",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:38.334Z"
+  },
+  {
+   "id": "yt-cdp",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:41.053Z"
+  },
+  {
+   "id": "yt-prompt-injection",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:43.541Z"
+  },
+  {
+   "id": "yt-cu-security",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:45.784Z"
+  },
+  {
+   "id": "yt-least-privilege",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:51.375Z"
+  },
+  {
+   "id": "yt-approval",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:54.479Z"
+  },
+  {
+   "id": "yt-sandbox",
+   "engine": "youtube",
+   "at": "2026-11-04T17:53:57.027Z"
+  },
+  {
+   "id": "yt-operator-safety",
+   "engine": "youtube",
+   "at": "2026-11-04T17:54:04.799Z"
+  },
+  {
+   "id": "yt-jarvis-oss",
+   "engine": "youtube",
+   "at": "2026-11-04T17:54:08.750Z"
+  },
+  {
+   "id": "yt-assistant-pc",
+   "engine": "youtube",
+   "at": "2026-11-04T17:54:11.427Z"
+  },
+  {
+   "id": "yt-voice-local",
+   "engine": "youtube",
+   "at": "2026-11-04T17:54:13.917Z"
+  },
+  {
+   "id": "yt-overlay",
+   "engine": "youtube",
+   "at": "2026-11-04T17:54:16.053Z"
+  },
+  {
+   "id": "g-cu-survey",
+   "engine": "google",
+   "at": "2026-11-04T17:54:28.616Z"
+  },
+  {
+   "id": "g-benchmarks",
+   "engine": "google",
+   "at": "2026-11-04T17:54:29.970Z"
+  },
+  {
+   "id": "g-ufo",
+   "engine": "google",
+   "at": "2026-11-04T17:54:31.289Z"
+  },
+  {
+   "id": "g-ui-tars",
+   "engine": "google",
+   "at": "2026-11-04T17:54:32.662Z"
+  },
+  {
+   "id": "g-omniparser",
+   "engine": "google",
+   "at": "2026-11-04T17:54:33.806Z"
+  },
+  {
+   "id": "g-anthropic-cu",
+   "engine": "google",
+   "at": "2026-11-04T17:54:34.927Z"
+  },
+  {
+   "id": "g-operator-card",
+   "engine": "google",
+   "at": "2026-11-04T17:54:36.074Z"
+  },
+  {
+   "id": "g-memory-survey",
+   "engine": "google",
+   "at": "2026-11-04T17:54:37.922Z"
+  },
+  {
+   "id": "g-memgpt",
+   "engine": "google",
+   "at": "2026-11-04T17:54:42.352Z"
+  },
+  {
+   "id": "g-voyager",
+   "engine": "google",
+   "at": "2026-11-04T17:54:47.731Z"
+  },
+  {
+   "id": "g-injection",
+   "engine": "google",
+   "at": "2026-11-04T17:54:54.009Z"
+  },
+  {
+   "id": "g-flaui",
+   "engine": "google",
+   "at": "2026-11-04T17:54:55.700Z"
+  },
+  {
+   "id": "g-permissions",
+   "engine": "google",
+   "at": "2026-11-04T17:54:57.040Z"
+  },
+  {
+   "id": "g-second-brain",
+   "engine": "google",
+   "at": "2026-11-04T17:55:12.392Z"
+  },
+  {
+   "id": "s-cu-survey",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:55:13.894Z"
+  },
+  {
+   "id": "s-grounding",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:55:17.471Z"
+  },
+  {
+   "id": "s-memory",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:55:20.437Z"
+  },
+  {
+   "id": "s-skills",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:55:21.896Z"
+  },
+  {
+   "id": "s-injection",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:55:23.841Z"
+  },
+  {
+   "id": "s-a11y",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:55:27.620Z"
+  },
+  {
+   "id": "s-tools",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:55:31.922Z"
+  },
+  {
+   "id": "s-oversight",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:55:33.120Z"
+  },
+  {
+   "id": "t-tiktok-cu",
+   "engine": "google",
+   "at": "2026-11-04T17:55:34.330Z"
+  },
+  {
+   "id": "t-tiktok-automation",
+   "engine": "google",
+   "at": "2026-11-04T17:55:35.667Z"
+  },
+  {
+   "id": "t-tiktok-jarvis",
+   "engine": "google",
+   "at": "2026-11-04T17:55:36.809Z"
+  },
+  {
+   "id": "t-tiktok-brain",
+   "engine": "google",
+   "at": "2026-11-04T17:59:37.988Z"
+  },
+  {
+   "id": "s-ufo2",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:59:39.503Z"
+  },
+  {
+   "id": "s-agent-s",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:59:41.866Z"
+  },
+  {
+   "id": "s-osworld2",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:59:44.432Z"
+  },
+  {
+   "id": "s-zep",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:59:46.816Z"
+  },
+  {
+   "id": "s-mem0",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:59:48.874Z"
+  },
+  {
+   "id": "s-voyager",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:59:53.877Z"
+  },
+  {
+   "id": "s-ui-tars",
+   "engine": "google_scholar",
+   "at": "2026-11-04T17:59:56.188Z"
+  }
+ ],
+ "transcripts": [
+  {
+   "v": "ODaHJzOyVCQ",
+   "at": "2026-11-04T17:56:01.014Z"
+  },
+  {
+   "v": "tyFPqtyOK5w",
+   "at": "2026-11-04T17:56:09.857Z"
+  },
+  {
+   "v": "qXsRh2k_0zI",
+   "at": "2026-11-04T17:56:18.524Z"
+  },
+  {
+   "v": "x1fawQEJXEQ",
+   "at": "2026-11-04T17:56:46.622Z"
+  },
+  {
+   "v": "SkBb-b18UNQ",
+   "at": "2026-11-04T17:57:16.948Z"
+  },
+  {
+   "v": "0bdmRn1edV4",
+   "at": "2026-11-04T17:57:22.862Z"
+  },
+  {
+   "v": "wqrkUtRauC4",
+   "at": "2026-11-04T17:57:29.508Z"
+  },
+  {
+   "v": "-YjbWjv1tJg",
+   "at": "2026-11-04T17:57:37.228Z"
+  }
+ ]
+}

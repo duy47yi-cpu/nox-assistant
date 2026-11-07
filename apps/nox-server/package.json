@@ -1,0 +1,13 @@
+{
+  "name": "nox-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Аккаунты, лимиты и пересылка запросов к модели для Nox Assistant",
+  "main": "index.js",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node index.js",
+    "backup": "node backup.js",
+    "test": "node --test"
+  }
+}

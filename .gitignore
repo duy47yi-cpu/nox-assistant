@@ -1,0 +1,41 @@
+# Секреты и локальные настройки — в репозиторий не попадают
+.env
+.env.local
+*.local
+
+# Зависимости (ставятся через npm install)
+apps/jarvis-desktop/node_modules/
+node_modules/
+
+# Данные приложения и рабочие папки: журналы, настройки, память, отчёты
+/data/
+/workspace/
+/workspaces/
+
+# Сборка приложения (npm run dist): большие файлы
+apps/jarvis-desktop/dist/
+apps/jarvis-desktop/build-info.json
+
+# База сервера Nox (аккаунты, хэши, токены)
+apps/nox-server/*.db
+apps/nox-server/*.db-*
+
+# Справочные материалы: видео и большие медиафайлы
+РЕФЕРЕНСЫ/
+
+# Мусор инструментов и агентов
+\[object Object\]
+.perch/
+.workbuddy-ai/
+.zcode/
+.claude/
+.megapowers/
+handoff/
+.tmp/
+
+# Системное и временное
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+Thumbs.db

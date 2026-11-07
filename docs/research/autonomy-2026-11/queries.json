@@ -1,0 +1,506 @@
+[
+ {
+  "id": "yt-cu-architecture",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "computer use agent architecture"
+ },
+ {
+  "id": "yt-openai-operator",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "OpenAI Operator computer use agent"
+ },
+ {
+  "id": "yt-anthropic-cu",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "Anthropic Claude computer use"
+ },
+ {
+  "id": "yt-mariner",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "Google Project Mariner computer use"
+ },
+ {
+  "id": "yt-ufo",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "Microsoft UFO Windows agent"
+ },
+ {
+  "id": "yt-ui-tars",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "UI-TARS GUI agent"
+ },
+ {
+  "id": "yt-agent-s",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "Agent-S computer use framework"
+ },
+ {
+  "id": "yt-omniparser",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "OmniParser screen parsing"
+ },
+ {
+  "id": "yt-som",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "Set-of-Mark GUI grounding"
+ },
+ {
+  "id": "yt-osworld",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "OSWorld computer agent benchmark"
+ },
+ {
+  "id": "yt-waa",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "WindowsAgentArena benchmark"
+ },
+ {
+  "id": "yt-a11y",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "accessibility tree GUI automation agent"
+ },
+ {
+  "id": "yt-grounding",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "GUI agent grounding element localization"
+ },
+ {
+  "id": "yt-opensource-cu",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "open source computer use agent"
+ },
+ {
+  "id": "yt-desktop-llm",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "desktop automation LLM"
+ },
+ {
+  "id": "yt-self-operating",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "self-operating computer agent"
+ },
+ {
+  "id": "yt-browser-use",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "browser use agent automation"
+ },
+ {
+  "id": "yt-long-horizon",
+  "engine": "youtube",
+  "tag": "computer-use",
+  "q": "long horizon computer use agent"
+ },
+ {
+  "id": "yt-memory-arch",
+  "engine": "youtube",
+  "tag": "memory",
+  "q": "LLM agent memory architecture"
+ },
+ {
+  "id": "yt-memgpt",
+  "engine": "youtube",
+  "tag": "memory",
+  "q": "MemGPT Letta memory"
+ },
+ {
+  "id": "yt-mem0",
+  "engine": "youtube",
+  "tag": "memory",
+  "q": "Mem0 memory layer agents"
+ },
+ {
+  "id": "yt-zep",
+  "engine": "youtube",
+  "tag": "memory",
+  "q": "Zep temporal knowledge graph memory"
+ },
+ {
+  "id": "yt-episodic",
+  "engine": "youtube",
+  "tag": "memory",
+  "q": "episodic memory AI agent"
+ },
+ {
+  "id": "yt-longctx",
+  "engine": "youtube",
+  "tag": "memory",
+  "q": "long context vs RAG agents"
+ },
+ {
+  "id": "yt-memory-consolidation",
+  "engine": "youtube",
+  "tag": "memory",
+  "q": "memory consolidation LLM agent"
+ },
+ {
+  "id": "yt-reflection",
+  "engine": "youtube",
+  "tag": "learning",
+  "q": "agent reflection self-correction"
+ },
+ {
+  "id": "yt-voyager",
+  "engine": "youtube",
+  "tag": "learning",
+  "q": "Voyager skill library agent"
+ },
+ {
+  "id": "yt-self-improving",
+  "engine": "youtube",
+  "tag": "learning",
+  "q": "self-improving LLM agent"
+ },
+ {
+  "id": "yt-plan-execute",
+  "engine": "youtube",
+  "tag": "learning",
+  "q": "plan and execute agent pattern"
+ },
+ {
+  "id": "yt-task-queue",
+  "engine": "youtube",
+  "tag": "learning",
+  "q": "autonomous agent task queue"
+ },
+ {
+  "id": "yt-openhands",
+  "engine": "youtube",
+  "tag": "learning",
+  "q": "OpenHands autonomous coding agent"
+ },
+ {
+  "id": "yt-manus",
+  "engine": "youtube",
+  "tag": "learning",
+  "q": "Manus autonomous agent"
+ },
+ {
+  "id": "yt-webarena",
+  "engine": "youtube",
+  "tag": "learning",
+  "q": "WebArena benchmark agent"
+ },
+ {
+  "id": "yt-tutor",
+  "engine": "youtube",
+  "tag": "learning",
+  "q": "AI tutor agent adaptive learning"
+ },
+ {
+  "id": "yt-uia",
+  "engine": "youtube",
+  "tag": "windows",
+  "q": "Windows UI Automation Python"
+ },
+ {
+  "id": "yt-pywinauto",
+  "engine": "youtube",
+  "tag": "windows",
+  "q": "pywinauto automation tutorial"
+ },
+ {
+  "id": "yt-ahk",
+  "engine": "youtube",
+  "tag": "windows",
+  "q": "AutoHotkey AI automation"
+ },
+ {
+  "id": "yt-powershell-ui",
+  "engine": "youtube",
+  "tag": "windows",
+  "q": "PowerShell UI automation"
+ },
+ {
+  "id": "yt-dpi",
+  "engine": "youtube",
+  "tag": "windows",
+  "q": "Windows DPI scaling automation coordinates"
+ },
+ {
+  "id": "yt-cdp",
+  "engine": "youtube",
+  "tag": "windows",
+  "q": "Chrome DevTools Protocol automation"
+ },
+ {
+  "id": "yt-prompt-injection",
+  "engine": "youtube",
+  "tag": "safety",
+  "q": "prompt injection AI agent defense"
+ },
+ {
+  "id": "yt-cu-security",
+  "engine": "youtube",
+  "tag": "safety",
+  "q": "computer use agent security risks"
+ },
+ {
+  "id": "yt-least-privilege",
+  "engine": "youtube",
+  "tag": "safety",
+  "q": "AI agent least privilege permissions"
+ },
+ {
+  "id": "yt-approval",
+  "engine": "youtube",
+  "tag": "safety",
+  "q": "human in the loop approval AI agent"
+ },
+ {
+  "id": "yt-sandbox",
+  "engine": "youtube",
+  "tag": "safety",
+  "q": "AI agent sandbox desktop VM"
+ },
+ {
+  "id": "yt-operator-safety",
+  "engine": "youtube",
+  "tag": "safety",
+  "q": "OpenAI Operator safety"
+ },
+ {
+  "id": "yt-jarvis-oss",
+  "engine": "youtube",
+  "tag": "product",
+  "q": "Jarvis AI assistant open source"
+ },
+ {
+  "id": "yt-assistant-pc",
+  "engine": "youtube",
+  "tag": "product",
+  "q": "AI assistant controls computer desktop"
+ },
+ {
+  "id": "yt-voice-local",
+  "engine": "youtube",
+  "tag": "product",
+  "q": "local voice assistant Whisper Windows"
+ },
+ {
+  "id": "yt-overlay",
+  "engine": "youtube",
+  "tag": "product",
+  "q": "desktop AI assistant overlay UX"
+ },
+ {
+  "id": "g-cu-survey",
+  "engine": "google",
+  "tag": "computer-use",
+  "q": "computer use agent survey arxiv GUI automation 2026"
+ },
+ {
+  "id": "g-benchmarks",
+  "engine": "google",
+  "tag": "computer-use",
+  "q": "OSWorld WindowsAgentArena GUI agent benchmark results"
+ },
+ {
+  "id": "g-ufo",
+  "engine": "google",
+  "tag": "computer-use",
+  "q": "Microsoft UFO GitHub Windows agent"
+ },
+ {
+  "id": "g-ui-tars",
+  "engine": "google",
+  "tag": "computer-use",
+  "q": "UI-TARS GUI agent paper"
+ },
+ {
+  "id": "g-omniparser",
+  "engine": "google",
+  "tag": "computer-use",
+  "q": "OmniParser screen parsing paper Microsoft"
+ },
+ {
+  "id": "g-anthropic-cu",
+  "engine": "google",
+  "tag": "computer-use",
+  "q": "Anthropic computer use documentation best practices"
+ },
+ {
+  "id": "g-operator-card",
+  "engine": "google",
+  "tag": "computer-use",
+  "q": "OpenAI Operator system card computer use"
+ },
+ {
+  "id": "g-memory-survey",
+  "engine": "google",
+  "tag": "memory",
+  "q": "LLM agent memory survey arxiv long-term memory"
+ },
+ {
+  "id": "g-memgpt",
+  "engine": "google",
+  "tag": "memory",
+  "q": "MemGPT paper arXiv memory management"
+ },
+ {
+  "id": "g-voyager",
+  "engine": "google",
+  "tag": "learning",
+  "q": "Voyager skill library paper Minecraft agent"
+ },
+ {
+  "id": "g-injection",
+  "engine": "google",
+  "tag": "safety",
+  "q": "indirect prompt injection computer use agent defense"
+ },
+ {
+  "id": "g-flaui",
+  "engine": "google",
+  "tag": "windows",
+  "q": "Windows UI Automation FlaUI python accessibility"
+ },
+ {
+  "id": "g-permissions",
+  "engine": "google",
+  "tag": "safety",
+  "q": "AI agent permissions least privilege capability design"
+ },
+ {
+  "id": "g-second-brain",
+  "engine": "google",
+  "tag": "memory",
+  "q": "personal AI assistant memory second brain architecture local"
+ },
+ {
+  "id": "s-cu-survey",
+  "engine": "google_scholar",
+  "tag": "computer-use",
+  "q": "computer use agents GUI automation survey"
+ },
+ {
+  "id": "s-grounding",
+  "engine": "google_scholar",
+  "tag": "computer-use",
+  "q": "GUI grounding benchmark screen understanding"
+ },
+ {
+  "id": "s-memory",
+  "engine": "google_scholar",
+  "tag": "memory",
+  "q": "long-term memory LLM agents survey"
+ },
+ {
+  "id": "s-skills",
+  "engine": "google_scholar",
+  "tag": "learning",
+  "q": "self-improving agents skill library experience"
+ },
+ {
+  "id": "s-injection",
+  "engine": "google_scholar",
+  "tag": "safety",
+  "q": "indirect prompt injection LLM agents"
+ },
+ {
+  "id": "s-a11y",
+  "engine": "google_scholar",
+  "tag": "windows",
+  "q": "desktop automation accessibility tree agent"
+ },
+ {
+  "id": "s-tools",
+  "engine": "google_scholar",
+  "tag": "learning",
+  "q": "tool selection many tools LLM agent"
+ },
+ {
+  "id": "s-oversight",
+  "engine": "google_scholar",
+  "tag": "safety",
+  "q": "human oversight AI agents approval"
+ },
+ {
+  "id": "t-tiktok-cu",
+  "engine": "google",
+  "tag": "tiktok",
+  "q": "site:tiktok.com AI computer use agent"
+ },
+ {
+  "id": "t-tiktok-automation",
+  "engine": "google",
+  "tag": "tiktok",
+  "q": "site:tiktok.com AI automation desktop"
+ },
+ {
+  "id": "t-tiktok-jarvis",
+  "engine": "google",
+  "tag": "tiktok",
+  "q": "site:tiktok.com Jarvis AI assistant"
+ },
+ {
+  "id": "t-tiktok-brain",
+  "engine": "google",
+  "tag": "tiktok",
+  "q": "site:tiktok.com second brain AI"
+ },
+ {
+  "id": "s-ufo2",
+  "engine": "google_scholar",
+  "tag": "computer-use",
+  "q": "UFO2 agent operating system Windows"
+ },
+ {
+  "id": "s-agent-s",
+  "engine": "google_scholar",
+  "tag": "computer-use",
+  "q": "Agent S open agentic framework uses computers like human"
+ },
+ {
+  "id": "s-osworld2",
+  "engine": "google_scholar",
+  "tag": "computer-use",
+  "q": "OSWorld 2 long-horizon computer use benchmark"
+ },
+ {
+  "id": "s-zep",
+  "engine": "google_scholar",
+  "tag": "memory",
+  "q": "Zep temporal knowledge graph agent memory"
+ },
+ {
+  "id": "s-mem0",
+  "engine": "google_scholar",
+  "tag": "memory",
+  "q": "Mem0 building production-ready AI agents memory"
+ },
+ {
+  "id": "s-voyager",
+  "engine": "google_scholar",
+  "tag": "learning",
+  "q": "Voyager open-ended embodied agent skill library"
+ },
+ {
+  "id": "s-ui-tars",
+  "engine": "google_scholar",
+  "tag": "computer-use",
+  "q": "UI-TARS automated GUI interaction"
+ },
+ {
+  "id": "s-omniparser",
+  "engine": "google_scholar",
+  "tag": "computer-use",
+  "q": "OmniParser parsing user interface screenshots"
+ }
+]

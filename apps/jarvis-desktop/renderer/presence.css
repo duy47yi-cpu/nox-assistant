@@ -1,0 +1,295 @@
+/* Nox: вид настольного ассистента. Рейка с подписями, крошки в шапке, мягкие панели, шар на сцене.
+ * Цвета только из токенов темы (themes.css), подключается последним. */
+:root { --rail-w: 216px; --header-h: 64px; --pad: 28px; --panel-r: 16px;
+  --font-reply: var(--font-head);
+  --panel: color-mix(in srgb, var(--text) var(--panel-pct, 4%), transparent);
+  --panel-2: color-mix(in srgb, var(--text) calc(var(--panel-pct, 4%) * 1.75), transparent);
+  --panel-line: color-mix(in srgb, var(--text) 10%, transparent);
+  --hue-soft: color-mix(in srgb, var(--hue) 16%, transparent);
+  /* Размытие стекла: «как сейчас» — только поле ввода, «стекло» — ещё панель чата и диалоги,
+   * «без размытия» — выключено. Значение --glass-blur ставит theme-boot.js (look.blur). */
+  --glass-composer: blur(20px) saturate(1.5);
+  --glass-panel: none;
+  --glass-dialog: none; }
+:root[data-rail="collapsed"] { --rail-w: 76px; }
+html[data-glass="off"] { --glass-composer: none; --glass-panel: none; --glass-dialog: none; }
+html[data-glass="l"] {
+  --glass-composer: blur(var(--glass-blur, 28px)) saturate(1.6);
+  --glass-panel: blur(var(--glass-blur, 28px)) saturate(170%);
+  --glass-dialog: blur(var(--glass-blur, 28px)) saturate(170%); }
+/* Сплошной фон: без градиента темы, ровный цвет (look.bg = solid). */
+html[data-bg="solid"] .app, html[data-bg="solid"] .account-gate { background: var(--bg); }
+
+/* Свой цвет акцента (theme-boot.js ставит --user-hue и --user-ink на корень). */
+html[data-accent], html[data-accent] body { --hue: var(--user-hue); --accent-ink: var(--user-ink); }
+.accent-pick { display: flex; gap: 12px; align-items: center; }
+.accent-opt { position: relative; width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 1px solid var(--panel-line); background: var(--swatch, transparent); }
+.accent-opt[data-accent-opt="theme"] { background: repeating-linear-gradient(45deg, transparent 0 4px, var(--panel-2) 4px 8px); }
+.accent-opt[aria-checked="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text); }
+
+/* ── Каркас и свет за окном ──────────────────────────────────── */
+.app { position: relative; overflow: clip; }
+.app::before { content: ""; display: block !important; position: absolute; z-index: 0; pointer-events: none; top: auto; left: auto; right: -20%; bottom: -42%; width: 74%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--hue) 30%, transparent), transparent); opacity: .62; }
+.app::after { content: ""; position: absolute; z-index: 0; pointer-events: none; top: -36%; left: -12%; width: 56%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--hue) 9%, transparent), transparent); }
+.rail, .main { position: relative; z-index: 1; }
+html[data-glow="off"] .app::before, html[data-glow="off"] .app::after { display: none !important; }
+
+/* Сцена: только шар, слово состояния и подсказки. Доска, «сегодня», «требуют внимания», миссии и виджеты не показываются:
+ * счётчик «Ждёт вас» остаётся в шапке, дела открываются по нему. */
+.scene-today, .board, .wait-tray, .wait-restore, .missions-bar, .missions, .wgt-row { display: none !important; }
+.stage { justify-content: center; }
+.accent-row, .look-row { align-items: center; }
+.look-select { flex: none; width: 240px; max-width: 50%; }
+.look-row .set-text, .accent-row .set-text { flex: 1 1 auto; min-width: 0; }
+.look-seg { flex: none; }
+.mcp-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.mcp-row { gap: 12px; }
+.mcp-state { font-size: var(--fs-xs); color: var(--text-2); padding: 2px 10px; border: 1px solid var(--panel-line); border-radius: 999px; white-space: nowrap; }
+.mcp-state[data-tone="ok"] { color: var(--ok); border-color: var(--ok-line); }
+.mcp-form { display: grid; gap: 12px; margin-top: 8px; }
+.mcp-form .field { display: grid; gap: 4px; }
+.mcp-form-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.rail-account { margin-bottom: 4px; }
+.contour { display: none !important; }
+
+/* ── Рейка ───────────────────────────────────────────────────── */
+.rail { width: var(--rail-w); align-items: stretch; padding: 24px 12px 16px; background: color-mix(in srgb, var(--bg) 62%, transparent); border-right: 1px solid var(--panel-line); }
+.rail-brand { display: flex; align-items: center; gap: 12px; height: 44px; margin: 0 8px 24px; font: var(--fw-strong) 20px/1 var(--font); color: var(--text); }
+.rail-mark { flex: none; width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 34% 28%, #fff 0 6%, color-mix(in srgb, var(--hue) 55%, #fff) 22%, var(--hue) 52%, color-mix(in srgb, var(--hue) 35%, #000) 100%); box-shadow: 0 0 20px color-mix(in srgb, var(--hue) 50%, transparent), inset 0 0 0 1px color-mix(in srgb, #fff 22%, transparent); }
+.rail-list { gap: 4px; width: 100%; }
+.rail-item, .rail-toggle { position: relative; flex-direction: row; justify-content: flex-start; gap: 12px; width: 100%; height: 48px; padding: 0 12px; border-radius: 12px; font-size: var(--fs-md); color: var(--text-2); }
+.rail-item:hover, .rail-toggle:hover { background: var(--panel-2); color: var(--text); transform: none; }
+.rail-item[aria-current="page"] { background: var(--hue-soft); color: var(--text); }
+.rail-item[aria-current="page"] .rail-icon { color: var(--hue); }
+.rail-item[aria-current="page"]::before { content: ""; position: absolute; left: -12px; top: 12px; width: 4px; height: 24px; border-radius: 0 3px 3px 0; background: var(--hue); }
+.rail-icon svg, .rail-toggle-icon svg { width: 21px; height: 21px; }
+.rail-label { font-size: var(--fs-md); line-height: 20px; max-width: none; }
+.rail-count { top: 12px; right: 12px; }
+.rail-dot { top: 16px; right: 16px; }
+.rail-foot { margin-top: auto; width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.rail-toggle { border: 0; background: transparent; }
+:root[data-rail="collapsed"] .rail-brand-text, :root[data-rail="collapsed"] .rail-label { display: none; }
+:root[data-rail="collapsed"] .rail-item, :root[data-rail="collapsed"] .rail-toggle { justify-content: center; padding: 0; }
+:root[data-rail="collapsed"] .rail-brand { justify-content: center; margin-inline: 0; }
+:root[data-rail="collapsed"] .rail-item[aria-current="page"]::before { left: -12px; }
+:root[data-rail="collapsed"] .rail-count { right: 8px; top: 6px; }
+
+/* ── Шапка: «Nox Assistant | Раздел» ─────────────────────────── */
+.topbar { height: var(--header-h); padding: 0 var(--pad); background: transparent; border: 0; gap: 16px; }
+.topbar::before { content: "Nox Assistant"; order: 0; font: 500 18px/1 var(--font); color: var(--text-2); white-space: nowrap; }
+.topbar::after { display: none !important; }
+.status-line { order: 1; flex: 1 1 auto; gap: 0; }
+.view-title { order: 0; margin: 0 0 0 16px; padding-left: 16px; border-left: 1px solid var(--panel-line); font: 400 22px/28px var(--font-head); color: var(--text); }
+.turn > .md { font-family: var(--font-reply); }
+body[data-view="dialog"] .view-title { position: static; width: auto; height: auto; overflow: hidden; clip: auto; clip-path: none; margin: 0 0 0 16px; padding-left: 16px; border-left: 1px solid var(--panel-line); }
+.crumb { order: 1; font: 400 22px/28px var(--font-head); }
+.header-state { order: 2; margin-left: 16px; display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font-size: var(--fs-sm); }
+.header-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--hue); }
+.header-state[data-state="waiting_approval"] { color: var(--warn); }
+.header-state[data-state="error"] { color: var(--err); }
+body:not([data-view="dialog"]) .header-state { display: none; }
+.status-line .orb-wrap { order: 3; margin-left: 12px; width: 30px; height: 30px; }
+body:not([data-view="dialog"]) .status-line .orb-wrap { display: none; }
+.status-text { order: 4; margin-left: 12px; }
+body:not([data-view="dialog"]) .status-line .status-sub { display: none; }
+/* На главной слову состояния место на сцене, но живой регион #statusText (aria-live) должен
+ * продолжать работать: прячем его визуально, а не display:none, иначе смена состояния не читается. */
+body[data-view="dialog"] .status-line > .status-text { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* Цвет слова состояния и точки в шапке для новых состояний (успех, отмена). */
+.status-main[data-state="success"], .header-state[data-state="success"] { color: var(--ok); }
+.status-main[data-state="cancelled"], .header-state[data-state="cancelled"] { color: var(--text-2); }
+.header-state[data-state="success"]::before { background: var(--ok); }
+.header-state[data-state="cancelled"]::before { background: var(--text-2); }
+.header-state[data-state="waiting_approval"]::before { background: var(--warn); }
+.header-state[data-state="error"]::before { background: var(--err); }
+.stage[data-state="success"] #sceneTitle { color: var(--ok); }
+.stage[data-state="cancelled"] #sceneTitle { color: var(--text-2); }
+.topbar-right { order: 2; margin-left: auto; gap: 10px; }
+.you-half, .mode-chip { height: 40px; padding: 0 16px; border-radius: 999px; background: var(--panel); border: 1px solid var(--panel-line); color: var(--text); }
+.mode-chip { padding-right: 12px; }
+.you-half:hover, .mode-chip:hover { background: var(--panel-2); border-color: color-mix(in srgb, var(--text) 18%, transparent); }
+.btn-stop { border-radius: 999px; min-height: 40px; }
+.workspace-switch { padding: 0; gap: 8px; }
+.workspace-switch label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.workspace-switch select { flex: none; max-width: 170px; min-height: 36px; background: var(--panel-2); border: 1px solid var(--panel-line); border-radius: 10px; }
+body:not([data-view="dialog"]) .workspace-switch { display: none; }
+.banner-wrap { padding: 0 var(--pad) 10px; }
+.banner { max-width: none; background: var(--warn-bg); border-radius: 16px; }
+.banner[data-kind="key"] { background: var(--panel); border-color: var(--panel-line); }
+.banner[data-kind="key"] .banner-icon { color: var(--text-2); }
+
+/* ── Области ─────────────────────────────────────────────────── */
+.view { padding: 0 var(--pad) var(--pad); }
+.page { max-width: 1240px; padding: 0; margin: 0; }
+.card, .set-section, .journal-card { background: var(--panel); border: 1px solid var(--panel-line); border-radius: var(--panel-r); }
+.set-section { padding: 20px 24px; gap: 0; }
+.set-title { font: var(--fw-strong) 16px/24px var(--font); margin-bottom: 8px; }
+
+/* ── Главная: чат слева, сцена с шаром справа ─────────────────── */
+.view-dialog { display: grid; grid-template-columns: minmax(0, 1fr) clamp(380px, 40%, 560px); grid-template-rows: minmax(0, 1fr); gap: 20px; overflow: hidden; padding: 0 var(--pad) var(--pad); }
+.convo, .convo:has(.feed-list > *), .convo:not(:has(.feed-list > *)):not(:has(.wait-tray:not([hidden]))) { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; min-height: 0; height: 100%; max-height: 100%; margin: 0; padding: 0; border: 1px solid var(--panel-line); border-radius: var(--panel-r); background: var(--panel); box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent), 0 24px 60px -30px #000000A0; backdrop-filter: var(--glass-panel, none); -webkit-backdrop-filter: var(--glass-panel, none); overflow: hidden; }
+.convo::before { display: none; }
+.convo > .workspace-switch { padding: 16px 20px 0; }
+.workspace-note { padding: 8px 20px 0; }
+.chat-tabs { display: flex; align-items: center; gap: 8px; padding: 16px 20px 0; }
+.chat-tabs-list { gap: 6px; }
+.chat-tab { min-height: 36px; border-radius: 12px; background: transparent; border: 1px solid transparent; color: var(--text-2); }
+.chat-tab:hover { background: var(--panel-2); color: var(--text); }
+.chat-tab[aria-selected="true"], .chat-tab[aria-current="true"], .chat-tab.is-active { background: var(--hue-soft); border-color: color-mix(in srgb, var(--hue) 40%, transparent); color: var(--text); }
+.chat-new { border-radius: 12px; background: var(--hue); color: var(--accent-ink); }
+.feed, .convo:not(:has(.feed-list > *)):not(:has(.wait-tray:not([hidden]))) .feed { flex: 1; min-height: 0; padding: 0 22px; }
+.feed-col { max-width: none; padding: 18px 0 20px; }
+.feed-list { gap: 24px; }
+.chat-empty { padding: 56px 8px; gap: 16px; }
+.chat-empty h2 { font: 400 32px/40px var(--font-head); }
+.chat-empty p { max-width: 400px; line-height: 24px; color: var(--text-2); }
+.chat-empty > .quick { position: static; display: flex; flex-wrap: wrap; justify-content: flex-start; width: auto; margin-top: 6px; }
+.chat-empty .quick-chip { position: static; transform: none; max-width: 100%; }
+.msg-user { align-self: flex-end; max-width: 80%; }
+.msg-user-text { padding: 12px 16px; background: var(--hue); color: var(--accent-ink); border: 0; border-radius: 18px 18px 6px 18px; font-size: var(--fs-read); line-height: 23px; }
+.turn { padding: 0; border: 0; background: none; gap: 16px; }
+.turn::before { display: none; }
+.turn > .md { align-self: flex-start; max-width: 94%; padding: 12px 16px; border: 1px solid var(--panel-line); border-radius: 18px 18px 18px 6px; background: var(--panel-2); font-size: var(--fs-read); line-height: 24px; }
+.turn-acts { width: 100%; border: 1px solid var(--panel-line); background: var(--panel); border-radius: 16px; padding: 16px; }
+.turn-acts .acts-sum { display: flex; width: 100%; margin: 0; padding: 0; font-size: var(--fs-read); color: var(--text); min-height: 34px; }
+.acts-text { white-space: normal; }
+.acts-list { border: 0; padding: 8px 0 0; gap: 0; }
+.act-row { padding: 12px 0; border-top: 1px solid var(--panel-line); }
+.act-row .status { margin-left: auto; order: 2; }
+.act-row .act-name { order: 0; }
+.act-row .act-args, .act-row .act-sum { order: 3; }
+.acts-progress { width: 100%; height: 4px; display: block; margin: 12px 0 4px; accent-color: var(--hue); }
+.acts-progress[hidden] { display: none; }
+.acts-progress::-webkit-progress-bar { background: var(--panel-2); border-radius: 4px; }
+.acts-progress::-webkit-progress-value { background: var(--hue); border-radius: 4px; }
+.turn-acts[data-tone="pending"] { border-color: var(--warn-line); }
+.turn-acts[data-tone="error"] { border-color: var(--err-line); }
+.turn-acts[data-tone="unverified"] .acts-icon { color: var(--text-2); }
+.task-card::before { width: 1px; }
+.stage-dock { flex: none; padding: 16px 20px; background: transparent; border-top: 1px solid var(--panel-line); }
+.composer { padding: 8px; border-radius: 20px; background: linear-gradient(180deg, color-mix(in srgb, var(--text) 11%, transparent), color-mix(in srgb, var(--text) 4%, transparent)); border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); backdrop-filter: var(--glass-composer, blur(20px) saturate(1.5)); -webkit-backdrop-filter: var(--glass-composer, blur(20px) saturate(1.5)); box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent), 0 16px 40px -20px #000000B0; }
+.composer-input { background: transparent; }
+.stage-dock { background: transparent; border-top: 0; }
+.composer:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue) 22%, transparent); border-color: color-mix(in srgb, var(--hue) 60%, transparent); }
+.composer-row { display: flex; align-items: center; gap: 8px; }
+.composer-input { min-height: 44px; font-size: var(--fs-read); line-height: 24px; padding: 10px 8px; }
+.composer .icon-btn { width: 44px; height: 44px; border-radius: 12px; }
+.composer .icon-btn-primary.composer-btn { width: auto; padding: 0 20px; gap: 10px; border-radius: 12px; font-weight: var(--fw-strong); }
+.composer-btn-label { font-size: var(--fs-md); }
+.composer .icon-btn-stop .composer-btn-label { display: none; }
+.composer-hint { display: block !important; padding: 8px 4px 0; font-size: var(--fs-2xs); color: var(--text-3); }
+.composer-picks { border-top: 1px solid var(--panel-line); padding-top: 8px; margin-top: 4px; }
+.pick-trigger { border-radius: 999px; background: var(--panel); border: 1px solid var(--panel-line); }
+.to-bottom { border-radius: 999px; }
+
+/* Сцена: шар, подпись, подсказки, «сегодня» */
+.stage { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; align-items: stretch; min-width: 0; min-height: 0; height: 100%; padding: 24px; gap: 16px; overflow: auto; border: 1px solid var(--panel-line); border-radius: var(--panel-r); background: var(--panel); box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent), 0 24px 60px -30px #000000A0; }
+.stage > * { flex-shrink: 0; }
+.stage-clock, .rings, .orbit-core::before, .said, .chain { display: none; }
+.orbit { display: contents; }
+.orbit-core { order: 0; flex: none; align-self: center; position: relative; width: min(100%, calc(var(--orb-scale, 1) * 56vh)); aspect-ratio: 1; height: auto; animation: none; }
+#stageOrb { position: absolute; inset: 0; }
+#stageOrb .orb-wrap { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; }
+.scene-chips { order: 2; position: static; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; pointer-events: auto; inset: auto; }
+.scene-chips > button { position: static; display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 16px; border: 1px solid var(--panel-line); border-radius: 999px; background: var(--panel); color: var(--text); font-size: var(--fs-sm); }
+.scene-chips > button:hover { border-color: color-mix(in srgb, var(--hue) 55%, transparent); background: var(--hue-soft); }
+.scene-chips > button:disabled { opacity: .5; cursor: not-allowed; }
+.scene-name { order: 1; text-align: center; font: 500 var(--fs-sm)/18px var(--font); letter-spacing: 0; text-transform: none; color: var(--text-2); margin: 0; }
+#stageStatus { order: 1; border: 0; padding: 0 0 6px; background: none; text-align: center; }
+#stageStatus .status-text { display: flex; flex-direction: column; align-items: center; white-space: normal; gap: 8px; }
+#stageStatus .status-main { font: 400 32px/40px var(--font-head, var(--font)); white-space: normal; overflow-wrap: anywhere; }
+#stageStatus .status-sub { display: block; font: 400 var(--fs-md)/22px var(--font); color: var(--text-3); white-space: normal; overflow-wrap: anywhere; }
+#statusSub:empty::before { content: "Ожидает задачу"; }
+.scene-today { order: 3; margin-top: auto; padding: 16px 20px; border: 1px solid var(--panel-line); border-radius: 16px; background: var(--panel); }
+.scene-today h2 { font: var(--fw-strong) var(--fs-sm)/18px var(--font); letter-spacing: 0; text-transform: none; color: var(--text-2); margin-bottom: 8px; }
+.scene-today p, .scene-today li { font-size: var(--fs-md); line-height: 22px; color: var(--text); }
+.scene-today ul { list-style: none; padding: 0; margin: 0; }
+.board { order: 4; display: flex; flex-wrap: wrap; padding: 0; border: 0; background: none; gap: 8px; }
+.board-row { background: transparent; font-size: var(--fs-xs); }
+.board-row[data-zero="true"] { display: none; }
+.wait-tray, .wait-restore { order: 5; backdrop-filter: none; border-radius: 16px; }
+.missions-bar { order: 6; }
+.missions { order: 7; }
+.wgt-row { order: 8; gap: 8px; }
+.wgt { flex: 1 1 100px; border-radius: 16px; }
+.scene-toggle { display: none; }
+
+/* ── Команды: список слева, действия справа ───────────────────── */
+.commands:not(:has(#cmdEditor:not([hidden]))) { max-width: none; }
+.cmd-lists { display: grid; grid-template-columns: minmax(0, 1fr) 248px; column-gap: 20px; align-items: start; }
+.cmd-toolbar { grid-column: 2; grid-row: 1 / span 4; position: sticky; top: 0; display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 16px 12px; border: 1px solid var(--panel-line); border-radius: var(--panel-r); background: var(--panel); }
+.cmd-toolbar .seg.tabs { display: grid; gap: 2px; padding: 0; border: 0; background: none; }
+.cmd-toolbar .seg-btn { justify-content: flex-start; height: 40px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--text-2); text-align: left; }
+.cmd-toolbar .seg-btn[aria-selected="true"] { background: var(--hue-soft); color: var(--text); }
+.cmd-toolbar .btn-primary { order: -1; height: 44px; border-radius: 12px; }
+.cmd-lists > .tab-panel { grid-column: 1; grid-row: 1; }
+.cmd-lists > .tab-panel[hidden] { display: none; }
+
+/* ── Настройки: карточки и список разделов справа ────────────── */
+.view-settings { display: grid; grid-template-columns: minmax(0, 1fr) 232px; column-gap: 20px; align-content: start; }
+.view-settings > .page { grid-column: 1; grid-row: 1; }
+.set-nav { grid-column: 2; grid-row: 1; position: sticky; top: 0; align-self: start; padding: 16px 12px; border: 1px solid var(--panel-line); border-radius: var(--panel-r); background: var(--panel); }
+.set-nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.set-nav-head { padding: 0 10px 8px; font-size: var(--fs-xs); color: var(--text-3); }
+.set-nav-item { display: flex; align-items: center; width: 100%; height: 40px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--text-2); text-align: left; font-size: var(--fs-md); }
+.set-nav-item:hover { background: var(--panel-2); color: var(--text); }
+.set-nav-item[aria-current="true"] { background: var(--hue-soft); color: var(--text); }
+.set-row { border-color: var(--panel-line); }
+
+/* ── Диалоги ─────────────────────────────────────────────────── */
+.dialog { border: 1px solid var(--panel-line); border-radius: 24px; background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: var(--glass-dialog, none); -webkit-backdrop-filter: var(--glass-dialog, none); box-shadow: var(--shadow-dialog); }
+html[data-glass="off"] .account-card, html[data-glass="off"] .composer, html[data-glass="off"] .dialog { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+html[data-glass="l"] .account-card { backdrop-filter: var(--glass-dialog, none); -webkit-backdrop-filter: var(--glass-dialog, none); }
+.dialog::backdrop { background: #05080EA6; }
+.dialog-actions .btn-primary { border-radius: 12px; }
+
+/* ── Адаптивность ────────────────────────────────────────────── */
+@media (max-width: 1180px) {
+  :root { --rail-w: 76px; }
+  .rail-brand-text, .rail-label { display: none; }
+  .rail-item, .rail-toggle { justify-content: center; padding: 0; }
+  .rail-brand { justify-content: center; margin-inline: 0; }
+  .view-settings { grid-template-columns: minmax(0, 1fr); }
+  .set-nav { display: none; }
+}
+@media (max-width: 999px) {
+  .scene-toggle { display: block; align-self: flex-start; margin: 0 0 10px; min-height: 36px; }
+  .view-dialog { display: flex; flex-direction: column; }
+  .stage { display: none; }
+  /* В узком окне содержимое сцены может быть выше окна: прижимаем к верху, иначе
+   * центрирование уводит шар за верхний край, куда нельзя доскроллить. */
+  body[data-scene-open="true"] .stage { display: flex; flex: 1; justify-content: flex-start; }
+  /* В узком окне сцена заменяет чат. Правило .convo выше составное и по весу сильнее,
+   * поэтому здесь !important — иначе открытая сцена оставляет чат и поле ввода за краем экрана. */
+  body[data-scene-open="true"] .convo { display: none !important; }
+  .convo, .convo:has(.feed-list > *), .convo:not(:has(.feed-list > *)):not(:has(.wait-tray:not([hidden]))) { flex: 1; min-height: 0; }
+  .topbar { padding: 0 16px; gap: 8px; }
+  .topbar::before { font-size: 16px; }
+  .topbar-right { gap: 8px; }
+  .workspace-switch select { max-width: 112px; }
+  .view { padding: 0 16px 16px; }
+}
+@media (max-width: 600px) {
+  :root { --rail-w: 60px; }
+  .topbar { height: auto; min-height: 68px; flex-wrap: wrap; padding: 12px; }
+  .topbar::before { display: none; }
+  .topbar-right { width: 100%; flex-wrap: wrap; }
+  .status-line { flex: 1; }
+  .workspace-switch { flex: 1; }
+  .workspace-switch select { max-width: 120px; }
+  .banner-wrap { padding: 0 8px 8px; }
+  .banner { flex-wrap: wrap; }
+  .scene-chips > button { font-size: var(--fs-xs); padding: 0 10px; min-height: 44px; }
+  .chat-tab-x { width: 44px; height: 44px; }
+  .pick-trigger { min-height: 44px; }
+  .chat-tab { min-height: 44px; }
+  .stage { padding: 16px; }
+  #stageStatus .status-main { font-size: 24px; line-height: 30px; }
+  .composer { padding: 6px; }
+  .composer-row { gap: 4px; }
+  .composer-input { font-size: var(--fs-md); padding-left: 0; }
+  .composer .icon-btn-primary.composer-btn { padding: 0 12px; }
+  .composer-btn-label { display: none; }
+  .chat-empty { padding: 32px 0; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

@@ -1,0 +1,340 @@
+/* Темы окна. Подключается последним. Селекторы без :root, потому что те же токены живут в образцах тем
+ * в Настройках (.theme-mini[data-theme]). Контраст и отличимость «вашей очереди» проверяет themes.test.js.
+ * --g1..--g3 — точки градиента фона: текст проверяется и по ним. */
+
+/* ── Шрифты: единственное место для семейств, размеров и весов ────────
+ * Inter (интерфейс) и IBM Plex Serif (заголовки, часы) — OFL, файлы и лицензии в fonts/. */
+@font-face { font-family: "Inter"; src: url("fonts/Inter-Variable.ttf") format("truetype"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Serif"; src: url("fonts/IBMPlexSerif-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+:root {
+  --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+
+  --fs-2xs: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-read: 15px;   /* текст ответа и запроса */
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 24px;
+  --fs-clock-md: 32px;
+  --fs-clock: 44px;
+
+  /* Inter переменный: 560 вместо 600 — спокойнее, но отличим от обычного */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-strong: 560;
+  --fw-bold: 650;
+}
+body { font-optical-sizing: auto; }
+/* Заголовки серифом: только крупные, мелкий сериф на экране читается хуже. Начертание одно — обычное. */
+.view-title, .set-title, .dialog-title, .account-title, .chat-empty h2 {
+  font-family: var(--font-head); font-weight: var(--fw-regular); letter-spacing: -0.005em;
+}
+
+[data-theme] {
+  --bg-image: none;
+  --hue-deals: var(--hue);
+  --hue-journal: var(--hue);
+  --hue-commands: var(--hue);
+  --hue-settings: var(--hue);
+  --border-input: color-mix(in srgb, var(--text-3) 70%, var(--surface));
+  --ok-bg: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  --ok-line: color-mix(in srgb, var(--ok) 42%, var(--surface));
+  --warn-bg: color-mix(in srgb, var(--warn) 16%, var(--surface));
+  --warn-line: color-mix(in srgb, var(--warn) 55%, var(--surface));
+  --err-bg: color-mix(in srgb, var(--err) 14%, var(--surface));
+  --err-line: color-mix(in srgb, var(--err) 42%, var(--surface));
+  --stop: var(--err);
+  --scrim: #00000080;
+  --shadow-pop: 0 8px 24px #00000066;
+  --shadow-dialog: 0 24px 64px #000000A3;
+}
+
+/* Токены с --hue считаются на body: раздел меняет --hue там, и кнопки, подсветка и фокус идут за ним. */
+body, .theme-mini {
+  --accent: var(--hue);
+  --accent-bg: color-mix(in srgb, var(--hue) 18%, var(--surface));
+  --accent-line: color-mix(in srgb, var(--hue) 45%, var(--surface));
+  --focus: var(--hue);
+}
+
+/* ── Основные ──────────────────────────────────────────────── */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --g1: #0B1018; --g2: #0B1018; --g3: #0B1018;
+  --bg: #0B1018;
+  --bg-image: none;
+  --surface: #111B27; --surface-2: #162333; --surface-3: #223448; --border: #26394B;
+  --text: #F1F6FA; --text-2: #B9C9D7; --text-3: #9BAEC0;
+  --hue: #58D9E8; --accent-ink: #0B1018;
+  --hue-deals: #58D9E8; --hue-journal: #58D9E8; --hue-commands: #58D9E8; --hue-settings: #58D9E8;
+  --contour: #252C66; --contour-index: #5A68C4;
+  --ok: #6EEFA8; --warn: #FFC24D; --err: #FF7F78; --on-stop: #0A0F12;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #F3F5F9; --surface: #FFFFFF; --surface-2: #EDF0F6; --surface-3: #E1E6EF; --border: #D6DCE7;
+  --text: #10201F; --text-2: #4A5365; --text-3: #5A6375;
+  --hue: #2F5FD0; --accent-ink: #FFFFFF;
+  --hue-deals: #6A45C9; --hue-journal: #16794F; --hue-commands: #0C6E8C; --hue-settings: #B4336A;
+  --contour: #D5DCE8; --contour-index: #AEB9CC;
+  --ok: #1F7A45; --warn: #8A5800; --err: #B3362D; --on-stop: #FFFFFF;
+  --scrim: #10141A66; --shadow-pop: 0 8px 24px #1018281F; --shadow-dialog: 0 24px 64px #10182833;
+}
+
+/* ── Монохромные: цвет раздела выключен, янтарь единственное цветное пятно ── */
+[data-theme="graphite"] {
+  color-scheme: dark;
+  --bg: #131313; --surface: #1D1D1D; --surface-2: #272727; --surface-3: #333333; --border: #3A3A3A;
+  --text: #F2F2F2; --text-2: #C2C2C2; --text-3: #A0A0A0;
+  --hue: #E8E8E8; --accent-ink: #131313;
+  --contour: #2C2C2C; --contour-index: #4A4A4A;
+  --ok: #C9E8D2; --warn: #FFB938; --err: #FF8A80; --on-stop: #131313;
+}
+
+[data-theme="lime"] {
+  color-scheme: light;
+  --bg: #F4F4F1; --surface: #FFFFFF; --surface-2: #ECECE8; --surface-3: #DFDFDA; --border: #CFCFC9;
+  --text: #111111; --text-2: #404040; --text-3: #575757;
+  --hue: #111111; --accent-ink: #FFFFFF;
+  --contour: #DEDED9; --contour-index: #B4B4AE;
+  --ok: #1D6B3C; --warn: #9A5400; --err: #B3261E; --on-stop: #FFFFFF;
+  --scrim: #11111166; --shadow-pop: 0 8px 24px #1111111F; --shadow-dialog: 0 24px 64px #11111133;
+}
+
+/* ── Цветные: весь фон в цвете, а не только акцент ───────────── */
+[data-theme="paper"] {
+  color-scheme: light;
+  --bg: #F2EADA; --surface: #FBF6EA; --surface-2: #EEE5D2; --surface-3: #E3D8C0; --border: #D8CAAD;
+  --text: #241C12; --text-2: #54483A; --text-3: #655846;
+  --hue: #1F5A46; --accent-ink: #FBF6EA;
+  --hue-deals: #7A3B69; --hue-journal: #1F5A46; --hue-commands: #2A5A7A; --hue-settings: #8C2F5A;
+  --contour: #E0D5BC; --contour-index: #C4B595;
+  --ok: #1F6B3E; --warn: #8F4F00; --err: #A8301F; --on-stop: #FBF6EA;
+  --scrim: #241C1266; --shadow-pop: 0 8px 24px #241C1224; --shadow-dialog: 0 24px 64px #241C1238;
+}
+
+[data-theme="forest"] {
+  color-scheme: dark;
+  --bg: #12291F; --surface: #183427; --surface-2: #204233; --surface-3: #2B5241; --border: #33604C;
+  --text: #F2EDDD; --text-2: #CFD4BF; --text-3: #B2BCA4;
+  --hue: #C7E08A; --accent-ink: #12291F;
+  --hue-deals: #E6CC92; --hue-journal: #C7E08A; --hue-commands: #9FD8C4; --hue-settings: #EDBFA6;
+  --contour: #234737; --contour-index: #3F6E58;
+  --ok: #A6E6B4; --warn: #FFBE4D; --err: #FF9A8A; --on-stop: #12291F;
+}
+
+[data-theme="wine"] {
+  color-scheme: dark;
+  --bg: #2A0C16; --surface: #38111E; --surface-2: #481828; --surface-3: #5A2134; --border: #6E2C41;
+  --text: #FBEFE6; --text-2: #E4CCC4; --text-3: #CFB0A9;
+  --hue: #F2B7A0; --accent-ink: #2A0C16;
+  --contour: #471A29; --contour-index: #76344A;
+  --ok: #A9E4B8; --warn: #FFC84A; --err: #FF9C94; --on-stop: #2A0C16;
+}
+
+[data-theme="cobalt"] {
+  color-scheme: dark;
+  --bg: #1234B8; --surface: #0E2A9A; --surface-2: #14339F; --surface-3: #1D3FB0; --border: #3D5CCB;
+  --text: #FFFFFF; --text-2: #DCE3FF; --text-3: #C7D2FF;
+  --hue: #FFFFFF; --accent-ink: #0E2A9A;
+  --contour: #2848C8; --contour-index: #5B78E6;
+  --ok: #A5F0C4; --warn: #FFC93D; --err: #FFBDB5; --on-stop: #0E2A9A;
+}
+
+/* ── Градиентные: панели спокойные, цвет живёт в фоне ─────────── */
+[data-theme="aurora"] {
+  color-scheme: dark;
+  --g1: #05262B; --g2: #0B4A45; --g3: #2A1C5C;
+  --bg: #0C2C36;
+  --bg-image: radial-gradient(90% 80% at 85% 5%, var(--g2), transparent 70%), radial-gradient(80% 90% at 5% 100%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
+  --surface: #0F2A33; --surface-2: #16363F; --surface-3: #20444D; --border: #2C5560;
+  --text: #E9F6F2; --text-2: #BBD8D2; --text-3: #9FC2BB;
+  --hue: #5CF0C0; --accent-ink: #04211B;
+  --hue-deals: #C4A6FF; --hue-journal: #5CF0C0; --hue-commands: #7FD8FF; --hue-settings: #FF9CCB;
+  --contour: #1C4D52; --contour-index: #36807E;
+  --ok: #8EF0B4; --warn: #FFC95C; --err: #FF9A90; --on-stop: #04211B;
+}
+
+[data-theme="ember"] {
+  color-scheme: dark;
+  --g1: #260E25; --g2: #561B30; --g3: #93391F;
+  --bg: #3C1428;
+  --bg-image: radial-gradient(85% 85% at 100% 100%, var(--g3), transparent 72%), radial-gradient(70% 70% at 45% 55%, var(--g2), transparent 80%), linear-gradient(var(--g1), var(--g1));
+  --surface: #2C1124; --surface-2: #3A182C; --surface-3: #4B2134; --border: #68304A;
+  --text: #FFF5EC; --text-2: #FFE3D3; --text-3: #FFD7C2;
+  --hue: #FF9CA8; --accent-ink: #2A0F1C;
+  --hue-deals: #E7B0FF; --hue-journal: #A8E8B8; --hue-commands: #8ED8F0; --hue-settings: #FF9CA8;
+  --contour: #5A2238; --contour-index: #A04A44;
+  --ok: #A8E8B8; --warn: #FFDD45; --err: #FF8F80; --on-stop: #2A0F1C;
+}
+
+[data-theme="dawn"] {
+  color-scheme: light;
+  --g1: #FFE3CF; --g2: #F8D5E4; --g3: #D8DCF8;
+  --bg: #F6DFE3;
+  --bg-image: radial-gradient(80% 90% at 100% 0%, var(--g3), transparent 72%), radial-gradient(70% 70% at 50% 60%, var(--g2), transparent 80%), linear-gradient(var(--g1), var(--g1));
+  --surface: #FFFBF8; --surface-2: #F9EEEB; --surface-3: #F0E0DE; --border: #E2CDCB;
+  --text: #2A1A2B; --text-2: #55404F; --text-3: #63495E;
+  --hue: #A0336F; --accent-ink: #FFFFFF;
+  --hue-deals: #6B3FBF; --hue-journal: #1B7355; --hue-commands: #1F6A9A; --hue-settings: #A0336F;
+  --contour: #EFCFD2; --contour-index: #D5A7B8;
+  --ok: #1B6E40; --warn: #8A4E00; --err: #AE2F2A; --on-stop: #FFFFFF;
+  --scrim: #2A1A2B55; --shadow-pop: 0 8px 24px #2A1A2B24; --shadow-dialog: 0 24px 64px #2A1A2B38;
+}
+
+/* Фон окна: у градиентных тем цвет лежит на .app */
+.app { background: var(--bg-image), var(--bg); }
+
+/* ── Выбор темы: образец — это те же токены, что и в окне ─────── */
+.theme-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: var(--sp-2); margin-top: var(--sp-2); }
+.theme-opt {
+  display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; padding: var(--sp-1) var(--sp-1) var(--sp-2);
+  border: 1px solid var(--border); border-radius: var(--panel-r); background: transparent; color: var(--text-2);
+  font-size: var(--fs-sm); line-height: 18px; text-align: center; cursor: pointer;
+}
+.theme-opt:hover { background: var(--surface-2); color: var(--text); }
+.theme-opt[aria-checked="true"] { border-color: var(--hue); box-shadow: inset 0 0 0 1px var(--hue); color: var(--text); font-weight: var(--fw-strong); }
+.theme-mini {
+  position: relative; display: block; height: 76px; overflow: hidden; border-radius: 10px;
+  background: var(--bg-image), var(--bg); box-shadow: inset 0 0 0 1px var(--border);
+}
+.theme-mini i { display: block; position: absolute; }
+.tm-rail { left: 0; top: 0; bottom: 0; width: 14px; background: color-mix(in srgb, var(--surface) 80%, transparent); box-shadow: inset -1px 0 0 var(--border); }
+.tm-panel { left: 20px; top: 8px; bottom: 8px; width: 42px; border-radius: 5px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+.tm-line { left: 6px; right: 6px; top: 9px; height: 4px; border-radius: 2px; background: var(--text); }
+.tm-short { top: 20px; right: 14px; background: var(--text-3); }
+.tm-you { left: 6px; bottom: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.theme-mini canvas { position: absolute; right: 4px; top: 50%; width: 54px; height: 54px; margin-top: -27px; }
+
+/* ── Стекло панели чата ─ контур и фон видны сквозь матовую панель ─ */
+[data-theme] { --glass: 80%; --glass-edge: #FFFFFF24; }
+:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"]) { --glass: 86%; --glass-edge: #FFFFFF99; }
+.convo {
+  background: color-mix(in srgb, var(--surface) var(--glass), transparent);
+  border-color: var(--glass-edge);
+  -webkit-backdrop-filter: blur(22px) saturate(170%); backdrop-filter: blur(22px) saturate(170%);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-pop);
+}
+
+/* Лоток внимания живёт в левой колонке и не заслоняет ответ; длинный список листается внутри. */
+@media (min-width: 760px) {
+  .stage .wait-tray, .stage .wait-restore { grid-area: tray; align-self: start; min-height: 0; max-height: 100%; }
+  .stage .wait-tray { display: flex; flex-direction: column; overflow: hidden; }
+  .stage .wait-tray[hidden], .stage .wait-restore[hidden] { display: none; }
+  .stage .wait-body { min-height: 0; overflow-y: auto; }
+  .stage .wait-row { flex-wrap: wrap; }
+  .stage .wait-main { flex: 1 1 calc(100% - 32px); }
+}
+/* Строка действий спокойная: неудачные шаги не кричат красным поверх ответа. */
+.turn-acts[data-tone="error"] .acts-icon { color: var(--text-3); }
+.turn-acts .acts-sum { color: var(--text-3); font-size: var(--fs-xs); }
+
+/* ── Движение: быстро отвечает на действие, мягко садится ─ */
+:root { --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
+.view:not([hidden]) { animation: viewIn 320ms var(--ease-out); }
+@keyframes viewIn { from { opacity: 0; transform: translateY(6px); } }
+.btn, .icon-btn, .rail-item, .chat-tab, .theme-opt, .wait-row { transition: background 180ms var(--ease-out), color 180ms var(--ease-out), border-color 180ms var(--ease-out), transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out), filter 180ms var(--ease-out); }
+.btn:hover:not(:disabled), .theme-opt:hover { transform: translateY(-1px); }
+.btn:active:not(:disabled), .icon-btn:active:not(:disabled), .rail-item:active, .theme-opt:active { transform: scale(0.97); transition-duration: 80ms; }
+.rail-item:hover { transform: translateX(2px); }
+.wait-row { animation: rowIn 300ms var(--ease-out) both; }
+@keyframes rowIn { from { opacity: 0; transform: translateX(8px); } }
+.dialog[open] { animation: dialogRise 320ms var(--ease-out); }
+@keyframes dialogRise { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
+.dialog[open]::backdrop { animation: scrimIn 240ms ease-out; }
+@keyframes scrimIn { from { opacity: 0; } }
+.chat-tab { animation: rowIn 240ms var(--ease-out); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 420ms; animation-timing-function: ease-in-out; }
+
+/* ── Аккаунт ─ вход поверх окна, расход в Настройках, пауза на лимите ─ */
+.account-gate { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: var(--sp-4); background: var(--bg-image), var(--bg); animation: scrimIn 240ms ease-out; }
+.account-gate[hidden], .limit-banner[hidden], .account-error[hidden] { display: none; }
+.account-card {
+  display: flex; flex-direction: column; gap: var(--sp-3); width: min(380px, 100%); padding: var(--sp-5);
+  border: 1px solid var(--glass-edge); border-radius: var(--panel-r);
+  background: color-mix(in srgb, var(--surface) var(--glass), transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(170%); backdrop-filter: blur(22px) saturate(170%);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow-dialog); animation: dialogRise 360ms var(--ease-out);
+}
+.account-title { margin: 0; font-size: var(--fs-2xl); line-height: 30px; color: var(--text); }
+.account-hint { margin: 0; color: var(--text-2); font-size: var(--fs-md); }
+.account-field { display: flex; flex-direction: column; gap: var(--sp-1); color: var(--text-2); font-size: var(--fs-sm); }
+.account-field input { width: 100%; min-height: 38px; padding: 0 var(--sp-3); border: 1px solid var(--border-input); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-md); }
+.account-field input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.account-error { margin: 0; color: var(--err); font-size: var(--fs-sm); }
+.usage-row { display: grid; grid-template-columns: 92px 1fr auto; align-items: center; gap: var(--sp-3); padding: var(--sp-2) 0; font-size: var(--fs-sm); color: var(--text-2); }
+.usage-bar { display: block; height: 6px; border-radius: 3px; overflow: hidden; background: var(--surface-3); }
+.usage-fill { display: block; height: 100%; border-radius: 3px; background: var(--hue); transition: width 600ms var(--ease-out); }
+.usage-fill[data-full="true"] { background: var(--warn); }
+.usage-note { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.limit-banner { position: fixed; left: 50%; top: 14px; z-index: 900; transform: translateX(-50%); max-width: min(560px, calc(100vw - 32px)); padding: var(--sp-2) var(--sp-4); border: 1px solid var(--warn-line); border-radius: var(--panel-r); background: var(--warn-bg); color: var(--text); font-size: var(--fs-md); box-shadow: var(--shadow-pop); animation: scrimIn 240ms ease-out; }
+
+/* ── Чат: сразу видно, где ваш запрос и где ответ ─ */
+@media (min-width: 760px) { .view-dialog { grid-template-columns: minmax(0, 1fr) clamp(380px, 36vw, 620px); } }
+.feed-list { gap: var(--sp-4); }
+.msg-user { align-self: flex-end; align-items: flex-end; max-width: 86%; margin-top: var(--sp-5); padding-top: 0; border-top: 0; gap: 4px; }
+.feed-list > .msg-user:first-child { margin-top: var(--sp-1); }
+.msg-user-text { padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--accent-bg); border: 1px solid var(--accent-line); color: var(--text); font-size: var(--fs-read); line-height: 22px; font-weight: var(--fw-medium); }
+.msg-time { align-self: flex-end; color: var(--text-3); }
+.turn { padding: 12px 14px; border-radius: 4px 16px 16px 16px; background: color-mix(in srgb, var(--surface-2) 72%, transparent); border: 1px solid var(--border); gap: var(--sp-2); }
+.turn::before { content: "Джарвис"; font-size: var(--fs-xs); line-height: 16px; font-weight: var(--fw-bold); letter-spacing: 0.02em; color: var(--hue); }
+.md { color: var(--text); font-size: var(--fs-read); line-height: 24px; }
+.md > * + * { margin-top: 10px; }
+.md strong { font-weight: var(--fw-bold); }
+.md a { color: var(--hue); }
+.turn-acts { border-top: 1px solid var(--border); padding-top: 4px; }
+
+/* Модель и обдумывание у поля ввода: одна строка-кнопка, по ней панель с двумя переключателями.
+ * Выбранный сегмент — как активный пункт левой панели. */
+.composer-picks { position: relative; display: flex; align-items: center; gap: var(--sp-3); min-width: 0; padding-top: var(--sp-1); }
+.pick-trigger {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 26px; padding: 0 var(--sp-2) 0 10px;
+  border: 1px solid transparent; border-radius: var(--r-pill); background: transparent;
+  color: var(--text-2); font-size: var(--fs-xs); font-weight: var(--fw-medium); white-space: nowrap;
+}
+.pick-trigger:hover, .pick-trigger[aria-expanded="true"] { background: var(--surface-2); border-color: var(--border); color: var(--text); }
+.pick-trigger-text { overflow: hidden; text-overflow: ellipsis; }
+.pick-chev svg { width: 12px; height: 12px; transform: rotate(180deg); transition: transform 160ms var(--ease-out); }
+.pick-trigger[aria-expanded="true"] .pick-chev svg { transform: none; }
+.pick-panel {
+  position: absolute; left: 0; bottom: calc(100% + var(--sp-2)); z-index: 30;
+  display: flex; flex-direction: column; gap: var(--sp-2); width: min(300px, calc(100vw - 32px)); padding: var(--sp-3);
+  border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-pop);
+  animation: pickIn 180ms var(--ease-out);
+}
+@keyframes pickIn { from { opacity: 0; transform: translateY(4px); } }
+.pick-panel[hidden] { display: none; }
+.pick { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.pick + .pick-note + .pick { margin-top: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.pick-name { padding: 0; color: var(--text); font-size: var(--fs-sm); line-height: 18px; font-weight: var(--fw-strong); }
+.pick-note { color: var(--text-2); font-size: var(--fs-xs); line-height: 16px; }
+.seg { display: flex; padding: 2px; gap: 2px; border-radius: 9px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
+.seg-opt { position: relative; display: block; flex: 1 1 0; cursor: pointer; }
+.seg-opt input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.seg-opt span {
+  display: block; height: 28px; padding: 0 10px; border-radius: 7px; text-align: center;
+  color: var(--text-2); font-size: var(--fs-sm); line-height: 28px; font-weight: var(--fw-medium); white-space: nowrap;
+  transition: background 160ms var(--ease-out), color 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
+}
+.seg-opt:hover span { color: var(--text); }
+.seg-opt input:checked + span { background: var(--accent-bg); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-line); font-weight: var(--fw-strong); }
+.seg-opt input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 1px; }
+.pick-cost { margin-left: auto; color: var(--text-3); font-size: var(--fs-xs); line-height: 16px; font-variant-numeric: tabular-nums; }
+
+/* ── Честность хода: под ответом видно, что подтверждено, что не проверено и что не получилось ── */
+.acts-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--sp-3); min-width: 0; }
+.acts-count { color: var(--text-3); }
+.verdict { display: inline-flex; align-items: center; gap: 5px; color: var(--text-2); font-weight: var(--fw-medium); white-space: nowrap; }
+.verdict .status-glyph { width: auto; }
+.verdict[data-status="confirmed"] .status-glyph, .verdict[data-status="confirmed"] b { color: var(--ok); }
+.verdict[data-status="failed"] .status-glyph, .verdict[data-status="failed"] b { color: var(--err); }
+.verdict[data-status="unverified"] .status-glyph, .verdict[data-status="refused"] .status-glyph, .verdict[data-status="done"] .status-glyph { color: var(--text-3); }
+.verdict b { font-weight: var(--fw-strong); font-variant-numeric: tabular-nums; color: var(--text); }
+.turn-acts .acts-sum:has(.acts-verdict) { color: var(--text-2); }
+

@@ -1,0 +1,58 @@
+{
+  "name": "jarvis-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Jarvis: трей-ассистент проекта Nox Assistant",
+  "license": "Apache-2.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis",
+    "test": "node --test",
+    "check-brain": "node scripts/check-brain.js",
+    "check-tools": "node scripts/check-tools.js",
+    "turns": "node scripts/turns-report.js",
+    "check-manifest": "node scripts/check-manifest.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.4.299"
+  },
+  "build": {
+    "appId": "ai.nox.assistant",
+    "productName": "Nox Assistant",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!.env",
+      "!.env.*",
+      "!data/**",
+      "!workspace/**",
+      "!docs/**",
+      "!.claude/**",
+      "!.megapowers/**",
+      "!dist/**",
+      "!tests/**",
+      "!**/*.test.js",
+      "!scripts/tts/voice-out/**",
+      "!scripts/tts/__pycache__/**",
+      "!**/*.{pem,key,p12,pfx,bin,log,jsonl}",
+      "!**/[[]object Object[]]"
+    ],
+    "asarUnpack": [
+      "scripts/commands/**",
+      "scripts/tts/**"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  }
+}

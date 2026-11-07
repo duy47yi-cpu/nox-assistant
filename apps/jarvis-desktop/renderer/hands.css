@@ -1,0 +1,29 @@
+/* Плашка «Nox работает на вашем ПК · Esc — остановить»: поверх окон (hands.html) и сверху главного окна (#handsBanner). */
+@font-face { font-family: 'Inter'; src: url('fonts/Inter-Variable.ttf') format('truetype'); font-weight: 100 900; }
+
+.hands-overlay { margin: 0; background: transparent; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; user-select: none; }
+
+.hands-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-radius: 999px;
+  font: 500 13px/1 'Inter', 'Segoe UI', sans-serif; letter-spacing: 0.01em;
+  color: #f4f1ea; background: rgba(22, 22, 26, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+.hands-dot { width: 8px; height: 8px; border-radius: 50%; background: #e8a33d; box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.25); animation: hands-pulse 1.6s ease-in-out infinite; }
+.hands-sep, .hands-hint { color: rgba(244, 241, 234, 0.65); }
+.hands-pill kbd { font: 600 11px/1 'Inter', 'Segoe UI', sans-serif; padding: 3px 6px; border-radius: 5px; color: #f4f1ea; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.18); }
+
+@keyframes hands-pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .hands-dot { animation: none; } }
+
+/* В главном окне: сверху по центру, мышь проходит насквозь. */
+.hands-banner { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 1000; pointer-events: none; }
+/* Узкое окно: плашка переносится на вторую строку, подсказка Esc не прячется. */
+.hands-banner { max-width: calc(100% - 16px); }
+.hands-banner .hands-pill { white-space: normal; flex-wrap: wrap; justify-content: center; row-gap: 4px; line-height: 1.2; }
+.hands-overlay .hands-pill { max-width: calc(100vw - 8px); }
+/* left:50% сжимал плашку до половины окна: растягиваем полосу на всю ширину, плашку — по центру по содержимому. */
+.hands-banner { left: 8px; right: 8px; transform: none; max-width: none; display: flex; justify-content: center; }

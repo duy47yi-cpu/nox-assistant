@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="color-scheme" content="dark light">
+  <title>Nox — Джарвис</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="home.css">
+  <link rel="stylesheet" href="themes.css">
+  <link rel="stylesheet" href="hands.css">
+  <link rel="stylesheet" href="presence.css">
+  <link rel="stylesheet" href="tools-extra.css">
+  <!-- Без defer: тема ставится до первой отрисовки -->
+  <script src="theme-boot.js"></script>
+  <!-- dev-stub.js здесь не подключается: shared.js догружает его сам и только в обычном браузере без window.jarvis. -->
+  <script src="shared.js" defer></script>
+  <script src="orb.js" defer></script>
+  <script src="orb-variants.js" defer></script>
+  <script src="contour.js" defer></script>
+  <script src="cmd-steps.js" defer></script>
+  <script src="desks.js" defer></script>
+  <script src="extensions.js" defer></script>
+  <script src="app.js" defer></script>
+  <script src="account.js" defer></script>
+  <script src="model-pick.js" defer></script>
+  <script src="accent.js" defer></script>
+  <script src="look.js" defer></script>
+  <script src="connections.js" defer></script>
+  <script src="settings-nav.js" defer></script>
+</head>
+<body>
+  <!-- Пока Джарвис управляет ПК (событие hands из main.js): надпись и подсказка Esc. -->
+  <div class="hands-banner" id="handsBanner" hidden><div class="hands-pill" role="status"><span class="hands-dot" aria-hidden="true"></span><span class="hands-text">Nox работает на вашем ПК</span><span class="hands-sep" aria-hidden="true">·</span><kbd>Esc</kbd><span class="hands-hint">— остановить</span></div></div>
+  <div class="app" id="app">
+
+    <!-- ── Левая панель: три раздела ──────────────────────────── -->
+    <nav class="rail" aria-label="Разделы">
+      <span class="rail-brand" aria-label="Nox"><i class="rail-mark" aria-hidden="true"></i><span class="rail-brand-text" aria-hidden="true">Nox</span></span>
+      <ul class="rail-list">
+        <li><button class="rail-item" type="button" data-nav="dialog" title="Чат (Ctrl+1)" aria-label="Чат"><span class="rail-icon" data-icon="chat" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Чат</span><span class="rail-count" id="pendingCount" hidden>0</span></button></li>
+        <li><button class="rail-item" type="button" data-nav="commands" title="Команды (Ctrl+2)" aria-label="Команды"><span class="rail-icon" data-icon="bolt" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Команды</span></button></li>
+        <li><button class="rail-item" type="button" data-nav="journal" title="История (Ctrl+3)" aria-label="История"><span class="rail-icon" data-icon="check" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">История</span></button></li>
+        <li><button class="rail-item" type="button" data-nav="mcp" title="Подключения (Ctrl+4)" aria-label="Подключения"><span class="rail-icon" data-icon="plug" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Подключения</span></button></li>
+        <li><button class="rail-item" type="button" data-nav="settings" title="Настройки (Ctrl+5)" aria-label="Настройки"><span class="rail-icon" data-icon="sliders" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Настройки</span><span class="rail-dot" id="settingsDot" hidden></span></button></li>
+      </ul>
+      <div class="rail-foot">
+        <button class="rail-item rail-account" type="button" data-nav="account" title="Аккаунт" aria-label="Аккаунт"><span class="rail-icon" data-icon="user" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Аккаунт</span></button>
+        <button class="rail-toggle" type="button" id="railToggle" aria-expanded="true" aria-label="Свернуть панель" title="Свернуть панель"><span class="rail-toggle-icon" data-icon="chevron" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Свернуть</span></button>
+      </div>
+    </nav>
+
+    <!-- ── Правая часть ───────────────────────────────────────── -->
+    <div class="main">
+      <canvas class="contour" id="contour" aria-hidden="true"></canvas>
+      <!-- Баннер в DOM перед шапкой: по порядку табуляции его действие идёт раньше чипа режима (раздел 8.2); визуально он под шапкой (CSS order). -->
+      <div class="banner-wrap" id="bannerWrap" hidden>
+        <div class="banner" id="banner" data-kind="key" role="status">
+          <span class="banner-icon" id="bannerIcon" aria-hidden="true"></span>
+          <p class="banner-text" id="bannerText"></p>
+          <button class="btn btn-secondary btn-sm banner-action" type="button" id="bannerAction" hidden></button>
+        </div>
+      </div>
+
+      <header class="topbar">
+        <div class="status-line"><span class="header-state" id="headerState">Готов</span>
+          <span class="orb-wrap" id="orbWrap" data-state="idle"><canvas class="orb-canvas" id="orb" aria-hidden="true"></canvas></span>
+          <p class="status-text"><span class="status-main" id="statusText" aria-live="polite">Готов</span><span class="status-sub" id="statusSub"></span></p>
+          <h1 class="view-title" id="viewTitle">Главная</h1>
+          <div class="crumb" id="editorCrumb" hidden>
+            <button class="crumb-back" type="button" id="cmdBack" title="К списку команд" aria-label="Назад к списку команд"><span data-icon="back" aria-hidden="true"></span><span class="crumb-back-label">Команды</span></button>
+            <span class="crumb-sep" aria-hidden="true">/</span>
+            <span class="crumb-name" id="cmdEditorTitle"></span>
+            <span class="tag tag-warn" id="cmdDirty" hidden>не сохранено</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <button class="you-half" type="button" id="youHalf" data-on="false"><span class="you-glyph" data-icon="stwait" aria-hidden="true"></span><span class="you-word">Ждёт вас</span><span class="you-num" id="youNum">0</span></button>
+          <span class="stub-tag" id="stubTag" hidden title="window.jarvis не найден, ядро эмулирует dev-stub.js">эмуляция</span>
+          <div class="mode-wrap" id="modeWrap">
+            <button class="mode-chip" type="button" id="modePill" aria-haspopup="menu" aria-expanded="false" aria-controls="modeMenu">
+              <span data-icon="shield" aria-hidden="true"></span><span class="mode-long" id="modePillText">…</span><span class="mode-short" id="modePillShort" aria-hidden="true">…</span><span class="mode-chev" data-icon="chevron" aria-hidden="true"></span>
+            </button>
+            <div class="menu mode-menu" id="modeMenu" role="menu" aria-label="Режим доступа" hidden>
+              <button class="menu-item" type="button" role="menuitemradio" data-mode="full" aria-checked="false" tabindex="-1">
+                <span class="menu-check" data-icon="check" aria-hidden="true"></span>
+                <span class="menu-body"><span class="menu-name">Полный доступ</span><span class="menu-desc">Ничего не спрашивает. Стоп и журнал работают.</span></span>
+              </button>
+              <button class="menu-item" type="button" role="menuitemradio" data-mode="ask" aria-checked="false" tabindex="-1">
+                <span class="menu-check" data-icon="check" aria-hidden="true"></span>
+                <span class="menu-body"><span class="menu-name">Спрашивать</span><span class="menu-desc">Спросит перед любым действием, которое что-то меняет. Чтение — сразу.</span></span>
+              </button>
+              <button class="menu-item" type="button" role="menuitemradio" data-mode="auto" aria-checked="false" tabindex="-1">
+                <span class="menu-check" data-icon="check" aria-hidden="true"></span>
+                <span class="menu-body"><span class="menu-name">Авто-умный</span><span class="menu-desc">Безопасное в рабочей папке сам, остальное спросит.</span></span>
+              </button>
+              <div class="menu-sep" role="separator"></div>
+              <button class="menu-item menu-link" type="button" role="menuitem" id="modeMore" tabindex="-1">Подробнее в настройках</button>
+            </div>
+          </div>
+          <button class="btn btn-stop btn-sm" type="button" id="headerStop" data-action="stop" title="Остановить (Esc)" aria-label="Остановить (Esc)" hidden><span data-icon="stop" aria-hidden="true"></span><span class="btn-label">Стоп</span></button>
+        </div>
+      </header>
+
+      <main class="views" id="views">
+
+        <!-- 1. Джарвис: диалог и шар -->
+        <section class="view view-dialog" data-view="dialog" aria-labelledby="viewTitle">
+          <section class="stage" id="stage" data-state="idle" aria-label="Состояние Джарвиса">
+            <p class="stage-clock"><time id="clock">--:--</time><span class="stage-date" id="clockDate"></span></p>
+            <div class="orbit">
+              <p class="said" id="said" hidden></p>
+              <div class="orbit-core">
+                <svg class="rings" viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+                  <circle class="ring" cx="100" cy="100" r="98" stroke-width="3" stroke-dasharray="0.6 4.53" opacity=".55"/>
+                  <circle class="ring ring-b" cx="100" cy="100" r="90" stroke-width="1" stroke-dasharray="70 18 28 24 110 30" opacity=".8"/>
+                  <circle class="ring ring-c" cx="100" cy="100" r="82" stroke-width="2" stroke-dasharray="4 8 40 90" opacity=".5"/>
+                </svg>
+                <div id="stageOrb"></div>
+              </div>
+              <div class="scene-chips" role="group" aria-label="Начать поручение"><button type="button" data-scene-draft="Помоги составить план на сегодня"><span data-icon="calendar" aria-hidden="true"></span>Планирую</button><button type="button" data-scene-draft="Найди информацию о "><span data-icon="search" aria-hidden="true"></span>Ищу</button><button type="button" data-scene-draft="Напомни мне "><span data-icon="clock" aria-hidden="true"></span>Напоминаю</button></div>
+              <div class="quick" id="quickChips" role="group" aria-label="Готовые фразы"></div>
+            </div>
+            <p class="scene-name">ДЖАРВИС</p>
+            <div id="stageStatus"><p class="status-main" id="sceneTitle">Готов помочь</p><p class="status-sub" id="sceneSubtitle">Ожидает задачу</p></div>
+            <section class="scene-today" aria-labelledby="todayTitle"><h2 id="todayTitle">СЕГОДНЯ</h2><ul id="todayList"><li>Расписание появится из ваших поручений</li></ul></section>
+            <ol class="chain" id="chain" aria-label="Шаги поручения"></ol>
+            <ul class="board" id="board"></ul>
+            <section class="wait-tray" id="waitTray" aria-labelledby="waitTitle" hidden>
+                <div class="wait-head">
+                  <h2 class="wait-title" id="waitTitle">Требуют внимания · 0</h2>
+                  <button class="btn btn-ghost btn-sm wait-hide" type="button" id="waitHide" title="Скрыть блок. Счётчик остаётся на кнопке и на доске">Скрыть</button>
+                  <button class="icon-btn icon-btn-sm wait-toggle" type="button" id="waitToggle" aria-expanded="true" aria-controls="waitBody" aria-label="Свернуть список" title="Свернуть список"><span data-icon="chevron" aria-hidden="true"></span></button>
+                </div>
+                <div class="wait-body" id="waitBody">
+                  <ul class="wait-list" id="waitList"></ul>
+                  <button class="btn btn-ghost btn-sm wait-all" type="button" id="waitAll" hidden></button>
+                </div>
+              </section>
+            <button class="btn btn-secondary btn-sm wait-restore" type="button" id="waitRestore" hidden title="Показать блок «Требуют внимания»"></button>
+            <div class="missions-bar">
+              <button class="btn btn-ghost btn-sm missions-toggle" type="button" id="missionsToggle" aria-expanded="false" aria-controls="missionsPanel" title="Центр управления миссиями: что в работе, что в очереди, где ошибки и что готово">Миссии</button>
+              <button class="btn btn-ghost btn-sm" type="button" id="deskOpen" title="Рабочий стол с виджетами">Стол</button>
+            </div>
+            <section class="missions" id="missionsPanel" aria-labelledby="missionsTitle" hidden>
+              <div class="missions-head">
+                <h2 class="missions-title" id="missionsTitle">Центр управления миссиями</h2>
+                <button class="btn btn-ghost btn-sm" type="button" id="missionsHide">Скрыть</button>
+              </div>
+              <p class="missions-line" id="missionsLine"></p>
+              <ul class="missions-list" id="missionsList"></ul>
+            </section>
+            <section class="wgt-row" id="widgets" aria-label="Виджеты" hidden>
+              <div class="wgt wgt-weather" id="wgtWeather" data-empty="true">
+                <span class="wgt-title">Погода</span>
+                <div class="wgt-cityrow"><button type="button" class="wgt-city" id="wgtCity" title="Нажмите, чтобы указать город">Не задан</button><span class="wgt-temp" id="wgtTemp"></span></div>
+                <span class="wgt-note" id="wgtWeatherNote">Нажмите, чтобы указать город</span>
+              </div>
+              <button type="button" class="wgt wgt-deals" id="wgtDeals" data-empty="true" title="Открыть «Дела»">
+                <span class="wgt-title">Дела</span>
+                <span class="wgt-body" id="wgtDealsBody">Всё чисто</span>
+              </button>
+              <div class="wgt wgt-music" id="wgtMusic" data-empty="true">
+                <span class="wgt-title">Музыка</span>
+                <span class="wgt-line" id="wgtMusicBody">Ещё не просили</span>
+                <span class="wgt-note" id="wgtMusicNote"></span>
+              </div>
+            </section>
+            <div class="stage-dock"><form class="composer" id="composer" autocomplete="off">
+                <div class="attach-list" id="attachList" role="list" aria-label="Прикреплённые файлы" hidden></div>
+                <div class="composer-row">
+                  <button class="icon-btn icon-btn-sm composer-attach" type="button" id="attachBtn" title="Прикрепить файлы (до 5)" aria-label="Прикрепить файлы (до 5)"><span data-icon="clip" aria-hidden="true"></span></button>
+                  <textarea class="composer-input" id="chatInput" rows="1" maxlength="8000" placeholder="Напишите Джарвису…" aria-label="Поручение для Джарвиса"></textarea>
+                  <button class="icon-btn icon-btn-sm composer-mic" type="button" id="dictationBtn" title="Диктовка" aria-label="Диктовка" hidden><span data-icon="mic" aria-hidden="true"></span></button>
+                  <button class="icon-btn icon-btn-sm icon-btn-primary composer-btn" type="submit" id="chatSend" title="Отправить (Enter)" aria-label="Отправить (Enter)"><span data-icon="send" aria-hidden="true"></span><span class="composer-btn-label" aria-hidden="true">Отправить</span></button>
+                  <button class="icon-btn icon-btn-sm icon-btn-stop composer-btn" type="button" id="chatStop" data-action="stop" title="Остановить (Esc)" aria-label="Остановить (Esc)" hidden><span data-icon="stop" aria-hidden="true"></span></button>
+                </div>
+              </form>
+              <p class="composer-hint" id="composerHint">Enter — отправить · Shift+Enter — новая строка · Esc — стоп</p>
+              <p class="composer-busy" id="composerBusy" hidden>Джарвис занят. Esc — остановить.</p></div>
+          </section>
+          <button class="btn btn-secondary scene-toggle" type="button" id="sceneToggle" aria-expanded="false" aria-controls="stage">Сцена Джарвиса</button>
+          <div class="convo">
+            <div class="workspace-switch" id="workspaceSwitch" hidden>
+              <label for="workspacePicker">Пространство</label>
+              <select id="workspacePicker" aria-label="Выбрать пространство"></select>
+              <button class="btn btn-ghost btn-sm" type="button" id="workspaceCreate">Создать</button>
+            </div>
+            <p class="workspace-note" id="workspaceNote" hidden>Файлы, память, поручения, напоминания, миссии и команды относятся к этому пространству.</p>
+            <div class="chat-tabs" id="chatTabs" hidden>
+              <nav class="chat-tabs-list" id="chatTabsList" aria-label="Чаты"></nav>
+              <button class="icon-btn icon-btn-sm chat-new" type="button" id="chatNew" title="Новый чат" aria-label="Новый чат"><span data-icon="plus" aria-hidden="true"></span></button>
+            </div>
+            <div class="feed" id="feed">
+              <div class="feed-col">
+                <button class="btn btn-ghost btn-sm feed-more" type="button" id="feedMore" hidden>Показать раньше</button>
+                <div class="chat-empty" id="chatEmpty">
+                  <h2>С чего начнём?</h2>
+                  <p>Поручите Джарвису задачу. Здесь появятся ответ, выполненные шаги и проверка результата.</p>
+                  </div>
+                <div class="feed-list" id="feedList"></div>
+              </div>
+            </div>
+            <button class="btn btn-secondary btn-sm to-bottom" type="button" id="toBottom" hidden>Вниз <span aria-hidden="true">↓</span></button>
+          </div>
+
+          <!-- Рабочий стол: вкладки столов и сетка виджетов -->
+          <div class="page desk-page" id="deskPage" hidden>
+            <div class="desk-head">
+              <div class="desk-tabs" id="deskTabs" role="tablist" aria-label="Столы"></div>
+              <div class="desk-actions">
+                <button class="btn btn-primary btn-sm" type="button" id="deskAdd">Новый стол</button>
+                <button class="btn btn-secondary btn-sm" type="button" id="deskRename">Переименовать</button>
+                <button class="btn btn-danger btn-sm" type="button" id="deskDelete">Удалить стол</button>
+                <button class="btn btn-secondary btn-sm" type="button" id="deskRefresh" title="Обновить данные виджетов">Обновить</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="deskClose">Вернуться в чат</button>
+              </div>
+            </div>
+            <p class="note" id="deskNote" hidden></p>
+            <div class="desk-grid" id="deskGrid" role="grid" aria-label="Виджеты стола"></div>
+            <div class="empty" id="deskEmpty" hidden><p>Стол пуст. Добавьте виджет кнопками ниже или выберите шаблон при создании стола.</p></div>
+            <div class="desk-add-row" id="deskAddRow" role="group" aria-label="Добавить виджет"></div>
+          </div>
+          <p class="sr-only" id="doneLive" aria-live="polite"></p>
+        </section>
+
+        <!-- Дела: что начато, ждёт, обещано, провалилось -->
+        <section class="view view-deals" data-view="deals" aria-labelledby="viewTitle" hidden>
+          <div class="page" id="dealsPage"></div>
+        </section>
+
+        <!-- Журнал проверок -->
+        <section class="view view-journal" data-view="journal" aria-labelledby="viewTitle" hidden>
+          <div class="page">
+            <section class="set-section" id="journalCard" aria-labelledby="setJournalTitle">
+              <div class="set-title-row">
+                <h2 class="sr-only" id="setJournalTitle">Журнал проверок</h2>
+                <span class="counter" id="histCount"></span>
+              </div>
+              <div class="filters">
+                <div class="seg" id="statusFilter" role="group" aria-label="Фильтр журнала">
+                  <button type="button" class="seg-btn" data-value="all" aria-pressed="true">Все</button>
+                  <button type="button" class="seg-btn" data-value="confirmed" aria-pressed="false">Подтверждено</button>
+                  <button type="button" class="seg-btn" data-value="unverified" aria-pressed="false">Не проверено</button>
+                  <button type="button" class="seg-btn" data-value="failed" aria-pressed="false">Провалено</button>
+                  <button type="button" class="seg-btn" data-value="error" aria-pressed="false">Ошибки</button>
+                  <button type="button" class="seg-btn" data-value="refused" aria-pressed="false">Отклонённые</button>
+                </div>
+                <div class="filter-search">
+                  <input class="input input-sm" id="histSearch" type="search" placeholder="Поиск по журналу" aria-label="Поиск по журналу">
+                  <button class="btn btn-secondary btn-sm" type="button" id="histReload" title="Обновить из журнала"><span data-icon="refresh" aria-hidden="true"></span>Обновить</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="jtable">
+                  <thead>
+                    <tr><th scope="col">Время</th><th scope="col">Действие</th><th scope="col">Риск</th><th scope="col">Статус</th><th scope="col">Итог</th></tr>
+                  </thead>
+                  <tbody id="histBody"></tbody>
+                </table>
+              </div>
+              <div class="empty" id="histEmpty" hidden>
+                <p id="histEmptyText">Журнал пуст. Здесь появятся действия Джарвиса.</p>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <!-- 2. Команды -->
+        <section class="view view-commands" data-view="commands" aria-labelledby="viewTitle" hidden>
+          <div class="page commands" id="commands">
+            <div class="cmd-lists" id="cmdLists">
+              <div class="cmd-toolbar">
+                <div class="seg tabs" role="tablist" aria-label="Команды">
+                  <button class="seg-btn" type="button" role="tab" id="tabMine" data-tab="mine" aria-controls="panelMine" aria-selected="true" tabindex="0">Мои · <span id="cmdCount">0</span></button>
+                  <button class="seg-btn" type="button" role="tab" id="tabLib" data-tab="lib" aria-controls="panelLib" aria-selected="false" tabindex="-1">Библиотека · <span id="libCount">0</span></button>
+                </div>
+                <button class="btn btn-primary btn-sm" type="button" id="cmdNew" title="Новая команда (Ctrl+N)"><span data-icon="plus" aria-hidden="true"></span>Новая</button>
+                <input class="input input-sm lib-search" id="libSearch" type="search" placeholder="Найти команду" aria-label="Найти команду" hidden>
+                <input class="input input-sm lib-search" id="cmdSearch" type="search" placeholder="Найти мою команду" aria-label="Найти мою команду" hidden>
+                <button class="btn btn-secondary btn-sm" type="button" id="cmdImport" title="Импортировать команды из файла">Импорт</button>
+                <button class="btn btn-secondary btn-sm" type="button" id="cmdExport" title="Сохранить команды в файл">Экспорт</button>
+                <button class="btn btn-secondary btn-sm" type="button" id="cmdRecord" title="Записать действия и превратить их в команду">Записать</button>
+              </div>
+
+              <div class="tab-panel" role="tabpanel" id="panelMine" aria-labelledby="tabMine">
+                <p class="note note-warn" id="cmdApiNote" hidden></p>
+                <p class="note" id="cmdTreeNote" hidden></p>
+                <ul class="cmd-list" id="cmdList"></ul>
+                <div class="empty" id="cmdEmpty" hidden>
+                  <p>Своих команд пока нет. Создайте первую или скажите в диалоге: «когда скажу „кино“, приглуши звук».</p>
+                  <button class="btn btn-secondary" type="button" id="cmdEmptyNew"><span data-icon="plus" aria-hidden="true"></span>Создать команду</button>
+                </div>
+              </div>
+
+              <div class="tab-panel" role="tabpanel" id="panelLib" aria-labelledby="tabLib" hidden>
+                <p class="note note-warn" id="libNote" hidden></p>
+                <div class="lib-groups" id="libGroups"></div>
+              </div>
+            </div>
+
+            <div class="set-section" id="cmdRecordPanel" hidden aria-live="polite">
+              <h2 class="set-title">Запись действий</h2>
+              <p class="set-hint">Записываются только реально выполненные шаги, пока идёт запись. Пароли, одноразовые коды и набранный текст не записываются.</p>
+              <p class="note note-warn" id="cmdRecordWarn">Шаги по координатам окна могут не совпасть при другом размере окна — проверьте их перед сохранением.</p>
+              <ol class="steps" id="cmdRecordSteps"></ol>
+              <p class="form-error" id="cmdRecordError" role="alert" hidden></p>
+              <div class="editor-foot">
+                <button class="btn btn-danger" type="button" id="cmdRecordCancel">Отменить запись</button>
+                <span class="editor-foot-gap"></span>
+                <button class="btn btn-primary" type="button" id="cmdRecordStop">Остановить и открыть черновик</button>
+              </div>
+            </div>
+
+            <form class="editor" id="cmdEditor" hidden autocomplete="off" novalidate aria-label="Редактор команды">
+              <div class="editor-main">
+                <div class="field">
+                  <label class="field-label" for="cmdName">Имя</label>
+                  <input class="input" id="cmdName" type="text" maxlength="60" placeholder="Например, «Рабочее утро»">
+                </div>
+
+                <div class="field">
+                  <div class="field-label-row">
+                    <span class="field-label" id="cmdPhrasesLabel">Фразы</span>
+                    <span class="counter" id="cmdPhraseCount">0 / 5</span>
+                  </div>
+                  <div class="chips" id="cmdPhrases" role="list" aria-labelledby="cmdPhrasesLabel"></div>
+                  <div class="inline-add">
+                    <input class="input" id="cmdPhraseInput" type="text" maxlength="80" placeholder="Новая фраза" aria-label="Новая фраза">
+                    <button class="btn btn-secondary" type="button" id="cmdPhraseAdd"><span data-icon="plus" aria-hidden="true"></span>Добавить</button>
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <div class="field">
+                    <label class="field-label" for="cmdFolder">Папка</label>
+                    <input class="input" id="cmdFolder" type="text" maxlength="60" placeholder="Необязательно, до 60 знаков">
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="cmdHotkey">Горячая клавиша</label>
+                    <input class="input" id="cmdHotkey" type="text" maxlength="40" placeholder="Например, Ctrl+Alt+1">
+                  </div>
+                </div>
+
+                <p class="note" id="cmdOrigin" hidden></p>
+                <p class="note note-warn" id="cmdWarnings" hidden></p>
+
+                <div class="field">
+                  <div class="field-label-row">
+                    <h2 class="field-label" id="cmdStepsLabel">Шаги</h2>
+                    <span class="field-tools">
+                      <span class="counter" id="cmdStepCount">0 / 10</span>
+                      <button class="btn btn-secondary btn-sm" type="button" id="cmdStepAdd"><span data-icon="plus" aria-hidden="true"></span>Шаг</button>
+                    </span>
+                  </div>
+                  <p class="note" id="cmdCatalogNote" hidden></p>
+                  <ol class="steps" id="cmdSteps" aria-labelledby="cmdStepsLabel"></ol>
+                </div>
+
+                <p class="form-error" id="cmdError" role="alert" hidden></p>
+              </div>
+
+              <aside class="editor-side" aria-label="Результат запуска">
+                <div class="run-result" id="cmdRunResult" role="status" hidden></div>
+              </aside>
+
+              <div class="editor-foot">
+                <button class="btn btn-danger" type="button" id="cmdDelete"><span data-icon="trash" aria-hidden="true"></span><span id="cmdDeleteText">Удалить</span></button>
+                <span class="editor-foot-gap"></span>
+                <button class="btn btn-secondary" type="button" id="cmdCheck" title="Показать, что будет делать команда, без запуска"><span data-icon="search" aria-hidden="true"></span>Проверить</button>
+                <button class="btn btn-secondary" type="button" id="cmdRun"><span data-icon="play" aria-hidden="true"></span>Запустить сейчас</button>
+                <button class="btn btn-ghost" type="button" id="cmdCancel">Отмена</button>
+                <button class="btn btn-primary" type="submit" id="cmdSave" title="Сохранить (Ctrl+S)">Сохранить</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <!-- Подключения: внешние сервисы по протоколу MCP -->
+        <section class="view view-mcp" data-view="mcp" aria-labelledby="viewTitle" hidden>
+          <div class="page" id="mcpPage">
+            <section class="set-section" aria-labelledby="mcpTitle">
+              <h2 class="set-title" id="mcpTitle">Подключённые сервисы</h2>
+              <p class="set-hint" id="mcpLead">Внешние программы, которым Джарвис может поручать работу: почта, календарь, таблицы, свои скрипты.</p>
+              <ul class="mcp-list" id="mcpList"></ul>
+              <div class="empty" id="mcpEmpty" hidden><p>Сервисов пока нет. Добавьте первый ниже.</p></div>
+            </section>
+            <section class="set-section" aria-labelledby="mcpAddTitle">
+              <h2 class="set-title" id="mcpAddTitle">Добавить сервис</h2>
+              <form class="mcp-form" id="mcpForm" autocomplete="off">
+                <label class="field"><span class="field-label">Название</span><input class="input" name="name" type="text" maxlength="40" placeholder="Например, calendar" required></label>
+                <label class="field"><span class="field-label">Адрес или команда</span><input class="input" name="target" type="text" maxlength="400" placeholder="https://… или npx.cmd" required></label>
+                <label class="field"><span class="field-label">Аргументы команды</span><input class="input" name="args" type="text" maxlength="400" placeholder="через пробел, если запуск командой"></label>
+                <div class="mcp-form-foot"><p class="set-hint" id="mcpFormNote">Изменения применятся после перезапуска Джарвиса. Действия сервиса всегда спрашиваются, пока вы не разрешите их в настройках.</p><button class="btn btn-primary" type="submit">Добавить</button></div>
+              </form>
+            </section>
+          </div>
+        </section>
+
+        <!-- Аккаунт -->
+        <section class="view view-account" data-view="account" aria-labelledby="viewTitle" hidden>
+          <div class="page" id="accountPage"></div>
+        </section>
+
+        <!-- 3. Настройки -->
+        <section class="view view-settings" data-view="settings" aria-labelledby="viewTitle" hidden>
+          <nav class="set-nav" id="setNav" aria-label="Разделы настроек"><p class="set-nav-head">Разделы</p><ul id="setNavList"></ul></nav>
+          <div class="page settings">
+
+            <section class="set-section" id="settings-mode" aria-labelledby="setModeTitle">
+              <h2 class="set-title" id="setModeTitle">Режим доступа</h2>
+              <div class="set-radios" id="modeOptions" role="radiogroup" aria-labelledby="setModeTitle">
+                <label class="set-row set-radio">
+                  <input type="radio" name="mode" value="full">
+                  <span class="set-text"><span class="set-name">Полный доступ</span><span class="set-hint">Выполняет ваши поручения без лишних вопросов. Оплату выполняете вы. Стоп и журнал работают.</span></span>
+                </label>
+                <label class="set-row set-radio">
+                  <input type="radio" name="mode" value="ask">
+                  <span class="set-text"><span class="set-name">Спрашивать</span><span class="set-hint">Спросит перед любым действием, которое что-то меняет. Чтение — сразу.</span></span>
+                </label>
+                <label class="set-row set-radio">
+                  <input type="radio" name="mode" value="auto">
+                  <span class="set-text"><span class="set-name">Авто-умный</span><span class="set-hint">Безопасное в рабочей папке сам, остальное спросит.</span></span>
+                </label>
+              </div>
+            </section>
+
+            <section class="set-section" aria-labelledby="mailTitle" id="mailSettings" hidden>
+              <h2 class="set-title" id="mailTitle">Почта Gmail</h2>
+              <div class="set-row">
+                <span class="set-text"><span class="set-name">Подключение</span><span class="set-hint" id="mailStatus" role="status">Проверяю…</span></span>
+                <button class="btn btn-secondary btn-sm" type="button" id="mailConnect">Подключить</button>
+              </div>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Читать непрочитанные письма</span><span class="set-hint">Для ответа темы и фрагменты передаются выбранному ИИ. Google запросит разрешение.</span></span>
+                <input type="checkbox" role="switch" class="switch" id="mailRead">
+              </label>
+              <div class="set-row" id="mailDisconnectRow" hidden>
+                <span class="set-text"><span class="set-name">Отключить на этом компьютере</span><span class="set-hint">Сохранённый доступ будет удалён.</span></span>
+                <button class="btn btn-secondary btn-sm" type="button" id="mailDisconnect">Отключить</button>
+              </div>
+            </section>
+
+            <section class="set-section" aria-labelledby="setAnswersTitle">
+              <h2 class="set-title" id="setAnswersTitle">Ответы</h2>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Говорить ответы</span><span class="set-hint">Озвучивать ответ голосом</span></span>
+                <input type="checkbox" role="switch" class="switch" data-setting="voice">
+              </label>
+              <div class="set-row">
+                <span class="set-text"><span class="set-name">Проверить голос</span><span class="set-hint">Скажет пробную фразу; ключ голоса читается из .env</span></span>
+                <button class="btn btn-secondary btn-sm" type="button" id="voiceTest">Проверить</button>
+              </div>
+              <div class="set-row voice-opts">
+                <span class="set-text"><span class="set-name">Громкость голоса</span><span class="set-hint" id="voiceVolumeHint">100 %</span></span>
+                <input class="range" id="voiceVolume" type="range" min="0" max="100" step="5" value="100" aria-label="Громкость голоса" aria-describedby="voiceVolumeHint">
+              </div>
+              <div class="set-row voice-opts">
+                <span class="set-text"><span class="set-name">Скорость речи</span><span class="set-hint" id="voiceRateHint">1,0 из 2</span></span>
+                <input class="range" id="voiceRate" type="range" min="0.5" max="2" step="0.1" value="1" aria-label="Скорость речи" aria-describedby="voiceRateHint">
+              </div>
+              <div class="set-row voice-opts">
+                <span class="set-text"><span class="set-name">Голос</span><span class="set-hint" id="voicePickHint">По умолчанию первый голос; список можно загрузить отдельно</span></span>
+                <span class="voice-pick-tools">
+                  <select class="input input-sm" id="voiceSpeaker" aria-label="Голос"><option value="">По умолчанию</option></select>
+                  <button class="btn btn-secondary btn-sm" type="button" id="voiceList">Список голосов</button>
+                </span>
+              </div>
+              <p class="note" id="voiceOptionsNote" hidden></p>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Диктовка</span><span class="set-hint">Голосом в поле ввода; во время ответа речь остановит текущий ход. Работает без сети</span></span>
+                <input type="checkbox" role="switch" class="switch" data-setting="dictation" id="setDictation">
+              </label>
+            </section>
+
+            <section class="set-section" aria-labelledby="setWindowTitle">
+              <h2 class="set-title" id="setWindowTitle">Окно и уведомления</h2>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Тихий режим</span><span class="set-hint">Без уведомлений и звуков</span></span>
+                <input type="checkbox" role="switch" class="switch" data-setting="quiet">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Анимации</span><span class="set-hint">Плавные переходы и живой шар, даже если эффекты выключены в Windows</span></span>
+                <input type="checkbox" role="switch" class="switch" data-setting="motion">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Окно поверх</span><span class="set-hint">Держать окно над остальными</span></span>
+                <input type="checkbox" role="switch" class="switch" data-setting="alwaysOnTop">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Запускать с Windows</span><span class="set-hint">Стартует в трее при входе</span></span>
+                <input type="checkbox" role="switch" class="switch" data-setting="autoStart">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Смотреть экран самому</span><span class="set-hint">Снимок, когда Джарвис сочтёт нужным. Выключено — только по вашей просьбе</span></span>
+                <input type="checkbox" role="switch" class="switch" data-setting="screenAuto">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Учиться на своём опыте</span><span class="set-hint">Имя, привычки, договорённости и удачные порядки действий — без отдельной команды. Пароли, здоровье и отправка не записываются</span></span>
+                <input type="checkbox" role="switch" class="switch" data-setting="memoryAuto">
+              </label>
+            </section>
+
+            <section class="set-section" aria-labelledby="setMemoryTitle" id="memorySettings">
+              <div class="set-title-row">
+                <h2 class="set-title" id="setMemoryTitle">Память</h2>
+                <span class="counter" id="memoryCount"></span>
+              </div>
+              <p class="set-hint">Что Джарвис помнит о вас и о работе. Пароли, здоровье, платежи и коды не сохраняются. Здесь можно исправить или удалить запись.</p>
+              <ul class="memory-list" id="memoryList"></ul>
+              <p class="note" id="memoryEmpty" hidden>Записей пока нет.</p>
+              <p class="note note-warn" id="memoryNote" hidden></p>
+              <div class="editor-foot">
+                <button class="btn btn-secondary btn-sm" type="button" id="memoryReload">Обновить</button>
+                <span class="editor-foot-gap"></span>
+                <button class="btn btn-danger btn-sm" type="button" id="memoryClear">Очистить память этого пространства</button>
+              </div>
+            </section>
+
+            <section class="set-section" aria-labelledby="setRemindersTitle" id="remindersSettings">
+              <div class="set-title-row">
+                <h2 class="set-title" id="setRemindersTitle">Напоминания</h2>
+                <span class="counter" id="remindersCount"></span>
+              </div>
+              <p class="set-hint">Ближайшие напоминания этого пространства. Время местное. Создать можно словами в чате: «напомни через час …».</p>
+              <ul class="memory-list" id="remindersList"></ul>
+              <p class="note" id="remindersEmpty" hidden>Напоминаний нет.</p>
+              <p class="note note-warn" id="remindersNote" hidden></p>
+              <div class="editor-foot">
+                <button class="btn btn-secondary btn-sm" type="button" id="remindersReload">Обновить</button>
+              </div>
+            </section>
+
+            <section class="set-section" aria-labelledby="setExtensionsTitle" id="extensionsSettings">
+              <h2 class="set-title" id="setExtensionsTitle">Расширения</h2>
+              <p class="set-hint">Дополнительные возможности. Опасные действия — только по вашему подтверждению; пароли и коды не сохраняются.</p>
+
+              <div class="ext-card">
+                <div class="set-title-row"><h3 class="set-subtitle">История буфера</h3><span class="counter" id="clipCount"></span></div>
+                <p class="set-hint">Сохраняется только на этом компьютере. Пароли, коды и номера карт не записываются.</p>
+                <label class="set-row">
+                  <span class="set-text"><span class="set-name">Сохранять скопированное</span><span class="set-hint">Выключено — история не ведётся</span></span>
+                  <input type="checkbox" role="switch" class="switch" id="clipEnabled">
+                </label>
+                <div class="set-row">
+                  <span class="set-text"><span class="set-name">Срок хранения</span></span>
+                  <span class="ext-inline">
+                    <select class="input input-sm" id="clipTtl" aria-label="Срок хранения истории буфера">
+                      <option value="900000">15 минут</option>
+                      <option value="3600000">1 час</option>
+                      <option value="86400000">1 день</option>
+                      <option value="">Бессрочно</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" type="button" id="clipPause">Пауза</button>
+                    <button class="btn btn-secondary btn-sm" type="button" id="clipReload">Обновить</button>
+                    <button class="btn btn-ghost btn-sm" type="button" id="clipClear">Очистить</button>
+                  </span>
+                </div>
+                <p class="note" id="clipNote" hidden></p>
+                <ul class="memory-list" id="clipList"></ul>
+                <p class="note" id="clipEmpty" hidden>История пуста.</p>
+              </div>
+
+              <div class="ext-card">
+                <div class="set-title-row"><h3 class="set-subtitle">Быстрые вставки</h3><span class="counter" id="snipCount"></span></div>
+                <p class="set-hint">Текст по короткой фразе. Вставка в буфер — только после подтверждения.</p>
+                <form class="snip-form" id="snipForm" autocomplete="off">
+                  <input class="input input-sm" id="snipTrigger" type="text" maxlength="40" placeholder="Фраза-триггер" aria-label="Фраза-триггер">
+                  <textarea class="input input-sm" id="snipText" rows="2" maxlength="2000" placeholder="Текст вставки" aria-label="Текст вставки"></textarea>
+                  <button class="btn btn-secondary btn-sm" type="submit" id="snipSave">Сохранить</button>
+                </form>
+                <p class="form-error" id="snipError" role="alert" hidden></p>
+                <ul class="memory-list" id="snipList"></ul>
+                <p class="note" id="snipEmpty" hidden>Вставок пока нет.</p>
+              </div>
+
+              <div class="ext-card">
+                <div class="set-title-row"><h3 class="set-subtitle">Уборка загрузок</h3></div>
+                <p class="set-hint">Сначала только предпросмотр. Удаление — отдельной кнопкой после подтверждения; вне папки загрузок ничего не трогается.</p>
+                <div class="editor-foot">
+                  <button class="btn btn-secondary btn-sm" type="button" id="dlAnalyze">Проверить загрузки</button>
+                  <span class="editor-foot-gap"></span>
+                  <button class="btn btn-danger btn-sm" type="button" id="dlRemove" disabled>Удалить выбранное</button>
+                </div>
+                <p class="note" id="dlNote" hidden></p>
+                <ul class="memory-list" id="dlList"></ul>
+              </div>
+            </section>
+
+            <section class="set-section" aria-labelledby="setLookTitle">
+              <h2 class="set-title" id="setLookTitle">Вид</h2>
+              <div class="set-row orb-pick-row">
+                <span class="set-text"><span class="set-name" id="themeLabel">Тема</span><span class="set-hint">Только на этом компьютере. Точка в образце — цвет «вашей очереди»</span></span>
+                <div class="theme-pick" id="themeSeg" role="radiogroup" aria-labelledby="themeLabel">
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="dark" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="dark" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Ночь</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="light" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="light" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>День</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="graphite" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="graphite" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Графит</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="lime" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="lime" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Известь</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="paper" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="paper" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Бумага</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="forest" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="forest" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Хвоя</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="wine" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="wine" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Бордо</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="cobalt" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="cobalt" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Кобальт</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="aurora" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="aurora" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Сияние</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="ember" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="ember" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Закат</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="dawn" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="dawn" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Рассвет</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="system" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="system" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Как в системе</button>
+                </div>
+              </div>
+              <div class="set-row orb-pick-row">
+                <span class="set-text"><span class="set-name" id="orbPickLabel">Вид шара</span><span class="set-hint">Только на этом компьютере</span></span>
+                <div class="orb-pick" id="orbPick" role="radiogroup" aria-labelledby="orbPickLabel">
+                  <button type="button" class="orb-opt" role="radio" data-orb-opt="sphere" aria-checked="false"><canvas aria-hidden="true"></canvas>Сфера</button>
+                  <button type="button" class="orb-opt" role="radio" data-orb-opt="iris" aria-checked="false"><canvas aria-hidden="true"></canvas>Диафрагма</button>
+                  <button type="button" class="orb-opt" role="radio" data-orb-opt="coil" aria-checked="false"><canvas aria-hidden="true"></canvas>Обмотка</button>
+                </div>
+              </div>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Анимация шара</span><span class="set-hint" id="orbAnimHint">Только на этом компьютере. Выключено — шар не движется</span></span>
+                <input type="checkbox" role="switch" class="switch" data-local="orbAnim">
+              </label>
+            </section>
+
+            <section class="set-section" aria-labelledby="setFolderTitle">
+              <h2 class="set-title" id="setFolderTitle">Рабочая папка</h2>
+              <div class="set-row">
+                <span class="set-text"><span class="set-name path-box mono" id="workspacePath">—</span><span class="set-hint">Здесь Джарвис читает и пишет файлы</span></span>
+                <button class="btn btn-secondary btn-sm" type="button" id="workspaceOpen"><span data-icon="folder" aria-hidden="true"></span>Открыть папку</button>
+              </div>
+              <div class="set-row">
+                <span class="set-text"><span class="set-name">Подключённые папки</span><span class="set-hint">Джарвис ищет и в них. Прочитает найденное только в «Полном доступе». Папки data, node_modules, dist, .git, файл .env и строки с ключами не ищутся</span></span>
+                <button class="btn btn-secondary btn-sm" type="button" id="folderAdd"><span data-icon="plus" aria-hidden="true"></span>Подключить</button>
+              </div>
+              <div id="folderList"></div>
+            </section>
+
+            <section class="set-section" id="settings-model" aria-labelledby="setModelTitle" tabindex="-1">
+              <h2 class="set-title" id="setModelTitle">Модель и связь</h2>
+              <div class="set-row">
+                <span class="set-text">
+                  <span class="set-name brain-state" id="brainState" data-ok="unknown"><span class="dot" aria-hidden="true"></span><span id="brainStateText">Проверяю…</span><span class="brain-model" id="brainModel" hidden></span></span>
+                  <span class="set-hint">Ядро: <span id="coreState">—</span></span>
+                </span>
+                <button class="btn btn-secondary btn-sm" type="button" id="brainRecheck"><span data-icon="refresh" aria-hidden="true"></span>Проверить снова</button>
+              </div>
+              <div class="hint" id="brainHint" hidden>
+                <p>Джарвис пока не подключён к модели. Войдите в аккаунт или свяжитесь с нами.</p>
+                <div id="brainHintOwner" hidden>
+                  <p>Для разработчика: откройте файл <code>.env</code> в папке проекта и добавьте строку <code>NOX_BRAIN_KEY=ваш ключ</code>, затем перезапустите Джарвиса.</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="set-section" id="ownerProviders" aria-labelledby="setOwnerTitle" hidden>
+              <h2 class="set-title" id="setOwnerTitle">Провайдеры владельца</h2>
+              <div class="set-row">
+                <span class="set-text"><span class="set-name">Свои модели</span><span class="set-hint">Выбранный провайдер заменяет «Быструю» и «Умную». Ключ хранится зашифрованным. Правила режимов те же</span></span>
+                <button class="btn btn-secondary btn-sm" type="button" id="ownerProvNone">Без провайдера</button>
+              </div>
+              <div id="ownerProvList"></div>
+              <form class="set-row" id="ownerProvForm">
+                <input class="input input-sm" name="name" type="text" maxlength="60" placeholder="Имя" aria-label="Имя провайдера" required>
+                <input class="input input-sm" name="baseUrl" type="url" placeholder="http://localhost:11434/v1" aria-label="Адрес" required>
+                <input class="input input-sm" name="model" type="text" placeholder="Модель" aria-label="Модель" required>
+                <input class="input input-sm" name="key" type="password" placeholder="Ключ, если нужен" aria-label="Ключ" autocomplete="off">
+                <button class="btn btn-secondary btn-sm" type="submit"><span data-icon="plus" aria-hidden="true"></span>Добавить</button>
+              </form>
+            </section>
+
+            <section class="set-section" aria-labelledby="setChatTitle">
+              <h2 class="set-title" id="setChatTitle">Разговор</h2>
+              <div class="set-row">
+                <span class="set-text"><span class="set-name">Очистить переписку</span><span class="set-hint">Очистка стирает переписку. Журнал остаётся.</span></span>
+                <button class="btn btn-danger btn-sm" type="button" id="chatClear"><span data-icon="trash" aria-hidden="true"></span><span id="chatClearText">Очистить разговор</span></button>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Подтверждение действия (раздел 4.13) -->
+  <dialog class="dialog" id="approvalDialog" aria-labelledby="apTitle" aria-describedby="apQuestion apMeta">
+    <form method="dialog" class="dialog-body" id="approvalForm">
+      <div class="dialog-head">
+        <h2 class="dialog-title" id="apTitle">Нужно ваше решение</h2>
+        <span class="dialog-count" id="apQueue" hidden></span>
+      </div>
+      <p class="ap-question" id="apQuestion"></p>
+      <p class="ap-meta" id="apMeta"><span id="apTool"></span><span class="risk" id="apRisk" hidden></span><span class="ap-reason" id="apReason" hidden></span></p>
+      <details class="ap-details" id="apDetails">
+        <summary><span class="acts-chev" data-icon="chevron" aria-hidden="true"></span>Подробности</summary>
+        <pre class="ap-args" id="apArgs" tabindex="0" aria-label="Аргументы действия"></pre>
+      </details>
+      <div class="dialog-actions">
+        <button class="btn btn-secondary" type="button" data-decision="reject">Отклонить</button>
+        <button class="btn btn-secondary" type="button" data-decision="session" id="apSession" title="Разрешать такое действие до перезапуска Джарвиса">На сессию</button>
+        <button class="btn btn-primary" type="button" data-decision="once">Разрешить</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog dialog-sm" id="workspaceDialog" aria-labelledby="workspaceDialogTitle">
+    <form class="dialog-body" id="workspaceForm">
+      <div class="dialog-head"><h2 class="dialog-title" id="workspaceDialogTitle">Новое пространство</h2></div>
+      <label for="workspaceName">Название</label>
+      <input id="workspaceName" class="input" maxlength="80" required autocomplete="off" placeholder="Например, Работа">
+      <p class="dialog-sub">Свои файлы, память, чаты, миссии и команды.</p>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" type="button" id="workspaceCancel">Отмена</button>
+        <button class="btn btn-primary" type="submit">Создать</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Импорт команд: предпросмотр и подтверждение -->
+  <dialog class="dialog" id="cmdImportDialog" aria-labelledby="ciTitle">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2 class="dialog-title" id="ciTitle">Импорт команд</h2>
+        <span class="dialog-count" id="ciCount"></span>
+      </div>
+      <p class="dialog-sub" id="ciFrom"></p>
+      <div class="imp-summary" id="ciSummary"></div>
+      <ul class="imp-list" id="ciList"></ul>
+      <p class="note note-warn" id="ciWarn" hidden></p>
+      <p class="note note-warn" id="ciConflicts" hidden></p>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" type="button" id="ciCancel">Отмена</button>
+        <button class="btn btn-primary" type="button" id="ciApply">Импортировать</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Правка записи памяти -->
+  <dialog class="dialog dialog-sm" id="memoryDialog" aria-labelledby="memoryDialogTitle">
+    <div class="dialog-body">
+      <div class="dialog-head"><h2 class="dialog-title" id="memoryDialogTitle">Исправить запись памяти</h2></div>
+      <label class="field-label" for="memoryEditText">Текст</label>
+      <textarea class="input" id="memoryEditText" rows="4" maxlength="2000"></textarea>
+      <label class="field-label" for="memoryEditAbout">О чём (необязательно)</label>
+      <input class="input" id="memoryEditAbout" type="text" maxlength="80">
+      <p class="form-error" id="memoryEditError" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" type="button" id="memoryEditCancel">Отмена</button>
+        <button class="btn btn-primary" type="button" id="memoryEditSave">Сохранить</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Новый или переименование стола -->
+  <dialog class="dialog dialog-sm" id="deskDialog" aria-labelledby="deskDialogTitle">
+    <form class="dialog-body" id="deskForm" autocomplete="off">
+      <div class="dialog-head"><h2 class="dialog-title" id="deskDialogTitle">Новый стол</h2></div>
+      <label class="field-label" for="deskName">Название</label>
+      <input class="input" id="deskName" type="text" maxlength="40" required placeholder="Например, Работа">
+      <div id="deskTemplateRow">
+        <label class="field-label" for="deskTemplate">Шаблон</label>
+        <select class="input" id="deskTemplate"></select>
+        <p class="set-hint">Шаблон задаёт только набор виджетов; данные берутся из настоящих источников.</p>
+      </div>
+      <p class="form-error" id="deskError" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" type="button" id="deskCancel">Отмена</button>
+        <button class="btn btn-primary" type="submit" id="deskSave">Создать</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Общий вопрос «да / нет» -->
+  <dialog class="dialog dialog-sm" id="confirmDialog" aria-labelledby="cfTitle" aria-describedby="cfText">
+    <form method="dialog" class="dialog-body">
+      <h2 class="dialog-title" id="cfTitle"></h2>
+      <p class="dialog-sub" id="cfText"></p>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" type="button" id="cfNo">Отмена</button>
+        <button class="btn btn-primary" type="button" id="cfYes">Да</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>
