@@ -80,12 +80,11 @@
     if (type === 'pet') {
       const mood = value && PET_FACES[value.mood] ? value.mood : 'idle';
       return el('div', { class: 'desk-widget-body-inner' },
-        el('div', { class: 'desk-pet', style: 'display:flex;align-items:center;gap:10px;' },
+        el('div', { class: 'desk-pet' },
           el('span', {
             class: 'desk-pet-face',
             'aria-hidden': 'true',
             text: PET_FACES[mood],
-            style: 'display:inline-block;font-size:34px;line-height:1;transition:transform .9s ease-in-out;will-change:transform;',
           }),
           el('span', { class: 'desk-pet-word', text: PET_WORDS[mood] })),
         el('p', { class: 'desk-widget-note', text: 'декоративная анимация — без данных и показаний' }));

@@ -114,6 +114,14 @@
         if (v === undefined || v === null || v === false) continue;
         if (k === 'class') node.className = v;
         else if (k === 'text') node.textContent = v;
+        // style через CSSOM, а не атрибутом: CSP style-src 'self' блокирует inline-атрибут.
+        else if (k === 'style') {
+          for (const part of String(v).split(';')) {
+            const colon = part.indexOf(':');
+            if (colon <= 0) continue;
+            node.style.setProperty(part.slice(0, colon).trim(), part.slice(colon + 1).trim());
+          }
+        }
         else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
         else if (k === 'dataset') Object.assign(node.dataset, v);
         else if (v === true) node.setAttribute(k, '');

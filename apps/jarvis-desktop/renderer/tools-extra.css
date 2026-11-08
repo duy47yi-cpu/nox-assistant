@@ -417,3 +417,13 @@
 .mcp-popular{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin:10px 0 0;padding:0;list-style:none}
 .mcp-popular .set-row{margin:0;align-items:flex-start}
 .mcp-popular .btn{margin-left:auto;flex:none}
+
+/* Питомец стола: украшение, данных не читает. Стили здесь, а не в разметке:
+ * CSP style-src 'self' блокирует inline-стили, а виджет должен выглядеть одинаково. */
+.desk-pet { display: flex; align-items: center; gap: 10px; }
+.desk-pet-face { display: inline-block; font-size: 34px; line-height: 1; transition: transform .9s ease-in-out; will-change: transform; }
+.desk-pet-word { color: var(--text-2); font-size: var(--fs-sm); }
+
+/* Кнопки карточки «Освободить место»: общий низ диалога (.editor-foot) с отрицательными
+ * полями и фоном .bg выходил за карточку тёмной полосой — внутри карточки он не нужен. */
+.ext-card .editor-foot { position: static; margin: 8px 0 0; padding: 0; background: none; border-top: 0; }

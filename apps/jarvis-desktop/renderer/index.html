@@ -481,6 +481,15 @@
                   <button class="btn btn-secondary btn-sm" type="button" id="voiceList">Список голосов</button>
                 </span>
               </div>
+              <div class="set-row voice-opts">
+                <span class="set-text"><span class="set-name">Характер речи</span><span class="set-hint" id="voicePersonaHint">Меняет только темп и громкость, голос остаётся выбранным</span></span>
+                <select class="input input-sm" id="voicePersona" aria-label="Характер речи" aria-describedby="voicePersonaHint">
+                  <option value="neutral">Как есть</option>
+                  <option value="butler">Дворецкий</option>
+                  <option value="assistant">Помощница</option>
+                  <option value="engineer">Инженер</option>
+                </select>
+              </div>
               <p class="note" id="voiceOptionsNote" hidden></p>
               <label class="set-row">
                 <span class="set-text"><span class="set-name">Диктовка</span><span class="set-hint">Голосом в поле ввода; во время ответа речь остановит текущий ход. Работает без сети</span></span>

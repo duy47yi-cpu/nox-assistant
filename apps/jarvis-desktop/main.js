@@ -52,6 +52,7 @@ const { WorkspaceIndex } = require('./src/rag/index');
 const { SpeechClient, ReplySpeech } = require('./src/voice/tts');
 const { FishSpeech } = require('./src/voice/fish');
 const { playBeep } = require('./src/voice/beep');
+const { listPersonas, getPersona, resolvePersona, personaVoiceOptions } = require('./src/voice/personas');
 const { webTools } = require('./src/tools/web');
 const { BrowserPage, browserTools, electronWindow } = require('./src/tools/browser');
 const { uiTools } = require('./src/tools/ui');
@@ -934,11 +935,15 @@ function readVoiceEnv() {
   try { return loadEnvFile(ENV_FILE); } catch { return {}; }
 }
 
-// Голос, громкость и скорость из настроек: применяются к обоим голосам без перезапуска.
+// Голос, громкость, скорость и характер из настроек: применяются к обоим голосам без перезапуска.
+// Характер (src/voice/personas.js) задаёт только темп и громкость; выбранный голос он не меняет.
 function voiceOptionsFromSettings() {
   const s = readSettings();
-  const volume = Number(s.voiceVolume);
-  const rate = Number(s.voiceRate);
+  const persona = personaVoiceOptions(s.voicePersona);
+  const personaVolume = Number(persona.volume);
+  const personaRate = Number(persona.rate);
+  const volume = Number.isFinite(personaVolume) ? personaVolume : Number(s.voiceVolume);
+  const rate = Number.isFinite(personaRate) ? personaRate : Number(s.voiceRate);
   return {
     speaker: typeof s.voiceSpeaker === 'string' && s.voiceSpeaker.trim() ? s.voiceSpeaker.trim().slice(0, 80) : null,
     volume: Number.isFinite(volume) && volume >= 0 && volume <= 1 ? volume : 1,
@@ -1045,6 +1050,9 @@ ipcMain.handle('voice:state', (event) => {
     reason: state.reason || null,
     cloudAvailable: fishVoice.isInstalled(),
     options: { ...opts, ...(provider.options ? provider.options() : {}) },
+    // Характер речи: id и список для строки в Настройках → Ответы.
+    persona: resolvePersona(readSettings().voicePersona).id,
+    personas: listPersonas(),
   };
 });
 
@@ -2592,6 +2600,7 @@ ipcMain.handle('settings:get', (event) => {
     voiceVolume: vo.volume,
     voiceRate: vo.rate,
     voiceSpeaker: vo.speaker,
+    voicePersona: resolvePersona(s.voicePersona).id,
   };
 });
 
@@ -2612,6 +2621,14 @@ ipcMain.handle('settings:set', (event, key, value) => {
     saveSettings({ voiceSpeaker: speaker || null });
     applyVoiceOptions();
     return { ok: true, speaker: speaker || null };
+  }
+  // Характер речи: только известный id или пусто («Как есть»). Голос не меняется.
+  if (key === 'voicePersona') {
+    const id = typeof value === 'string' ? value.trim() : '';
+    if (id && !getPersona(id)) return { ok: false };
+    saveSettings({ voicePersona: id || null });
+    applyVoiceOptions();
+    return { ok: true, persona: resolvePersona(id).id };
   }
   if (!SETTING_KEYS.has(key) || typeof value !== 'boolean') return { ok: false };
   if (key === 'autoStart') {

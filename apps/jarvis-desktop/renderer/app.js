@@ -4083,7 +4083,31 @@
     if (rr) rr.addEventListener('click', loadReminders);
   }
 
-  // ── Голос: громкость, скорость и выбор голоса (Настройки → Ответы) ──
+  // ── Голос: громкость, скорость, характер и выбор голоса (Настройки → Ответы) ──
+  function renderVoicePersonas(personas, current) {
+    const sel = $('#voicePersona');
+    if (!sel) return;
+    if (Array.isArray(personas) && personas.length > 0) {
+      sel.innerHTML = '';
+      for (const persona of personas) {
+        if (!persona || typeof persona.id !== 'string' || !persona.id) continue;
+        const option = document.createElement('option');
+        option.value = persona.id;
+        option.textContent = persona.name || persona.id;
+        if (persona.description) option.title = persona.description;
+        sel.appendChild(option);
+      }
+    }
+    if (typeof current === 'string' && current) sel.value = current;
+    const hint = $('#voicePersonaHint');
+    if (hint) {
+      const found = (Array.isArray(personas) ? personas : []).find((persona) => persona && persona.id === sel.value);
+      hint.textContent = found && found.description
+        ? found.description
+        : 'Меняет только темп и громкость, голос остаётся выбранным';
+    }
+  }
+
   function renderVoiceOptions(opts = {}) {
     const vol = Number.isFinite(opts.volume) ? Math.min(1, Math.max(0, opts.volume)) : 1;
     const rate = Number.isFinite(opts.rate) ? Math.min(2, Math.max(0.5, opts.rate)) : 1;
@@ -4117,6 +4141,7 @@
         return;
       }
       renderVoiceOptions(st.options || {});
+      renderVoicePersonas(st.personas, st.persona);
       const sel = $('#voiceSpeaker');
       if (sel && st.options && st.options.speaker) sel.value = st.options.speaker;
       const hint = $('#voicePickHint');
@@ -4195,6 +4220,12 @@
     rate.addEventListener('input', () => { if (rateHint) rateHint.textContent = String(rate.value).replace('.', ',') + ' из 2'; });
     rate.addEventListener('change', () => { if (rateHint) rateHint.textContent = String(rate.value).replace('.', ',') + ' из 2'; saveVoiceOption('voiceRate', Number(rate.value), 'Скорость речи: ' + String(rate.value).replace('.', ',')); });
     sel.addEventListener('change', () => saveVoiceOption('voiceSpeaker', sel.value, sel.value ? 'Голос выбран' : 'Голос по умолчанию'));
+    const persona = $('#voicePersona');
+    if (persona) {
+      persona.addEventListener('change', () => {
+        saveVoiceOption('voicePersona', persona.value, 'Характер речи: ' + (persona.selectedOptions[0] ? persona.selectedOptions[0].textContent : persona.value));
+      });
+    }
     list.addEventListener('click', () => loadVoiceList(list));
   }
 
