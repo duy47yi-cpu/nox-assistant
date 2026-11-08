@@ -14,7 +14,7 @@ const ROLES = Object.freeze({
   ]) },
   files: { title: 'редактор файлов', tools: new Set([
     'workspace_list', 'workspace_read', 'workspace_search', 'workspace_write',
-    'document_read', 'document_write', 'project_brief',
+    'document_read', 'document_write', 'document_fill', 'project_brief',
   ]) },
 });
 const MAX_TASKS = 3;

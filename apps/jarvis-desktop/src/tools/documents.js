@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { readZip, writeZip } = require('./zip');
 const { writeTarget, reportsOnly } = require('./workspace');
 const { pptxBuffer, pptxCheck, normalizeSlides } = require('./pptx');
+const { fillDocx, placeholdersIn } = require('./docx-fill');
 
 const MAX_FILE = 10 * 1024 * 1024;
 const MAX_TEXT = 50000;
@@ -430,7 +431,74 @@ function documentTools(index, { renderPdf } = {}) {
     },
   };
 
-  return [read, write];
+  // Шаблон Word с ключами {{ключ}} (например, диплом по образцу): значения подставляются, результат — новый файл.
+  const fill = {
+    name: 'document_fill',
+    description: 'Заполнить шаблон Word (.docx): в образце ключи в двойных фигурных скобках, например {{ФИО}}. values — значения по ключам. Результат пишется новым файлом (path); существующий заменяется только с overwrite: true. Ключи без значения вернутся в missing.',
+    risk: 'T1',
+    parameters: {
+      type: 'object',
+      properties: {
+        template: { type: 'string', minLength: 1, maxLength: MAX_PATH },
+        path: { type: 'string', minLength: 1, maxLength: MAX_PATH },
+        values: { type: 'object' },
+        overwrite: { type: 'boolean' },
+      },
+      required: ['template', 'path', 'values'],
+    },
+    async run(args = {}) {
+      try {
+        const tplRel = cleanPath(args.template);
+        const rel = cleanPath(args.path);
+        if (!tplRel || !rel) return notOk('нужны template и path');
+        if (path.extname(tplRel).toLowerCase() !== '.docx') return notOk('шаблон должен быть .docx');
+        if (path.extname(rel).toLowerCase() !== '.docx') return notOk('результат должен быть .docx');
+        if (/[<>:"|?*\x00-\x1f]/.test(path.basename(rel))) return notOk('в имени файла есть символы, которых нет в Windows: < > : " | ? *');
+        const tplAbs = index.resolveInside(tplRel);
+        if (!fs.existsSync(tplAbs) || !fs.statSync(tplAbs).isFile()) return notOk('шаблон не найден');
+        if (fs.statSync(tplAbs).size > MAX_FILE) return notOk(`шаблон больше ${MAX_FILE / 1024 / 1024} МБ`);
+        const values = args.values && typeof args.values === 'object' ? args.values : {};
+        const out = fillDocx(fs.readFileSync(tplAbs), values);
+        const abs = writeTarget(index, rel, null);
+        const exists = fs.existsSync(abs);
+        if (exists) {
+          if (fs.statSync(abs).isDirectory()) return notOk('это папка');
+          if (!args.overwrite) return notOk('файл уже есть: укажите overwrite: true, чтобы заменить');
+          const denied = reportsOnly(index, abs);
+          if (denied) return notOk(denied);
+        }
+        fs.mkdirSync(path.dirname(abs), { recursive: true });
+        const tmp = path.join(path.dirname(abs), `.${path.basename(abs)}.${crypto.randomUUID()}.tmp`);
+        try {
+          fs.writeFileSync(tmp, out.buffer);
+          fs.renameSync(tmp, abs);
+        } finally {
+          fs.rmSync(tmp, { force: true });
+        }
+        index.invalidate();
+        const summary = out.missing.length ? `записал; без значения осталось: ${out.missing.join(', ')}` : 'записал';
+        return { ok: true, summary, data: { path: relOf(abs), format: 'docx', created: !exists, filled: out.filled, missing: out.missing } };
+      } catch (err) {
+        return fail(err);
+      }
+    },
+    // Проверка эффекта: в результате не осталось ни одного заполненного ключа, а сам файл читается как Word.
+    async verify(args = {}, result = {}) {
+      if (!result.data || !result.data.path) return { status: 'unknown', evidence: 'нет пути результата' };
+      const abs = index.resolveInside(result.data.path);
+      if (!fs.existsSync(abs)) return { status: 'failed', evidence: `файла ${result.data.path} нет на диске` };
+      try {
+        const left = placeholdersIn(fs.readFileSync(abs));
+        const stuck = (result.data.filled || []).filter((k) => left.includes(k));
+        if (stuck.length) return { status: 'failed', evidence: `в документе остались не заполненные ключи: ${stuck.join(', ')}` };
+        return { status: 'confirmed', evidence: `документ ${result.data.path} заполнен; без значения: ${(result.data.missing || []).length}` };
+      } catch (err) {
+        return { status: 'failed', evidence: `документ ${result.data.path} не читается как Word: ${err.message}` };
+      }
+    },
+  };
+
+  return [read, write, fill];
 }
 
 module.exports = { documentTools, parseCsv };

@@ -49,8 +49,10 @@ test('youtube_play: не уверен — ничего не открывает �
   const urlOpen = { run: async ({ url }) => { opened.push(url); return { ok: true, summary: 'открыто', data: { host: 'www.youtube.com' } }; }, verify: async () => ({ status: 'confirmed' }) };
   const [tool] = youtubeTools(urlOpen, { find: async () => [video('ddddddddddd', 'XXXTENTACION - MOONLIGHT'), video('eeeeeeeeeee', 'Another')] });
   const res = await tool.run({ query: 'тентасион спулаемулае' });
-  assert.equal(res.ok, false);
-  assert.match(res.summary, /не уверен/);
+  // Это вопрос владельцу, а не сбой: ok и quiet, чтобы карточка действия в чате не появлялась.
+  assert.equal(res.ok, true);
+  assert.equal(res.quiet, true);
+  assert.match(res.summary, /не открыл: не уверен/);
   assert.equal(opened.length, 0);
 });
 

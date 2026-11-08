@@ -359,7 +359,10 @@ test('прямая просьба отправить письмо на указ�
   for (const ownerText of ['Не отправляй письмо на new@example.com', 'Отправь письмо на other@example.com', 'Посмотри письмо от new@example.com', 'Если попрошу, отправь письмо на new@example.com', 'Отправь письмо на new@example.com.evil']) {
     assert.equal(decide({ ...request, mode: 'full', ownerText }), 'ask', ownerText);
   }
-  assert.equal(decide({ ...request, mode: 'full', ownerText: 'Отправь письмо на new@example.com', tainted: true }), 'ask');
+  // Прямая просьба владельца отправить письмо названному адресату проходит и после чтения страниц (решение 08.11.2026).
+  assert.equal(decide({ ...request, mode: 'full', ownerText: 'Отправь письмо на new@example.com', tainted: true }), 'allow');
+  // Без названного адреса и при чужом тексте в этом ходу — по-прежнему вопрос.
+  assert.equal(decide({ ...request, mode: 'full', ownerText: 'Отправь письмо', tainted: true }), 'ask');
 });
 
 test('цикл агента передаёт прямую просьбу политике и отправляет через Gmail без дополнительного вопроса', async () => {

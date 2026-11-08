@@ -218,6 +218,7 @@
     project_diagnostics: 'Разбор журнала проекта',
     document_read: 'Чтение документа',
     document_write: 'Запись документа',
+    document_fill: 'Заполнение шаблона документа',
     web_search: 'Поиск в интернете',
     web_wiki: 'Поиск в Википедии',
     web_fetch: 'Чтение страницы',

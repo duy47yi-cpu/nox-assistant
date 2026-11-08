@@ -85,7 +85,8 @@ test('ход модели: музыка и погода выполняются �
     async run() { return { ok: true, summary: 'Москва: +5, облачно', data: {} }; },
   });
   const steps = [
-    { toolCalls: [{ id: 'c1', name: 'youtube_play', args: { query: 'мияги бадабум проверить погоду' } }] },
+    // Запрос для поиска формирует модель: в нём только песня, погоду она ищет отдельным инструментом.
+    { toolCalls: [{ id: 'c1', name: 'youtube_play', args: { query: 'мияги бадабум' } }] },
     { toolCalls: [{ id: 'c2', name: 'web_search', args: { query: 'погода сегодня' } }] },
     { content: 'Включил мияги. На улице +5, облачно.' },
   ];

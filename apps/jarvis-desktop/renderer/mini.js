@@ -68,6 +68,7 @@
       location.href = 'index.html' + location.search;
     });
     $('miniStop').addEventListener('click', () => U.call('stop').catch(() => {}));
+    $('miniHide').addEventListener('click', () => U.call('closeMini').catch(() => {}));
     for (const b of document.querySelectorAll('[data-decision]')) b.addEventListener('click', () => answer(b.dataset.decision));
     if (U.has('onEvent')) window.jarvis.onEvent(onEvent);
 

@@ -495,7 +495,11 @@
       this.stepsAmt = lerp(this.stepsAmt, this.steps.length ? 1 : 0, 1 - Math.exp(-dt / 0.35));
 
       // Голос: быстрая атака, мягкий спад; источник замолчал — уровень уходит в ноль.
-      if (this.t - this.voiceAt > 0.3) this.voiceTarget = 0;
+      // Настоящего уровня звука пока нет (setVoice без источника): когда Джарвис отвечает или слушает,
+      // уровень колеблется по времени, чтобы шар реагировал на голос. Это оценка, не громкость.
+      const external = this.t - this.voiceAt <= 0.3;
+      if (!external && (this.state === 'speaking' || this.state === 'listening')) this.voiceTarget = 0.2 + 0.35 * (0.5 + 0.5 * Math.sin(this.t * 9.1) * Math.sin(this.t * 3.7 + 1.3));
+      else if (!external) this.voiceTarget = 0;
       this.voice = lerp(this.voice, this.voiceTarget, 1 - Math.exp(-dt / (this.voiceTarget > this.voice ? 0.05 : 0.18)));
 
       // Волны только от настоящих порций ответа (pulse); таймера «говорит» нет.

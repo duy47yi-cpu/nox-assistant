@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('jarvis', {
   send: (text, files) => ipcRenderer.invoke('chat:send', String(text), Array.isArray(files) ? files : []),
   side: (text) => ipcRenderer.invoke('chat:side', String(text)),
   stop: () => ipcRenderer.invoke('agent:stop'),
+  showMain: () => ipcRenderer.invoke('window:showMain'),
+  closeMini: () => ipcRenderer.invoke('mini:close'),
   setWindowBackground: (color) => ipcRenderer.invoke('window:setBackground', String(color)),
   getState: () => ipcRenderer.invoke('state:get'),
   tasksAttention: () => ipcRenderer.invoke('tasks:attention'),

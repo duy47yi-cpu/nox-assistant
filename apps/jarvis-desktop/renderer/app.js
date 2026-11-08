@@ -23,7 +23,7 @@
   const THEMES = window.JarvisTheme.IDS;
   const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
   const TIER_NAMES = { fast: 'Быстрая', smart: 'Умная' };
-  const SETTING_KEYS = ['voice', 'quiet', 'alwaysOnTop', 'autoStart', 'screenAuto', 'memoryAuto', 'motion', 'dictation'];
+  const SETTING_KEYS = ['voice', 'quiet', 'alwaysOnTop', 'desktopOverlay', 'alwaysListen', 'autoStart', 'screenAuto', 'memoryAuto', 'motion', 'dictation'];
   const JOURNAL_LIMIT = 200;
   const MAX_FILES = 5;
   const MAX_PHRASES = 5;
@@ -49,7 +49,7 @@
     mode: null,
     hasKey: null,
     stateOk: null,
-    settings: { voice: false, quiet: false, alwaysOnTop: false, autoStart: false, screenAuto: false, memoryAuto: true, motion: true, dictation: false },
+    settings: { voice: false, quiet: false, alwaysOnTop: false, desktopOverlay: false, alwaysListen: false, autoStart: false, screenAuto: false, memoryAuto: true, motion: true, dictation: false },
     tier: 'fast',
     workspace: '',
     folders: [],
@@ -136,6 +136,7 @@
 
   let dealsRefreshSeq = 0;
   async function reloadDeals() {
+    if (has('remindersList')) loadReminders().catch(() => {});
     if (!has('dealsList')) return;
     const seq = ++dealsRefreshSeq;
     try {
@@ -161,8 +162,15 @@
     const scheduled = [...(g.promised || []), ...(g.started || [])]
       .filter((d) => d.due && new Date(d.due).toDateString() === new Date().toDateString())
       .sort((a, b) => new Date(a.due) - new Date(b.due)).slice(0, 2);
-    $('#todayList').replaceChildren(...(scheduled.length ? scheduled.map((d) => el('li', { text: `${U.toolTitle(d.title)} · ${U.shortTime(d.due)}` }))
-      : [el('li', { text: D.error ? 'Не удалось прочитать поручения' : 'Нет поручений на сегодня' })]));
+    // Сегодня: поручения со сроком и напоминания на сегодня (из списка напоминаний, если он уже загружен).
+    const today = new Date().toDateString();
+    const reminders = (MEM.reminders || []).filter((r) => r.due && !r.done && new Date(r.due).toDateString() === today).sort((a, b) => new Date(a.due) - new Date(b.due)).slice(0, 2);
+    const lines = [
+      ...scheduled.map((d) => `${U.toolTitle(d.title)} · ${U.shortTime(d.due)}`),
+      ...reminders.map((r) => `Напомнить: ${U.clip(String(r.text || ''), 60)} · ${U.shortTime(r.due)}`),
+    ].slice(0, 4);
+    $('#todayList').replaceChildren(...(lines.length ? lines.map((text) => el('li', { text }))
+      : [el('li', { text: D.error ? 'Не удалось прочитать поручения' : 'Нет поручений и напоминаний на сегодня' })]));
     const n = (k) => (g[k] ? g[k].length : 0);
     const rows = [
       ['waiting', '▲', 'Ждёт вас', waitCount()],
@@ -1953,9 +1961,21 @@
       el('span', { class: 'chain-name', text: U.toolTitle(e.tool) }))));
   }
 
+  // Служебный вызов (quiet): его строка не попадает в карточку действий, пустую карточку убираем.
+  function dropActRow(id, rec) {
+    rec.li.remove();
+    C.act.items.delete(id);
+    if (C.act.items.size) renderActs();
+    else { C.act.node.remove(); C.act = null; }
+  }
+
   function chatTool(ev) {
     hideThinking();
     let rec = C.act && C.act.items.get(ev.id);
+    if (ev.type === tool_result && ev.quiet) {
+      if (rec) dropActRow(ev.id, rec);
+      return;
+    }
     if (!rec) {
       if (ev.type === 'tool_result') return;
       const act = ensureActs();

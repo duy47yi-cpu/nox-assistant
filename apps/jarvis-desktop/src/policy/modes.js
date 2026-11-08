@@ -3,10 +3,13 @@
 // Детерминированная политика: решение зависит только от режима, риска и аргументов.
 // Вердикты: 'allow' | 'ask' | 'deny'. Владелец решил не отказывать, а спрашивать; 'deny' остаётся как возможность.
 //
-// Решение владельца (01.11.2026):
+// Решение владельца (01.11.2026, уточнено 08.11.2026):
 // - оплата запрещена всегда, в любом режиме: платит владелец сам;
-// - явно запрошенные владельцем удаление и установка разрешены в «Полном доступе»;
-// - отправка (письмо, отчёт, сообщение) — по режиму: в «Полном доступе» без вопроса;
+// - в «Полном доступе» удаление, установка и выключение выполняются по прямой повелительной просьбе владельца
+//   в его сообщении этого хода («установи», «удали», «выключи»), без вопроса, какой бы ни была команда;
+// - в «Полном доступе» отправка сообщения (почта, мессенджер, ответ в окне) по прямой просьбе владельца
+//   («отправь», «напиши», «ответь») идёт без вопроса, даже если в этом ходе читали страницы или файлы;
+// - секрет (пароль, ключ) в исходящем всё равно спрашивается: это защита от утечки, а не от владельца;
 // - в «Полном доступе» жёсткие запреты на почту, банк и мессенджеры не действуют: иначе отправка невозможна.
 //
 // Честная оговорка: гарантия «удаление спросит» касается инструментов удаления.
@@ -225,6 +228,41 @@ function ownerAsked(kind, ownerText) {
   return ownerImperative(kind, text);
 }
 
+// Прямая просьба отправить сообщение: повелительный глагол отправки первым словом клаузы. Вопрос и отрицание — нет.
+// «Обсуждать» отправку («что такое отправка») здесь не отсекаем: это не действие, а слово в начале поручения.
+const OWNER_SEND_WORDS = ['отправь', 'отправьте', 'отправить', 'отправляй', 'пошли', 'пошлите', 'send', 'напиши', 'напишите', 'написать', 'ответь', 'ответьте', 'ответить', 'reply'];
+function ownerAskedSend(ownerText) {
+  const text = String(ownerText || '');
+  if (text.includes('?')) return false;
+  if (/(?:^|[^\p{L}\p{N}])(не|нельзя|запрещаю|спроси|подтверждения|разрешения|согласия|если|когда|потом|позже|сначала|после)(?:$|[^\p{L}\p{N}])/iu.test(text)) return false;
+  const bare = text.toLowerCase().replace(/ё/g, 'е');
+  return bare.split(/[.!?;\n]+/).some((clause) => {
+    const tokens = clause.match(/[\p{L}\p{N}]+/gu) || [];
+    let i = 0;
+    while (i < tokens.length && OWNER_LEAD_WORDS.has(tokens[i])) i += 1;
+    return i < tokens.length && OWNER_SEND_WORDS.includes(tokens[i]);
+  });
+}
+
+// Письмо уходит без вопроса только если владелец назвал адресата сам и это тот же адрес, что в письме.
+function mailRecipientMatches(ownerText, args) {
+  const to = typeof args?.to === 'string' ? args.to.trim().toLowerCase() : '';
+  const named = String(ownerText || '').match(/[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/giu) || [];
+  return Boolean(to) && named.length === 1 && named[0].toLowerCase() === to;
+}
+
+// Пакет из команды установки: winget install --id VideoLAN.VLC или pip install python-pptx → имя пакета.
+function installPackageOf(command) {
+  const m = /\b(?:install|add|i)\s+(?:-{1,2}[\w-]+\s+)*([\w.+@-]+)/i.exec(String(command || ''));
+  return m ? m[1] : null;
+}
+
+// Инструменты, которыми уходит сообщение: почта и ввод или клик в окне мессенджера, почты, браузера.
+const MESSAGE_TOOLS = new Set(['mail_send', 'ui_type', 'ui_keys', 'ui_click', 'desktop_type', 'desktop_click', 'browser_type', 'browser_click', 'mouse_click']);
+function isMessageTool(name) {
+  return MESSAGE_TOOLS.has(String(name || '')) || /(^|_)(send|message|reply)(_|$)/i.test(toolWords(name));
+}
+
 // Пока нет проверенной связи между фразой и найденным объектом, учитываем только
 // явно указанную полную цель. Совпадение части пути или wildcard не подходит.
 function ownerNamedTarget(ownerText, target) {
@@ -342,23 +380,30 @@ function hasSecretEgress({ name, args } = {}) {
 function decide({ mode, name, risk, args, workspace, sessionAllow, hasPathParam = true, source, ownerAllowed = false, ownerText = '', ownerCommand = false, tainted = false, handsTainted = false, installEvidence = null } = {}) {
   // Оплата запрещена всегда: платит владелец сам.
   if (isPayment({ name, args })) return 'deny';
-  // Для удаления и установки без прямой просьбы требуется подтверждение.
+  // Для удаления и установки без прямой просьбы владельца требуется подтверждение.
   if (isDeletion({ name, args }) && !(mode === 'full' && (ownerCommand || (ownerAsked('delete', ownerText) && ownerNamedWorkspaceTarget(ownerText, args && args.path, workspace))))) return 'ask';
+  // Установка в «Полном доступе» — по прямой просьбе «установи <программа>»: программа должна совпасть с названной
+  // (в команде пакет берём из самой команды: winget install X, pip install X). Поиск по просьбе — своя связь.
   const searchMatches = name === 'app_install' && installEvidence && args && typeof args.id === 'string'
     && typeof installEvidence.id === 'string' && installEvidence.id.toLowerCase() === args.id.trim().toLowerCase()
     && ownerAskedInstallTarget(ownerText, installEvidence.query);
-  const explicitInstall = name === 'shell_run' ? ownerNamedTarget(ownerText, args && args.command) : ownerAskedInstallTarget(ownerText, args && args.id);
+  const explicitInstall = name === 'shell_run'
+    ? ownerNamedTarget(ownerText, args && args.command) || ownerAskedInstallTarget(ownerText, installPackageOf(args && args.command))
+    : ownerAskedInstallTarget(ownerText, args && args.id);
   if (isInstall({ name, args }) && !(mode === 'full' && (ownerCommand || (ownerAsked('install', ownerText) && (explicitInstall || searchMatches))))) return 'ask';
-  // В полном доступе прямое поручение владельца разрешает отправку указанному адресату.
-  const directMail = mode === 'full' && name === 'mail_send' && source === 'mail' && ownerAskedMail(ownerText, args);
+  // Отправка по прямой просьбе владельца в «Полном доступе»: без вопроса, в том числе после чтения страниц.
+  // Для письма адрес в просьбе, если назван, должен совпасть с адресатом.
+  const ownerSends = mode === 'full' && isMessageTool(name) && ownerAskedSend(ownerText)
+    && (name !== 'mail_send' || mailRecipientMatches(ownerText, args));
+  const directMail = mode === 'full' && name === 'mail_send' && source === 'mail' && (ownerSends || ownerAskedMail(ownerText, args));
   const selectedCommand = mode === 'full' && ownerCommand === true;
   if (EXTERNAL_SOURCES.has(source) && ownerAllowed !== true && !directMail && !selectedCommand) return 'ask';
   // Заражение контекста: если в этом ходу уже читали страницу, экран или файл, исходящее действие
-  // в «Полном доступе» спрашиваем. Владелец подтвердит, если это его настоящая просьба.
-  if (tainted && isEgress(name)) return 'ask';
-  // Чужой текст и руки: клик или ввод после чужой страницы/файла могут выполнить чужое указание
-  // (например, нажать «Отправить» в чужом окне). В «Полном доступе» спрашиваем, владелец подтвердит.
-  if (handsTainted && isHandsAction(name)) return 'ask';
+  // спрашиваем, кроме прямой просьбы владельца отправить.
+  if (tainted && isEgress(name) && !ownerSends) return 'ask';
+  // Чужой текст и руки: клик или ввод после чужой страницы/файла могут выполнить чужое указание.
+  // Прямая просьба владельца отправить («отправь», «ответь») это снимает.
+  if (handsTainted && isHandsAction(name) && !ownerSends) return 'ask';
   // Секрет в исходящем аргументе — тоже вопрос в любом режиме.
   if (hasSecretEgress({ name, args })) return 'ask';
   // Намеренное ужесточение (03.11.2026): профиль и договорённость попадают в каждый промпт, поэтому их запись

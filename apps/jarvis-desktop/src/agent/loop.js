@@ -738,6 +738,7 @@ class Agent {
       verifiedStatus, decision: resolution, ...(target ? { target } : {}), startedAt: stepStartedAt,
       label: stopped ? STEP_WORDS.failed : STEP_WORDS[callStatus],
       ...(result.verified ? { verified: result.verified, evidence: result.evidence || '' } : {}),
+      ...(result.quiet ? { quiet: true } : {}),
     });
     // repeat — служебная пометка для цикла, в историю не попадает.
     return repeat ? Object.defineProperty(result, 'repeat', { value: true, enumerable: false }) : result;
@@ -850,6 +851,8 @@ class Agent {
         // Подпись для модели: снимок экрана и картинка из файла — разные вещи, пусть видит, что именно.
         imageLabel: r && r.image ? (tool.name === 'screen_look' ? 'Снимок экрана' : 'Картинка') : undefined,
         ...(r && r.verified ? { verified: r.verified, evidence: r.evidence || '' } : {}),
+        // quiet — вызов был служебным (например, варианты без открытия): в чате карточку действия не показываем.
+        ...(r && r.quiet ? { quiet: true } : {}),
       };
       // Перед проверкой результата окно честно показывает, что идёт проверка, а не выполнение.
       // Если действие уже не удалось, проверять нечего и «проверяю» не показываем.

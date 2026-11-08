@@ -5,7 +5,7 @@
 // Видео открывается, только если его название совпадает с просьбой; иначе отдаёт варианты и не открывает ничего.
 const { findYoutubeCandidates, atSecond } = require('../music/play');
 const { chooseVideo } = require('../music/match');
-const { SERVICES, stripOtherDeals } = require('../music/intent');
+const { SERVICES } = require('../music/intent');
 
 function youtubeTools(urlOpen, { find = findYoutubeCandidates, notePlay = null } = {}) {
   const youtubePlay = {
@@ -21,8 +21,8 @@ function youtubeTools(urlOpen, { find = findYoutubeCandidates, notePlay = null }
       required: ['query'],
     },
     async run(args, ctx = {}) {
-      // Модель иногда передаёт просьбу целиком («мияги бадабум проверить погоду»): чужие дела в поиск не идут.
-      const query = stripOtherDeals((args && args.query) || '');
+      // Запрос формирует модель: в нём только то, что искать. Пустой запрос — ошибка.
+      const query = String((args && args.query) || '').trim();
       if (!query) return { ok: false, summary: 'пустой запрос', data: {} };
       const start = Number.isInteger(args.start) && args.start > 0 ? args.start : null;
       const candidates = await find(query);
@@ -37,7 +37,8 @@ function youtubeTools(urlOpen, { find = findYoutubeCandidates, notePlay = null }
       if (!pick.confident) {
         // Не уверены, что это то самое: ничего не открываем, варианты уходят модели, она спросит владельца.
         const options = pick.options.map((v, i) => `${i + 1}) ${v.title}`).join('; ');
-        return { ok: false, summary: `не уверен, какое видео по запросу «${query}»: ${options}`, data: { options: pick.options.map((v) => ({ title: v.title, url: v.url })) } };
+        // Это вопрос, а не сбой: карточку действия не показываем, модель спросит владельца сама.
+        return { ok: true, quiet: true, summary: `не открыл: не уверен, какое видео по запросу «${query}». Варианты: ${options}`, data: { options: pick.options.map((v) => ({ title: v.title, url: v.url })) } };
       }
       const url = atSecond(pick.video.url, start);
       const res = await urlOpen.run({ url }, ctx);
