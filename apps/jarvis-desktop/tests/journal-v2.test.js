@@ -128,19 +128,20 @@ test('app_open: своё окно подтверждает запуск по и�
   assert.deepEqual(parseOpenOutput('совсем не json'), {});
 });
 
-test('url_open: окно с адресом найдено — confirmed', async () => {
+test('url_open: окно браузера с названием сайта найдено — confirmed', async () => {
   const tool = byName('url_open');
-  const res = { ok: true, summary: 'открыто: example.com', data: { host: 'example.com' } };
-  const v = await tool.verify({ url: 'https://example.com' }, res, { probeWindowTitle: async (h) => h === 'example.com', pollTimeoutMs: 300 });
+  const res = { ok: true, summary: 'открыто: www.example.com', data: { host: 'www.example.com' } };
+  // Проверка идёт по названию сайта («example»), а не по адресу: заголовок окна адреса не содержит.
+  const v = await tool.verify({ url: 'https://www.example.com' }, res, { probeWindowTitle: async (b) => b === 'example', pollTimeoutMs: 300 });
   assert.equal(v.status, 'confirmed');
 });
 
-test('url_open: заголовок без адреса — unknown с пояснением', async () => {
+test('url_open: в заголовках нет названия сайта — unknown с пояснением', async () => {
   const tool = byName('url_open');
   const res = { ok: true, data: { host: 'example.com' } };
   const v = await tool.verify({}, res, { probeWindowTitle: async () => false, pollTimeoutMs: 200 });
   assert.equal(v.status, 'unknown');
-  assert.match(v.evidence, /example\.com/);
+  assert.match(v.evidence, /example/);
 });
 
 test('checkEffect: unknown от app_open сохраняет ok и добавляет пометку', async () => {

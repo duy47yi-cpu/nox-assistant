@@ -54,13 +54,13 @@ function fakeUrlOpen(opened) {
 
 test('youtube_play открывает первое видео с нужной секунды, без видео — страницу поиска', async () => {
   const opened = [];
-  const [found] = youtubeTools(fakeUrlOpen(opened), { find: async () => ({ id: 'abcdefghijk', title: 'Песня', url: 'https://www.youtube.com/watch?v=abcdefghijk' }) });
+  const [found] = youtubeTools(fakeUrlOpen(opened), { find: async () => [{ id: 'abcdefghijk', title: 'Моргенштерн — Песня', url: 'https://www.youtube.com/watch?v=abcdefghijk' }] });
   const res = await found.run({ query: 'моргенштерн', start: 16 }, {});
   assert.equal(res.ok, true);
   assert.match(opened[0], /[?&]t=16s/);
   assert.match(res.summary, /16-й секунды/);
 
-  const [missing] = youtubeTools(fakeUrlOpen(opened), { find: async () => null });
+  const [missing] = youtubeTools(fakeUrlOpen(opened), { find: async () => [] });
   const res2 = await missing.run({ query: 'моргенштерн', start: 16 }, {});
   assert.match(opened[1], /results\?search_query=/);
   assert.match(res2.summary, /перемотку сделать не удалось/);
@@ -131,7 +131,7 @@ test('цепочка из трёх шагов за один ход: видео, 
   const opened = [];
   const ran = [];
   const reg = new ToolRegistry();
-  const [yt] = youtubeTools(fakeUrlOpen(opened), { find: async () => ({ id: 'abcdefghijk', title: 'Песня', url: 'https://www.youtube.com/watch?v=abcdefghijk' }) });
+  const [yt] = youtubeTools(fakeUrlOpen(opened), { find: async () => [{ id: 'abcdefghijk', title: 'Моргенштерн — Песня', url: 'https://www.youtube.com/watch?v=abcdefghijk' }] });
   const [close] = windowsCloseTools({ runner: windowsRunner({ before: W, after: [] }).runner });
   const wait = { name: 'wait', risk: 'T0', description: 'wait', parameters: { type: 'object', properties: {} }, async run() { return { ok: true, summary: 'подождал', data: {} }; } };
   for (const tool of [yt, wait, close]) reg.register({ ...tool, run: async (a, c) => { ran.push(tool.name); return tool.run(a, c); } });

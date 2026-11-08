@@ -2,12 +2,13 @@
 
 // disk_cleanup_suggest: большие файлы только внутри разрешённых папок (рабочая, но не данные и не папка программы),
 // путь уходит в PowerShell через -LiteralPath, файлы, попавшие наружу через ссылку, в ответ не попадают.
+// Суммирование ответа — чистое: байты/ГБ/категории, без чтения диска и без удаления.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { diskTools } = require('../src/tools/disk');
+const { diskTools, summarizeCleanup, humanBytes, categoryOf, MB, GB } = require('../src/tools/disk');
 
 const win = process.platform === 'win32';
 
@@ -128,4 +129,144 @@ test('disk_cleanup_suggest: живой PowerShell видит файл в пап�
   assert.equal(res.data.files.length, 1);
   assert.equal(res.data.files[0].path.toLowerCase(), big.toLowerCase());
   assert.ok(res.data.files[0].sizeMB >= 0.2, String(res.data.files[0].sizeMB));
+});
+
+// ── Суммирование: байты, ГБ, категории, мусорные входы, округление ──
+// Вход — ответ PowerShell: [{ path, sizeMB }]. Функция ничего не читает и не удаляет.
+
+test('суммирование: пустой и не-массив дают честные нули', () => {
+  for (const input of [[], null, undefined, 'файлы', 42, {}]) {
+    const sum = summarizeCleanup(input);
+    assert.equal(sum.count, 0);
+    assert.equal(sum.totalBytes, 0);
+    assert.equal(sum.totalMB, 0);
+    assert.equal(sum.totalGB, 0);
+    assert.equal(sum.totalText, '0 Б');
+    assert.deepEqual(sum.categories, []);
+    assert.deepEqual(sum.files, []);
+  }
+});
+
+test('суммирование: байты, ГБ, категории и порядок «крупные сверху»', () => {
+  const files = [
+    { path: 'D:\\загрузки\\setup.exe', sizeMB: 1024 },
+    { path: 'D:\\загрузки\\фильм.mp4', sizeMB: 512 },
+    { path: 'D:\\загрузки\\архив.zip', sizeMB: 2048.5 },
+  ];
+  const copy = JSON.parse(JSON.stringify(files));
+  const sum = summarizeCleanup(files);
+
+  assert.equal(sum.count, 3);
+  assert.equal(sum.totalBytes, 3_758_620_672);
+  assert.equal(sum.totalBytes, Math.round((1024 + 512 + 2048.5) * MB));
+  assert.ok(Math.abs(sum.totalGB - 3.5005) < 0.001, String(sum.totalGB));
+  assert.equal(sum.totalText, '3.5 ГБ');
+  assert.deepEqual(files, copy, 'вход не меняется');
+
+  assert.deepEqual(sum.files.map((file) => file.path), [
+    'D:\\загрузки\\архив.zip',
+    'D:\\загрузки\\setup.exe',
+    'D:\\загрузки\\фильм.mp4',
+  ]);
+  assert.equal(sum.files[0].sizeMB, 2048.5);
+  assert.equal(sum.files[0].category, 'archives');
+
+  // Категории тоже по убыванию, с человеческой подписью размера.
+  assert.deepEqual(sum.categories.map((group) => group.key), ['archives', 'installers', 'video']);
+  assert.equal(sum.categories[0].count, 1);
+  assert.equal(sum.categories[0].bytes, 2_148_007_936);
+  assert.equal(sum.categories[0].title, 'архивы');
+  assert.equal(sum.categories[0].text, '2.0 ГБ');
+});
+
+test('суммирование: мусорные входы не ломают счёт и не выдумывают байты', () => {
+  const sum = summarizeCleanup([
+    null,
+    'строка',
+    42,
+    {},
+    { path: '' },
+    { path: '   ' },
+    { path: 'нет-размера.bin' },
+    { path: 'nan.bin', sizeMB: 'abc' },
+    { path: 'neg.bin', sizeMB: -5 },
+    { path: 'inf.bin', sizeMB: Infinity },
+    { path: 'ok.bin', sizeMB: 1 },
+  ]);
+  assert.equal(sum.count, 5, 'считаются только записи с непустым путём');
+  assert.equal(sum.totalBytes, MB);
+  assert.equal(sum.totalText, '1.0 МБ');
+  assert.equal(sum.files[0].path, 'ok.bin');
+  assert.equal(sum.files[0].sizeBytes, MB);
+  assert.equal(sum.categories.length, 1);
+  assert.equal(sum.categories[0].key, 'other');
+  assert.equal(sum.categories[0].count, 5);
+  assert.equal(sum.categories[0].bytes, MB);
+});
+
+test('суммирование: округление Б/КБ/МБ/ГБ', () => {
+  assert.equal(humanBytes(0), '0 Б');
+  assert.equal(humanBytes(NaN), '0 Б');
+  assert.equal(humanBytes(-5), '0 Б');
+  assert.equal(humanBytes(1023), '1023 Б');
+  assert.equal(humanBytes(1024), '1 КБ');
+  assert.equal(humanBytes(1536), '2 КБ');
+  assert.equal(humanBytes(MB), '1.0 МБ');
+  assert.equal(humanBytes(13 * GB + Math.round(0.4 * GB)), '13.4 ГБ');
+  assert.equal(humanBytes(GB), '1.0 ГБ');
+});
+
+test('суммирование: категория по расширению, неизвестное — «другое»', () => {
+  assert.equal(categoryOf('setup.EXE'), 'installers');
+  assert.equal(categoryOf('кино.mkv'), 'video');
+  assert.equal(categoryOf('фото.png'), 'images');
+  assert.equal(categoryOf('архив.7z'), 'archives');
+  assert.equal(categoryOf('документ.pdf'), 'documents');
+  assert.equal(categoryOf('странное.xyz'), 'other');
+  assert.equal(categoryOf(''), 'other');
+});
+
+test('суммирование: suggest считает итог только по видимым файлам, скрытые за границей не входят', async (t) => {
+  const { base, workspace, data } = setup(t);
+  const inside = path.join(workspace, 'свой.zip');
+  fs.writeFileSync(inside, Buffer.alloc(256 * 1024));
+  const outside = path.join(data, 'чужой.bin');
+  fs.writeFileSync(outside, Buffer.alloc(1024));
+  const tool = cleanup({
+    denyWrite: [data],
+    run: async () => ({ ok: true, data: { stdout: JSON.stringify([{ path: outside, sizeMB: 5 }, { path: inside, sizeMB: 0.25 }]) } }),
+  });
+  const res = await tool.run({ folder: '.' }, { workspace });
+  assert.equal(res.ok, true, res.summary);
+  assert.equal(res.data.hidden, 1);
+  assert.equal(res.data.totalBytes, Math.round(0.25 * MB), 'чужой файл не раздувает цифру');
+  assert.equal(res.data.totalText, '256 КБ');
+  assert.deepEqual(res.data.categories.map((group) => group.key), ['archives']);
+  assert.equal(base.length > 0, true);
+});
+
+test('суммирование: suggest ничего не удаляет; отказ по границе тоже не трогает файлы', async (t) => {
+  const { workspace } = setup(t);
+  const archive = path.join(workspace, 'большой.zip');
+  const video = path.join(workspace, 'фильм.mp4');
+  fs.writeFileSync(archive, Buffer.alloc(256 * 1024, 1));
+  fs.writeFileSync(video, Buffer.alloc(128 * 1024, 2));
+  const runner = async () => ({
+    ok: true,
+    data: { stdout: JSON.stringify([{ path: archive, sizeMB: 0.25 }, { path: video, sizeMB: 0.125 }]) },
+  });
+  const tool = cleanup({ denyWrite: [], run: runner });
+
+  const res = await tool.run({ folder: '.' }, { workspace });
+  assert.equal(res.ok, true, res.summary);
+  assert.equal(res.data.totalBytes, Math.round(0.375 * MB));
+  assert.equal(res.data.totalText, '384 КБ');
+  assert.equal(res.data.categories[0].key, 'archives');
+  assert.equal(fs.existsSync(archive), true, 'suggest не удаляет файлы');
+  assert.equal(fs.existsSync(video), true, 'suggest не удаляет файлы');
+
+  const refused = await tool.run({ folder: '..' }, { workspace });
+  assert.equal(refused.ok, false, 'папка вне рабочей отклонена');
+  assert.equal(fs.existsSync(archive), true, 'отказ ничего не удалил');
+  assert.equal(fs.existsSync(video), true, 'отказ ничего не удалил');
 });

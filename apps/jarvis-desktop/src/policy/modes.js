@@ -177,6 +177,13 @@ function isShellDeletion({ name, args } = {}) {
   return String(name || '') === 'shell_run' && SHELL_DELETE.test(`${String((args && args.command) || '')} `);
 }
 
+// Shift+Delete в проводнике удаляет мимо корзины. Клавиши ui_keys идут строкой через пробел: "tab shift+delete".
+// Цель клавиш в вызове не названа, поэтому её проверяем только по прямой просьбе удалить в ходе.
+function isShiftDelete({ name, args } = {}) {
+  if (String(name || '') !== 'ui_keys' || !args || typeof args.keys !== 'string') return false;
+  return args.keys.toLowerCase().split(/\s+/).includes('shift+delete');
+}
+
 // Прямая просьба владельца: только повелительное слово действия в его сообщении этого хода.
 // Существительные («перезагрузка», «удаление», «установка») командой не считаются:
 // «сколько длится перезагрузка» или «обсуди удаление файла» — не просьба выполнить действие.
@@ -296,6 +303,7 @@ function hardDeny({ name, args }) {
   if (n === 'shell_run' && HARD_SHELL.test(String((args && args.command) || ''))) {
     return 'запрет: команда удаляет файлы, отправляет почту или платит';
   }
+  if (isShiftDelete({ name, args })) return 'запрет: Shift+Delete удаляет мимо корзины (только по прямой просьбе владельца)';
   if (HARD_UI.has(n) && HARD_WINDOW.test(String((args && args.window) || ''))) {
     return 'запрет: ввод в окне почты, мессенджера или банка';
   }
@@ -360,6 +368,7 @@ function decide({ mode, name, risk, args, workspace, sessionAllow, hasPathParam 
   // Решение владельца (05.11.2026): в «Полном доступе» выключение, перезагрузка и удаление командой спрашиваются,
   // кроме случая, когда владелец сам прямо попросил это в своём сообщении этого хода (ownerText — только его слова из чата).
   if (mode === 'full') {
+    if (isShiftDelete({ name, args }) && !ownerCommand && !ownerAsked('delete', ownerText)) return 'ask';
     const kind = isPowerOff({ name, args }) ? 'power' : isShellDeletion({ name, args }) ? 'delete' : null;
     if (kind && !ownerCommand && (!ownerAsked(kind, ownerText) || (kind === 'delete' && !ownerNamedShellDelete(ownerText, args && args.command, workspace)))) return 'ask';
     return 'allow';
@@ -383,4 +392,4 @@ function decide({ mode, name, risk, args, workspace, sessionAllow, hasPathParam 
   return 'ask';
 }
 
-module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, hasSecretEgress, describe };
+module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe };

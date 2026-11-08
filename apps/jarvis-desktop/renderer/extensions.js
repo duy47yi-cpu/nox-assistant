@@ -8,7 +8,7 @@
   const DEPS = { toast: () => {}, ask: async () => false };
   const $ = (sel, root = document) => (root || document).querySelector(sel);
   const el = (tag, attrs, ...children) => U.el(tag, attrs, ...children);
-  const EXT = { loaded: false, items: [], dl: null, paused: false };
+  const EXT = { loaded: false, items: [], dl: null, dlError: null, paused: false };
 
   const fmtBytes = (n) => {
     if (!Number.isFinite(n)) return '';
@@ -186,18 +186,27 @@
   async function analyzeDownloads() {
     if (!W.dlNote) return;
     if (!U.has || !U.has('downloadsAnalyze')) {
-      W.dlNote.textContent = 'Эта версия ядра не умеет разбирать загрузки.';
+      EXT.dl = null;
+      EXT.dlError = 'Эта версия ядра не умеет разбирать загрузки.';
+      W.dlNote.textContent = EXT.dlError;
       W.dlNote.hidden = false;
+      renderDiskCard();
       return;
     }
     W.dlNote.textContent = 'Смотрю папку загрузок…';
     W.dlNote.hidden = false;
+    if (W.diskNote) { W.diskNote.textContent = 'Смотрю папку загрузок…'; W.diskNote.hidden = false; }
     let r;
     try { r = await U.call('downloadsAnalyze', {}); } catch (err) { r = { ok: false, message: err.message }; }
     if (!r || r.ok === false) {
-      W.dlNote.textContent = 'Не получилось: ' + ((r && r.message) || (r && r.reason) || 'причина неизвестна');
+      EXT.dl = null;
+      EXT.dlError = 'Не получилось: ' + ((r && r.message) || (r && r.reason) || 'причина неизвестна');
+      W.dlNote.textContent = EXT.dlError;
+      W.dlNote.hidden = false;
+      renderDiskCard();
       return;
     }
+    EXT.dlError = null;
     EXT.dl = r;
     const candidates = Array.isArray(r.candidates) ? r.candidates : [];
     const scanned = typeof r.scanned === 'number' ? r.scanned : (r.scanned && Number.isFinite(r.scanned.files) ? r.scanned.files : 0);
@@ -217,6 +226,143 @@
       }));
     }
     if (W.dlRemove) W.dlRemove.disabled = candidates.length === 0;
+    renderDiskCard();
+  }
+
+  // Карточка «Освободить место»: крупная реальная цифра и уборка через тот же подтверждённый путь,
+  // что у «Уборки загрузок» (downloads:analyze / downloads:remove). Свободное место на диске ядро
+  // этой версии не сообщает — вместо выдуманных чисел честная строка об этом.
+  function renderDiskCard() {
+    if (!W.diskNote || !W.diskBig) return;
+    const r = EXT.dl;
+    if (!r) {
+      W.diskBig.hidden = true;
+      W.diskBig.textContent = '';
+      if (W.diskCount) W.diskCount.textContent = '';
+      if (W.diskList) W.diskList.replaceChildren();
+      if (W.diskFree) W.diskFree.disabled = true;
+      W.diskNote.textContent = EXT.dlError || 'Нажмите «Проверить»: покажу, сколько можно освободить в загрузках.';
+      W.diskNote.hidden = false;
+      return;
+    }
+    const candidates = Array.isArray(r.candidates) ? r.candidates : [];
+    const bytes = Number.isFinite(r.candidateBytes) && r.candidateBytes > 0
+      ? r.candidateBytes
+      : candidates.reduce((sum, item) => sum + (Number(item && item.size) || 0), 0);
+    if (candidates.length === 0 || r.status === 'empty') {
+      W.diskBig.hidden = true;
+      W.diskBig.textContent = '';
+      if (W.diskCount) W.diskCount.textContent = '0';
+      if (W.diskList) W.diskList.replaceChildren();
+      if (W.diskFree) W.diskFree.disabled = true;
+      W.diskNote.textContent = 'Освобождать нечего: в загрузках нет старых и временных файлов.';
+      W.diskNote.hidden = false;
+      return;
+    }
+    W.diskBig.textContent = `Можно освободить ~${fmtBytes(bytes)}`;
+    W.diskBig.hidden = false;
+    if (W.diskCount) W.diskCount.textContent = String(candidates.length);
+    // Крупные сверху: уборка должна быть видна по цифре.
+    const top = [...candidates]
+      .sort((a, b) => (Number(b && b.size) || 0) - (Number(a && a.size) || 0))
+      .slice(0, 5);
+    if (W.diskList) {
+      W.diskList.replaceChildren(...top.map((item) => el('li', { class: 'memory-item' },
+        el('div', { class: 'memory-text' },
+          el('span', { class: 'memory-body', text: item.path || '' }),
+          el('span', { class: 'memory-meta', text: [fmtBytes(Number(item.size) || 0), item.reason || ''].filter(Boolean).join(' · ') })))));
+    }
+    if (W.diskFree) W.diskFree.disabled = false;
+    W.diskNote.textContent = 'Это предпросмотр: ничего не удалено. Удаление — по кнопке, с подтверждением.';
+    W.diskNote.hidden = false;
+  }
+
+  async function analyzeDisk() {
+    await analyzeDownloads();
+    // Ошибку или пустое состояние уже показал общий разбор; здесь только уточняем цифру.
+    if (!W.diskNote || !EXT.dl) return;
+    const candidates = Array.isArray(EXT.dl.candidates) ? EXT.dl.candidates : [];
+    const bytes = Number.isFinite(EXT.dl.candidateBytes) && EXT.dl.candidateBytes > 0
+      ? EXT.dl.candidateBytes
+      : candidates.reduce((sum, item) => sum + (Number(item && item.size) || 0), 0);
+    if (candidates.length === 0 || EXT.dl.status === 'empty') {
+      W.diskNote.textContent = 'Освобождать нечего: в загрузках нет старых и временных файлов.';
+    } else {
+      // Свободное место — тот же инструмент ядра, что у агента; без него честно не показываем цифру.
+      let freeText = '';
+      if (U.has && U.has('diskFree')) {
+        try {
+          const fr = await U.call('diskFree');
+          const drive = fr && fr.ok && fr.data && Array.isArray(fr.data.drives) ? fr.data.drives[0] : null;
+          if (drive && Number.isFinite(Number(drive.freeGB))) freeText = `Свободно на ${drive.drive}: ~${Math.round(Number(drive.freeGB))} ГБ. `;
+        } catch { /* свободное место необязательно: цифра уборки остаётся */ }
+      }
+      W.diskNote.textContent = `${freeText}Можно освободить ~${fmtBytes(bytes)}; ничего не удалено.`;
+    }
+    W.diskNote.hidden = false;
+  }
+
+  async function freeDiskSpace() {
+    const r = EXT.dl;
+    if (!r) return;
+    const candidates = Array.isArray(r.candidates) ? r.candidates : [];
+    const paths = candidates.map((item) => (item && typeof item.path === 'string' ? item.path : '')).filter(Boolean);
+    if (paths.length === 0) { DEPS.toast('Нечего освобождать', 'error'); return; }
+    const bytes = Number.isFinite(r.candidateBytes) && r.candidateBytes > 0
+      ? r.candidateBytes
+      : candidates.reduce((sum, item) => sum + (Number(item && item.size) || 0), 0);
+    const ok = await DEPS.ask(
+      'Освободить место?',
+      `Файлов: ${paths.length}${bytes ? ' примерно на ' + fmtBytes(bytes) : ''}. Это удалит их из папки загрузок без корзины.`,
+      'Удалить',
+      'Отмена',
+    );
+    // Отказ: удаление не вызывается вовсе.
+    if (!ok) return;
+    try {
+      const res = await U.call('downloadsRemove', { paths }, true);
+      if (!res || res.ok === false) {
+        if (W.diskNote) {
+          W.diskNote.textContent = 'Не удалось: ' + ((res && res.message) || (res && res.reason) || 'причина неизвестна');
+          W.diskNote.hidden = false;
+        }
+        return;
+      }
+      const removed = Array.isArray(res.removed) ? res.removed.length : 0;
+      const freed = Number.isFinite(res.bytesFreed) ? fmtBytes(res.bytesFreed) : '';
+      const message = `Удалено ${removed}${freed ? ', освобождено ' + freed : ''}${res.refused && res.refused.length ? ', отклонено: ' + res.refused.length : ''}${res.failed && res.failed.length ? ', ошибок: ' + res.failed.length : ''}.`;
+      await analyzeDownloads();
+      if (W.diskNote) { W.diskNote.textContent = message; W.diskNote.hidden = false; }
+    } catch (err) {
+      if (W.diskNote) { W.diskNote.textContent = 'Не удалось: ' + err.message; W.diskNote.hidden = false; }
+    }
+  }
+
+  // Карточка строится здесь: index.html не меняем, стили — только существующие классы.
+  function buildDiskCard() {
+    const host = $('#extensionsSettings');
+    if (!host || $('#diskCard')) return;
+    const card = el('div', { class: 'ext-card', id: 'diskCard' },
+      el('div', { class: 'set-title-row' },
+        el('h3', { class: 'set-subtitle', text: 'Освободить место' }),
+        el('span', { class: 'counter', id: 'diskCount' })),
+      el('p', { class: 'set-hint', text: 'Реальная цифра по папке загрузок. Удаление — только после подтверждения. Свободное место на диске эта версия ядра не сообщает.' }),
+      el('p', { class: 'set-name', id: 'diskBig', hidden: true }),
+      el('ul', { class: 'memory-list', id: 'diskList' }),
+      el('p', { class: 'note', id: 'diskNote', text: 'Нажмите «Проверить»: покажу, сколько можно освободить в загрузках.' }),
+      el('div', { class: 'editor-foot' },
+        el('button', { type: 'button', class: 'btn btn-secondary btn-sm', id: 'diskAnalyze', text: 'Проверить' }),
+        el('span', { class: 'editor-foot-gap' }),
+        el('button', { type: 'button', class: 'btn btn-danger btn-sm', id: 'diskFree', text: 'Освободить', disabled: true })));
+    host.append(card);
+    W.diskBig = $('#diskBig');
+    W.diskList = $('#diskList');
+    W.diskNote = $('#diskNote');
+    W.diskCount = $('#diskCount');
+    W.diskFree = $('#diskFree');
+    W.diskAnalyze = $('#diskAnalyze');
+    if (W.diskAnalyze) W.diskAnalyze.addEventListener('click', analyzeDisk);
+    if (W.diskFree) W.diskFree.addEventListener('click', freeDiskSpace);
   }
 
   async function removeDownloads() {
@@ -286,6 +432,8 @@
     if (W.snipForm) W.snipForm.addEventListener('submit', (e) => { e.preventDefault(); saveSnippet(); });
     if (W.dlAnalyze) W.dlAnalyze.addEventListener('click', analyzeDownloads);
     if (W.dlRemove) W.dlRemove.addEventListener('click', removeDownloads);
+    buildDiskCard();
+    renderDiskCard();
   }
 
   async function loadSettingsState() {

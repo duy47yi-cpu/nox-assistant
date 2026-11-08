@@ -112,18 +112,24 @@ test('замок стола зовёт хук до действия и «пос�
   assert.deepEqual(seen, ['до:ui_keys', 'шаг', 'после']);
 });
 
-test('клавиши для Проводника и Блокнота в белом списке, Delete и alt+f4 нет', () => {
+test('клавиши для Проводника и Блокнота в белом списке; голый Delete и alt+f4 нет; shift+delete есть', () => {
   assert.equal(parseKeys('ctrl+shift+n').sendkeys, '^+n');
   assert.equal(parseKeys('ctrl+l').sendkeys, '^l');
   assert.equal(parseKeys('ctrl+n').sendkeys, '^n');
   assert.equal(parseKeys('delete').ok, false);
   assert.equal(parseKeys('alt+f4').ok, false);
+  assert.equal(parseKeys('shift+delete').sendkeys, '+{DEL}');
 });
 
 test('каждая клавиша белого списка имеет код виртуальной клавиши', () => {
   for (const k of Object.keys(KEY_MAP)) assert.match(keysToVk([k]), /^\d+(,\d+)*$/, k);
   assert.equal(keysToVk(parseKeys('ctrl+s enter').tokens), '17,83;13');
   assert.equal(keysToVk(['ctrl+shift+n']), '17,16,78');
+  // Клавиши паков: Delete — только в составе Shift+Delete, F5 — свой код.
+  assert.equal(keysToVk(['shift+delete']), '16,46');
+  assert.equal(keysToVk(['f5']), '116');
+  assert.equal(keysToVk(['ctrl+tab']), '17,9');
+  assert.equal(keysToVk(['ctrl+w']), '17,87');
 });
 
 test('удаление и замена в чужом окне спрашиваются даже в «Полном доступе»', () => {
@@ -184,29 +190,44 @@ test('серия действий одним ответом: идёт подря
   assert.match(toolMsg.content, /предыдущий шаг серии не удался/);
 });
 
-test('владелец печатает: руки ждут тишины, говорят об этом и не трогают ввод', async () => {
+test('владелец печатает в другом окне: руки ждут короткой паузы и действуют, без сообщений', async () => {
   let t = 10000;
   const agos = [200, 400, 5000];
-  const told = [];
-  const lock = new DesktopLock({ inputAgoMs: async () => agos.shift() ?? 5000, onOwnerBusy: (m) => told.push(m), pollMs: 1, now: () => t });
+  const lock = new DesktopLock({ inputAgoMs: async () => agos.shift() ?? 5000, pollMs: 1, now: () => t });
   let ran = 0;
   const res = await lock.run(async () => { ran += 1; return { ok: true, summary: '' }; });
   assert.equal(res.ok, true);
   assert.equal(ran, 1);
-  assert.equal(told.length, 1, 'сообщение один раз');
-  assert.match(told[0], /печатаете|мышь/);
 });
 
-test('владелец не отпускает ввод: действие не выполняется, фон не ждёт', async () => {
+test('владелец не отпускает ввод: руки ждут не дольше ownerWaitMs и всё равно действуют', async () => {
   let t = 0;
   const lock = new DesktopLock({ inputAgoMs: async () => { t += 500; return 100; }, pollMs: 1, ownerWaitMs: 2000, now: () => t });
   let ran = 0;
   const res = await lock.run(async () => { ran += 1; return { ok: true }; });
-  assert.equal(res.ok, false);
-  assert.match(res.summary, /blocked_desktop: владелец работает/);
-  assert.equal(ran, 0);
+  assert.equal(res.ok, true);
+  assert.equal(ran, 1);
+  assert.ok(t <= 2600, 'ждали не дольше срока');
   const bg = await lock.run(async () => { ran += 1; return { ok: true }; }, { background: true });
   assert.equal(bg.ok, true, 'фон и так ждёт 2 минуты простоя по idleSeconds');
+});
+
+test('открыть ссылку или программу не ждёт паузы в вводе владельца', async () => {
+  let t = 0;
+  const lock = new DesktopLock({ inputAgoMs: async () => { t += 500; return 100; }, pollMs: 1, ownerWaitMs: 2000, now: () => t });
+  const [open] = guardDesktopTools([{ name: 'url_open', risk: 'T1', run: async () => ({ ok: true, summary: 'открыто' }) }], lock);
+  const res = await open.run({ url: 'https://example.com' }, {});
+  assert.equal(res.ok, true);
+  assert.equal(t, 0, 'ожидания не было');
+});
+
+test('ввод в окне самого Nox не считается вводом владельца', async () => {
+  const { inputAgoVia } = require('../src/control/desktop-lock');
+  const runner = async () => ({ ok: true, data: { stdout: '120;4242\r\n' } });
+  assert.equal(await inputAgoVia(runner, 4242)(), null, 'фокус на Nox: руки не ждут');
+  assert.equal(await inputAgoVia(runner, 9999)(), 120, 'фокус на другом окне: ввод виден');
+  assert.equal(await inputAgoVia(runner)(), 120);
+  assert.equal(await inputAgoVia(async () => ({ ok: true, data: { stdout: 'none' } }))(), null);
 });
 
 test('свой ввод Джарвиса не считается вводом владельца', async () => {

@@ -9,7 +9,8 @@
       box = document.createElement('div');
       box.id = 'fatalBox';
       box.setAttribute('role', 'alert');
-      box.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;background:#3a1212;color:#ffd7d7;padding:10px 12px;border-radius:8px;font:12px/1.4 system-ui,sans-serif;white-space:pre-wrap;max-height:40vh;overflow:auto';
+      // Свойства по одному: строка style (cssText) под CSP style-src 'self' не применяется.
+      Object.assign(box.style, { position: 'fixed', left: '8px', right: '8px', bottom: '8px', zIndex: '99999', background: '#3a1212', color: '#ffd7d7', padding: '10px 12px', borderRadius: '8px', font: '12px/1.4 system-ui, sans-serif', whiteSpace: 'pre-wrap', maxHeight: '40vh', overflow: 'auto' });
       (document.body || document.documentElement).appendChild(box);
     }
     box.textContent += `${text}\n`;
@@ -172,9 +173,11 @@
     currency_rate: 'Курс валют',
     web_check_claims: 'Проверка утверждений по источникам',
     command_create: 'Новая команда',
+    command_build: 'Сценарий по описанию',
     command_list: 'Список команд',
     command_set_hotkey: 'Горячая клавиша',
     screen_look: 'Снимок экрана',
+    screen_region_look: 'Обведённая область экрана',
     url_open: 'Открыть адрес',
     shell_run: 'Команда PowerShell',
     remember: 'Запомнить',
@@ -196,6 +199,7 @@
     windows_list: 'Список окон',
     windows_focus: 'Переключить окно',
     windows_arrange: 'Разложить окна',
+    windows_snap: 'Прикрепить окно',
     windows_close_all: 'Закрыть все окна',
     youtube_play: 'Видео на YouTube',
     organize_workspace: 'Организовать рабочее пространство',

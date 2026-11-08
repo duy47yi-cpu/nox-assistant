@@ -2,7 +2,7 @@
 
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
-const { uiTools, escapeSendKeys, parseKeys, SCRIPTS, KEY_MAP } = require('../src/tools/ui');
+const { uiTools, escapeSendKeys, parseKeys, keysToVk, SCRIPTS, KEY_MAP } = require('../src/tools/ui');
 
 // Подменённый runner: запоминает вызовы и отдаёт заранее заданный ответ.
 // Реальный PowerShell не запускается: ни кликов, ни ввода, ни клавиш.
@@ -359,7 +359,7 @@ describe('ui_keys: белый список', () => {
   });
 
   test('клавиши не из белого списка → отказ', () => {
-    for (const k of ['win+r', 'ctrl+alt+delete', 'f5', 'ctrl+w', 'a', 'enter win', '{ENTER}', '^a', '%{F4}']) {
+    for (const k of ['win+r', 'ctrl+alt+delete', 'delete', 'a', 'enter win', '{ENTER}', '^a', '%{F4}']) {
       const r = parseKeys(k);
       assert.equal(r.ok, false, k);
       assert.match(r.error, /белого списка|alt\+f4/);
@@ -399,6 +399,81 @@ describe('ui_keys: белый список', () => {
     const res = await tool('ui_keys', runner).run({ keys: 'enter' }, {});
     assert.equal(res.ok, false);
     assert.match(res.summary, /Джарвиса/);
+  });
+});
+
+describe('ui_keys: клавиши паков «Монтаж», «Игры», «Браузер»', () => {
+  test('каждая клавиша даёт SendKeys и точный план виртуальных клавиш', () => {
+    const expected = {
+      'ctrl+k': ['^k', '17,75'],
+      'ctrl+b': ['^b', '17,66'],
+      'ctrl+m': ['^m', '17,77'],
+      'shift+delete': ['+{DEL}', '16,46'],
+      i: ['i', '73'],
+      o: ['o', '79'],
+      e: ['e', '69'],
+      q: ['q', '81'],
+      f5: ['{F5}', '116'],
+      'ctrl+w': ['^w', '17,87'],
+      'ctrl+tab': ['^{TAB}', '17,9'],
+    };
+    for (const [key, [sendkeys, plan]] of Object.entries(expected)) {
+      const parsed = parseKeys(key);
+      assert.equal(parsed.ok, true, key);
+      assert.equal(parsed.sendkeys, sendkeys, key);
+      assert.equal(keysToVk(parsed.tokens), plan, key);
+    }
+  });
+
+  test('сознательно не добавлены: alt+f4, ctrl+alt+delete, win+r, голый delete', () => {
+    for (const key of ['alt+f4', 'ctrl+alt+delete', 'win+r', 'delete']) {
+      assert.equal(parseKeys(key).ok, false, key);
+      assert.equal(Object.prototype.hasOwnProperty.call(KEY_MAP, key), false, key);
+    }
+  });
+});
+
+describe('ui_keys: сочетания с клавишей Win', () => {
+  test('системные сочетания есть в белом списке и переводятся в коды виртуальных клавиш', () => {
+    const combos = {
+      'win+left': '91,37',
+      'win+right': '91,39',
+      'win+up': '91,38',
+      'win+down': '91,40',
+      'win+l': '91,76',
+      'win+v': '91,86',
+      'win+.': '91,190',
+      'win+ctrl+d': '91,17,68',
+      'win+shift+s': '91,16,83',
+      'win+plus': '91,187',
+    };
+    for (const [key, plan] of Object.entries(combos)) {
+      assert.equal(parseKeys(key).ok, true, key);
+      assert.deepEqual(parseKeys(key).tokens, [key], key);
+      assert.equal(keysToVk([key]), plan, key);
+    }
+  });
+
+  test('каждая клавиша белого списка даёт числовой план без undefined', () => {
+    for (const key of Object.keys(KEY_MAP)) {
+      const plan = keysToVk([key]);
+      assert.equal(/undefined|NaN/.test(plan), false, key);
+      for (const code of plan.split(/[,;]/)) assert.ok(Number.isInteger(Number(code)), `${key}: ${code}`);
+    }
+  });
+
+  test('Win-сочетание уходит в env: пустой SendKeys и план виртуальных клавиш', async () => {
+    const { runner, calls } = fakeRunner(okJson({ status: 'ok', window: 'Блокнот' }));
+    const res = await tool('ui_keys', runner).run({ keys: 'win+left' }, {});
+    assert.equal(res.ok, true);
+    assert.equal(calls[0].env.JARVIS_UI_KEYS, '');
+    assert.equal(calls[0].env.JARVIS_UI_VK, '91,37');
+  });
+
+  test('неизвестные сочетания с Win по-прежнему отклоняются', () => {
+    for (const key of ['win+r', 'win+e', 'win+tab', 'win', 'win+alt+f4', 'ctrl+win+left']) {
+      assert.equal(parseKeys(key).ok, false, key);
+    }
   });
 });
 

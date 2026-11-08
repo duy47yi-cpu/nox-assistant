@@ -32,9 +32,16 @@ const LIMITS = Object.freeze({
 //   system   — снимок os (загрузка ЦП и память);
 //   apps     — чем пользуется владелец (src/inventory/usage.js);
 //   orb      — состояние шара/аватара (renderer/orb.js, состояния без выдуманных значений);
-//   commands — список своих команд (src/commands/store.js) как быстрый запуск.
-// Типа «финансы», «умный дом», «питомец» здесь нет: у них нет настоящих источников,
-// а выдумывать показания запрещено продуктовыми правилами.
+//   commands — список своих команд (src/commands/store.js) как быстрый запуск;
+//   goals    — активные цели (src/goals/store.js, list({status:'active'}));
+//   missions — фоновые задачи (src/missions/store.js, list());
+//   reminders — невыполненные напоминания (src/schedule/store.js, list());
+//   notes    — записи памяти (src/memory/store.js, list()), личные скрываются;
+//   downloads — отчёт о папке загрузок (src/extensions/downloads-cleanup.js, analyze);
+//   mcp      — подключённые MCP-сервисы (src/mcp/client.js, mcpManager.state());
+//   pet      — декоративная анимация: данных нет, «показаний» нет.
+// Типов «финансы» и «умный дом» здесь нет: у них нет настоящих источников,
+// а выдумывать данные запрещено продуктовыми правилами.
 const WIDGET_TYPES = Object.freeze([
   Object.freeze({ id: 'tasks', title: 'Задачи', defaultW: 6, defaultH: 4 }),
   Object.freeze({ id: 'today', title: 'Сегодня', defaultW: 6, defaultH: 4 }),
@@ -45,6 +52,13 @@ const WIDGET_TYPES = Object.freeze([
   Object.freeze({ id: 'apps', title: 'Программы', defaultW: 4, defaultH: 3 }),
   Object.freeze({ id: 'orb', title: 'Аватар', defaultW: 12, defaultH: 6 }),
   Object.freeze({ id: 'commands', title: 'Команды', defaultW: 6, defaultH: 3 }),
+  Object.freeze({ id: 'goals', title: 'Цели', defaultW: 6, defaultH: 4 }),
+  Object.freeze({ id: 'missions', title: 'Миссии', defaultW: 6, defaultH: 4 }),
+  Object.freeze({ id: 'reminders', title: 'Напоминания', defaultW: 6, defaultH: 4 }),
+  Object.freeze({ id: 'notes', title: 'Заметки', defaultW: 6, defaultH: 4 }),
+  Object.freeze({ id: 'downloads', title: 'Загрузки', defaultW: 6, defaultH: 4 }),
+  Object.freeze({ id: 'mcp', title: 'MCP', defaultW: 6, defaultH: 4 }),
+  Object.freeze({ id: 'pet', title: 'Питомец', defaultW: 4, defaultH: 3 }),
 ]);
 
 const WIDGET_BY_ID = new Map(WIDGET_TYPES.map((item) => [item.id, item]));
@@ -73,11 +87,30 @@ const CONFIG_SCHEMA = Object.freeze({
   commands: Object.freeze({
     limit: Object.freeze({ kind: 'int', min: 1, max: 20 }),
   }),
+  goals: Object.freeze({
+    limit: Object.freeze({ kind: 'int', min: 1, max: 20 }),
+  }),
+  missions: Object.freeze({
+    limit: Object.freeze({ kind: 'int', min: 1, max: 20 }),
+  }),
+  reminders: Object.freeze({
+    limit: Object.freeze({ kind: 'int', min: 1, max: 20 }),
+  }),
+  notes: Object.freeze({
+    limit: Object.freeze({ kind: 'int', min: 1, max: 20 }),
+  }),
+  downloads: Object.freeze({
+    limit: Object.freeze({ kind: 'int', min: 1, max: 10 }),
+  }),
+  mcp: Object.freeze({
+    limit: Object.freeze({ kind: 'int', min: 1, max: 20 }),
+  }),
+  pet: Object.freeze({}),
 });
 
-// Шесть шаблонов из видео 3 (00:34–00:50), но только те, у которых есть настоящие источники.
-// Финансы/умный дом/питомец не переносим: источников нет. «Пустой» и «Только аватар» —
-// реальные шаблоны видео; «Работа», «Учёба», «Игры», «Медиа» собраны из существующих данных.
+// Девять шаблонов: шесть прежних из видео 3 (00:34–00:50) и три новых — «Ночь»,
+// «Разработка», «Стрим». Собраны только из существующих типов и настоящих источников.
+// «Питомец» в шаблоне «Стрим» — декоративная анимация, а не показания прибора.
 const TEMPLATES = Object.freeze({
   empty: Object.freeze({ id: 'empty', title: 'Пустой', widgets: Object.freeze([]) }),
   work: Object.freeze({
@@ -125,6 +158,38 @@ const TEMPLATES = Object.freeze({
     title: 'Только аватар',
     widgets: Object.freeze([
       Object.freeze({ type: 'orb', x: 1, y: 1, w: 12, h: 6, config: Object.freeze({}) }),
+    ]),
+  }),
+  // Тихий вечер: состояние компьютера, шар и ближайшие напоминания.
+  night: Object.freeze({
+    id: 'night',
+    title: 'Ночь',
+    widgets: Object.freeze([
+      Object.freeze({ type: 'system', x: 1, y: 1, w: 6, h: 3, config: Object.freeze({}) }),
+      Object.freeze({ type: 'orb', x: 7, y: 1, w: 6, h: 3, config: Object.freeze({}) }),
+      Object.freeze({ type: 'reminders', x: 1, y: 4, w: 12, h: 4, config: Object.freeze({ limit: 8 }) }),
+    ]),
+  }),
+  // Разработка: задачи, команды, снимок компьютера и записи памяти.
+  dev: Object.freeze({
+    id: 'dev',
+    title: 'Разработка',
+    widgets: Object.freeze([
+      Object.freeze({ type: 'tasks', x: 1, y: 1, w: 6, h: 4, config: Object.freeze({ filter: 'active' }) }),
+      Object.freeze({ type: 'commands', x: 7, y: 1, w: 6, h: 4, config: Object.freeze({ limit: 10 }) }),
+      Object.freeze({ type: 'system', x: 1, y: 5, w: 6, h: 3, config: Object.freeze({}) }),
+      Object.freeze({ type: 'notes', x: 7, y: 5, w: 6, h: 3, config: Object.freeze({ limit: 6 }) }),
+    ]),
+  }),
+  // Стрим: музыка, программы, компьютер и питомец-анимация.
+  stream: Object.freeze({
+    id: 'stream',
+    title: 'Стрим',
+    widgets: Object.freeze([
+      Object.freeze({ type: 'music', x: 1, y: 1, w: 8, h: 4, config: Object.freeze({}) }),
+      Object.freeze({ type: 'apps', x: 9, y: 1, w: 4, h: 4, config: Object.freeze({ limit: 6 }) }),
+      Object.freeze({ type: 'system', x: 1, y: 5, w: 8, h: 3, config: Object.freeze({}) }),
+      Object.freeze({ type: 'pet', x: 9, y: 5, w: 4, h: 3, config: Object.freeze({}) }),
     ]),
   }),
 });

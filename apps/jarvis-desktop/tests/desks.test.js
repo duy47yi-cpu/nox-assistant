@@ -186,9 +186,9 @@ test('небезопасные id и workspaceId отклоняются до ч�
 
 // --- шаблоны --------------------------------------------------------------
 
-test('шесть шаблонов: пустой, работа, учёба, игры, медиа, только аватар', (t) => {
-  assert.deepEqual(TEMPLATE_IDS, ['empty', 'work', 'study', 'games', 'media', 'avatar']);
-  assert.deepEqual(templateList().map((x) => x.title), ['Пустой', 'Работа', 'Учёба', 'Игры', 'Медиа', 'Только аватар']);
+test('девять шаблонов: шесть прежних и ночь, разработка, стрим', (t) => {
+  assert.deepEqual(TEMPLATE_IDS, ['empty', 'work', 'study', 'games', 'media', 'avatar', 'night', 'dev', 'stream']);
+  assert.deepEqual(templateList().map((x) => x.title), ['Пустой', 'Работа', 'Учёба', 'Игры', 'Медиа', 'Только аватар', 'Ночь', 'Разработка', 'Стрим']);
   const { store } = setup(t);
   for (const id of TEMPLATE_IDS) {
     const spec = template(id);
@@ -208,12 +208,30 @@ test('шесть шаблонов: пустой, работа, учёба, иг�
   const avatar = store.get('default', store.list('default').find((d) => d.template === 'avatar').id);
   assert.deepEqual(avatar.widgets.map((w) => w.type), ['orb']);
   assert.deepEqual(template('work').widgets.map((w) => w.type).sort(), ['commands', 'currency', 'system', 'tasks', 'today', 'weather']);
+  // Новые шаблоны: только существующие типы, сетка 12×12, материализация даёт id.
+  assert.deepEqual(template('night').widgets.map((w) => w.type).sort(), ['orb', 'reminders', 'system']);
+  assert.deepEqual(template('dev').widgets.map((w) => w.type).sort(), ['commands', 'notes', 'system', 'tasks']);
+  assert.deepEqual(template('stream').widgets.map((w) => w.type).sort(), ['apps', 'music', 'pet', 'system']);
+  for (const id of ['night', 'dev', 'stream']) {
+    const made = templateWidgets(id, { newId: () => uuid(70) });
+    assert.equal(made.length, template(id).widgets.length);
+    for (const widget of made) {
+      assert.ok(isWidgetType(widget.type));
+      assert.ok(widget.x + widget.w - 1 <= GRID.cols);
+      assert.ok(widget.y + widget.h - 1 <= GRID.rows);
+    }
+  }
 });
 
-test('нет выдуманных типов: только реальные источники, без финансов/умного дома/питомца', () => {
-  const ids = WIDGET_TYPES.map((w) => w.id);
-  assert.deepEqual(ids.sort(), ['apps', 'commands', 'currency', 'music', 'orb', 'system', 'tasks', 'today', 'weather']);
-  for (const banned of ['finance', 'home', 'pet', 'calendar', 'notes', 'files']) assert.equal(isWidgetType(banned), false);
+test('каталог: 16 типов, у каждого настоящий источник или честная пометка', () => {
+  const ids = WIDGET_TYPES.map((w) => w.id).sort();
+  assert.deepEqual(ids, [
+    'apps', 'commands', 'currency', 'downloads', 'goals', 'mcp', 'missions',
+    'music', 'notes', 'orb', 'pet', 'reminders', 'system', 'tasks', 'today', 'weather',
+  ]);
+  assert.equal(WIDGET_TYPES.length, 16);
+  for (const id of WIDGET_TYPES.map((w) => w.id)) assert.ok(isWidgetType(id));
+  for (const banned of ['finance', 'home', 'calendar', 'files', 'holodeck']) assert.equal(isWidgetType(banned), false);
   // Каждый шаблон использует только типы из каталога — поймает опечатку в шаблоне.
   for (const id of TEMPLATE_IDS) {
     for (const widget of template(id).widgets) assert.ok(isWidgetType(widget.type), `${id}: ${widget.type}`);
@@ -240,7 +258,7 @@ test('сетка: координаты, ширина и высота прове�
   assert.throws(() => normalizeWidget({ ...base, x: 10, w: 4 }), /правый край/);
   assert.throws(() => normalizeWidget({ ...base, y: 11, h: 4 }), /нижний край/);
   assert.throws(() => normalizeWidget({ ...base, x: undefined, y: 2 }), /x и y задаются вместе/);
-  assert.throws(() => normalizeWidget({ ...base, type: 'pet' }), /неизвестный тип/);
+  assert.throws(() => normalizeWidget({ ...base, type: 'holodeck' }), /неизвестный тип/);
   assert.throws(() => normalizeWidget({ ...base, version: 2 }), /версия/);
   assert.throws(() => normalizeWidget({ type: 'tasks', w: 1, h: 1 }), /нет id/);
 });
@@ -527,7 +545,7 @@ test('weather: нет города — empty/no_city, сбой — error с пр
   const netErr = data.weather({ city: 'Москва', ok: false, reason: 'network' });
   assert.equal(netErr.state, 'error');
   assert.equal(netErr.error, 'network');
-  const ok = data.weather({ city: 'Москва', temp: 3.4, apparent: 1, precipitation: 0.2, fetchedAt: now - 1000 });
+  const ok = data.weather({ city: 'Москва', temp: 3.4, apparent: 1, precipitation: 0.2, fetchedAt: now - 1000 }, { now });
   assert.equal(ok.state, 'ok');
   assert.equal(ok.value.temp, 3.4);
   assert.equal(ok.value.apparent, 1);
@@ -547,7 +565,7 @@ test('currency: настоящие строки ЦБ, сбой — error с пр
     date: '2026-11-07T00:00:00.000Z',
     rates: [{ code: 'USD', name: 'доллар', value: 82.1, previous: 81.9 }, { code: 'EUR', name: 'евро', value: 95.2 }],
     fetchedAt: now - 1000,
-  });
+  }, { now });
   assert.equal(ok.state, 'ok');
   assert.equal(ok.value.rates.length, 2);
   assert.equal(ok.value.rates[0].value, 82.1);
@@ -595,26 +613,172 @@ test('commands: список своих команд; пустой — empty', (
   assert.equal(data.commands({ items: 'мусор' }).state, 'error');
 });
 
+test('новые типы: goals, missions, reminders — настоящие списки и честные состояния', () => {
+  // goals: только активные, число шагов — из записи.
+  const goals = data.goals([
+    { id: 'g1', title: 'Выучить язык', status: 'active', steps: [{ status: 'done' }, { status: 'pending' }], updatedAt: '2026-11-07T09:00:00.000Z' },
+    { id: 'g2', title: 'Готовая', status: 'done', steps: [] },
+    { id: 'g3', title: 'Сломанная' },
+    { title: 'Без id' },
+  ]);
+  assert.equal(goals.state, 'ok');
+  assert.deepEqual(goals.value.items.map((g) => g.id), ['g1']);
+  assert.equal(goals.value.items[0].stepsDone, 1);
+  assert.equal(goals.value.items[0].stepsTotal, 2);
+  assert.equal(data.goals([]).state, 'empty');
+  assert.equal(data.goals(null).state, 'empty');
+  assert.equal(data.goals('мусор').state, 'error');
+  assert.equal(data.goals({ items: 5 }).state, 'error');
+
+  // missions: выключенные видны, порядок по nextRunAt, running посчитан.
+  const missions = data.missions([
+    { id: 'm2', goal: 'Поздняя', enabled: true, status: 'idle', nextRunAt: '2026-11-07T18:00:00.000Z', runs: 2 },
+    { id: 'm1', goal: 'Ранняя', enabled: false, status: 'running', nextRunAt: '2026-11-07T12:00:00.000Z', runs: 5 },
+  ]);
+  assert.equal(missions.state, 'ok');
+  assert.deepEqual(missions.value.items.map((m) => m.id), ['m1', 'm2']);
+  assert.equal(missions.value.items[0].enabled, false);
+  assert.equal(missions.value.running, 1);
+  assert.equal(missions.value.total, 2);
+  assert.equal(data.missions([]).state, 'empty');
+  assert.equal(data.missions(null).state, 'empty');
+  assert.equal(data.missions({}).state, 'error');
+
+  // reminders: выполненные и без даты пропускаются, просроченные помечены.
+  const now = Date.parse('2026-11-07T10:00:00Z');
+  const reminders = data.reminders([
+    { id: 'r1', text: 'Позже', dueAt: '2026-11-07T12:00:00.000Z', done: false },
+    { id: 'r2', text: 'Просрочено', dueAt: '2026-11-07T09:00:00.000Z', done: false },
+    { id: 'r3', text: 'Сделано', dueAt: '2026-11-07T08:00:00.000Z', done: true },
+    { id: 'r4', text: 'Без даты' },
+  ], { now });
+  assert.equal(reminders.state, 'ok');
+  assert.deepEqual(reminders.value.items.map((r) => r.id), ['r2', 'r1']);
+  assert.equal(reminders.value.items[0].overdue, true);
+  assert.equal(reminders.value.overdue, 1);
+  assert.equal(data.reminders([], { now }).state, 'empty');
+  assert.equal(data.reminders(null, { now }).state, 'empty');
+  assert.equal(data.reminders([{}], { now }).state, 'empty');
+  assert.equal(data.reminders('мусор', { now }).state, 'error');
+});
+
+test('новые типы: notes скрывает личное, downloads читает отчёт, mcp без секретов', () => {
+  // notes: sensitive по умолчанию скрыты, их число честно показано.
+  const notes = data.notes([
+    { id: 'n1', text: 'Купить корм', kind: 'note', updatedAt: '2026-11-07T09:00:00.000Z' },
+    { id: 'n2', text: 'Личное', sensitive: true },
+    { id: 'n3', text: '' },
+  ]);
+  assert.equal(notes.state, 'ok');
+  assert.deepEqual(notes.value.items.map((n) => n.id), ['n1']);
+  assert.equal(notes.value.hiddenSensitive, 1);
+  assert.deepEqual(notes.value.items[0].text, 'Купить корм');
+  const withSensitive = data.notes([{ id: 'n2', text: 'Личное', sensitive: true }], { includeSensitive: true });
+  assert.equal(withSensitive.state, 'ok');
+  assert.equal(withSensitive.value.hiddenSensitive, 0);
+  assert.equal(data.notes([]).state, 'empty');
+  assert.equal(data.notes(null).state, 'empty');
+  assert.equal(data.notes(5).state, 'error');
+
+  // downloads: отчёт analyze() — настоящие числа; ошибка папки — error с причиной.
+  const report = {
+    ok: true,
+    status: 'ok',
+    folder: 'C:\\Users\\me\\Downloads',
+    scanned: { files: 12, totalBytes: 5000 },
+    candidates: [{ name: 'old.zip', size: 3000, ageDays: 40, reason: 'старый файл: 40 дн.' }],
+    candidatesTotal: 3,
+    candidateBytes: 4200,
+    candidatesTruncated: true,
+  };
+  const dl = data.downloads(report);
+  assert.equal(dl.state, 'ok');
+  assert.equal(dl.value.fileCount, 12);
+  assert.equal(dl.value.candidateCount, 3);
+  assert.equal(dl.value.candidateBytes, 4200);
+  assert.equal(dl.value.truncated, true);
+  assert.deepEqual(dl.value.items.map((f) => f.name), ['old.zip']);
+  // Папка с файлами, но без кандидатов — ok без выдуманного списка.
+  const clean = data.downloads({ ok: true, status: 'ok', folder: 'D:\\Загрузки', scanned: { files: 2, totalBytes: 10 }, candidates: [], candidatesTotal: 0 });
+  assert.equal(clean.state, 'ok');
+  assert.deepEqual(clean.value.items, []);
+  assert.equal(clean.value.fileCount, 2);
+  // Пустая папка — empty.
+  assert.equal(data.downloads({ ok: true, status: 'empty', folder: 'D:\\Загрузки', scanned: { files: 0, totalBytes: 0 }, candidates: [], candidatesTotal: 0 }).state, 'empty');
+  // Список файлов, переданный напрямую, тоже честен.
+  const list = data.downloads([{ name: 'a.iso', size: 2048, mtimeMs: Date.parse('2026-11-06T10:00:00Z') }], { now: Date.parse('2026-11-07T10:00:00Z') });
+  assert.equal(list.state, 'ok');
+  assert.equal(list.value.totalBytes, 2048);
+  assert.equal(list.value.items[0].ageDays, 1);
+  assert.equal(data.downloads(null).state, 'empty');
+  assert.equal(data.downloads(false).state, 'error', 'не источник — честная ошибка, а не пустая папка');
+  assert.equal(data.downloads('мусор').state, 'error');
+  const denied = data.downloads({ ok: false, reason: 'not_found' });
+  assert.equal(denied.state, 'error');
+  assert.equal(denied.error, 'not_found');
+
+  // mcp: имена и состояния сервисов; секретов в state нет — и здесь их нет.
+  const mcp = data.mcp({
+    servers: [
+      { name: 'files', transport: 'stdio', target: 'npx', status: 'connected', toolCount: 2 },
+      { name: 'github', transport: 'http', status: 'error', error: 'unauthorized' },
+      { name: 'old', transport: 'stdio', status: 'disabled', disabled: true, toolCount: 0 },
+    ],
+  });
+  assert.equal(mcp.state, 'ok');
+  assert.equal(mcp.value.total, 3);
+  assert.equal(mcp.value.connected, 1);
+  assert.equal(mcp.value.errors, 1);
+  assert.equal(data.mcp({ servers: [] }).state, 'empty');
+  assert.equal(data.mcp(null).state, 'empty');
+  assert.equal(data.mcp('мусор').state, 'error');
+});
+
+test('питомец: всегда ok, фиксированные настроения, данных не читает', () => {
+  const idle = data.pet();
+  assert.equal(idle.state, 'ok');
+  assert.equal(idle.type, 'pet');
+  assert.equal(idle.value.mood, 'idle');
+  assert.equal(idle.value.decorative, true);
+  assert.deepEqual(idle.value.moods, ['idle', 'curious', 'sleepy']);
+  assert.equal(data.pet('curious').value.mood, 'curious');
+  assert.equal(data.pet('что-то').value.mood, 'idle', 'неизвестное настроение не выдумывается');
+  assert.equal(data.pet('спать').value.mood, 'idle');
+  // Даже «битый» источник не даёт ошибку: питомец — украшение, а не показатель.
+  assert.equal(data.pet({ mood: 'sleepy' }).state, 'ok');
+  assert.equal(data.pet(false).state, 'ok');
+});
+
 test('buildWidget: сборка по типу, одинаковый формат у всех, неизвестный тип падает', () => {
   const sources = {
     os: { cpus: [{ times: { user: 1, nice: 0, sys: 1, irq: 0, idle: 2 } }], totalmem: 100, freemem: 50 },
     tasks: [{ id: 't1', title: 'Задача', status: 'queued' }],
-    reminders: [],
-    missions: [],
+    reminders: [{ id: 'r1', text: 'Напоминание', dueAt: '2026-11-07T12:00:00.000Z' }],
+    missions: [{ id: 'm1', goal: 'Миссия', enabled: true, nextRunAt: '2026-11-07T18:00:00.000Z' }],
     music: [{ query: 'Трек' }],
     weather: null,
     currency: { ok: true, rates: [{ code: 'USD', value: 82 }] },
     apps: { apps: { code: { launches: 1 } } },
     orb: 'idle',
     commands: [{ id: 'c1', name: 'Команда' }],
+    goals: [{ id: 'g1', title: 'Цель', status: 'active', steps: [{ status: 'done' }] }],
+    notes: [{ id: 'n1', text: 'Запись', kind: 'note' }],
+    downloads: [{ name: 'файл.zip', size: 1024, mtimeMs: Date.parse('2026-11-01T00:00:00Z') }],
+    mcp: { servers: [{ name: 'files', transport: 'stdio', status: 'connected', toolCount: 2 }] },
   };
   for (const type of data.DATA_TYPES) {
     const result = data.buildWidget(type, sources);
     assertWidgetResult(result);
     assert.equal(result.type, type);
     assert.notEqual(result.state, 'error', `${type} не должен ломаться на настоящих данных`);
+    // Питомец — единственный виджет без источника: state всегда ok.
+    if (type === 'pet') assert.equal(result.state, 'ok');
   }
-  assert.throws(() => data.buildWidget('pet', sources), /неизвестный тип/);
+  // Источники не переданного типа дают честный empty, а не выдуманные числа.
+  for (const type of ['goals', 'missions', 'reminders', 'notes', 'downloads', 'mcp']) {
+    assert.equal(data.buildWidget(type, {}).state, 'empty');
+  }
+  assert.throws(() => data.buildWidget('holodeck', sources), /неизвестный тип/);
 });
 
 test('buildDeskData: данные по id виджетов, ошибка одного типа не рушит остальные, источники не меняются', () => {
@@ -626,7 +790,8 @@ test('buildDeskData: данные по id виджетов, ошибка одн�
     widgets: [
       { id: uuid(2), type: 'tasks', version: 1, x: 1, y: 1, w: 6, h: 4, config: { limit: 2 } },
       { id: uuid(3), type: 'orb', version: 1, x: 7, y: 1, w: 6, h: 4, config: {} },
-      { id: uuid(4), type: 'pet', version: 1, x: 1, y: 5, w: 4, h: 2, config: {} },
+      { id: uuid(4), type: 'holodeck', version: 1, x: 1, y: 5, w: 4, h: 2, config: {} },
+      { id: uuid(5), type: 'pet', version: 1, x: 5, y: 5, w: 4, h: 2, config: {} },
     ],
   };
   const sources = {
@@ -639,13 +804,14 @@ test('buildDeskData: данные по id виджетов, ошибка одн�
   };
   const snapshot = JSON.stringify(sources);
   const values = data.buildDeskData(desk, sources, { now: Date.parse('2026-11-07T10:00:00Z') });
-  assert.deepEqual(Object.keys(values).sort(), [uuid(2), uuid(3), uuid(4)].sort());
+  assert.deepEqual(Object.keys(values).sort(), [uuid(2), uuid(3), uuid(4), uuid(5)].sort());
   assert.equal(values[uuid(2)].state, 'ok');
   assert.equal(values[uuid(2)].value.items.length, 2, 'limit из config виджета применён');
   assert.equal(values[uuid(3)].state, 'ok');
   assert.equal(values[uuid(4)].state, 'error');
   assert.equal(values[uuid(4)].error, 'bad_type');
+  assert.equal(values[uuid(5)].state, 'ok', 'питомец не зависит от источников');
   assert.equal(JSON.stringify(sources), snapshot, 'источники не изменены');
-  assert.equal(desk.widgets.length, 3, 'стол не изменён');
+  assert.equal(desk.widgets.length, 4, 'стол не изменён');
   assert.throws(() => data.buildDeskData(null, sources), /нужен объект с виджетами/);
 });

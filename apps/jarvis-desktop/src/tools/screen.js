@@ -62,4 +62,53 @@ function screenTools({ allowed = () => false, capture = runPowerShell } = {}) {
   ];
 }
 
-module.exports = { screenTools, CAPTURE_SCRIPT, MAX_WIDTH };
+// Срок жизни обведённой области: дольше снимок в памяти не держим.
+const REGION_TTL_MS = 10 * 60 * 1000;
+
+// Область, которую владелец сам обвёл рамкой. take() отдаёт {shot, pixels, label, at}:
+// shot — nativeImage всего экрана, снятый desktopCapturer в момент выбора (потом окно Джарвиса закрыло бы область),
+// pixels — прямоугольник в пикселях снимка. Снимок только в памяти, на диск не пишется; после показа сбрасывается.
+// Только для чата в окне: в фон, команды и Telegram не регистрируется (screen_ закрыт в telegram/policy.js).
+function regionTools({ take = () => null, clear = () => {}, now = Date.now } = {}) {
+  return [
+    {
+      name: 'screen_region_look',
+      description: 'Картинка области экрана, которую владелец сам обвёл рамкой («объясни, что я обвёл»). Только смотреть и объяснять: ничего не нажимать и не оплачивать.',
+      risk: 'T1',
+      parameters: { type: 'object', properties: {} },
+      async run() {
+        const region = take();
+        if (!region || !region.shot || !region.pixels) return { ok: false, summary: 'область не выбрана: владелец обводит её кнопкой у поля ввода', data: {} };
+        if (now() - region.at > REGION_TTL_MS) { clear(); return { ok: false, summary: 'обведённая область устарела, обведите заново', data: {} }; }
+        const want = region.pixels;
+        let part;
+        try { part = region.shot.crop(want); } catch (err) { return { ok: false, summary: `не удалось вырезать область: ${err.message}`, data: {} }; }
+        const got = part && typeof part.getSize === 'function' ? part.getSize() : { width: 0, height: 0 };
+        // Как у screen_look: ширину ужимаем до MAX_WIDTH, пропорции сохраняются.
+        const small = got.width > MAX_WIDTH ? part.resize({ width: MAX_WIDTH, quality: 'best' }) : part;
+        const bytes = small && typeof small.toJPEG === 'function' ? small.toJPEG(85) : Buffer.alloc(0);
+        clear();
+        if (!bytes.length) return { ok: false, summary: 'снимок области пустой', data: { width: got.width, height: got.height } };
+        if (bytes.length > MAX_BYTES) return { ok: false, summary: 'снимок области слишком большой', data: {} };
+        return {
+          ok: true,
+          summary: `снимок: ${region.label || `область ${got.width}×${got.height}`}`,
+          data: { width: got.width, height: got.height, wantWidth: want.width, wantHeight: want.height, bytes: bytes.length },
+          image: `data:image/jpeg;base64,${bytes.toString('base64')}`,
+        };
+      },
+      // Снимок есть и вырезан ровно того размера, что обвели; иначе честный провал.
+      verify(args, result) {
+        const d = (result && result.data) || {};
+        const image = typeof result.image === 'string' && result.image.startsWith('data:image/jpeg;base64,') && result.image.length > 23;
+        if (!image) return { status: 'failed', evidence: 'картинки области нет' };
+        if (d.width !== d.wantWidth || d.height !== d.wantHeight) {
+          return { status: 'failed', evidence: `размер не совпал: ${d.width}×${d.height} вместо ${d.wantWidth}×${d.wantHeight}` };
+        }
+        return { status: 'confirmed', evidence: `область ${d.width}×${d.height}` };
+      },
+    },
+  ];
+}
+
+module.exports = { screenTools, regionTools, CAPTURE_SCRIPT, MAX_WIDTH, REGION_TTL_MS };

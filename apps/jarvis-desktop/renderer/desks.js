@@ -7,7 +7,7 @@
   if (!U) return;
 
   const DEPS = { toast: () => {}, ask: async () => false };
-  const DESK = { open: false, desks: [], activeId: null, templates: [], types: [], data: {}, now: 0, busy: false, timer: 0, dragId: null, dialogMode: 'create', editId: null };
+  const DESK = { open: false, desks: [], activeId: null, templates: [], types: [], data: {}, now: 0, busy: false, timer: 0, dragId: null, dialogMode: 'create', editId: null, petTimers: [] };
 
   const $ = (sel, root = document) => (root || document).querySelector(sel);
   const el = (tag, attrs, ...children) => U.el(tag, attrs, ...children);
@@ -26,6 +26,17 @@
     no_data: 'данных пока нет',
     bad_state: 'состояние недоступно',
     bad_type: 'виджет неизвестного типа',
+    folder_required: 'папка загрузок не указана',
+    not_found: 'папки загрузок нет',
+    not_directory: 'это не папка',
+  };
+
+  // Питомец — только украшение: фиксированные настроения, никаких «показаний».
+  const PET_FACES = { idle: '😺', curious: '🐾', sleepy: '😴' };
+  const PET_WORDS = { idle: 'спокойно сидит', curious: 'смотрит на вас', sleepy: 'дремлет' };
+  const MCP_STATUS_WORDS = {
+    connected: 'подключён', connecting: 'подключается', error: 'ошибка',
+    disabled: 'выключен', idle: 'не подключён',
   };
 
   const taskStatusWords = {
@@ -65,6 +76,20 @@
     const type = widget.type;
     const state = datum && datum.state ? datum.state : 'empty';
     const value = datum ? datum.value : null;
+    // Питомец не зависит от состояния источника: это украшение, а не показатель.
+    if (type === 'pet') {
+      const mood = value && PET_FACES[value.mood] ? value.mood : 'idle';
+      return el('div', { class: 'desk-widget-body-inner' },
+        el('div', { class: 'desk-pet', style: 'display:flex;align-items:center;gap:10px;' },
+          el('span', {
+            class: 'desk-pet-face',
+            'aria-hidden': 'true',
+            text: PET_FACES[mood],
+            style: 'display:inline-block;font-size:34px;line-height:1;transition:transform .9s ease-in-out;will-change:transform;',
+          }),
+          el('span', { class: 'desk-pet-word', text: PET_WORDS[mood] })),
+        el('p', { class: 'desk-widget-note', text: 'декоративная анимация — без данных и показаний' }));
+    }
     if (state === 'error') {
       return el('p', { class: 'desk-widget-state', 'data-state': 'error', text: 'Не получилось: ' + (errorWords[datum && datum.error] || 'причина неизвестна') });
     }
@@ -79,6 +104,13 @@
         apps: 'Статистики программ пока нет',
         orb: 'Шар ждёт задачу',
         commands: 'Своих команд пока нет',
+        goals: 'Активных целей нет',
+        missions: 'Фоновых задач нет',
+        reminders: 'Напоминаний нет',
+        notes: 'Записей в памяти нет',
+        downloads: 'Папка загрузок пуста или ещё не передана',
+        mcp: 'MCP-сервисы не подключены',
+        pet: 'Питомец',
       };
       return el('p', { class: 'desk-widget-state', 'data-state': 'empty', text: words[type] || stateWords.empty });
     }
@@ -144,6 +176,69 @@
         text: item.name || 'команда',
         note: item.enabled === false ? 'выключена' : (item.lastRunAt ? 'запускалась' : ''),
       }))));
+    } else if (type === 'goals') {
+      const items = (value && Array.isArray(value.items)) ? value.items : [];
+      parts.push(widgetList(items.map((item) => ({
+        text: item.title || 'цель',
+        note: Number.isInteger(item.stepsTotal) && item.stepsTotal > 0
+          ? `шаги: ${item.stepsDone} из ${item.stepsTotal}` : '',
+      }))));
+    } else if (type === 'missions') {
+      const items = (value && Array.isArray(value.items)) ? value.items : [];
+      parts.push(widgetList(items.map((item) => ({
+        text: String(item.goal || 'миссия').slice(0, 120),
+        note: item.enabled === false ? 'выключена'
+          : item.status === 'running' ? 'выполняется'
+            : (item.nextRunAt ? shortTime(new Date(item.nextRunAt).getTime()) : ''),
+      }))));
+    } else if (type === 'reminders') {
+      const items = (value && Array.isArray(value.items)) ? value.items : [];
+      parts.push(widgetList(items.map((item) => ({
+        text: String(item.text || 'напоминание').slice(0, 120),
+        note: item.overdue ? 'просрочено' : (item.dueAt ? shortTime(new Date(item.dueAt).getTime()) : ''),
+      }))));
+    } else if (type === 'notes') {
+      const items = (value && Array.isArray(value.items)) ? value.items : [];
+      parts.push(widgetList(items.map((item) => ({
+        text: String(item.text || 'запись').slice(0, 120),
+        note: item.about || item.kind || '',
+      }))));
+      if (value && value.hiddenSensitive > 0) {
+        parts.push(el('p', { class: 'desk-widget-note', text: `личных записей скрыто: ${value.hiddenSensitive}` }));
+      }
+    } else if (type === 'downloads') {
+      if (value) {
+        const items = Array.isArray(value.items) ? value.items : [];
+        // Настоящая цифра уборки: candidateBytes из анализа папки (не весь размер папки); нет данных — строки нет.
+        if (Number.isFinite(value.candidateBytes) && value.candidateBytes > 0) {
+          parts.push(el('p', { class: 'desk-widget-note', text: `Можно освободить ~${fmtBytes(value.candidateBytes)}` }));
+        }
+        const parts2 = [];
+        if (Number.isFinite(value.fileCount)) parts2.push(`файлов: ${value.fileCount}`);
+        if (Number.isFinite(value.totalBytes)) parts2.push(fmtBytes(value.totalBytes));
+        if (parts2.length) parts.push(el('p', { class: 'desk-widget-note', text: parts2.join(' · ') }));
+        if (items.length) {
+          parts.push(widgetList(items.map((item) => ({
+            text: item.name,
+            note: [Number.isFinite(item.size) ? fmtBytes(item.size) : '', Number.isFinite(item.ageDays) ? item.ageDays + ' дн.' : ''].filter(Boolean).join(' · '),
+          }))));
+        } else {
+          parts.push(el('p', { class: 'desk-widget-state', text: Number.isFinite(value.candidateCount) && value.candidateCount === 0 ? 'Убирать нечего' : 'Крупных файлов нет' }));
+        }
+        if (Number.isFinite(value.candidateCount) && value.candidateCount > items.length) {
+          parts.push(el('p', { class: 'desk-widget-note', text: `можно убрать: ${value.candidateCount} (${Number.isFinite(value.candidateBytes) ? fmtBytes(value.candidateBytes) : 'размер неизвестен'})` }));
+        }
+        if (value.truncated) parts.push(el('p', { class: 'desk-widget-note', text: 'список неполный: файлов слишком много' }));
+      }
+    } else if (type === 'mcp') {
+      const items = (value && Array.isArray(value.items)) ? value.items : [];
+      parts.push(widgetList(items.map((item) => ({
+        text: item.name,
+        note: [MCP_STATUS_WORDS[item.status] || item.status, item.toolCount ? 'инструментов: ' + item.toolCount : ''].filter(Boolean).join(' · '),
+      }))));
+      if (value && Number.isFinite(value.connected)) {
+        parts.push(el('p', { class: 'desk-widget-note', text: `подключено: ${value.connected} из ${value.total}` }));
+      }
     }
     if (!parts.length) parts.push(el('p', { class: 'desk-widget-state', text: 'Нет данных' }));
     return el('div', { class: 'desk-widget-body-inner' }, ...parts);
@@ -172,8 +267,29 @@
     return DESK.desks.find((desk) => desk.id === DESK.activeId) || null;
   }
 
+  // Питомец: простая анимация без картинок и сети — покачивание эмодзи. Таймеры
+  // останавливаются перед перерисовкой и при закрытии, чтобы не копились.
+  function stopPetTimers() {
+    for (const timer of DESK.petTimers) clearInterval(timer);
+    DESK.petTimers = [];
+  }
+
+  function startPet(article) {
+    const face = article.querySelector('.desk-pet-face');
+    if (!face) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let up = false;
+    const timer = setInterval(() => {
+      up = !up;
+      face.style.transform = up ? 'translateY(-4px)' : 'translateY(0)';
+    }, 1400);
+    if (timer && typeof timer.unref === 'function') timer.unref();
+    DESK.petTimers.push(timer);
+  }
+
   function renderGrid() {
     if (!W.grid) return;
+    stopPetTimers();
     const desk = activeDesk();
     const widgets = desk && Array.isArray(desk.widgets) ? desk.widgets : [];
     W.grid.replaceChildren(...widgets.map((widget) => renderWidget(widget)));
@@ -203,6 +319,7 @@
         el('button', { type: 'button', class: 'icon-btn icon-btn-sm', 'aria-label': `Ниже: ${widgetTitle(widget.type)}`, title: 'Ниже (Alt+Shift+↓)', onclick: (e) => { e.stopPropagation(); resizeBy(widget, 0, 1); } }, U.icon('down')),
         el('button', { type: 'button', class: 'icon-btn icon-btn-sm', 'aria-label': `Удалить виджет ${widgetTitle(widget.type)}`, title: 'Удалить виджет', onclick: (e) => { e.stopPropagation(); removeWidget(widget); } }, U.icon('x'))));
     article.append(head, renderBody(widget, datum));
+    if (widget.type === 'pet') startPet(article);
     article.addEventListener('keydown', (e) => {
       if (e.altKey) {
         const map = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
@@ -459,6 +576,7 @@
   function close() {
     DESK.open = false;
     stopTimer();
+    stopPetTimers();
     if (W.page) W.page.hidden = true;
     const view = W.page ? W.page.closest('.view-dialog') : null;
     if (view) view.classList.remove('desk-open');

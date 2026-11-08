@@ -14,6 +14,8 @@ const { CommandStore } = require('../src/commands/store');
 const { SAMPLE_COMMANDS, seedSampleCommands } = require('../src/commands/samples');
 const { desktopTools, setSpeaker } = require('../src/tools/desktop');
 const { systemTools } = require('../src/tools/system');
+const { windowsTools } = require('../src/tools/windows');
+const { uiTools } = require('../src/tools/ui');
 const { runCommand } = require('../src/commands/runner');
 const { decide } = require('../src/policy/modes');
 
@@ -56,11 +58,13 @@ test('лимит шагов задаётся на агента: фоновой �
   assert.equal(new Agent({ brain: endlessBrain(), tools: registry, journal: new Journal(path.join(dir, 'j2.jsonl')) }).maxSteps, MAX_TOOL_STEPS);
 });
 
-test('примерные сценарии: три штуки, фразы уникальны, все шаги — известные инструменты', () => {
-  assert.deepEqual(SAMPLE_COMMANDS.map((c) => c.name), ['Работа', 'Игра', 'Отбой']);
+test('примерные сценарии: имена уникальны, «Работа/Игра/Отбой» на месте, все шаги — известные инструменты', () => {
+  const names = SAMPLE_COMMANDS.map((c) => c.name);
+  for (const must of ['Работа', 'Игра', 'Отбой']) assert.ok(names.includes(must), `нет сценария «${must}»`);
+  assert.equal(new Set(names).size, names.length, 'имена образцов повторяются');
   const phrases = SAMPLE_COMMANDS.flatMap((c) => c.phrases);
   assert.equal(new Set(phrases).size, phrases.length);
-  const known = new Set([...systemTools, ...desktopTools].map((t) => t.name));
+  const known = new Set([...systemTools, ...desktopTools, ...windowsTools(), ...uiTools()].map((t) => t.name));
   for (const cmd of SAMPLE_COMMANDS) {
     for (const step of cmd.steps) assert.ok(known.has(step.tool), `${cmd.name}: нет инструмента ${step.tool}`);
   }
@@ -69,7 +73,7 @@ test('примерные сценарии: три штуки, фразы уни�
 test('seedSampleCommands: добавляет один раз и не трогает существующие команды', (t) => {
   const dir = tmpDir(t);
   const store = new CommandStore(path.join(dir, 'commands.json'));
-  assert.deepEqual(seedSampleCommands(store), ['Работа', 'Игра', 'Отбой']);
+  assert.deepEqual(seedSampleCommands(store), SAMPLE_COMMANDS.map((c) => c.name));
   assert.deepEqual(seedSampleCommands(store), [], 'повторный запуск ничего не добавляет');
   assert.equal(store.findByPhrase('отбой').name, 'Отбой');
   assert.equal(store.findByPhrase('Начинаем работу').name, 'Работа');

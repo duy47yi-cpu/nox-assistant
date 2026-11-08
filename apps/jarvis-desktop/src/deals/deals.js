@@ -269,14 +269,15 @@ function hanging(store, { now = Date.now() } = {}) {
 const TOOL_WORDS = {
   agents_parallel: 'Параллельная работа ролей',
   shell_run: 'Команда PowerShell', app_open: 'Запуск программы', app_install: 'Установка программы', app_close: 'Закрытие программы', url_open: 'Открыть адрес',
-  windows_focus: 'Переключение окна', windows_arrange: 'Раскладка окон', windows_close_all: 'Закрытие всех окон', youtube_play: 'Видео на YouTube', ui_close_window: 'Закрытие окна', desktop_observe: 'Снимок рабочего стола', desktop_click: 'Нажатие по id', desktop_type: 'Ввод по id', ui_click: 'Нажатие в окне', ui_set_toggle: 'Переключение флажка', ui_type: 'Ввод текста',
+  windows_focus: 'Переключение окна', windows_arrange: 'Раскладка окон', windows_snap: 'Прикрепление окна', windows_close_all: 'Закрытие всех окон', youtube_play: 'Видео на YouTube', ui_close_window: 'Закрытие окна', desktop_observe: 'Снимок рабочего стола', desktop_click: 'Нажатие по id', desktop_type: 'Ввод по id', ui_click: 'Нажатие в окне', ui_set_toggle: 'Переключение флажка', ui_type: 'Ввод текста',
   ui_keys: 'Нажатие клавиш', clipboard_set: 'Запись в буфер', media_control: 'плеер', image_read_text: 'картинка', volume_set: 'Громкость', speak: 'Сказать вслух',
-  image_look: 'просмотр картинки', project_commands: 'команды проекта', project_run: 'запуск команды проекта', web_check_claims: 'проверка утверждений по источникам', currency_rate: 'курс валют',
+  image_look: 'просмотр картинки', project_commands: 'команды проекта', project_run: 'запуск команды проекта', web_check_claims: 'проверка утверждений по источникам', currency_rate: 'курс валют', screen_region_look: 'обведённая область экрана',
   monitor_off: 'Выключить экран', pc_shutdown: 'Выключить компьютер', workspace_write: 'Запись файла', workspace_move: 'Перенос файла', workspace_copy: 'Копия файла', workspace_mkdir: 'Создание папки', workspace_restore: 'Возврат прежней версии файла', project_brief: 'Разбор папки проекта', document_write: 'Запись документа', code_write: 'Запись кода', code_edit: 'Правка кода',
   code_read: 'Чтение кода', library_run: 'Готовая команда', library_list: 'Список готовых команд', skill_read: 'Чтение навыка', skills_list: 'Список навыков',
   task_create: 'Новая задача', task_plan: 'План задачи', task_enqueue: 'Задача в очередь', task_start: 'Запуск задачи', task_step: 'Шаг задачи',
   task_verify: 'Проверка задачи', task_list: 'Список задач исполнителя', task_submit: 'Поручение исполнителю', task_resume: 'Продолжение задачи',
   task_note: 'Запись к делу',
+  command_build: 'Сборка сценария по описанию',
   goal_create: 'План цели', goal_list: 'Цели', goal_next: 'Следующий шаг цели', goal_step: 'Шаг цели', goal_close: 'Закрытие цели',
   workspace_list: 'Список файлов', workspace_read: 'Чтение файла', workspace_search: 'Поиск в папке', project_diagnostics: 'Разбор журнала проекта', web_search: 'Поиск в интернете', web_fetch: 'Чтение страницы', web_research: 'Сбор и чтение источников', weather_now: 'погода', browser_open: 'Открыть страницу', browser_read: 'Чтение страницы в браузере', browser_scroll: 'Прокрутка страницы', browser_click: 'Нажатие на странице', browser_type: 'Ввод на странице', code_test: 'Запуск тестов', memory_about: 'Память о человеке или деле', mail_send: 'Отправка письма', mail_unread: 'Непрочитанные письма',
 };

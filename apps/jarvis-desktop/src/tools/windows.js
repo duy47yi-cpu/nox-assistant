@@ -211,6 +211,109 @@ function computeLayout(layout, count, area) {
 
 }
 
+// ── windows_snap: прикрепить чужое окно ──
+// Тип с вызовами Win32. DPI-осведомлённость включается в скриптах, иначе координаты на масштабе экрана врут.
+const SNAP_TYPE = [
+  "try { [Console]::OutputEncoding = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false } catch {}",
+  'Add-Type -AssemblyName System.Windows.Forms',
+  "Add-Type -TypeDefinition @'",
+  'using System; using System.Text; using System.Runtime.InteropServices;',
+  'public static class Snap {',
+  '  public struct RECT { public int Left, Top, Right, Bottom; }',
+  '  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();',
+  '  [DllImport("user32.dll")] public static extern IntPtr GetTopWindow(IntPtr h);',
+  '  [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h, uint c);',
+  '  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);',
+  '  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);',
+  '  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);',
+  '  [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);',
+  '  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);',
+  '  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);',
+  '  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);',
+  '  [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int i);',
+  '  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);',
+  '  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);',
+  '  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int w, int hh, uint f);',
+  '  [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] public static extern int DwmInt(IntPtr h, int a, out int v, int s);',
+  '  [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] public static extern int DwmRect(IntPtr h, int a, out RECT v, int s);',
+  '}',
+  "'@",
+  '[void][Snap]::SetProcessDPIAware()',
+  // Видимая рамка окна (без невидимой тени Windows 10/11); при сбое DWM — обычный прямоугольник.
+  'function Get-Frame($h) {',
+  '  $r = New-Object Snap+RECT; [void][Snap]::GetWindowRect($h, [ref]$r)',
+  '  $f = New-Object Snap+RECT',
+  '  if ([Snap]::DwmRect($h, 9, [ref]$f, 16) -ne 0) { $f = $r }',
+  '  [pscustomobject]@{ r = $r; f = $f }',
+  '}',
+  'function Out-Json($o) { [Console]::Out.Write((ConvertTo-Json -Compress -InputObject $o)) }',
+].join('\n');
+
+// Поиск окна по порядку сверху вниз (Z-order) и действие. Вход — $env:JARVIS_SNAP: {title, side, noxPid}.
+// Пропускаются: невидимые, дочерние/инструментальные, скрытые (cloaked), без заголовка, панель задач и рабочий стол,
+// окна процесса Nox (по pid и по имени процесса) и системные оболочки. Без title свёрнутые окна не берутся.
+const SNAP_SCRIPT = [
+  SNAP_TYPE,
+  '$req = ConvertFrom-Json -InputObject $env:JARVIS_SNAP',
+  "$shellCls = @('Shell_TrayWnd','Shell_SecondaryTrayWnd','Progman','WorkerW')",
+  "$skipProc = @('shellexperiencehost','searchhost','searchui','startmenuexperiencehost','textinputhost','lockapp')",
+  '$want = [string]$req.title',
+  '$found = [IntPtr]::Zero; $info = $null; $n = 0',
+  '$h = [Snap]::GetTopWindow([IntPtr]::Zero)',
+  'while ($h -ne [IntPtr]::Zero -and $n -lt 3000) {',
+  '  $n++; $cur = $h; $h = [Snap]::GetWindow($h, 2)',
+  '  if (-not [Snap]::IsWindowVisible($cur)) { continue }',
+  '  if ([Snap]::GetWindow($cur, 4) -ne [IntPtr]::Zero) { continue }',
+  '  if (([Snap]::GetWindowLong($cur, -20) -band 0x80) -ne 0) { continue }',
+  '  $cv = 0; [void][Snap]::DwmInt($cur, 14, [ref]$cv, 4); if ($cv -ne 0) { continue }',
+  '  $sb = New-Object System.Text.StringBuilder 256; [void][Snap]::GetClassName($cur, $sb, 256)',
+  '  if ($shellCls -contains $sb.ToString()) { continue }',
+  '  $tb = New-Object System.Text.StringBuilder 512; [void][Snap]::GetWindowText($cur, $tb, 512)',
+  '  $title = $tb.ToString(); if ([string]::IsNullOrWhiteSpace($title)) { continue }',
+  '  [uint32]$procId = 0; [void][Snap]::GetWindowThreadProcessId($cur, [ref]$procId)',
+  '  if ($procId -eq [uint32]$req.noxPid) { continue }',
+  '  $pn = [string](Get-Process -Id $procId -ErrorAction SilentlyContinue).ProcessName',
+  "  if ($pn -like '*nox*' -or $pn -like '*jarvis*' -or $pn -eq 'electron' -or $skipProc -contains $pn.ToLower()) { continue }",
+  '  if ($want) { if ($title.IndexOf($want, [StringComparison]::OrdinalIgnoreCase) -lt 0) { continue } }',
+  '  elseif ([Snap]::IsIconic($cur)) { continue }',
+  '  $found = $cur; $info = @{ title = $title; process = $pn }; break',
+  '}',
+  'if ($found -eq [IntPtr]::Zero) { Out-Json @{ ok = $false; reason = $(if ($want) { "not_found" } else { "no_candidate" }) }; exit 0 }',
+  '$side = [string]$req.side',
+  'if ($side -eq "minimize") { [void][Snap]::ShowWindow($found, 6); Out-Json @{ ok = $true; hwnd = [int64]$found; title = $info.title; process = $info.process; side = $side }; exit 0 }',
+  'if ($side -eq "maximize") { [void][Snap]::ShowWindow($found, 3); Out-Json @{ ok = $true; hwnd = [int64]$found; title = $info.title; process = $info.process; side = $side }; exit 0 }',
+  // Свёрнутое или развёрнутое окно сначала возвращаем в обычный вид, иначе SetWindowPos не даст размер.
+  'if ([Snap]::IsIconic($found) -or [Snap]::IsZoomed($found)) { [void][Snap]::ShowWindow($found, 9); Start-Sleep -Milliseconds 150 }',
+  '$wa = [System.Windows.Forms.Screen]::FromHandle($found).WorkingArea',
+  // Имена переменных в PowerShell без учёта регистра: $aw/$ah, а не $W/$H рядом с $w/$h.
+  '$aw = $wa.Width; $ah = $wa.Height',
+  'if ($side -eq "left") { $nw = [int][Math]::Floor($aw / 2); $nh = $ah; $x = $wa.X; $y = $wa.Y }',
+  'elseif ($side -eq "right") { $nw = [int][Math]::Floor($aw / 2); $nh = $ah; $x = $wa.X + $aw - $nw; $y = $wa.Y }',
+  'else { $nw = [int][Math]::Round($aw * 0.7); $nh = [int][Math]::Round($ah * 0.8); $x = $wa.X + [int][Math]::Floor(($aw - $nw) / 2); $y = $wa.Y + [int][Math]::Floor(($ah - $nh) / 2) }',
+  '$fr = Get-Frame $found',
+  '$il = $fr.f.Left - $fr.r.Left; $it = $fr.f.Top - $fr.r.Top; $ir = $fr.r.Right - $fr.f.Right; $ib = $fr.r.Bottom - $fr.f.Bottom',
+  '[void][Snap]::SetWindowPos($found, [IntPtr]::Zero, $x - $il, $y - $it, $nw + $il + $ir, $nh + $it + $ib, 0x0014)',
+  'Out-Json @{ ok = $true; hwnd = [int64]$found; title = $info.title; process = $info.process; side = $side; expected = @{ x = $x; y = $y; w = $nw; h = $nh } }',
+].join('\n');
+
+// Проверка: читаем состояние и видимую рамку окна по hwnd из $env:JARVIS_HWND.
+const SNAP_READ_SCRIPT = [
+  SNAP_TYPE,
+  '$h = [IntPtr][int64]$env:JARVIS_HWND',
+  'if (-not [Snap]::IsWindow($h)) { Out-Json @{ exists = $false }; exit 0 }',
+  '$fr = Get-Frame $h',
+  'Out-Json @{ exists = $true; iconic = [Snap]::IsIconic($h); zoomed = [Snap]::IsZoomed($h); x = $fr.f.Left; y = $fr.f.Top; w = $fr.f.Right - $fr.f.Left; h = $fr.f.Bottom - $fr.f.Top }',
+].join('\n');
+
+const SNAP_SIDES = ['left', 'right', 'maximize', 'minimize', 'center'];
+const SNAP_SIDE_WORD = { left: 'влево', right: 'вправо', maximize: 'развёрнуто', minimize: 'свёрнуто', center: 'по центру' };
+const SNAP_TOLERANCE = 12;
+
+function parseJsonOut(res) {
+  const text = String((res.data && res.data.stdout) || '').trim();
+  return text ? JSON.parse(text) : null;
+}
+
 // runner по умолчанию — runPowerShell; в тестах подменяется функцией с той же сигнатурой.
 function windowsTools(runner = runPowerShell) {
   const windowsList = {
@@ -269,6 +372,69 @@ function windowsTools(runner = runPowerShell) {
       if (seen) return { status: 'confirmed', evidence: `впереди окно «${front.slice(0, 120)}»` };
       if (front === null) return { status: 'unknown', evidence: 'не удалось узнать активное окно' };
       return { status: 'failed', evidence: `впереди другое окно: «${front.slice(0, 120)}»` };
+    },
+  };
+
+  const windowsSnap = {
+    name: 'windows_snap',
+    description: 'Прикрепить чужое окно: влево, вправо, развернуть, свернуть или по центру. title — часть заголовка из windows_list, обязательно: без названия инструмент откажет и попросит назвать окно. Окна Nox не трогает.',
+    risk: 'T1',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', maxLength: MAX_TITLE },
+        side: { type: 'string', enum: SNAP_SIDES },
+      },
+      required: ['title', 'side'],
+    },
+    async run(args, ctx) {
+      const side = String((args && args.side) || '').trim().toLowerCase();
+      if (!SNAP_SIDES.includes(side)) return { ok: false, summary: `сторона должна быть одной из: ${SNAP_SIDES.join(', ')}`, data: {} };
+      const title = String((args && args.title) || '').trim();
+      // Без названия не угадываем: верхнее окно может оказаться мессенджером или чужим окном (решение владельца).
+      if (!title) return { ok: false, summary: 'назови окно по названию, например «Блокнот»', data: {} };
+      if (title.length > MAX_TITLE) return { ok: false, summary: `название длиннее ${MAX_TITLE} символов`, data: {} };
+      const signal = ctx && ctx.signal;
+      // pid Nox передаём явно: его окна не трогаем никогда.
+      const res = await runner(SNAP_SCRIPT, { JARVIS_SNAP: JSON.stringify({ title, side, noxPid: process.pid }) }, { timeoutMs: TIMEOUT_MS, signal });
+      if (!res.ok) return { ok: false, summary: res.summary, data: {} };
+      let out;
+      try { out = parseJsonOut(res); } catch { out = null; }
+      if (!out) return { ok: false, summary: 'не удалось разобрать ответ о положении окна', data: {} };
+      if (!out.ok) {
+        const summary = out.reason === 'not_found'
+          ? `окно «${title}» не найдено среди открытых`
+          : 'не могу надёжно понять, какое окно двигать: назови окно по названию';
+        return { ok: false, summary, data: { reason: out.reason } };
+      }
+      return {
+        ok: true,
+        summary: `окно «${String(out.title).slice(0, 80)}» (${out.process}): ${SNAP_SIDE_WORD[side]}`,
+        data: { hwnd: out.hwnd, title: out.title, process: out.process, side, expected: out.expected || null },
+      };
+    },
+    async verify(args, result, ctx = {}) {
+      const d = result && result.data;
+      if (!result || !result.ok || !d || !d.hwnd) return { status: 'unknown', evidence: 'нет данных об окне' };
+      const read = async () => {
+        const res = await runner(SNAP_READ_SCRIPT, { JARVIS_HWND: String(d.hwnd) }, { timeoutMs: TIMEOUT_MS, signal: ctx.signal });
+        if (!res.ok) return null;
+        try { return parseJsonOut(res); } catch { return null; }
+      };
+      const fits = (s) => {
+        if (!s || !s.exists) return false;
+        if (d.side === 'minimize') return !!s.iconic;
+        if (d.side === 'maximize') return !!s.zoomed && !s.iconic;
+        if (s.iconic || s.zoomed || !d.expected) return false;
+        const e = d.expected;
+        return [s.x - e.x, s.y - e.y, s.w - e.w, s.h - e.h].every((v) => Math.abs(v) <= SNAP_TOLERANCE);
+      };
+      let last = null;
+      const ok = await pollUntil(async () => { last = await read(); return fits(last); }, { timeoutMs: ctx.pollTimeoutMs || 1500, signal: ctx.signal });
+      if (ok) return { status: 'confirmed', evidence: `окно «${String(d.title).slice(0, 80)}»: ${SNAP_SIDE_WORD[d.side]}, положение подтверждено` };
+      if (!last) return { status: 'unknown', evidence: 'не удалось прочитать положение окна' };
+      if (!last.exists) return { status: 'failed', evidence: 'окно исчезло' };
+      return { status: 'failed', evidence: `положение не совпало: x=${last.x}, y=${last.y}, ${last.w}×${last.h}, свёрнуто=${!!last.iconic}, развёрнуто=${!!last.zoomed}` };
     },
   };
 
@@ -563,7 +729,7 @@ function windowsTools(runner = runPowerShell) {
   };
 
 
-  return [windowsList, windowsFocus, windowsArrange, organizeWorkspace, restoreWorkspace];
+  return [windowsList, windowsFocus, windowsSnap, windowsArrange, organizeWorkspace, restoreWorkspace];
 }
 
 module.exports = { windowsTools, computeLayout };

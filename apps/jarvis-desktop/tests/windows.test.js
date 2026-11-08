@@ -152,7 +152,7 @@ describe('windows_focus', () => {
 describe('метаданные инструментов', () => {
   test('три инструмента с нужными именами и рисками', () => {
     const tools = windowsTools(async () => okRun(''));
-    assert.deepEqual(tools.map((t) => t.name), ['windows_list', 'windows_focus', 'windows_arrange', 'organize_workspace', 'restore_workspace']);
+    assert.deepEqual(tools.map((t) => t.name), ['windows_list', 'windows_focus', 'windows_snap', 'windows_arrange', 'organize_workspace', 'restore_workspace']);
     assert.equal(byName(tools, 'windows_list').risk, 'T0');
     assert.equal(byName(tools, 'windows_focus').risk, 'T1');
     assert.equal(byName(tools, 'windows_arrange').risk, 'T1');

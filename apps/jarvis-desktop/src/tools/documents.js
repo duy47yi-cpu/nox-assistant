@@ -7,12 +7,14 @@ const path = require('path');
 const crypto = require('crypto');
 const { readZip, writeZip } = require('./zip');
 const { writeTarget, reportsOnly } = require('./workspace');
+const { pptxBuffer, pptxCheck, normalizeSlides } = require('./pptx');
 
 const MAX_FILE = 10 * 1024 * 1024;
 const MAX_TEXT = 50000;
 const MAX_PATH = 300;
 const MAX_ROWS = 5000;
-const FORMATS = ['docx', 'xlsx', 'csv', 'pdf'];
+const FORMATS = ['docx', 'xlsx', 'csv', 'pdf', 'pptx'];
+const MAX_SLIDES = 40;
 const READABLE = ['.docx', '.xlsx', '.csv', '.pdf'];
 
 const ENT = new Map([['amp', '&'], ['lt', '<'], ['gt', '>'], ['quot', '"'], ['apos', "'"]]);
@@ -320,7 +322,7 @@ function documentTools(index, { renderPdf } = {}) {
 
   const write = {
     name: 'document_write',
-    description: 'Записать документ в рабочую папку: docx (title и text или rows), xlsx и csv (rows или text; title — имя листа), pdf (title и text), если подключена печать PDF. Существующий файл заменяется только с overwrite: true.',
+    description: 'Записать документ в рабочую папку: docx (title и text или rows), xlsx и csv (rows или text; title — имя листа), pdf (title и text), если подключена печать PDF, pptx (презентация: title — обложка, slides — слайды с заголовком и пунктами). Существующий файл заменяется только с overwrite: true.',
     risk: 'T1',
     parameters: {
       type: 'object',
@@ -329,6 +331,17 @@ function documentTools(index, { renderPdf } = {}) {
         format: { type: 'string', enum: FORMATS },
         title: { type: 'string', maxLength: 200 },
         text: { type: 'string', maxLength: MAX_TEXT },
+        slides: {
+          type: 'array',
+          maxItems: MAX_SLIDES,
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', maxLength: 200 },
+              bullets: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 } },
+            },
+          },
+        },
         rows: {
           type: 'array',
           maxItems: MAX_ROWS,
@@ -344,12 +357,15 @@ function documentTools(index, { renderPdf } = {}) {
         if (!rel) return notOk('пустой путь');
         if (rel.length > MAX_PATH) return notOk(`путь длиннее ${MAX_PATH} символов`);
         const format = String(args.format || '');
-        if (!FORMATS.includes(format)) return notOk('формат: docx, xlsx, csv или pdf');
+        if (!FORMATS.includes(format)) return notOk('формат: docx, xlsx, csv, pdf или pptx');
         if (path.extname(rel).toLowerCase() !== `.${format}`) return notOk(`расширение файла должно быть .${format}`);
         if (/[<>:"|?*\x00-\x1f]/.test(path.basename(rel))) return notOk('в имени файла есть символы, которых нет в Windows: < > : " | ? *');
         const rows = rowsOf(args);
         const title = typeof args.title === 'string' ? args.title.trim() : '';
-        if (!title && rows.length === 0) return notOk('нет содержимого: передайте text или rows');
+        // Презентация: слайды из slides, а без них — текст строками на одном слайде.
+        let slides = format === 'pptx' ? normalizeSlides(args.slides) : [];
+        if (format === 'pptx' && !slides.length && rows.length) slides = [{ title: title || 'Слайд', bullets: rows.map(lineOf) }];
+        if (!title && rows.length === 0 && slides.length === 0) return notOk('нет содержимого: передайте text, rows или slides');
         if (rows.length > MAX_ROWS) return notOk(`строк больше ${MAX_ROWS}`);
         const abs = writeTarget(index, rel, null);
         const exists = fs.existsSync(abs);
@@ -360,7 +376,10 @@ function documentTools(index, { renderPdf } = {}) {
           if (denied) return notOk(denied);
         }
         let body;
-        if (format === 'docx') body = docxBuffer(title, rows);
+        if (format === 'pptx') {
+          if (slides.length > MAX_SLIDES) return notOk(`слайдов больше ${MAX_SLIDES}`);
+          body = pptxBuffer({ title, slides });
+        } else if (format === 'docx') body = docxBuffer(title, rows);
         else if (format === 'xlsx') body = xlsxBuffer(title, rows.length ? rows : [['']]);
         else if (format === 'csv') body = csvBuffer(rows);
         else {
@@ -380,7 +399,7 @@ function documentTools(index, { renderPdf } = {}) {
         return {
           ok: true,
           summary: exists ? 'перезаписал' : 'записал',
-          data: { path: relOf(abs), format, created: !exists },
+          data: { path: relOf(abs), format, created: !exists, ...(format === 'pptx' ? { slides: slides.length + (title ? 1 : 0) } : {}) },
         };
       } catch (err) {
         return fail(err);
@@ -391,6 +410,13 @@ function documentTools(index, { renderPdf } = {}) {
       if (!result.data || !result.data.path) return { status: 'unknown', evidence: 'нет пути результата' };
       const abs = index.resolveInside(result.data.path);
       if (!fs.existsSync(abs)) return { status: 'failed', evidence: `файла ${result.data.path} нет на диске` };
+      if (result.data.format === 'pptx') {
+        // Презентация не читается как текст: проверяем архив и число слайдов.
+        const check = pptxCheck(fs.readFileSync(abs), result.data.slides);
+        return check.ok
+          ? { status: 'confirmed', evidence: `презентация ${result.data.path} открывается: ${check.evidence}` }
+          : { status: 'failed', evidence: `презентация ${result.data.path} повреждена или неполна: ${check.evidence}` };
+      }
       if (result.data.format === 'pdf') {
         const head = fs.readFileSync(abs).subarray(0, 5).toString('latin1');
         return head === '%PDF-'

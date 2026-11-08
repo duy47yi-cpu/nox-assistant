@@ -682,6 +682,8 @@ function escapeSendKeys(text) {
 }
 
 // Белый список клавиш → коды SendKeys. alt+f4 сюда сознательно не входит (см. ui_close_window).
+// Сочетания с клавишей Win SendKeys отправить не умеет: значение '' значит «этим путём не отправляется»,
+// нажимаются они только кодами виртуальных клавиш (keysToVk → JARVIS_UI_VK, см. VK_CODES).
 const KEY_MAP = Object.freeze({
   tab: '{TAB}',
   enter: '{ENTER}',
@@ -706,13 +708,43 @@ const KEY_MAP = Object.freeze({
   'ctrl+shift+s': '^+s',
   'ctrl+t': '^t', // новая вкладка браузера: открытую вкладку владельца не трогаем
   'ctrl+l': '^l',
+  // Монтаж: разрез (Premiere — Ctrl+K, CapCut и DaVinci — Ctrl+B), экспорт, метки входа и выхода.
+  'ctrl+k': '^k',
+  'ctrl+b': '^b',
+  'ctrl+m': '^m',
+  'i': 'i',
+  'o': 'o',
+  // Удаление со сдвигом в редакторе. В Проводнике Shift+Delete удаляет мимо корзины, поэтому голый Delete не добавлен.
+  'shift+delete': '+{DEL}',
+  // Игры: инвентарь, выброс предмета, вид от третьего лица. Буквы уходят в активное окно.
+  'e': 'e',
+  'q': 'q',
+  'f5': '{F5}',
+  // Браузер: закрыть текущую вкладку и переключить вкладку. Alt+F4 сюда не входит (см. ui_close_window).
+  'ctrl+w': '^w',
+  'ctrl+tab': '^{TAB}',
+  // Системные сочетания Windows для команд по фразе. Значение '' — SendKeys их не умеет,
+  // нажатие идёт кодами виртуальных клавиш (см. KEYS_MAIN: план JARVIS_UI_VK).
+  'win+left': '', // прикрепить окно влево
+  'win+right': '', // прикрепить окно вправо
+  'win+up': '', // развернуть окно
+  'win+down': '', // свернуть окно вниз
+  'win+l': '', // заблокировать экран
+  'win+v': '', // история буфера обмена
+  'win+.': '', // панель эмодзи
+  'win+ctrl+d': '', // новый рабочий стол
+  'win+shift+s': '', // фрагмент экрана
+  'win+plus': '', // экранная лупа: Win + «+»
 });
 
 // Заголовок окна с именем файла («привет.txt — Блокнот»): то же правило, что в policy/modes.js для перезаписи.
 const SAVED_FILE_TITLE = /\.[a-z0-9]{1,5}(\s|$)/i;
 
 // Те же клавиши как коды виртуальных клавиш: "17,83" — Ctrl+S, сочетания через «;».
-const VK_CODES = Object.freeze({ ctrl: 17, shift: 16, tab: 9, enter: 13, escape: 27, space: 32, up: 38, down: 40, left: 37, right: 39, pageup: 33, pagedown: 34, home: 36, end: 35, a: 65, c: 67, v: 86, z: 90, s: 83, n: 78, l: 76, t: 84 });
+// win — клавиша Win (VK_LWIN): сочетания с ней идут только этим путём.
+// '.' — VK_OEM_PERIOD, plus — VK_OEM_PLUS (лупа Windows вызывается Win + «+»).
+// delete — VK_DELETE, нужен только для shift+delete; f5 — VK_F5.
+const VK_CODES = Object.freeze({ win: 91, ctrl: 17, shift: 16, tab: 9, enter: 13, escape: 27, space: 32, up: 38, down: 40, left: 37, right: 39, pageup: 33, pagedown: 34, home: 36, end: 35, delete: 46, f5: 116, '.': 190, plus: 187, a: 65, b: 66, c: 67, d: 68, e: 69, i: 73, k: 75, l: 76, m: 77, n: 78, o: 79, q: 81, s: 83, t: 84, v: 86, w: 87, z: 90 });
 function keysToVk(tokens) {
   return tokens.map((t) => t.split('+').map((k) => VK_CODES[k]).join(',')).join(';');
 }

@@ -29,7 +29,7 @@ const { ChatBook } = require('../chats/book');
 // Картинки читаются инструментами самого пространства — их корень папки берётся из пространства.
 const COMMON = new Set([
   'web_search', 'web_fetch', 'web_wiki', 'web_research', 'web_check_claims', 'weather_now', 'currency_rate',
-  'screen_look', 'desktop_observe', 'windows_list', 'mail_unread',
+  'screen_look', 'screen_region_look', 'desktop_observe', 'windows_list', 'mail_unread',
   'desktop_click', 'desktop_type', 'ui_windows', 'ui_elements', 'ui_click', 'ui_type', 'ui_keys', 'ui_focus', 'ui_close_window', 'ui_set_toggle', 'ui_wait',
   'mouse_click', 'mouse_scroll', 'shell_run', 'app_search', 'app_install', 'app_open', 'app_close',
   'browser_open', 'browser_read', 'browser_scroll', 'browser_click', 'browser_type', 'url_open', 'mail_send',

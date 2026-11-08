@@ -16,7 +16,12 @@
 //   weather  — getCurrentWeather(city): {ok, temp, apparent, precipitation, fetchedAt} или {ok:false, reason};
 //   currency — getRates(codes): {ok, date, rates:[{code,name,value,previous}], fetchedAt} или {ok:false, reason};
 //   apps     — AppUsage: {apps: {name: {launches, seenRunning, last}}, services};
-//   orb      — состояние шара из renderer/orb.js: 'idle' | {state: 'idle'}.
+//   orb      — состояние шара из renderer/orb.js: 'idle' | {state: 'idle'};
+//   goals    — GoalStore.list({status:'active'}): [{id, title, status, steps:[{status}], updatedAt}];
+//   notes    — MemoryStore.list(): [{id, text, kind, about, sensitive, updatedAt}];
+//   downloads — downloads-cleanup.analyze(folder) или список файлов [{name,size,mtimeMs}];
+//   mcp      — mcpManager.state(): {servers: [{name, transport, status, toolCount, ...}]};
+//   pet      — декоративная анимация: данных нет, источник не читается вообще.
 
 const DATA_STATES = Object.freeze(['ok', 'empty', 'error', 'stale']);
 
@@ -29,7 +34,17 @@ const DEFAULTS = Object.freeze({
   appsLimit: 6,
   musicLimit: 5,
   commandsLimit: 10,
+  goalsLimit: 5,
+  missionsLimit: 5,
+  remindersLimit: 5,
+  notesLimit: 5,
+  downloadsLimit: 5,
+  mcpLimit: 6,
 });
+
+// Настроения питомца — фиксированный набор. Это не данные источника и не «показания»:
+// питомец декоративный, поэтому другого состояния у него быть не может.
+const PET_MOODS = Object.freeze(['idle', 'curious', 'sleepy']);
 
 const ACTIVE_TASK_STATUSES = Object.freeze(['queued', 'running', 'waiting_approval', 'paused', 'blocked']);
 const FINAL_TASK_STATUSES = Object.freeze(['done', 'unverified', 'cancelled']);
@@ -333,6 +348,255 @@ function commands(source, options = {}) {
   return result('commands', 'ok', { items: items.slice(0, limit), total: items.length });
 }
 
+// Источник в виде массива или {items: [...]}: так отдают хранилища приложения.
+// Всё остальное — не список, и это честная ошибка источника, а не пустой виджет.
+function sourceList(source) {
+  if (Array.isArray(source)) return source;
+  if (isPlainObject(source) && Array.isArray(source.items)) return source.items;
+  return null;
+}
+
+function shortText(value, max) {
+  return Array.isArray(value) ? value.slice(0, max).join('') : String(value).slice(0, max);
+}
+
+// Цели: только активные, с числом выполненных шагов. Закрытые цели в виджет не попадают:
+// они уже не «в работе», а переносить их в один список — путать владельца.
+function goals(source, options = {}) {
+  const limit = clampLimit(options.limit, DEFAULTS.goalsLimit, 20);
+  if (source === undefined || source === null) return result('goals', 'empty', null);
+  const list = sourceList(source);
+  if (!list) return result('goals', 'error', null, 'bad_source');
+  const items = [];
+  for (const raw of list) {
+    if (!isPlainObject(raw) || typeof raw.id !== 'string' || typeof raw.title !== 'string') continue;
+    // Статус обязателен: запись без него — не активная цель, и придумывать ей статус нельзя.
+    if (raw.status !== 'active') continue;
+    const steps = Array.isArray(raw.steps) ? raw.steps : [];
+    let done = 0;
+    for (const step of steps) {
+      if (isPlainObject(step) && step.status === 'done') done += 1;
+    }
+    items.push({
+      id: raw.id,
+      title: shortText(raw.title, 200),
+      stepsDone: done,
+      stepsTotal: steps.length,
+      updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
+    });
+  }
+  if (!items.length) return result('goals', 'empty', { items: [], total: 0 });
+  return result('goals', 'ok', { items: items.slice(0, limit), total: items.length });
+}
+
+// Миссии: фоновые задачи по расписанию. Показываем и выключенные — рендерер пометит их,
+// чтобы «выключено» не выглядело как «ничего нет».
+function missions(source, options = {}) {
+  const limit = clampLimit(options.limit, DEFAULTS.missionsLimit, 20);
+  if (source === undefined || source === null) return result('missions', 'empty', null);
+  const list = sourceList(source);
+  if (!list) return result('missions', 'error', null, 'bad_source');
+  const items = [];
+  for (const raw of list) {
+    if (!isPlainObject(raw) || typeof raw.id !== 'string' || typeof raw.goal !== 'string') continue;
+    const nextRunAt = typeof raw.nextRunAt === 'string' && Number.isFinite(new Date(raw.nextRunAt).getTime())
+      ? new Date(raw.nextRunAt).toISOString() : null;
+    items.push({
+      id: raw.id,
+      goal: shortText(raw.goal, 300),
+      enabled: raw.enabled !== false,
+      status: typeof raw.status === 'string' ? raw.status : null,
+      nextRunAt,
+      lastRunAt: typeof raw.lastRunAt === 'string' ? raw.lastRunAt : null,
+      runs: finite(raw.runs) === null ? null : Math.max(0, Math.round(raw.runs)),
+    });
+  }
+  items.sort((a, b) => {
+    const at = a.nextRunAt ? new Date(a.nextRunAt).getTime() : Infinity;
+    const bt = b.nextRunAt ? new Date(b.nextRunAt).getTime() : Infinity;
+    return at - bt;
+  });
+  if (!items.length) return result('missions', 'empty', { items: [], total: 0 });
+  return result('missions', 'ok', {
+    items: items.slice(0, limit),
+    total: items.length,
+    running: items.filter((item) => item.status === 'running').length,
+  });
+}
+
+// Напоминания: невыполненные, ближайшие первыми. Просроченные не прячем — они ждут владельца.
+function reminders(source, options = {}) {
+  const { now = Date.now() } = options;
+  const limit = clampLimit(options.limit, DEFAULTS.remindersLimit, 20);
+  if (source === undefined || source === null) return result('reminders', 'empty', null);
+  const list = sourceList(source);
+  if (!list) return result('reminders', 'error', null, 'bad_source');
+  const items = [];
+  for (const raw of list) {
+    if (!isPlainObject(raw) || typeof raw.id !== 'string' || typeof raw.text !== 'string' || raw.done) continue;
+    const due = raw.dueAt === undefined ? NaN : new Date(raw.dueAt).getTime();
+    if (!Number.isFinite(due)) continue;
+    items.push({
+      id: raw.id,
+      text: shortText(raw.text, 300),
+      dueAt: new Date(due).toISOString(),
+      repeat: typeof raw.repeat === 'string' ? raw.repeat : null,
+      overdue: due < now,
+    });
+  }
+  items.sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
+  if (!items.length) return result('reminders', 'empty', { items: [], total: 0 });
+  return result('reminders', 'ok', {
+    items: items.slice(0, limit),
+    total: items.length,
+    overdue: items.filter((item) => item.overdue).length,
+  });
+}
+
+// Заметки: записи памяти, новые сверху. Личные (sensitive) по умолчанию скрыты:
+// на столе их может увидеть кто угодно. Число скрытых честно показываем.
+function notes(source, options = {}) {
+  const limit = clampLimit(options.limit, DEFAULTS.notesLimit, 20);
+  const includeSensitive = options.includeSensitive === true;
+  if (source === undefined || source === null) return result('notes', 'empty', null);
+  const list = sourceList(source);
+  if (!list) return result('notes', 'error', null, 'bad_source');
+  const items = [];
+  let hiddenSensitive = 0;
+  for (const raw of list) {
+    if (!isPlainObject(raw) || typeof raw.id !== 'string' || typeof raw.text !== 'string') continue;
+    const text = raw.text.trim();
+    if (!text) continue;
+    if (raw.sensitive === true) {
+      if (!includeSensitive) {
+        hiddenSensitive += 1;
+        continue;
+      }
+    }
+    items.push({
+      id: raw.id,
+      text: shortText(text, 200),
+      kind: typeof raw.kind === 'string' ? raw.kind : null,
+      about: typeof raw.about === 'string' ? raw.about : null,
+      updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
+    });
+  }
+  if (!items.length) return result('notes', 'empty', { items: [], total: 0, hiddenSensitive });
+  return result('notes', 'ok', { items: items.slice(0, limit), total: items.length, hiddenSensitive });
+}
+
+// Загрузки: отчёт настоящего анализа папки (downloads-cleanup.analyze) или список файлов,
+// переданный вызывающим. Ничего не дочитываем и не досчитываем сами.
+function downloads(source, options = {}) {
+  const { now = Date.now() } = options;
+  const limit = clampLimit(options.limit, DEFAULTS.downloadsLimit, 10);
+  if (source === undefined || source === null) return result('downloads', 'empty', null);
+  if (Array.isArray(source)) {
+    const items = [];
+    let totalBytes = 0;
+    for (const raw of source) {
+      if (!isPlainObject(raw) || typeof raw.name !== 'string' || !raw.name.trim()) continue;
+      const size = finite(raw.size);
+      const mtimeMs = finite(raw.mtimeMs);
+      if (size !== null && size > 0) totalBytes += size;
+      items.push({
+        name: shortText(raw.name.trim(), 120),
+        size: size === null ? null : Math.max(0, Math.round(size)),
+        ageDays: mtimeMs === null ? null : Math.max(0, Math.floor((now - mtimeMs) / (24 * 60 * 60 * 1000))),
+        reason: typeof raw.reason === 'string' ? shortText(raw.reason, 120) : null,
+      });
+    }
+    if (!items.length) return result('downloads', 'empty', { items: [], total: 0 });
+    return result('downloads', 'ok', {
+      folder: null,
+      fileCount: items.length,
+      totalBytes,
+      candidateCount: null,
+      candidateBytes: null,
+      items: items.slice(0, limit),
+      truncated: false,
+    });
+  }
+  if (!isPlainObject(source)) return result('downloads', 'error', null, 'bad_source');
+  if (source.ok === false) {
+    return result('downloads', 'error', null, typeof source.reason === 'string' ? source.reason : 'bad_data');
+  }
+  if (source.ok !== true) return result('downloads', 'error', null, 'bad_source');
+  const folder = typeof source.folder === 'string' && source.folder.trim() ? shortText(source.folder.trim(), 300) : null;
+  const scanned = isPlainObject(source.scanned) ? source.scanned : {};
+  const fileCount = finite(scanned.files);
+  const totalBytes = finite(scanned.totalBytes);
+  const candidates = Array.isArray(source.candidates) ? source.candidates : [];
+  const items = [];
+  for (const raw of candidates) {
+    if (!isPlainObject(raw) || typeof raw.name !== 'string' || !raw.name.trim()) continue;
+    const size = finite(raw.size);
+    items.push({
+      name: shortText(raw.name.trim(), 120),
+      size: size === null ? null : Math.max(0, Math.round(size)),
+      ageDays: finite(raw.ageDays) === null ? null : Math.max(0, Math.round(raw.ageDays)),
+      reason: typeof raw.reason === 'string' ? shortText(raw.reason, 120) : null,
+    });
+  }
+  const candidateCount = finite(source.candidatesTotal);
+  const candidateBytes = finite(source.candidateBytes);
+  // Пустая папка — пусто; папка с файлами, но без кандидатов на уборку — честный ok без списка.
+  if (fileCount === 0 && !items.length) {
+    return result('downloads', 'empty', {
+      folder, fileCount: 0, totalBytes: totalBytes === null ? 0 : totalBytes,
+      candidateCount: 0, candidateBytes: 0, items: [], truncated: false,
+    });
+  }
+  return result('downloads', 'ok', {
+    folder,
+    fileCount: fileCount === null ? null : Math.max(0, Math.round(fileCount)),
+    totalBytes: totalBytes === null ? null : Math.max(0, Math.round(totalBytes)),
+    candidateCount: candidateCount === null ? (items.length || null) : Math.max(0, Math.round(candidateCount)),
+    candidateBytes: candidateBytes === null ? null : Math.max(0, Math.round(candidateBytes)),
+    items: items.slice(0, limit),
+    truncated: source.candidatesTruncated === true,
+  });
+}
+
+// MCP: подключённые сервисы и их состояние. Секретов в state() нет — и здесь их быть не должно.
+function mcp(source, options = {}) {
+  const limit = clampLimit(options.limit, DEFAULTS.mcpLimit, 20);
+  if (source === undefined || source === null) return result('mcp', 'empty', null);
+  // mcpManager.state() отдаёт {servers: [...]}, поэтому принимаем и такую форму.
+  const list = Array.isArray(source) ? source
+    : isPlainObject(source) && Array.isArray(source.servers) ? source.servers
+      : sourceList(source);
+  if (!list) return result('mcp', 'error', null, 'bad_source');
+  const items = [];
+  for (const raw of list) {
+    if (!isPlainObject(raw) || typeof raw.name !== 'string' || !raw.name.trim()) continue;
+    const toolCount = finite(raw.toolCount);
+    items.push({
+      name: shortText(raw.name.trim(), 80),
+      transport: typeof raw.transport === 'string' ? raw.transport : null,
+      target: typeof raw.target === 'string' ? shortText(raw.target, 120) : null,
+      status: typeof raw.status === 'string' ? raw.status : (raw.disabled === true ? 'disabled' : 'idle'),
+      disabled: raw.disabled === true,
+      toolCount: toolCount === null ? 0 : Math.max(0, Math.round(toolCount)),
+    });
+  }
+  if (!items.length) return result('mcp', 'empty', { items: [], total: 0 });
+  return result('mcp', 'ok', {
+    items: items.slice(0, limit),
+    total: items.length,
+    connected: items.filter((item) => item.status === 'connected').length,
+    errors: items.filter((item) => item.status === 'error').length,
+  });
+}
+
+// Питомец: декоративная анимация. Данных нет и не читается, поэтому state всегда ok;
+// настроение — только из фиксированного набора, иначе спокойное.
+function pet(source) {
+  const mood = typeof source === 'string' ? source : isPlainObject(source) ? source.mood : null;
+  const safeMood = typeof mood === 'string' && PET_MOODS.includes(mood) ? mood : 'idle';
+  return result('pet', 'ok', { mood: safeMood, moods: PET_MOODS.slice(), decorative: true });
+}
+
 // --- сборка ---------------------------------------------------------------
 
 const BUILDERS = Object.freeze({
@@ -345,6 +609,13 @@ const BUILDERS = Object.freeze({
   apps: (sources, options) => apps(sources.apps, options),
   orb: (sources) => orb(sources.orb),
   commands: (sources, options) => commands(sources.commands, options),
+  goals: (sources, options) => goals(sources.goals, options),
+  missions: (sources, options) => missions(sources.missions, options),
+  reminders: (sources, options) => reminders(sources.reminders, options),
+  notes: (sources, options) => notes(sources.notes, options),
+  downloads: (sources, options) => downloads(sources.downloads, options),
+  mcp: (sources, options) => mcp(sources.mcp, options),
+  pet: () => pet(null),
 });
 
 const DATA_TYPES = Object.freeze(Object.keys(BUILDERS));
@@ -385,6 +656,7 @@ module.exports = {
   DEFAULTS,
   ACTIVE_TASK_STATUSES,
   ORB_WORDS,
+  PET_MOODS,
   system,
   tasks,
   today,
@@ -394,6 +666,13 @@ module.exports = {
   apps,
   orb,
   commands,
+  goals,
+  missions,
+  reminders,
+  notes,
+  downloads,
+  mcp,
+  pet,
   buildWidget,
   buildDeskData,
   startOfDay,

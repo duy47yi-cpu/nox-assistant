@@ -3,6 +3,7 @@
 // План отделён от сохранения: создание с dryRun: true только показывает редактируемый план, без dryRun сохраняет.
 const { FORBIDDEN_PREFIXES } = require('../commands/runner');
 const { DANGEROUS_TOOLS, EDITOR_STEP_TOOLS } = require('../commands/store');
+const { buildCommandFromText, dryRunCommand } = require('../commands/builder');
 
 const MAX_NAME = 60;
 const MAX_STEPS_CHAT = 10;
@@ -118,7 +119,8 @@ function hotkeyStateOf(cmd, hotkeyActive) {
 // knownTools() — Set имён инструментов, которые исполнитель команд умеет запускать.
 // hotkeyActive(key) — зарегистрирована ли клавиша в системе. Без него регистрацию проверить нечем.
 // toolDefs() — описания инструментов (необязательно): без них план проверяет имена, но не аргументы.
-function commandModelTools(store, knownTools, { onChange = () => {}, hotkeyActive = null, toolDefs = null } = {}) {
+// modelCall(prompt) — один вызов модели для сборки сценария из описания словами (необязательно).
+function commandModelTools(store, knownTools, { onChange = () => {}, hotkeyActive = null, toolDefs = null, modelCall = null } = {}) {
   // Что с клавишей сценария: 'off' (клавиши нет или сценарий выключен), 'active', 'busy' или 'unknown'.
   const hotkeyState = (cmd) => hotkeyStateOf(cmd, hotkeyActive);
   const known = () => knownOf(knownTools);
@@ -286,7 +288,64 @@ function commandModelTools(store, knownTools, { onChange = () => {}, hotkeyActiv
     },
   };
 
-  return [create, list, setHotkey];
+  const build = {
+    name: 'command_build',
+    description: 'Собрать сценарий по описанию владельца словами: вернуть готовый план (имя, фразы, шаги) или уточняющие вопросы. С dryRun по умолчанию только показывает план и ничего не сохраняет и не запускает; с dryRun: false сохраняет. Инструменты — только из настоящего реестра команд, опасные запрещены.',
+    risk: 'T1',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', minLength: 5, maxLength: 2000, description: 'Что должен делать сценарий, словами владельца' },
+        dryRun: { type: 'boolean', description: 'false — сохранить собранный сценарий; по умолчанию только план' },
+      },
+      required: ['text'],
+    },
+    async run(args) {
+      const text = String(args.text || '').trim();
+      if (!text) return { ok: false, summary: 'нужно описание сценария словами', data: {} };
+      if (typeof modelCall !== 'function') return { ok: false, summary: 'сборка сценариев недоступна в этой сборке', data: {} };
+      let built;
+      try {
+        built = await buildCommandFromText({ text, modelCall, tools: known() });
+      } catch (err) {
+        return { ok: false, summary: `сборка сценария не удалась: ${err.message}`, data: {} };
+      }
+      if (!built || built.ok !== true) {
+        const questions = built && Array.isArray(built.questions) ? built.questions : [];
+        const why = built && built.error ? built.error : 'не удалось собрать сценарий';
+        return { ok: false, summary: why, data: { questions, attempts: built && built.attempts ? built.attempts : 0 } };
+      }
+      const command = built.command;
+      const view = dryRunCommand(command, { tools: known() });
+      if (args.dryRun === false) {
+        try {
+          const saved = store.save(command);
+          onChange();
+          return {
+            ok: true,
+            summary: `сценарий «${saved.name}» собран и сохранён: ${saved.phrases.join(' | ')}`,
+            data: { id: saved.id, plan: command, saved: true, attempts: built.attempts || 0 },
+          };
+        } catch (err) {
+          return { ok: false, summary: err.message, data: { plan: command, saved: false } };
+        }
+      }
+      return {
+        ok: true,
+        summary: `План «${command.name}» из ${command.steps.length} шагов готов, не сохранён и не запущен. ${view.text}`,
+        data: { plan: command, questions: built.questions || [], warnings: view.warnings || [], saved: false, attempts: built.attempts || 0 },
+      };
+    },
+    async verify(args, result) {
+      if (!result || !result.data || result.data.saved !== true) return { status: 'confirmed', evidence: 'план показан, файл команд не менялся и запуска не было' };
+      const saved = store.get(result.data.id);
+      if (!saved) return { status: 'failed', evidence: 'сценария нет в файле' };
+      return { status: 'confirmed', evidence: 'сценарий есть в файле' };
+    },
+  };
+
+  // Порядок прежних инструментов не меняем: внешние вызовы и тесты берут их по позиции.
+  return [create, list, setHotkey, build];
 }
 
 module.exports = { commandModelTools, checkPlanSteps, knownOf, defsOf };

@@ -107,7 +107,7 @@
 .imp-conflicts { color: var(--err, #e5484d); }
 
 /* Голос: громкость, скорость, выбор голоса в Настройках. */
-.voice-opts .range {
+.voice-opts .range, .orb-tune .range {
   width: clamp(160px, 30vw, 240px);
   accent-color: var(--hue);
 }
@@ -407,3 +407,13 @@
   gap: 6px;
   flex-wrap: wrap;
 }
+
+/* Подключения: тоны статуса и популярные серверы. Здесь, а не <style> из JS: CSP style-src 'self'. */
+.mcp-state[data-tone="err"]{color:var(--err);border-color:var(--err-line)}
+.mcp-state[data-tone="busy"]{color:var(--warn);border-color:var(--warn-line)}
+.mcp-tools{display:block;margin-top:2px;color:var(--text-2)}
+.mcp-error{color:var(--err)}
+.mcp-actions{display:flex;align-items:center;gap:8px}
+.mcp-popular{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin:10px 0 0;padding:0;list-style:none}
+.mcp-popular .set-row{margin:0;align-items:flex-start}
+.mcp-popular .btn{margin-left:auto;flex:none}

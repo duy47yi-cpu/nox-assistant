@@ -134,15 +134,23 @@ async function probeProcessWindow(proc, { signal } = {}) {
   return String(res.data.stdout || '').trim() === 'True';
 }
 
-// Есть ли окно браузера с заголовком, где упоминается адрес. Заголовки часто содержат только название сайта,
-// поэтому для ссылок «нет совпадения» не значит провал.
-async function probeWindowTitle(host, { signal } = {}) {
+// Окно браузера, у которого в заголовке название сайта («YouTube - Google Chrome»). Адреса в заголовке обычно нет,
+// поэтому ищем по названию сайта. procs — процессы браузера через запятую.
+const BROWSER_PROCS = ['chrome', 'msedge', 'firefox', 'brave', 'opera', 'librewolf', 'vivaldi'];
+async function probeBrowserTitle(brand, { signal, browserExe } = {}) {
+  const procs = browserExe ? [String(browserExe).replace(/^.*[\\/]/, '').replace(/\.exe$/i, '')] : BROWSER_PROCS;
   const res = await runPowerShell(
-    '(@(Get-Process | Where-Object { $_.MainWindowTitle -like ("*" + $env:JARVIS_HOST + "*") })).Count -gt 0',
-    { JARVIS_HOST: host },
+    '(@(Get-Process -Name ($env:JARVIS_PROCS -split \',\') -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like ("*" + $env:JARVIS_BRAND + "*") })).Count -gt 0',
+    { JARVIS_PROCS: procs.join(','), JARVIS_BRAND: brand },
     { signal, timeoutMs: 5000 }
   );
   return res.ok && String(res.data.stdout || '').trim() === 'True';
+}
+
+// Название сайта для поиска в заголовке: youtube.com → youtube, music.yandex.ru → yandex.
+function brandOf(host) {
+  const parts = String(host || '').toLowerCase().replace(/^www\./, '').split('.').filter(Boolean);
+  return parts.length >= 2 ? parts[parts.length - 2] : (parts[0] || '');
 }
 
 // Открыто ли окно Проводника именно с этой папкой (по пути, не по заголовку). Путь — через переменную окружения.
@@ -430,16 +438,18 @@ const urlOpen = {
       child.once('error', (err) => resolve({ ok: false, summary: err.message, data: {} }));
     });
   },
-  // Проверка: окно браузера с адресом появилось. Заголовки часто без адреса, поэтому срок короткий,
-  // а без совпадения — unknown с пояснением, не failed.
+  // Проверка: окно браузера со страницей сайта. Заголовок называет сайт, а не адрес, поэтому ищем название сайта.
+  // Без совпадения — unknown с пояснением, не failed: страница могла ещё грузиться.
   async verify(args, result, ctx = {}) {
     const host = result.data && result.data.host;
     if (!host) return { status: 'unknown', evidence: 'нет адреса для проверки' };
-    const probe = ctx.probeWindowTitle || ((h) => probeWindowTitle(h, ctx));
-    const seen = await pollUntil(() => probe(host), { timeoutMs: ctx.pollTimeoutMs || 1500, signal: ctx.signal });
-    if (seen) return { status: 'confirmed', evidence: `окно с адресом ${host} найдено` };
-    return { status: 'unknown', evidence: `окно с ${host} в заголовках не найдено: страница могла открыться без адреса в заголовке` };
+    const brand = brandOf(host);
+    if (brand.length < 3) return { status: 'unknown', evidence: `страница ${host} открыта; по заголовку окна проверить нельзя: название сайта слишком короткое` };
+    const probe = ctx.probeWindowTitle || ((b) => probeBrowserTitle(b, { signal: ctx.signal, browserExe }));
+    const seen = await pollUntil(() => probe(brand), { timeoutMs: ctx.pollTimeoutMs || 3000, signal: ctx.signal });
+    if (seen) return { status: 'confirmed', evidence: `окно браузера со страницей ${host} найдено по заголовку («${brand}»)` };
+    return { status: 'unknown', evidence: `браузер открыт, но в заголовках его окон нет «${brand}»: страница ещё грузится или сайт назван иначе` };
   },
 };
 
-module.exports = { systemTools: [volumeSet, appOpen, shellRun, urlOpen], runPowerShell, probeProcess, probeProcessWindow, pollUntil, setBrowserExe, findBrowserExe, setAppResolver, setAppLaunchHook, parseOpenOutput, windowMatches, MAX_ENCODED };
+module.exports = { systemTools: [volumeSet, appOpen, shellRun, urlOpen], runPowerShell, probeProcess, probeProcessWindow, probeBrowserTitle, brandOf, pollUntil, setBrowserExe, findBrowserExe, setAppResolver, setAppLaunchHook, parseOpenOutput, windowMatches, MAX_ENCODED };

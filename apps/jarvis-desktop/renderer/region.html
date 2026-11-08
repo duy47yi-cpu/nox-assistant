@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>Обведите область</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body { background: rgba(0, 0, 0, .28); cursor: crosshair; user-select: none; font: 14px/1.4 "Segoe UI", sans-serif; }
+    .hint { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); padding: 8px 14px; border-radius: 999px;
+      background: rgba(20, 20, 24, .88); color: #fff; pointer-events: none; }
+    .box { position: fixed; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); background: rgba(255, 255, 255, .06); display: none; pointer-events: none; }
+  </style>
+</head>
+<!-- Выделение области для «Объясни, что я обвёл» (main.js, regionOverlay). Итог уходит заголовком страницы. -->
+<body>
+  <div class="hint" role="status">Обведите область мышью · Esc — отмена</div>
+  <div class="box" id="box"></div>
+  <script src="region.js"></script>
+</body>
+</html>

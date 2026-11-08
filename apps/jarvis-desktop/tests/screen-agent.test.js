@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { ScreenAgent, screenTask, MAX_SCREEN_STEPS, UNSURE_TEXT } = require('../src/screen/agent');
+const { ScreenAgent, screenTask, MAX_SCREEN_STEPS, UNSURE_TEXT, isDangerousStep } = require('../src/screen/agent');
 const { ToolRegistry } = require('../src/tools/registry');
 const { Journal } = require('../src/journal/journal');
 const { ApprovalBroker } = require('../src/policy/approvals');
@@ -28,7 +28,7 @@ function fakeTools(verdict = 'confirmed') {
   return { reg, look, runs, verifies };
 }
 
-function setup(t, { brain, verdict, mode = 'full', stop = null } = {}) {
+function setup(t, { brain, verdict, mode = 'full', stop = null, maxSteps } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-screen-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const { reg, look, runs, verifies } = fakeTools(verdict);
@@ -36,10 +36,19 @@ function setup(t, { brain, verdict, mode = 'full', stop = null } = {}) {
   const approvals = new ApprovalBroker();
   const agent = new ScreenAgent({
     brain, tools: reg, look, policy: modes, approvals, journal: new Journal(path.join(dir, 'journal.jsonl')),
-    emit: (e) => events.push(e), mode, workspace: dir, stop,
+    emit: (e) => events.push(e), mode, workspace: dir, stop, ...(maxSteps ? { maxSteps } : {}),
   });
   const journal = () => fs.readFileSync(path.join(dir, 'journal.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   return { agent, runs, verifies, events, approvals, journal };
+}
+
+// Ждём событие, не занимая поток: цикл агента живёт на setImmediate-микрозадачах.
+async function waitFor(check, tries = 1000) {
+  for (let i = 0; i < tries; i += 1) {
+    if (check()) return true;
+    await new Promise((r) => setImmediate(r));
+  }
+  return false;
 }
 
 // Мозг: первый ответ — снимок, дальше вызовы по функции step(номер).
@@ -62,15 +71,109 @@ test('видны только инструменты экрана', (t) => {
   assert.deepEqual(names, ['app_open', 'screen_look', 'ui_click', 'ui_elements', 'ui_focus', 'ui_keys', 'ui_type']);
 });
 
-test('лимит 20 шагов', async (t) => {
+test('лимит 40 шагов', async (t) => {
   const brain = brainOf((n) => ({ toolCalls: [n === 1 ? call('screen_look') : call('ui_keys', { keys: `k${n}` })] }));
   const { agent, runs, journal } = setup(t, { brain });
   const res = await agent.run('жми клавиши');
   assert.equal(res.outcome, 'limit');
-  assert.equal(MAX_SCREEN_STEPS, 20);
-  // Действий и снимков после них: всего вызовов модели-инструментов не больше 20.
-  assert.equal(journal().length, 20);
-  assert.ok(runs.filter((r) => r.name === 'ui_keys').length <= 19);
+  assert.equal(MAX_SCREEN_STEPS, 40);
+  // Действий и снимков после них: всего вызовов модели-инструментов не больше 40.
+  assert.equal(journal().length, 40);
+  assert.ok(runs.filter((r) => r.name === 'ui_keys').length <= 39);
+});
+
+test('предел шагов задаётся в конструкторе (тесты берут меньше)', async (t) => {
+  const brain = brainOf((n) => ({ toolCalls: [n === 1 ? call('screen_look') : call('ui_keys', { keys: `k${n}` })] }));
+  const { agent, runs, journal } = setup(t, { brain, maxSteps: 5 });
+  const res = await agent.run('жми клавиши');
+  assert.equal(res.outcome, 'limit');
+  assert.equal(journal().length, 5);
+  assert.equal(runs.filter((r) => r.name === 'ui_keys').length, 4);
+});
+
+test('признаки опасного шага: отправка, оплата, удаление, установка и Enter после ввода', () => {
+  for (const label of ['Отправить', 'Отправить сообщение', 'Send', 'Submit', 'Оплатить', 'Удалить', 'Установить', 'Купить', 'Оформить заказ']) {
+    assert.equal(isDangerousStep('ui_click', { name: label }), true, `«${label}» — опасный шаг`);
+  }
+  for (const label of ['Файл', 'Сохранить', 'Отмена', 'Оформить', 'Заказать звонок', 'Поиск', 'Правка']) {
+    assert.equal(isDangerousStep('ui_click', { name: label }), false, `«${label}» — безопасный шаг`);
+  }
+  // Enter опасен только после ввода текста в этом же ходу.
+  assert.equal(isDangerousStep('ui_keys', { keys: 'enter' }), false);
+  assert.equal(isDangerousStep('ui_keys', { keys: 'tab tab' }, { typed: true }), false);
+  assert.equal(isDangerousStep('ui_keys', { keys: 'enter' }, { typed: true }), true);
+  assert.equal(isDangerousStep('ui_keys', { keys: 'ctrl+s' }, { typed: true }), false);
+});
+
+test('опасный клик в полном доступе спрашивает и выполняется после согласия', async (t) => {
+  const brain = brainOf((n) => (n === 1 ? { toolCalls: [call('screen_look')] }
+    : n === 2 ? { toolCalls: [call('ui_click', { window: 'Telegram', name: 'Отправить' }, 'send-ok')] } : { content: 'Сообщение отправлено.' }));
+  const { agent, runs, events, approvals, journal } = setup(t, { brain, mode: 'full' });
+  const turn = agent.run('отправь сообщение');
+  assert.ok(await waitFor(() => events.some((e) => e.type === 'approval_request' && e.id === 'send-ok')), 'владельца спросили');
+  const request = events.find((e) => e.type === 'approval_request' && e.id === 'send-ok');
+  // «На сессию» для отправки не предлагаем: каждое действие — отдельное согласие.
+  assert.equal(request.allowSession, false);
+  approvals.respond('send-ok', 'once');
+  const res = await turn;
+  assert.equal(res.outcome, 'answer');
+  assert.equal(runs.filter((r) => r.name === 'ui_click').length, 1);
+  assert.equal(journal().find((r) => r.tool === 'ui_click').decision, 'once');
+});
+
+test('отказ на опасном клике: шаг не выполнен, ход needs_human, повтора нет', async (t) => {
+  const brain = brainOf((n) => (n === 1 ? { toolCalls: [call('screen_look')] }
+    : { toolCalls: [call('ui_click', { window: 'Telegram', name: 'Отправить' }, `send-${n}`)] }));
+  const { agent, runs, events, approvals, journal } = setup(t, { brain, mode: 'full' });
+  const turn = agent.run('отправь сообщение');
+  assert.ok(await waitFor(() => events.some((e) => e.type === 'approval_request' && e.name === 'ui_click')), 'владельца спросили');
+  const request = events.find((e) => e.type === 'approval_request' && e.name === 'ui_click');
+  approvals.respond(request.id, 'reject');
+  const res = await turn;
+  assert.equal(res.outcome, 'needs_human');
+  assert.equal(runs.filter((r) => r.name === 'ui_click').length, 0, 'шаг не выполнен');
+  assert.equal(brain.calls, 2, 'после отказа модель больше не зовут: шаг не повторяется');
+  assert.equal(journal().find((r) => r.tool === 'ui_click').decision, 'reject');
+  assert.ok(events.some((e) => e.type === 'text' && /не подтвердили/.test(e.delta)));
+});
+
+test('безопасный клик не спрашивает', async (t) => {
+  const brain = brainOf((n) => (n === 1 ? { toolCalls: [call('screen_look')] }
+    : n === 2 ? { toolCalls: [call('ui_click', { window: 'Блокнот', name: 'Файл' }, 'file')] } : { content: 'Меню открыто.' }));
+  const { agent, runs, events, journal } = setup(t, { brain, mode: 'full' });
+  const res = await agent.run('открой меню Файл');
+  assert.equal(res.outcome, 'answer');
+  assert.equal(events.some((e) => e.type === 'approval_request'), false);
+  assert.equal(runs.filter((r) => r.name === 'ui_click').length, 1);
+  assert.equal(journal().find((r) => r.tool === 'ui_click').decision, 'allow');
+});
+
+test('Enter после ввода текста спрашивает и выполняется после согласия', async (t) => {
+  const brain = brainOf((n) => (n === 1 ? { toolCalls: [call('screen_look')] }
+    : n === 2 ? { toolCalls: [call('ui_type', { window: 'Telegram', name: 'Сообщение', text: 'привет' })] }
+      : n === 3 ? { toolCalls: [call('ui_keys', { window: 'Telegram', keys: 'enter' }, 'enter-ok')] }
+        : { content: 'Сообщение отправлено.' }));
+  const { agent, runs, events, approvals, journal } = setup(t, { brain, mode: 'full' });
+  const turn = agent.run('напиши и отправь');
+  assert.ok(await waitFor(() => events.some((e) => e.type === 'approval_request' && e.id === 'enter-ok')), 'владельца спросили перед Enter');
+  approvals.respond('enter-ok', 'once');
+  const res = await turn;
+  assert.equal(res.outcome, 'answer');
+  assert.deepEqual(
+    runs.filter((r) => r.name === 'ui_type' || r.name === 'ui_keys').map((r) => r.name),
+    ['ui_type', 'ui_keys']
+  );
+  assert.equal(journal().find((r) => r.tool === 'ui_keys').decision, 'once');
+});
+
+test('Enter без ввода текста не спрашивает', async (t) => {
+  const brain = brainOf((n) => (n === 1 ? { toolCalls: [call('screen_look')] }
+    : n === 2 ? { toolCalls: [call('ui_keys', { window: 'Блокнот', keys: 'enter' }, 'plain-enter')] } : { content: 'Нажал Enter.' }));
+  const { agent, runs, events } = setup(t, { brain, mode: 'full' });
+  const res = await agent.run('нажми enter');
+  assert.equal(res.outcome, 'answer');
+  assert.equal(events.some((e) => e.type === 'approval_request'), false);
+  assert.equal(runs.filter((r) => r.name === 'ui_keys').length, 1);
 });
 
 test('один шаг за ответ модели и снимок после действия', async (t) => {

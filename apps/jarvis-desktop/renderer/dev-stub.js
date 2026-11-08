@@ -623,6 +623,7 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       history.length = 0;
       return { ok: true };
     },
+    pickRegion: async () => ({ ok: true, label: 'область 400×300 в середине экрана' }),
     pickFiles: async () => {
       await sleep(200);
       pickRound++;
@@ -671,6 +672,19 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       }
     },
 
+    installPack: async (id) => {
+      const packs = [{ id: 'montage', title: 'Монтаж', description: 'Нажатия в активном окне редактора.', total: 2 }];
+      if (id == null) return { ok: true, packs };
+      if (!packs.some((p) => p.id === id)) return { ok: false, error: 'пак не найден' };
+      const have = new Set(commands.map((c) => c.name));
+      let added = 0;
+      for (const name of ['Монтаж: сохранить', 'Монтаж: отменить']) {
+        if (have.has(name)) continue;
+        commands.push({ id: 'pack-' + added + Date.now(), name, phrases: [name.toLowerCase()], steps: [{ tool: 'ui_keys', args: { keys: 'ctrl+s' } }], enabled: true });
+        added++;
+      }
+      return { ok: true, added };
+    },
     listCommands: async () => { await failCmd(); return commands.map((c) => JSON.parse(JSON.stringify(c))); },
     saveCommand: async (cmd) => {
       await failCmd();
@@ -720,7 +734,7 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
   };
 
   if (params.get('oldcore') === '1') {
-    for (const k of ['listCommands', 'saveCommand', 'deleteCommand', 'runCommand', 'toolCatalog', 'openMini',
+    for (const k of ['installPack', 'listCommands', 'saveCommand', 'deleteCommand', 'runCommand', 'toolCatalog', 'openMini',
       'chatHistory', 'clearChat', 'chatList', 'chatNew', 'chatSelect', 'chatClose', 'pickFiles', 'openWorkspace', 'addFolder', 'removeFolder', 'setModelTier', 'libraryList', 'libraryRun']) delete api[k];
   }
 

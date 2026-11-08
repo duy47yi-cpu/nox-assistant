@@ -29,6 +29,7 @@ apps/nox-server/*.db-*
 .workbuddy-ai/
 .zcode/
 .claude/
+.agents/
 .megapowers/
 handoff/
 .tmp/

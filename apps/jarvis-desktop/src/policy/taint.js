@@ -6,7 +6,7 @@
 const TAINT_SOURCES = new Set([
   'web_search', 'web_wiki', 'web_fetch', 'web_research', 'agents_parallel',
   'browser_open', 'browser_read',
-  'screen_look', 'desktop_observe', 'ui_elements', 'image_read_text', 'image_look',
+  'screen_look', 'screen_region_look', 'desktop_observe', 'ui_elements', 'image_read_text', 'image_look',
   'workspace_read', 'workspace_search', 'document_read', 'code_read', 'clipboard_get',
   'project_brief', 'project_diagnostics', 'mail_unread',
 ]);
@@ -28,7 +28,7 @@ const HAND_ACTIONS = new Set([
 // Снимки собственного экрана — тоже недоверенный текст для исходящих действий, но для рук
 // пометку «чужой текст» не ставят: иначе каждое нажатие после обязательного desktop_observe
 // спрашивало бы и руки встали бы. Руки спрашиваются только после текстовых источников ниже.
-const SCENE_SOURCES = new Set(['screen_look', 'desktop_observe', 'ui_elements']);
+const SCENE_SOURCES = new Set(['screen_look', 'screen_region_look', 'desktop_observe', 'ui_elements']);
 
 // source — метка инструмента: mcp-инструменты приходят с чужого сервера, их ответы тоже недоверенные.
 function isTaintSource(name, source) {

@@ -13,18 +13,21 @@
   const view = document.querySelector('[data-view="mcp"]');
   const POLL_MS = 3000;
 
-  // Тоны статуса: зелёный — подключён, красный — ошибка. Остальные состояния нейтральные.
-  if (document.head) {
-    const style = document.createElement('style');
-    style.textContent = [
-      '.mcp-state[data-tone="err"]{color:var(--err);border-color:var(--err-line)}',
-      '.mcp-state[data-tone="busy"]{color:var(--warn);border-color:var(--warn-line)}',
-      '.mcp-tools{display:block;margin-top:2px;color:var(--text-2)}',
-      '.mcp-error{color:var(--err)}',
-      '.mcp-actions{display:flex;align-items:center;gap:8px}',
-    ].join('\n');
-    document.head.append(style);
-  }
+  // ── начало списка популярных
+  // Короткая безопасная часть каталога src/mcp/catalog.js. Окно не имеет доступа к ядру
+  // (nodeIntegration выключен), поэтому данные записаны здесь; тест mcp-catalog сверяет id,
+  // команду и аргументы с каталогом. Все записи без ключей: секреты в окно не подставляются.
+  const POPULAR = [
+    { id: 'filesystem', title: 'Файлы', hint: 'Чтение и запись файлов в разрешённой папке', target: 'npx.cmd', args: '-y @modelcontextprotocol/server-filesystem .' },
+    { id: 'memory', title: 'Память', hint: 'Долгая память в виде графа знаний', target: 'npx.cmd', args: '-y @modelcontextprotocol/server-memory' },
+    { id: 'sequential-thinking', title: 'Рассуждения', hint: 'Пошаговые рассуждения со структурой мыслей', target: 'npx.cmd', args: '-y @modelcontextprotocol/server-sequential-thinking' },
+    { id: 'playwright', title: 'Браузер Playwright', hint: 'Управление настоящим браузером и снимки экрана', target: 'npx.cmd', args: '-y @playwright/mcp@latest' },
+    { id: 'chrome-devtools', title: 'Chrome DevTools', hint: 'Сеть, консоль и отладка сайта в Chrome', target: 'npx.cmd', args: '-y chrome-devtools-mcp@latest' },
+    { id: 'context7', title: 'Context7', hint: 'Свежая документация библиотек для модели', target: 'npx.cmd', args: '-y @upstash/context7-mcp' },
+    { id: 'desktop-commander', title: 'Командная строка', hint: 'Терминал и файлы на компьютере', target: 'npx.cmd', args: '-y @wonderwhy-er/desktop-commander@latest' },
+  ];
+  // ── конец списка популярных
+
 
   const el = (tag, attrs = {}, ...kids) => {
     const node = document.createElement(tag);
@@ -141,6 +144,50 @@
     }));
   }
 
+  // Раздел «Популярные»: запись каталога добавляется тем же mcp:add, что и форма.
+  // Если нужной разметки нет (проверка без index.html), раздел просто не строится.
+  let popularMounted = false;
+  function mountPopular() {
+    if (popularMounted) return;
+    const page = document.getElementById('mcpPage');
+    if (!page || typeof page.append !== 'function') return;
+    popularMounted = true;
+    const section = el('section', { class: 'set-section', 'aria-labelledby': 'mcpPopularTitle' });
+    const title = el('h2', { class: 'set-title', id: 'mcpPopularTitle', text: 'Популярные' });
+    const lead = el('p', { class: 'set-hint', text: 'Готовые внешние сервисы: нажмите «Добавить», сервис сразу подключится. Ключи доступа сюда не подставляются, поэтому здесь только сервисы без ключей; остальные добавляются вручную ниже.' });
+    const grid = el('ul', { class: 'mcp-popular' });
+    grid.append(...POPULAR.map((item) => {
+      const text = el('span', { class: 'set-text' },
+        el('span', { class: 'set-name', text: item.title }),
+        el('span', { class: 'set-hint', text: item.hint }));
+      const add = el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Добавить' });
+      add.title = `Добавить сервис «${item.title}»`;
+      add.addEventListener('click', async () => {
+        const api = bridge();
+        if (!api || !api.mcpAdd) return;
+        add.disabled = true;
+        try {
+          const r = await api.mcpAdd(item.id, item.target, item.args);
+          if (!r || !r.ok) { toast((r && r.error) || 'Не получилось добавить', 'error'); return; }
+          if (r.servers) paint(r.servers);
+          if (r.error) toast(`Сервис сохранён, но не подключился: ${r.error}`, 'error');
+          else toast(`Сервис «${item.title}» подключён. Его действия спрашиваются, пока вы не разрешите их в настройках`, 'ok');
+        } finally {
+          add.disabled = false;
+        }
+      });
+      return el('li', { class: 'set-row mcp-popular-row' }, text, add);
+    }));
+    section.append(title, lead, grid);
+    // Ставим перед формой ручного добавления; если разметка другая — в конец страницы.
+    const formSection = typeof form.closest === 'function' ? form.closest('.set-section') : null;
+    if (formSection && formSection.parentNode && typeof formSection.parentNode.insertBefore === 'function') {
+      formSection.parentNode.insertBefore(section, formSection);
+    } else {
+      page.append(section);
+    }
+  }
+
   async function load() {
     const api = bridge();
     if (!api) return;
@@ -189,5 +236,6 @@
     polling(active);
     if (active) load();
   });
+  mountPopular();
   load();
 })();

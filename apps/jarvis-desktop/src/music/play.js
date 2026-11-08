@@ -6,6 +6,7 @@ const SEARCH_URL = 'https://www.youtube.com/results?search_query=';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const FETCH_TIMEOUT_MS = 4000;
 const VIDEO_RE = /"videoRenderer":\{"videoId":"([A-Za-z0-9_-]{11})"/;
+const VIDEO_RE_ALL = /"videoRenderer":\{"videoId":"([A-Za-z0-9_-]{11})"/g;
 const TITLE_RE = /"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/;
 // Хвост «40 seconds» и «4 minutes, 48 seconds» — на случай, если он попал в название.
 const DURATION_RE = /\s*\d+ (?:minutes?|seconds?)(?:, \d+ seconds?)?\.?\s*$/i;
@@ -18,26 +19,36 @@ function cleanTitle(raw) {
   return t || 'видео';
 }
 
-// Первое видео из HTML страницы результатов. null, если его нет.
-function pickFromHtml(html) {
+// Видео из HTML страницы результатов, по порядку выдачи, не больше limit.
+function pickManyFromHtml(html, limit = 5) {
   const text = String(html || '');
-  const m = VIDEO_RE.exec(text);
-  if (!m) return null;
-  const near = text.slice(m.index, m.index + 6000);
-  const t = TITLE_RE.exec(near);
-  let title = '';
-  if (t) {
-    try {
-      title = JSON.parse(`"${t[1]}"`);
-    } catch {
-      title = t[1];
+  const out = [];
+  const re = new RegExp(VIDEO_RE_ALL.source, 'g');
+  let m;
+  while (out.length < limit && (m = re.exec(text)) !== null) {
+    if (out.some((v) => v.id === m[1])) continue;
+    const near = text.slice(m.index, m.index + 6000);
+    const t = TITLE_RE.exec(near);
+    let title = '';
+    if (t) {
+      try {
+        title = JSON.parse(`"${t[1]}"`);
+      } catch {
+        title = t[1];
+      }
     }
+    out.push({ id: m[1], title: cleanTitle(title), url: `https://www.youtube.com/watch?v=${m[1]}` });
   }
-  return { id: m[1], title: cleanTitle(title), url: `https://www.youtube.com/watch?v=${m[1]}` };
+  return out;
 }
 
-// Ищет первое видео по запросу. Любая ошибка сети или таймаут — null: тогда откроется страница поиска.
-async function findFirstYoutubeVideo(query, { fetchImpl = fetch, timeoutMs = FETCH_TIMEOUT_MS } = {}) {
+// Первое видео из HTML страницы результатов. null, если его нет.
+function pickFromHtml(html) {
+  return pickManyFromHtml(html, 1)[0] || null;
+}
+
+// HTML страницы результатов по запросу или null при ошибке сети и таймауте.
+async function fetchResultsHtml(query, { fetchImpl = fetch, timeoutMs = FETCH_TIMEOUT_MS } = {}) {
   const q = String(query || '').trim();
   if (!q) return null;
   const controller = new AbortController();
@@ -48,12 +59,24 @@ async function findFirstYoutubeVideo(query, { fetchImpl = fetch, timeoutMs = FET
       signal: controller.signal,
     });
     if (!res.ok) return null;
-    return pickFromHtml(await res.text());
+    return await res.text();
   } catch {
     return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Ищет первое видео по запросу. Любая ошибка сети или таймаут — null: тогда откроется страница поиска.
+async function findFirstYoutubeVideo(query, opts = {}) {
+  const html = await fetchResultsHtml(query, opts);
+  return html === null ? null : pickFromHtml(html);
+}
+
+// Несколько видео по запросу (по порядку выдачи). Ошибка или пусто — []: тогда откроется страница поиска.
+async function findYoutubeCandidates(query, { limit = 5, ...opts } = {}) {
+  const html = await fetchResultsHtml(query, opts);
+  return html === null ? [] : pickManyFromHtml(html, limit);
 }
 
 // Ссылка на видео с нужной секунды: YouTube понимает параметр t=16s.
@@ -64,4 +87,4 @@ function atSecond(url, seconds) {
   return u.href;
 }
 
-module.exports = { findFirstYoutubeVideo, pickFromHtml, cleanTitle, atSecond };
+module.exports = { findFirstYoutubeVideo, findYoutubeCandidates, pickFromHtml, pickManyFromHtml, cleanTitle, atSecond };

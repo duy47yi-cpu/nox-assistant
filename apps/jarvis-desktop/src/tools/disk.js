@@ -10,6 +10,95 @@ const { runPowerShell } = require('./system');
 const TIMEOUT_MS = 15000;
 const MAX_FILES = 10;
 
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+
+// Категории для итога «по категориям»: только группы расширений, без догадок о содержимом.
+const CATEGORY_BY_EXT = new Map([
+  ['.exe', 'installers'], ['.msi', 'installers'], ['.msix', 'installers'], ['.appx', 'installers'],
+  ['.iso', 'installers'], ['.dmg', 'installers'], ['.pkg', 'installers'],
+  ['.zip', 'archives'], ['.rar', 'archives'], ['.7z', 'archives'], ['.tar', 'archives'],
+  ['.gz', 'archives'], ['.bz2', 'archives'], ['.xz', 'archives'],
+  ['.png', 'images'], ['.jpg', 'images'], ['.jpeg', 'images'], ['.gif', 'images'],
+  ['.webp', 'images'], ['.bmp', 'images'], ['.svg', 'images'], ['.heic', 'images'], ['.tiff', 'images'],
+  ['.mp4', 'video'], ['.mkv', 'video'], ['.avi', 'video'], ['.mov', 'video'],
+  ['.webm', 'video'], ['.wmv', 'video'], ['.m4v', 'video'],
+  ['.mp3', 'audio'], ['.wav', 'audio'], ['.flac', 'audio'], ['.aac', 'audio'], ['.ogg', 'audio'], ['.m4a', 'audio'],
+  ['.pdf', 'documents'], ['.doc', 'documents'], ['.docx', 'documents'], ['.xls', 'documents'],
+  ['.xlsx', 'documents'], ['.ppt', 'documents'], ['.pptx', 'documents'], ['.txt', 'documents'],
+  ['.csv', 'documents'], ['.rtf', 'documents'], ['.md', 'documents'], ['.epub', 'documents'],
+]);
+
+const CATEGORY_TITLES = {
+  installers: 'установщики',
+  archives: 'архивы',
+  images: 'картинки',
+  video: 'видео',
+  audio: 'звук',
+  documents: 'документы',
+  other: 'другое',
+};
+
+// Байты в понятный текст. Округление одно: десятые доли для МБ и ГБ.
+function humanBytes(n) {
+  const size = Number(n);
+  if (!Number.isFinite(size) || size <= 0) return '0 Б';
+  if (size >= GB) return `${(size / GB).toFixed(1)} ГБ`;
+  if (size >= MB) return `${(size / MB).toFixed(1)} МБ`;
+  if (size >= 1024) return `${Math.round(size / 1024)} КБ`;
+  return `${Math.round(size)} Б`;
+}
+
+function categoryOf(filePath) {
+  const ext = path.extname(String(filePath || '')).toLowerCase();
+  return CATEGORY_BY_EXT.get(ext) || 'other';
+}
+
+// Чистое суммирование ответа disk_cleanup_suggest: [{ path, sizeMB }] → байты, категории, крупные сверху.
+// Ничего не читает и не удаляет. Мусорные входы (не массив, null, пустой путь, NaN/отрицательный размер)
+// не ломают счёт: неизвестный размер считается нулём, а не выдуманной цифрой.
+function summarizeCleanup(files) {
+  const items = Array.isArray(files) ? files : [];
+  const clean = [];
+  let totalBytes = 0;
+  for (const raw of items) {
+    if (!raw || typeof raw !== 'object') continue;
+    const filePath = typeof raw.path === 'string' ? raw.path.trim() : '';
+    if (!filePath) continue;
+    const sizeMB = Number(raw.sizeMB);
+    const sizeBytes = Number.isFinite(sizeMB) && sizeMB > 0 ? Math.round(sizeMB * MB) : 0;
+    const category = categoryOf(filePath);
+    totalBytes += sizeBytes;
+    clean.push({
+      path: filePath,
+      sizeMB: sizeBytes / MB,
+      sizeBytes,
+      category,
+      categoryTitle: CATEGORY_TITLES[category],
+    });
+  }
+  clean.sort((a, b) => b.sizeBytes - a.sizeBytes || a.path.localeCompare(b.path, 'ru'));
+  const sums = new Map();
+  for (const file of clean) {
+    const group = sums.get(file.category) || { key: file.category, title: file.categoryTitle, count: 0, bytes: 0 };
+    group.count += 1;
+    group.bytes += file.sizeBytes;
+    sums.set(file.category, group);
+  }
+  const categories = [...sums.values()]
+    .sort((a, b) => b.bytes - a.bytes || a.key.localeCompare(b.key))
+    .map((group) => ({ ...group, text: humanBytes(group.bytes) }));
+  return {
+    count: clean.length,
+    totalBytes,
+    totalMB: totalBytes / MB,
+    totalGB: totalBytes / GB,
+    totalText: humanBytes(totalBytes),
+    categories,
+    files: clean,
+  };
+}
+
 // Папка программы: здесь main.js и src/. Смотреть её большие файлы нельзя ни в каком режиме.
 const APP_DIR = path.resolve(__dirname, '..', '..');
 const PROJECT_ROOT = path.resolve(APP_DIR, '..', '..');
@@ -210,10 +299,20 @@ function diskCleanupSuggest(options = {}) {
       const top = visible.slice(0, MAX_FILES);
       const list = top.map((f) => `${f.path} (${f.sizeMB} МБ)`).join('; ');
       const note = hidden ? `; скрыто файлов вне разрешённых папок: ${hidden}` : '';
+      // Итог для карточки: реальные байты и категории, без удаления и без догадок.
+      const totals = summarizeCleanup(top);
       return {
         ok: true,
         summary: `найдено ${top.length} больших файлов${note}`,
-        data: { folder: root, files: top, list, hidden },
+        data: {
+          folder: root,
+          files: top,
+          list,
+          hidden,
+          totalBytes: totals.totalBytes,
+          totalText: totals.totalText,
+          categories: totals.categories,
+        },
       };
     },
   };
@@ -223,4 +322,16 @@ function diskTools(options = {}) {
   return [diskFreeSpace, diskCleanupSuggest(options)];
 }
 
-module.exports = { diskTools, parseDrives, cleanupFolder, fileAllowed, LARGE_FILES_SCRIPT };
+module.exports = {
+  diskTools,
+  parseDrives,
+  cleanupFolder,
+  fileAllowed,
+  summarizeCleanup,
+  humanBytes,
+  categoryOf,
+  LARGE_FILES_SCRIPT,
+  CATEGORY_TITLES,
+  MB,
+  GB,
+};
