@@ -58,6 +58,7 @@
     disabled: ['выключен', 'idle'],
     idle: ['не подключён', 'idle'],
     error: ['ошибка', 'err'],
+    drift: ['набор действий изменился', 'warn'],
     legacy: ['подключится при запуске', 'idle'],
   };
 
@@ -105,6 +106,18 @@
       const capabilities = capabilitiesText(s);
       if (capabilities) text.append(el('span', { class: 'mcp-tools', text: capabilities }));
       if (status === 'error' && s.error) text.append(el('span', { class: 'mcp-tools mcp-error', role: 'status', text: String(s.error).slice(0, 400) }));
+      // Подмена набора действий: показываем, что именно изменилось, до подтверждения владельцем.
+      if (status === 'drift') {
+        const d = s.drift && typeof s.drift === 'object' ? s.drift : {};
+        const parts = [];
+        if (Array.isArray(d.added) && d.added.length) parts.push(`добавлены: ${d.added.slice(0, 4).join(', ')}`);
+        if (Array.isArray(d.removed) && d.removed.length) parts.push(`убраны: ${d.removed.slice(0, 4).join(', ')}`);
+        if (Array.isArray(d.changed) && d.changed.length) parts.push(`изменены: ${d.changed.slice(0, 4).map((c) => c && c.name).filter(Boolean).join(', ')}`);
+        const warning = parts.length
+          ? `Набор действий изменился — ${parts.join('; ')}. Пока не подтвердите, действия сервиса недоступны.`
+          : 'Набор действий сервиса изменился. Пока не подтвердите, действия недоступны.';
+        text.append(el('span', { class: 'mcp-tools mcp-error', role: 'status', text: warning }));
+      }
       const state = el('span', { class: 'mcp-state', 'data-tone': tone, text: word });
       const actions = el('span', { class: 'mcp-actions' });
       // Ошибку можно повторить, не удаляя сервис: включение заново переподключает его.
@@ -118,6 +131,20 @@
             if (r && r.servers) paint(r.servers);
             if (!r || !r.ok) toast((r && r.error) || 'Не получилось переподключить', 'error');
             else if (r.error) toast(`Не подключилось: ${r.error}`, 'error');
+          },
+        }));
+      }
+      // Новый набор действий после обновления сервиса: подтверждение владельцем возвращает действия.
+      if (status === 'drift' && api && api.mcpApprove) {
+        actions.append(el('button', {
+          class: 'btn btn-primary btn-sm',
+          type: 'button',
+          text: 'Подтвердить изменения',
+          onclick: async () => {
+            const r = await api.mcpApprove(s.name);
+            if (r && r.servers) paint(r.servers);
+            if (!r || !r.ok) toast((r && r.error) || 'Не получилось подтвердить', 'error');
+            else toast('Изменения подтверждены: действия сервиса снова доступны', 'ok');
           },
         }));
       }

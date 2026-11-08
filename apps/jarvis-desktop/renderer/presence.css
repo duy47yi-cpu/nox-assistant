@@ -19,7 +19,7 @@ html[data-glass="l"] {
   --glass-panel: blur(var(--glass-blur, 28px)) saturate(170%);
   --glass-dialog: blur(var(--glass-blur, 28px)) saturate(170%); }
 /* Сплошной фон: без градиента темы, ровный цвет (look.bg = solid). */
-html[data-bg="solid"] .app, html[data-bg="solid"] .account-gate { background: var(--bg); }
+html[data-bg="solid"] .app, html[data-bg="solid"] .account-gate { background: var(--win-bg, var(--bg)); }
 
 /* Свой цвет акцента (theme-boot.js ставит --user-hue и --user-ink на корень). */
 html[data-accent], html[data-accent] body { --hue: var(--user-hue); --accent-ink: var(--user-ink); }
@@ -33,11 +33,20 @@ html[data-accent], html[data-accent] body { --hue: var(--user-hue); --accent-ink
 .accent-opt[aria-checked="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text); }
 
 /* ── Каркас (свет за окном убран — плоский фон как у Luxify) ─────── */
-.app { position: relative; overflow: clip; }
+.app { position: relative; overflow: clip; border-radius: var(--win-radius, 0px); }
 .app::before, .app::after { display: none !important; }
 /* Материал: очень слабое бумажное зерно поверх цвета темы (около 4 %), без пятен света. Сплошной фон его убирает. */
 :root { --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .45 0 0 0 0 .38 0 0 0 .1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
-.app { background: var(--grain), var(--bg-image), var(--bg); background-size: 180px 180px, auto, auto; }
+/* Прозрачность окна: --win-alpha (0..0.6) ставит theme-boot.js. 0 — как сейчас (фон непрозрачный);
+ * больше — цвет темы в фоне окна уходит в прозрачность через color-mix. Текст и панели не меняются. */
+:root { --win-bg: color-mix(in srgb, var(--bg) calc((1 - var(--win-alpha, 0)) * 100%), transparent); }
+.app { background: var(--grain), var(--bg-image), var(--win-bg); background-size: 180px 180px, auto, auto; }
+/* Прозрачные углы и фон показывает подложка окна, а не сплошной body. */
+html[data-win-alpha] { background: transparent; }
+html[data-win-alpha] body { background: transparent; }
+/* Радиус без прозрачности: body тоже прозрачный, иначе скруглённые углы закрашены. */
+html[data-win-radius] { background: transparent; }
+html[data-win-radius] body { background: transparent; }
 .rail, .main { position: relative; z-index: 1; }
 
 /* Сцена: только шар, слово состояния и подсказки. Доска, «сегодня», «требуют внимания», миссии и виджеты не показываются:

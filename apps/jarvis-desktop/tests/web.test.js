@@ -539,3 +539,53 @@ test('web_check_claims без собранных источников — ok:fal
   assert.deepEqual(res.data, {});
 });
 
+test('web_fetch и url_open: отклоняют URL с учётными данными (username/password) и обманными префиксами IPv6/IPv4', async () => {
+  const { systemTools } = require('../src/tools/system');
+  const urlOpen = systemTools.find((t) => t.name === 'url_open');
+  const { fetchImpl, calls } = recordingFetch(() => response({ body: '<p>ok</p>' }));
+  const fetchTool = toolByName(webTools({ fetchImpl, lookup: publicLookup }), 'web_fetch');
+
+  // Подмена домена через userinfo (Ghosthand UrlLauncherValidator)
+  for (const spoofed of ['https://google.com@evil.example/login', 'https://user:secret@example.com/']) {
+    const fRes = await fetchTool.run({ url: spoofed });
+    assert.equal(fRes.ok, false, `web_fetch должен блокировать ${spoofed}`);
+    assert.equal(fRes.summary, 'адрес не разрешён');
+
+    const uRes = await urlOpen.run({ url: spoofed });
+    assert.equal(uRes.ok, false, `url_open должен блокировать ${spoofed}`);
+    assert.match(uRes.summary, /учётными данными|не разрешён/);
+  }
+  assert.equal(calls.length, 0);
+
+  // Расширенные IPv6/IPv4 диапазоны SSRF (Microsoft UFO url_security.py)
+  const blockedResolved = [
+    ['0:0:0:0:0:0:0:1', 6],                      // полная форма ::1
+    ['0:0:0:0:0:0:0:0', 6],                      // полная форма ::
+    ['::ffff:7f00:1', 6],                        // hex IPv4-mapped 127.0.0.1
+    ['0:0:0:0:0:ffff:10.0.0.1', 6],              // полная форма IPv4-mapped 10.0.0.1
+    ['64:ff9b::127.0.0.1', 6],                   // NAT64 с локальным IPv4
+    ['64:ff9b:1::1', 6],                         // локальный NAT64
+    ['2002:7f00:1::1', 6],                       // 6to4 с 127.0.0.1
+    ['2002:a00:1::1', 6],                        // 6to4 с 10.0.0.1
+    ['2001:0000:4136:e378:8000:63bf:3fff:fdd2', 6], // Teredo 2001:0000::/32
+    ['2001:db8::1', 6],                          // документационный диапазон
+    ['192.0.2.1', 4],                            // TEST-NET-1
+    ['198.18.0.1', 4],                           // benchmark
+    ['198.51.100.1', 4],                         // TEST-NET-2
+    ['203.0.113.1', 4],                          // TEST-NET-3
+  ];
+  for (const [address, family] of blockedResolved) {
+    const lookup = async () => [{ address, family }];
+    const res = await toolByName(webTools({ fetchImpl, lookup }), 'web_fetch').run({ url: 'https://rebind.example/' });
+    assert.equal(res.ok, false, `DNS-адрес ${address} должен блокироваться`);
+    assert.equal(res.summary, 'адрес не разрешён', address);
+  }
+  assert.equal(calls.length, 0);
+
+  // Публичный IPv4-mapped IPv6 (::ffff:93.184.216.34) разрешён
+  const pubMappedLookup = async () => [{ address: '::ffff:93.184.216.34', family: 6 }];
+  const okRes = await toolByName(webTools({ fetchImpl, lookup: pubMappedLookup }), 'web_fetch').run({ url: 'https://example.com/' });
+  assert.equal(okRes.ok, true);
+});
+
+

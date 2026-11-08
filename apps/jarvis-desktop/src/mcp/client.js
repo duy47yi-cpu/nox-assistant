@@ -12,6 +12,7 @@
 // поэтому разрешение приложения от подключения не расширяется.
 const { spawn } = require('child_process');
 const { cannotVerify } = require('../agent/effects');
+const { canonicalTools, toolsFingerprint, toolDiff } = require('./drift');
 
 const PROTOCOL = '2025-06-18';
 const TIMEOUT_MS = 30000;
@@ -585,7 +586,11 @@ function friendlyConnectError(err) {
 // allowed() — белый список mcpAllow. Сбои изолированы: один сервер не мешает остальным и не роняет окно.
 // Предел ожидания одного подключения: сам клиент отвечает по timeoutMs, у сервера он 30 с по умолчанию.
 class McpManager {
-  constructor({ load = () => ({}), save = () => {}, register = () => {}, unregister = () => {}, allowed = () => [], log = console.warn, make = (opts) => new McpClient(opts) } = {}) {
+  constructor({
+    load = () => ({}), save = () => {}, register = () => {}, unregister = () => {},
+    allowed = () => [], log = console.warn, make = (opts) => new McpClient(opts),
+    snapshotLoad = () => ({}), snapshotSave = () => {},
+  } = {}) {
     this.load = load;
     this.save = save;
     this.register = register;
@@ -593,6 +598,9 @@ class McpManager {
     this.allowed = allowed;
     this.log = log;
     this.make = make;
+    // Отпечатки наборов инструментов серверов: отдельная настройка, в mcpServers не смешиваются.
+    this.snapshotLoad = snapshotLoad;
+    this.snapshotSave = snapshotSave;
     this._configs = {};
     this._live = new Map();
     this._reload();
@@ -619,6 +627,47 @@ class McpManager {
     } catch (err) {
       return `не удалось сохранить настройки: ${maskSecrets(err.message)}`;
     }
+  }
+
+  // ── Отпечатки инструментов (защита от подмены описаний)
+
+  _readSnapshots() {
+    try {
+      const value = this.snapshotLoad();
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    } catch (err) {
+      this.log(`MCP: отпечатки инструментов не прочитаны: ${maskSecrets(String((err && err.message) || err))}`);
+      return {};
+    }
+  }
+
+  _writeSnapshot(key, hash, tools) {
+    try {
+      this.snapshotSave({ ...this._readSnapshots(), [key]: { hash, at: new Date().toISOString(), tools } });
+      return null;
+    } catch (err) {
+      return `не удалось сохранить отпечаток: ${maskSecrets(String((err && err.message) || err))}`;
+    }
+  }
+
+  _clearSnapshot(key) {
+    const snapshots = this._readSnapshots();
+    if (!(key in snapshots)) return;
+    delete snapshots[key];
+    try {
+      this.snapshotSave(snapshots);
+    } catch {
+      // Старый отпечаток вреда не несёт: при следующем запуске просто снова будет проверка.
+    }
+  }
+
+  // Что показывать владельцу: имена действий и короткие подписи (без внутренних имён модели).
+  _displayTools(key, list, tools) {
+    return tools.slice(0, MAX_TOOLS).map((tool) => ({
+      name: tool.name,
+      title: String((list.find((item) => item && `${safeName(key)}_${safeName(item.name)}` === tool.name) || {}).title || tool.name).slice(0, 80),
+      description: String(tool.description || '').replace(/^Внешний сервис[^:]*:\s*/, '').slice(0, 160),
+    }));
   }
 
   // Подключить все включённые серверы при запуске. Ошибки остаются в состоянии каждого сервера.
@@ -660,6 +709,27 @@ class McpManager {
         }
         const list = await client.listTools();
         const tools = mcpTools(client, key, list, { allowed: this.allowed });
+        const displayTools = this._displayTools(key, list, tools);
+        const currentHash = toolsFingerprint(list);
+        const saved = this._readSnapshots()[key];
+        if (saved && saved.hash && saved.hash !== currentHash) {
+          // Набор инструментов изменился после прошлого подтверждения: описания чужих действий
+          // не регистрируем, пока владелец не увидит изменения и не подтвердит их.
+          entry.status = 'drift';
+          entry.error = 'набор инструментов изменился: нужно ваше подтверждение';
+          entry.drift = toolDiff(saved.tools || [], list);
+          entry.tools = displayTools;
+          entry.pendingTools = tools;
+          entry.pendingHash = currentHash;
+          entry.pendingCanonical = canonicalTools(list);
+          entry.protocolVersion = client.protocol || null;
+          entry.serverInfo = client.serverInfo;
+          entry.capabilities = publicCapabilities(client.capabilities);
+          return { ok: false, error: entry.error, drift: entry.drift };
+        }
+        // Первое подключение: владелец сам добавил сервис — запоминаем отпечаток и доверяем.
+        const snapshotError = this._writeSnapshot(key, currentHash, canonicalTools(list));
+        if (snapshotError) this.log(`MCP ${key}: ${snapshotError}`);
         for (const tool of tools) {
           try {
             this.register(tool);
@@ -668,11 +738,7 @@ class McpManager {
             this.log(maskSecrets(`MCP ${key}: «${tool.name}» не зарегистрирован: ${err.message}`, entry.secrets));
           }
         }
-        entry.tools = tools.slice(0, MAX_TOOLS).map((tool) => ({
-          name: tool.name,
-          title: String((list.find((item) => item && `${safeName(key)}_${safeName(item.name)}` === tool.name) || {}).title || tool.name).slice(0, 80),
-          description: String(tool.description || '').replace(/^Внешний сервис[^:]*:\s*/, '').slice(0, 160),
-        }));
+        entry.tools = displayTools;
         entry.protocolVersion = client.protocol || null;
         entry.serverInfo = client.serverInfo;
         entry.capabilities = publicCapabilities(client.capabilities);
@@ -777,6 +843,33 @@ class McpManager {
     return { ok: true, servers: this.state().servers, ...(error ? { error } : {}) };
   }
 
+  // Владелец посмотрел изменения и подтвердил их: запоминаем новый отпечаток и регистрируем действия.
+  approve(name) {
+    this._reload();
+    const key = String(name ?? '');
+    const entry = this._live.get(key);
+    if (!entry || entry.status !== 'drift' || !Array.isArray(entry.pendingTools)) {
+      return { ok: false, error: 'Подтверждать нечего' };
+    }
+    const saveError = this._writeSnapshot(key, entry.pendingHash, entry.pendingCanonical || []);
+    if (saveError) return { ok: false, error: saveError };
+    for (const tool of entry.pendingTools) {
+      try {
+        this.register(tool);
+        entry.registered.push(tool.name);
+      } catch (err) {
+        this.log(maskSecrets(`MCP ${key}: «${tool.name}» не зарегистрирован: ${err.message}`, entry.secrets));
+      }
+    }
+    entry.status = 'connected';
+    entry.error = null;
+    entry.drift = null;
+    entry.pendingTools = null;
+    entry.pendingHash = null;
+    entry.pendingCanonical = null;
+    return { ok: true, servers: this.state().servers };
+  }
+
   // Удалить сервис: сначала снять инструменты, потом убрать настройку.
   remove(name) {
     this._reload();
@@ -784,6 +877,7 @@ class McpManager {
     if (!this._configs[key]) return { ok: false, error: 'Сервиса нет в списке' };
     this.stop(key);
     delete this._configs[key];
+    this._clearSnapshot(key);
     const saveError = this._persist();
     return { ok: true, servers: this.state().servers, ...(saveError ? { error: saveError } : {}) };
   }
@@ -812,6 +906,9 @@ class McpManager {
         capabilities: live ? live.capabilities : null,
         tools: live ? live.tools : [],
         toolCount: live ? live.tools.length : 0,
+        // Изменение набора инструментов: что добавилось, что убрано, где изменились описание/схема.
+        // Поле появляется только при расхождении: у обычного сервера форма состояния прежняя.
+        ...(live && live.drift ? { drift: live.drift } : {}),
       };
     });
     return { servers };

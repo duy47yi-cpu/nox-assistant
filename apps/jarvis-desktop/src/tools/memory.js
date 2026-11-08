@@ -344,12 +344,13 @@ function memoryTools(store) {
 
   const forget = {
     name: 'forget',
-    description: 'Удалить запись из памяти по id.',
+    description: 'Убрать запись из текущей памяти по id. Запись не стирается безвозвратно: помечается забытой с причиной и остаётся в истории, но recall, memory_about и профиль её больше не показывают.',
     risk: 'T2',
     parameters: {
       type: 'object',
       properties: {
         id: { type: 'string', minLength: 1, maxLength: MAX_ID },
+        reason: { type: 'string', maxLength: 200, description: 'почему забыть (необязательно, остаётся в истории)' },
       },
       required: ['id'],
     },
@@ -357,20 +358,29 @@ function memoryTools(store) {
       try {
         const id = String(args.id ?? '').trim();
         if (!id) return { ok: false, summary: 'пустой id', data: {} };
-        const removed = store.remove(id);
+        const record = store.get(id);
+        if (!record) return { ok: false, summary: 'такой записи нет', data: { forgotten: false } };
+        if (record.forgottenAt) {
+          return { ok: true, summary: 'уже забыто (осталось в истории)', data: { forgotten: true, at: record.forgottenAt } };
+        }
+        const reason = typeof args.reason === 'string' ? args.reason.trim().slice(0, 200) : '';
+        const at = new Date().toISOString();
+        store.update(id, { forgottenAt: at, ...(reason ? { forgetReason: reason } : {}) });
         return {
-          ok: removed,
-          summary: removed ? 'удалил' : 'такой записи нет',
-          data: { removed },
+          ok: true,
+          summary: reason ? `забыл (в истории, причина: ${reason})` : 'забыл (осталось в истории)',
+          data: { forgotten: true, at, ...(reason ? { reason } : {}) },
         };
       } catch (err) {
         return fail(err);
       }
     },
+    // Проверка: запись не удалена, но помечена забытой и больше не попадает в текущую память.
     async verify(args) {
-      return store.get(String(args.id).trim())
-        ? { status: 'failed', evidence: 'запись осталась в файле памяти' }
-        : { status: 'confirmed', evidence: 'записи больше нет в файле памяти' };
+      const record = store.get(String(args.id).trim());
+      if (!record) return { status: 'confirmed', evidence: 'записи нет в файле памяти' };
+      if (record.forgottenAt) return { status: 'confirmed', evidence: `запись помечена забытой (${record.forgottenAt}), осталась в истории` };
+      return { status: 'failed', evidence: 'запись всё ещё считается текущей' };
     },
   };
 

@@ -5,7 +5,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
-const { BrowserPage, browserTools, windowOptions, requestAllowed, navigationAllowed, NEEDS_HUMAN, MAX_TEXT } = require('../src/tools/browser');
+const { BrowserPage, browserTools, windowOptions, requestAllowed, navigationAllowed, NEEDS_HUMAN, MAX_TEXT, SNAPSHOT_SCRIPT } = require('../src/tools/browser');
 const { checkEffect } = require('../src/agent/effects');
 const { maskArgs } = require('../src/journal/journal');
 const { hardDeny, decide, isOneShot, setBrowserHost } = require('../src/policy/modes');
@@ -368,6 +368,30 @@ test('нажатие без перемен на странице — «не пр
   assert.equal(moved.data.unchanged, undefined);
 });
 
+test('expect: названное ожидание важнее «страница изменилась ли»', async () => {
+  const h = setup();
+  await h.tools.browser_open.run({ url: 'https://example.com/' });
+  const clicked = await h.tools.browser_click.run({ index: 1 });
+
+  const good = await checkEffect(h.tools.browser_click, { index: 1, expect: { text: 'текст страницы' } }, clicked);
+  assert.equal(good.verified, 'confirmed', 'ожидаемый текст подтверждает шаг');
+  assert.match(good.evidence, /ожидание выполнено/);
+
+  const bad = await checkEffect(h.tools.browser_click, { index: 1, expect: { text: 'готово' } }, clicked);
+  assert.equal(bad.verified, 'failed', 'невыполненное ожидание — провал');
+  assert.equal(bad.ok, false);
+  assert.match(bad.summary, /ожидание не выполнено/);
+});
+
+test('expect: видимый элемент и адрес тоже проверяются', async () => {
+  const h = setup();
+  const opened = await h.tools.browser_open.run({ url: 'https://example.com/' });
+  const good = await checkEffect(h.tools.browser_open, { url: 'https://example.com/', expect: { visible: 'Дальше', urlContains: 'example.com' } }, opened);
+  assert.equal(good.verified, 'confirmed');
+  const bad = await checkEffect(h.tools.browser_open, { url: 'https://example.com/', expect: { visible: 'Оплатить' } }, opened);
+  assert.equal(bad.verified, 'failed');
+});
+
 test('у фона своё окно: открытие в фоне не трогает страницу чата', async () => {
   const chat = setup();
   const bg = setup();
@@ -380,4 +404,49 @@ test('у фона своё окно: открытие в фоне не трог�
   const read = await checkEffect(tools.browser_read, {}, await tools.browser_read.run({}, { background: true }), { background: true });
   assert.equal(read.verified, 'confirmed');
   assert.equal(read.data.url, 'https://bg.example/');
+});
+
+test('снимок страницы: значения полей, варианты select, формат даты, пароль не читается', () => {
+  const make = (over) => ({
+    tagName: 'INPUT',
+    type: 'text',
+    value: '',
+    options: [],
+    selectedIndex: -1,
+    innerText: '',
+    isContentEditable: false,
+    title: '',
+    getAttribute: () => null,
+    getBoundingClientRect: () => ({ width: 20, height: 10 }),
+    ...over,
+  });
+  const date = make({ type: 'date', value: '2026-11-08' });
+  const password = make({ type: 'password', value: 'секрет' });
+  const text = make({ type: 'text', value: 'привет' });
+  const select = make({
+    tagName: 'SELECT',
+    value: 'b',
+    options: [{ text: 'Альфа', value: 'a' }, { text: 'Бета', value: 'b' }],
+    selectedIndex: 1,
+  });
+  const snap = vm.runInNewContext(SNAPSHOT_SCRIPT, {
+    window: { innerHeight: 800 },
+    document: {
+      title: 'Пример',
+      body: { innerText: 'текст страницы', scrollHeight: 3000 },
+      querySelectorAll: (selector) => (selector.includes('captcha') ? [] : [date, password, text, select]),
+    },
+    location: { href: 'https://example.com/' },
+    getComputedStyle: () => ({ visibility: 'visible', display: 'block' }),
+  });
+
+  assert.equal(snap.elements.length, 4);
+  const [dateItem, passwordItem, textItem, selectItem] = snap.elements;
+  assert.equal(dateItem.format, 'YYYY-MM-DD', 'формат даты подсказан');
+  assert.equal(dateItem.value, '2026-11-08');
+  assert.equal('value' in passwordItem, false, 'значение пароля не читается');
+  assert.equal(textItem.value, 'привет', 'что уже введено — видно');
+  assert.deepEqual([...selectItem.options], ['Альфа', 'Бета'], 'варианты списка видны');
+  assert.equal(selectItem.selected, 'Бета', 'выбранный вариант виден');
+  assert.equal(snap.moreBelow, true, 'подсказка о содержимом ниже');
 });

@@ -3,7 +3,7 @@
 // Инструменты «глаза и руки по id»: один снимок рабочего стола, нажатие и ввод по устойчивому id.
 // Собираются из уже существующих ui_windows/ui_elements/ui_click/ui_type, поэтому не трогают их PowerShell,
 // политику и проверки. Снимок экрана сюда не входит: screen_look остаётся отдельным и спрашивает разрешение по режиму.
-const { buildScene, diffScene, sceneText } = require('../perception/scene');
+const { buildScene, diffScene, sceneText, sceneSignature } = require('../perception/scene');
 const { isPayment, isDeletion, isInstall, isPowerOff, describe, hardDeny } = require('../policy/modes');
 
 const MAX_WINDOW = 120;
@@ -13,6 +13,8 @@ const MAX_TEXT = 2000;
 const ID_RE = /^e[0-9a-f]{6}$/;
 // Пауза после действия: интерфейс успевает перерисоваться, дельта становится осмысленной.
 const SETTLE_MS = 150;
+// Сколько действий подряд без изменений на экране считаем застоем: дальше вслепую не действуем.
+const STALL_LIMIT = 3;
 // Типы, среди которых ui_type ищет поле: его номер вхождения считается только по ним.
 const FIELD_KINDS = new Set(['Edit', 'Document', 'ComboBox']);
 
@@ -59,6 +61,10 @@ function observeTools(ui = [], { mouse = [] } = {}) {
 
   // Последняя сцена — для дельты и для действий по id. Одна на инструмент: сцена рабочего стола общая.
   let last = null;
+  // Счётчик действий подряд, после которых экран не изменился (застой),
+  // и подпись прошлой сцены: по ней видно, менялся ли экран между действиями.
+  let stalls = 0;
+  let lastSignature = null;
 
   // Читает окно и элементы, собирает сцену. Ничего не запоминает: это делают вызывающие.
   async function capture({ window: want = '', filter = '', limit = MAX_LIMIT } = {}, ctx = {}) {
@@ -95,11 +101,29 @@ function observeTools(ui = [], { mouse = [] } = {}) {
   // Снимок после действия: что изменилось. Ошибка чтения не отменяет уже выполненное действие.
   async function after(scene, ctx) {
     const current = await capture({ window: scene.window.title, limit: MAX_LIMIT }, ctx);
-    if (current.error) return { scene: null, diff: null, note: `состояние после действия не прочитано: ${current.error}` };
+    if (current.error) {
+      return { scene: null, diff: null, note: `состояние после действия не прочитано: ${current.error}`, stalled: false, stalls };
+    }
     last = current.scene;
     const diff = diffScene(scene, current.scene);
+    // Застой: экран после действия не изменился. Подряд несколько раз — дальше вслепую не действуем.
+    const signature = sceneSignature(current.scene);
+    if (!diff.first && lastSignature !== null && lastSignature === signature) stalls += 1;
+    else stalls = 0;
+    lastSignature = signature;
+    const stalled = stalls >= STALL_LIMIT;
     current.scene.text = sceneText(current.scene, { diff });
-    return { scene: current.scene, diff, note: '' };
+    const note = stalled
+      ? `состояние не меняется: ${stalls} действия подряд без изменений — не повторяй, скажи владельцу`
+      : '';
+    return { scene: current.scene, diff, note, stalled, stalls };
+  }
+
+  // Хвост ответа действия: застой важнее обычной дельты, иначе модель не заметит предупреждение.
+  function tailOf(state) {
+    if (state.stalled) return `; ${state.note}`;
+    if (state.diff) return `; ${state.diff.summary}`;
+    return `; ${state.note}`;
   }
 
   const desktopObserve = {
@@ -127,6 +151,9 @@ function observeTools(ui = [], { mouse = [] } = {}) {
       if (!scene) return { ok: false, summary: current.error, data: current.windows ? { windows: current.windows } : {} };
       const diff = diffScene(last, scene);
       last = scene;
+      // Новый снимок — осознанная проверка экрана: счётчик застоя начинается заново.
+      stalls = 0;
+      lastSignature = sceneSignature(scene);
       scene.text = sceneText(scene, { diff });
       const tail = diff.first ? '' : `; ${diff.summary}`;
       return {
@@ -208,16 +235,22 @@ function observeTools(ui = [], { mouse = [] } = {}) {
         }
         await delay(SETTLE_MS);
         const state = await after(scene, ctx);
-        const tail = state.diff ? `; ${state.diff.summary}` : `; ${state.note}`;
+        const tail = tailOf(state);
         return {
           ok: true,
           summary: fallback ? `нажал по координатам ${center.x}, ${center.y}${tail}` : `нажал «${element.name}»${tail}`,
-          data: { element, action, fallback, coords: fallback ? center : null, scene: state.scene, diff: state.diff, afterNote: state.note },
+          data: {
+            element, action, fallback, coords: fallback ? center : null,
+            scene: state.scene, diff: state.diff, afterNote: state.note,
+            stalled: state.stalled === true, stalls: state.stalls || 0,
+          },
         };
       },
       async verify(args, result) {
         if (!result || !result.ok) return { status: 'failed', evidence: 'нажатие не выполнено' };
         const data = result.data || {};
+        // Застой важнее любой локальной проверки: если экран не меняется, повторять вслепую нельзя.
+        if (data.stalled) return { status: 'unknown', evidence: `экран не меняется: ${data.stalls} действия подряд без изменений — нужно решение владельца` };
         if (!data.fallback && data.action && clickTool && typeof clickTool.verify === 'function' && data.element) {
           const verdict = await clickTool.verify({ name: data.element.name }, data.action);
           // Ответ вложенной проверки окончательный: неопределённость не превращаем
@@ -277,16 +310,20 @@ function observeTools(ui = [], { mouse = [] } = {}) {
         if (!action || !action.ok) return action || { ok: false, summary: 'ввод не выполнен', data: {} };
         await delay(SETTLE_MS);
         const state = await after(sceneBefore, ctx);
-        const tail = state.diff ? `; ${state.diff.summary}` : `; ${state.note}`;
+        const tail = tailOf(state);
         return {
           ok: true,
           summary: `ввёл ${args.text.length} симв.${element ? ` в «${element.name}»` : ''}${tail}`,
-          data: { element, action, scene: state.scene, diff: state.diff, afterNote: state.note },
+          data: {
+            element, action, scene: state.scene, diff: state.diff, afterNote: state.note,
+            stalled: state.stalled === true, stalls: state.stalls || 0,
+          },
         };
       },
       async verify(args, result) {
         if (!result || !result.ok) return { status: 'failed', evidence: 'ввод не выполнен' };
         const data = result.data || {};
+        if (data.stalled) return { status: 'unknown', evidence: `экран не меняется: ${data.stalls} действия подряд без изменений — нужно решение владельца` };
         if (data.action && typeof typeTool.verify === 'function') {
           const verdict = await typeTool.verify({ text: args.text }, data.action);
           // Ответ вложенной проверки окончательный: неопределённость не превращаем

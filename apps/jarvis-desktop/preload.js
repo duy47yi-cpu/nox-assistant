@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   mcpAdd: (name, target, args) => ipcRenderer.invoke('mcp:add', String(name), String(target), String(args || '')),
   mcpToggle: (name, disabled) => ipcRenderer.invoke('mcp:toggle', String(name), disabled === true),
   mcpRemove: (name) => ipcRenderer.invoke('mcp:remove', String(name)),
+  mcpApprove: (name) => ipcRenderer.invoke('mcp:approve', String(name)),
   mailState: () => ipcRenderer.invoke('mail:state'),
   mailConnect: (read = false) => ipcRenderer.invoke('mail:connect', { read: read === true }),
   mailDisconnect: () => ipcRenderer.invoke('mail:disconnect'),
@@ -41,6 +42,9 @@ contextBridge.exposeInMainWorld('jarvis', {
   widgetsSetCity: (city) => ipcRenderer.invoke('widgets:setCity', city),
   dictationStart: () => ipcRenderer.invoke('dictation:start'),
   dictationStop: () => ipcRenderer.invoke('dictation:stop'),
+  // Режим микрофона: «Слушаю» → «Только имя» → «Микрофон выкл».
+  dictationMode: (mode) => ipcRenderer.invoke('dictation:mode', String(mode)),
+  dictationState: () => ipcRenderer.invoke('dictation:state'),
   onDictationEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('dictation:event', listener);

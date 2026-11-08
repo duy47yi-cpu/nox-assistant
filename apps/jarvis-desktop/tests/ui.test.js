@@ -160,15 +160,29 @@ describe('пустой или слишком длинный window → отка�
 describe('ui_click: поиск элемента', () => {
   test('одно совпадение → нажато', async () => {
     const { runner, calls } = fakeRunner(okJson({
-      status: 'ok', window: 'Параметры', method: 'invoke', count: 1,
+      status: 'ok', window: 'Параметры', method: 'invoke', count: 1, resolution: 'automationId',
       element: { name: 'Сохранить', type: 'Button', enabled: true },
     }));
     const res = await tool('ui_click', runner).run({ window: 'Параметры', name: 'Сохранить' }, {});
     assert.equal(res.ok, true);
     assert.match(res.summary, /Сохранить/);
     assert.equal(res.data.method, 'invoke');
+    assert.equal(res.data.resolution, 'automationId', 'видно, каким уровнем найден элемент');
+    assert.match(res.summary, /по AutomationId/);
     assert.equal(calls[0].env.JARVIS_UI_NAME, 'Сохранить');
     assert.equal(calls[0].env.JARVIS_UI_OCCURRENCE, '0', 'occurrence не задан → 0');
+  });
+
+  test('поиск по части имени сообщает слабый уровень', async () => {
+    const { runner } = fakeRunner(okJson({ status: 'ok', window: 'w', method: 'invoke', element: { name: 'Сохранить как…', type: 'Button' }, resolution: 'name-part' }));
+    const res = await tool('ui_click', runner).run({ window: 'w', name: 'Сохранить' }, {});
+    assert.equal(res.data.resolution, 'name-part');
+    assert.match(res.summary, /по части имени/);
+  });
+
+  test('скрипт поиска сообщает уровень цели', () => {
+    assert.ok(SCRIPTS.ui_click.includes('resolution'), 'уровень поиска в ответе скрипта');
+    assert.ok(SCRIPTS.ui_click.includes('automationId'), 'AutomationId — отдельный уровень');
   });
 
   test('несколько совпадений без occurrence → ok:false и первые 5 совпадений', async () => {
@@ -621,6 +635,30 @@ describe('ui_wait: ожидание элемента в окне', () => {
     }
   });
 
+  test('enabled: ждёт, пока элемент станет доступен, а не просто появится', async () => {
+    let n = 0;
+    const { runner } = fakeRunner(() => okJson({ status: 'ok', found: true, state: { enabled: ++n >= 2, visible: true, focused: false } }));
+    const res = await wait(runner, { until: 'enabled', timeout_ms: 5000 });
+    assert.equal(res.ok, true);
+    assert.match(res.summary, /стал доступен/);
+    assert.equal(res.data.state.enabled, true);
+  });
+
+  test('focused: ждёт фокус на элементе', async () => {
+    const { runner } = fakeRunner(okJson({ status: 'ok', found: true, state: { enabled: true, visible: true, focused: true } }));
+    const res = await wait(runner, { until: 'focused' });
+    assert.equal(res.ok, true);
+    assert.match(res.summary, /получил фокус/);
+  });
+
+  test('условие состояния без сведений о состоянии — «неизвестно», а не «не выполнено»', async () => {
+    const { runner } = fakeRunner(okJson({ status: 'ok', found: true }));
+    const res = await wait(runner, { until: 'visible', timeout_ms: 1 });
+    assert.equal(res.ok, false);
+    assert.match(res.summary, /неизвестно/);
+    assert.equal(res.data.seen, null);
+  });
+
   test('verify: условие прочитано', async () => {
     const { runner } = fakeRunner(okJson({ status: 'ok', found: true }));
     assert.deepEqual(await tool('ui_wait', runner).verify({}, {}), { status: 'confirmed', evidence: 'условие прочитано' });
@@ -710,5 +748,34 @@ describe('метаданные инструментов', () => {
 
   test('alt+f4 нет в белом списке', () => {
     assert.equal(Object.prototype.hasOwnProperty.call(KEY_MAP, 'alt+f4'), false);
+  });
+
+  test('ui_elements: маскирует пароли, ключи API и номера карт в value, кеширует IsPasswordProperty и IsOffscreenProperty', async () => {
+    assert.ok(SCRIPTS.ui_elements.includes('IsPasswordProperty'), 'должен кешировать IsPasswordProperty');
+    assert.ok(SCRIPTS.ui_elements.includes('IsOffscreenProperty'), 'должен кешировать IsOffscreenProperty');
+
+    const { runner } = fakeRunner(okJson({
+      status: 'ok',
+      window: 'Вход в аккаунт',
+      total: 6,
+      truncated: false,
+      items: [
+        { name: 'Логин', type: 'Edit', enabled: true, value: 'ivan@example.com' },
+        { name: 'Поле 1', type: 'Edit', enabled: true, isPassword: true, value: 'MySuperSecret!' },
+        { name: 'Введите пароль', type: 'Edit', enabled: true, value: 'qwerty12345' },
+        { name: 'API Token', type: 'Edit', enabled: true, value: 'sk-proj-1234567890abcdefghijklmnop' },
+        { name: 'Карта', type: 'Document', enabled: true, value: '4276 3800 1234 5678' },
+        { name: 'Заголовок', type: 'Text', enabled: true, value: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc' },
+      ],
+    }));
+    const res = await tool('ui_elements', runner).run({ window: 'Вход' }, {});
+    assert.equal(res.ok, true);
+    const values = res.data.elements.map((e) => e.value);
+    assert.equal(values[0], 'ivan@example.com', 'обычный email не маскируется');
+    assert.equal(values[1], '[скрыто]', 'isPassword=true маскируется');
+    assert.equal(values[2], '[скрыто]', 'поле с именем пароль маскируется');
+    assert.equal(values[3], '[скрыто]', 'ключ sk-... маскируется');
+    assert.equal(values[4], '[скрыто]', 'номер банковской карты маскируется');
+    assert.equal(values[5], '[скрыто]', 'токен Bearer маскируется');
   });
 });

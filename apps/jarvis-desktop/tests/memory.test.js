@@ -216,11 +216,13 @@ test('инструменты: remember -> recall -> forget', async (t) => {
 
   const gone = await forget.run({ id: saved.data.id });
   assert.equal(gone.ok, true);
-  assert.equal(gone.summary, 'удалил');
+  assert.match(gone.summary, /забыл/);
+  // Запись не стирается: она помечена забытой и осталась в истории (идея Supermemory).
+  assert.ok(store.get(saved.data.id).forgottenAt);
 
   const again = await forget.run({ id: saved.data.id });
-  assert.equal(again.ok, false);
-  assert.equal(again.summary, 'такой записи нет');
+  assert.equal(again.ok, true);
+  assert.match(again.summary, /уже забыто/);
 });
 
 test('инструменты возвращают {ok: false} на ошибках ввода', async (t) => {

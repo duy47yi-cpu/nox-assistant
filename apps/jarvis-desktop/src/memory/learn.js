@@ -194,7 +194,7 @@ function consolidate(store, { max = 2000 } = {}) {
 
 // Главная точка: после хода. Никогда не бросает — память не должна ломать ответ.
 function learnFromTurn({ store, text, reply = '', auto = true, max = MAX_ADD } = {}) {
-  const result = { added: [], skipped: [], conflicts: [], disabled: false };
+  const result = { added: [], skipped: [], conflicts: [], replaced: [], disabled: false };
   if (!store || typeof store.add !== 'function' || typeof store.list !== 'function') return result;
   if (!auto) {
     result.disabled = true;
@@ -240,8 +240,29 @@ function learnFromTurn({ store, text, reply = '', auto = true, max = MAX_ADD } =
       conflicts = [];
     }
     if (conflicts.length) {
-      result.skipped.push({ text: textFact, reason: 'противоречит старой записи' });
-      result.conflicts.push(...conflicts);
+      // Идея Supermemory: новый факт не выбрасывается, а становится новой версией.
+      // Старая запись остаётся в файле как история, но перестаёт быть текущей (см. visible в store.js).
+      try {
+        const record = store.add({
+          text: textFact,
+          kind: candidate.kind,
+          about: candidate.about,
+          supersedes: conflicts.map((item) => item.id),
+        });
+        for (const old of conflicts) {
+          try {
+            store.update(old.id, { supersededBy: record.id });
+          } catch {
+            // Старая версия осталась как есть: новую запись всё равно сохранили.
+          }
+        }
+        result.added.push(record);
+        result.replaced.push(...conflicts.map((old) => ({ oldId: old.id, oldText: old.text, by: record.id })));
+        result.conflicts.push(...conflicts);
+        existing.push(record);
+      } catch (err) {
+        result.skipped.push({ text: textFact, reason: err && err.message ? err.message : String(err) });
+      }
       continue;
     }
     try {

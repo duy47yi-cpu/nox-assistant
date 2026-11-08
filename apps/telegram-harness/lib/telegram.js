@@ -101,6 +101,23 @@ class TelegramClient {
     return this.call('sendChatAction', { chat_id: chatId, action }, { signal });
   }
 
+  // Правка уже отправленного текста (живой ответ, пока агент работает).
+  // «message is not modified» — не ошибка: текст уже такой же.
+  async editText(chatId, messageId, text, { signal } = {}) {
+    const body = String(text == null ? '' : text).slice(0, TEXT_LIMIT) || '…';
+    try {
+      return await this.call('editMessageText', {
+        chat_id: chatId,
+        message_id: messageId,
+        text: body,
+        disable_web_page_preview: true,
+      }, { signal });
+    } catch (err) {
+      if (/message is not modified/i.test(String(err && err.message))) return null;
+      throw err;
+    }
+  }
+
   // Отправка формы в API с повтором при 429.
   async _post(method, form, { retry = true } = {}) {
     let res;

@@ -492,6 +492,10 @@
               </div>
               <p class="note" id="voiceOptionsNote" hidden></p>
               <label class="set-row">
+                <span class="set-text"><span class="set-name">Тише озвучивать очевидное</span><span class="set-hint">Если результат виден на экране (открыл, нажал, свернул) — только строка в окне, без голоса. Ошибки и обычные ответы звучат как раньше</span></span>
+                <input type="checkbox" role="switch" class="switch" data-setting="terseReplies">
+              </label>
+              <label class="set-row">
                 <span class="set-text"><span class="set-name">Диктовка</span><span class="set-hint">Голосом в поле ввода; во время ответа речь остановит текущий ход. Работает без сети</span></span>
                 <input type="checkbox" role="switch" class="switch" data-setting="dictation" id="setDictation">
               </label>
@@ -530,6 +534,14 @@
               <label class="set-row">
                 <span class="set-text"><span class="set-name">Учиться на своём опыте</span><span class="set-hint">Имя, привычки, договорённости и удачные порядки действий — без отдельной команды. Пароли, здоровье и отправка не записываются</span></span>
                 <input type="checkbox" role="switch" class="switch" data-setting="memoryAuto">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Не давать компьютеру заснуть</span><span class="set-hint">Во время работы Джарвиса; экран может гаснуть как обычно. «Всегда» — пока приложение открыто</span></span>
+                <select class="input input-sm" id="setKeepAwake" aria-label="Не давать компьютеру заснуть">
+                  <option value="while-working">Пока работает</option>
+                  <option value="off">Никогда</option>
+                  <option value="always">Всегда</option>
+                </select>
               </label>
             </section>
 
@@ -735,6 +747,10 @@
         <summary><span class="acts-chev" data-icon="chevron" aria-hidden="true"></span>Подробности</summary>
         <pre class="ap-args" id="apArgs" tabindex="0" aria-label="Аргументы действия"></pre>
       </details>
+      <div class="ap-preview" id="apPreview" hidden>
+        <p class="ap-preview-title" id="apPreviewTitle"></p>
+        <pre class="ap-diff" id="apDiff" tabindex="0" aria-label="Предпросмотр изменений файла"></pre>
+      </div>
       <div class="dialog-actions">
         <button class="btn btn-secondary" type="button" data-decision="reject">Отклонить</button>
         <button class="btn btn-secondary" type="button" data-decision="session" id="apSession" title="Разрешать такое действие до перезапуска Джарвиса">На сессию</button>

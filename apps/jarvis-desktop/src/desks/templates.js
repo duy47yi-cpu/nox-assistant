@@ -39,6 +39,7 @@ const LIMITS = Object.freeze({
 //   notes    — записи памяти (src/memory/store.js, list()), личные скрываются;
 //   downloads — отчёт о папке загрузок (src/extensions/downloads-cleanup.js, analyze);
 //   mcp      — подключённые MCP-сервисы (src/mcp/client.js, mcpManager.state());
+//   news     — новости из RSS (src/news/rss.js, fetchNews; кэш 30 минут);
 //   pet      — декоративная анимация: данных нет, «показаний» нет.
 // Типов «финансы» и «умный дом» здесь нет: у них нет настоящих источников,
 // а выдумывать данные запрещено продуктовыми правилами.
@@ -58,6 +59,7 @@ const WIDGET_TYPES = Object.freeze([
   Object.freeze({ id: 'notes', title: 'Заметки', defaultW: 6, defaultH: 4 }),
   Object.freeze({ id: 'downloads', title: 'Загрузки', defaultW: 6, defaultH: 4 }),
   Object.freeze({ id: 'mcp', title: 'MCP', defaultW: 6, defaultH: 4 }),
+  Object.freeze({ id: 'news', title: 'Новости', defaultW: 4, defaultH: 3 }),
   Object.freeze({ id: 'pet', title: 'Питомец', defaultW: 4, defaultH: 3 }),
 ]);
 
@@ -105,6 +107,9 @@ const CONFIG_SCHEMA = Object.freeze({
   mcp: Object.freeze({
     limit: Object.freeze({ kind: 'int', min: 1, max: 20 }),
   }),
+  news: Object.freeze({
+    limit: Object.freeze({ kind: 'int', min: 1, max: 20 }),
+  }),
   pet: Object.freeze({}),
 });
 
@@ -123,6 +128,7 @@ const TEMPLATES = Object.freeze({
       Object.freeze({ type: 'currency', x: 9, y: 3, w: 4, h: 3, config: Object.freeze({ codes: Object.freeze(['USD', 'EUR']) }) }),
       Object.freeze({ type: 'commands', x: 1, y: 6, w: 8, h: 3, config: Object.freeze({ limit: 10 }) }),
       Object.freeze({ type: 'system', x: 9, y: 6, w: 4, h: 3, config: Object.freeze({}) }),
+      Object.freeze({ type: 'news', x: 9, y: 9, w: 4, h: 3, config: Object.freeze({ limit: 4 }) }),
     ]),
   }),
   study: Object.freeze({
@@ -179,6 +185,7 @@ const TEMPLATES = Object.freeze({
       Object.freeze({ type: 'commands', x: 7, y: 1, w: 6, h: 4, config: Object.freeze({ limit: 10 }) }),
       Object.freeze({ type: 'system', x: 1, y: 5, w: 6, h: 3, config: Object.freeze({}) }),
       Object.freeze({ type: 'notes', x: 7, y: 5, w: 6, h: 3, config: Object.freeze({ limit: 6 }) }),
+      Object.freeze({ type: 'news', x: 1, y: 8, w: 4, h: 3, config: Object.freeze({ limit: 4 }) }),
     ]),
   }),
   // Стрим: музыка, программы, компьютер и питомец-анимация.

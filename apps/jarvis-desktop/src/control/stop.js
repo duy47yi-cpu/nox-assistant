@@ -80,4 +80,79 @@ async function runHotkey({ isBusy, setBusy, run, report }) {
   }
 }
 
-module.exports = { StopSwitch, isStopPhrase, busyRoute, runHotkey, BUSY_TEXT };
+// Защита окон Electron (Hermes Agent window-open-policy + window-renderer-lifecycle):
+// 1) запрет всплывающих окон (setWindowOpenHandler -> deny) с безопасным описанием URL без query/hash;
+// 2) блокировка навигации окна со страницы интерфейса на внешние адреса (will-navigate);
+// 3) ограниченный перезапуск упавшего рендерера (не более maxCrashes за windowMs, чтобы не уйти в бесконечный цикл).
+function describeDeniedUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || ''));
+    return parsed.origin === 'null' ? parsed.protocol : `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return '<invalid-url>';
+  }
+}
+
+function createWindowOpenHandler(log = console.warn) {
+  return ({ url }) => {
+    log(`[window-guard] blocked window.open to ${describeDeniedUrl(url)}`);
+    return { action: 'deny' };
+  };
+}
+
+const RECOVERABLE_CRASH_REASONS = new Set(['crashed', 'oom', 'killed']);
+
+function createCrashLoopGuard({ maxCrashes = 3, windowMs = 60000, now = Date.now } = {}) {
+  const timestamps = [];
+  return {
+    shouldReload(reason) {
+      if (!RECOVERABLE_CRASH_REASONS.has(String(reason || ''))) return false;
+      const t = now();
+      while (timestamps.length > 0 && t - timestamps[0] > windowMs) {
+        timestamps.shift();
+      }
+      if (timestamps.length >= maxCrashes) return false;
+      timestamps.push(t);
+      return true;
+    },
+  };
+}
+
+function attachWindowGuards(win, { log = console.warn, maxCrashes = 3, windowMs = 60000, now = Date.now } = {}) {
+  const wc = win && win.webContents;
+  if (!wc) return;
+  if (typeof wc.setWindowOpenHandler === 'function') {
+    wc.setWindowOpenHandler(createWindowOpenHandler(log));
+  }
+  if (typeof wc.on === 'function') {
+    wc.on('will-navigate', (event, url) => {
+      const target = String(url || '');
+      if (!target.startsWith('file://')) {
+        if (event && typeof event.preventDefault === 'function') event.preventDefault();
+        log(`[window-guard] blocked navigation to ${describeDeniedUrl(target)}`);
+      }
+    });
+    const crashGuard = createCrashLoopGuard({ maxCrashes, windowMs, now });
+    wc.on('render-process-gone', (_event, details) => {
+      const reason = details && details.reason;
+      const exitCode = details && details.exitCode;
+      log(`[window-guard] renderer gone: reason=${reason} exitCode=${exitCode}`);
+      if (crashGuard.shouldReload(reason)) {
+        if (typeof win.isDestroyed === 'function' && win.isDestroyed()) return;
+        if (typeof wc.reload === 'function') wc.reload();
+      }
+    });
+  }
+}
+
+module.exports = {
+  StopSwitch,
+  isStopPhrase,
+  busyRoute,
+  runHotkey,
+  BUSY_TEXT,
+  describeDeniedUrl,
+  createWindowOpenHandler,
+  createCrashLoopGuard,
+  attachWindowGuards,
+};

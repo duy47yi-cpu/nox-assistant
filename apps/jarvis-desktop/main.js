@@ -7,13 +7,13 @@ const fs = require('fs');
 const os = require('os');
 const { spawn } = require('child_process');
 const path = require('path');
-const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, Notification, shell, dialog, powerMonitor, safeStorage, clipboard } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, Notification, shell, dialog, powerMonitor, powerSaveBlocker, safeStorage, clipboard } = require('electron');
 
 const { DeepSeekClient } = require('./src/brain/deepseek');
 const { StubBrain } = require('./src/brain/stub');
 const { Agent, repairToolHistory } = require('./src/agent/loop');
 const modes = require('./src/policy/modes');
-const { ApprovalBroker } = require('./src/policy/approvals');
+const { ApprovalBroker, parseApprovalAnswer, DEFAULT_AUTO_CANCEL_MS } = require('./src/policy/approvals');
 const { Journal, maskHistory, searchJournal } = require('./src/journal/journal');
 const { ToolRegistry } = require('./src/tools/registry');
 const { systemTools, setBrowserExe, findBrowserExe, setAppResolver, setAppLaunchHook, runPowerShell } = require('./src/tools/system');
@@ -23,7 +23,7 @@ const { isScanRequest, isForgetRequest } = require('./src/inventory/consent');
 const { inventoryTools } = require('./src/tools/inventory');
 const { desktopTools, setSpeaker } = require('./src/tools/desktop');
 const { seedSampleCommands } = require('./src/commands/samples');
-const { seedPackCommands, PACKS, availableCommands } = require('./src/commands/packs');
+const { seedPackCommands, describePacks } = require('./src/commands/packs');
 const { commandModelTools } = require('./src/tools/commands');
 const { TelegramBridge } = require('./src/telegram/bridge');
 const { remoteAllowed, remoteRefusal } = require('./src/telegram/policy');
@@ -31,6 +31,7 @@ const { WatchNotifier, listInboxFiles } = require('./src/notify/watch');
 const { readTasks } = require('./src/tasks/store');
 const { windowsTools } = require('./src/tools/windows');
 const { windowsCloseTools } = require('./src/tools/windows-close');
+const { displayTools } = require('./src/tools/display');
 const { youtubeTools } = require('./src/tools/youtube');
 const { weatherTools } = require('./src/tools/weather');
 const { currencyTools } = require('./src/tools/currency');
@@ -38,6 +39,7 @@ const { parseCurrencyRequest, getRates } = require('./src/currency/rates');
 const { getCurrentWeather } = require('./src/weather/open-meteo');
 const { parseRunnerLine, describeError, createDictationRouter, dictationScript } = require('./src/voice/dictation');
 const { createWakeRouter, extractWake } = require('./src/voice/wake');
+const voiceModes = require('./src/voice/modes');
 const { diskTools } = require('./src/tools/disk');
 const { memoryTools } = require('./src/tools/memory');
 const { GoalStore, goalsBrief } = require('./src/goals/store');
@@ -51,8 +53,8 @@ const { MissionStore } = require('./src/missions/store');
 const { WorkspaceIndex } = require('./src/rag/index');
 const { SpeechClient, ReplySpeech } = require('./src/voice/tts');
 const { FishSpeech } = require('./src/voice/fish');
-const { playBeep } = require('./src/voice/beep');
 const { listPersonas, getPersona, resolvePersona, personaVoiceOptions } = require('./src/voice/personas');
+const { classifyDelivery } = require('./src/voice/delivery');
 const { webTools } = require('./src/tools/web');
 const { BrowserPage, browserTools, electronWindow } = require('./src/tools/browser');
 const { uiTools } = require('./src/tools/ui');
@@ -73,6 +75,9 @@ const { skillsTools } = require('./src/tools/skills');
 const { loadLibrary, libraryTools, libraryModelTools, runEntry } = require('./src/library');
 const { CommandStore, normalize, EDITOR_STEP_TOOLS, DANGEROUS_TOOLS, exportCommandJson, previewCommandImport, applyCommandImport } = require('./src/commands/store');
 const { runCommand, commandReply, CommandRecorder } = require('./src/commands/runner');
+const { matchSequence } = require('./src/commands/match');
+const { fetchNews, CACHE_FILE: NEWS_CACHE_FILE } = require('./src/news/rss');
+const { playSound, ensureBuiltinPack, DEFAULT_PACK_ID } = require('./src/voice/packs');
 const { parseOffline } = require('./src/shortcuts/offline');
 const { workspaceTools } = require('./src/tools/workspace');
 const { projectTools } = require('./src/tools/project');
@@ -87,7 +92,8 @@ const { trayIcon, windowIcon } = require('./icon');
 const { makeConfig, loadEnvFile } = require('./src/config/env');
 const { sandboxRoot } = require('./src/config/sandbox');
 const { projectRoot, unpacked } = require('./src/config/paths');
-const { StopSwitch, busyRoute, runHotkey } = require('./src/control/stop');
+const { StopSwitch, busyRoute, runHotkey, attachWindowGuards } = require('./src/control/stop');
+const { createKeepAwake } = require('./src/control/keep-awake');
 const { AccountSession } = require('./src/account/session');
 const { createRouter } = require('./src/brain/tiers');
 const { OWNER_BUILD } = require('./src/config/build');
@@ -121,6 +127,8 @@ const DEFAULT_MODEL = 'deepseek-ai/DeepSeek-V4.1-Flash-1017';
 const SHORTCUT = 'Control+Alt+J';
 // Аварийный стоп работает из любого приложения. Сброс — только пунктом в трее.
 const STOP_SHORTCUT = 'Control+Alt+Shift+K';
+// Переключение режима микрофона: Слушаю → Только имя → Микрофон выкл.
+const DICTATION_SHORTCUT = 'Control+Alt+M';
 
 function emergencyStop() {
   stopSwitch.trigger('аварийный стоп');
@@ -158,6 +166,7 @@ const SYSTEM_PROMPT = [
   '- шаблон Word (диплом, справка) с ключами вида {{ФИО}} — document_fill: template, path, values. Значения сначала узнай у владельца, если их нет; без значения ключ остаётся и его назови;',
   '- презентация (.pptx) — document_write с format «pptx», title и slides [{title, bullets}]: одним вызовом, без установки программ и без кода. После записи назови владельцу путь к файлу;',
   '- погода — weather_now {city?}: без аргумента город берётся из настроек; погоду узнавай через weather_now, не через поиск;',
+  '- яркость — screen_brightness {percent} или {change: 20 / -20}; закрыть окно сверху — window_close_active; все окна — windows_close_all; прочитать буфер вслух — read_clipboard_aloud (текст сначала скопировать); перевод того, что на экране — screen_look, переводи сам, не ищи в интернете;',
   '- курс валют — currency_rate {codes?}: один быстрый запрос к ЦБ, без браузера и поиска. «Какой курс доллара», «сколько стоит евро» — этот инструмент; не открывай сайт ради курса;',
   '- программы — app_open; окна — windows_list, windows_focus; разложить окна на экране (рядом, сеткой, каскадом) — windows_arrange; прикрепить одно окно к половине экрана, развернуть или свернуть — windows_snap, только с названием окна (title); если есть ui_*, нажатия и ввод делай ими; ждать окно, файл или процесс — wait_for, а не wait; ждать элемент в окне — ui_wait; флажок или переключатель — ui_set_toggle;',
   '- память — recall; memory_about {name} — записи про человека или дело, со связями и сроками, кроме чувствительных. remember по просьбе или для важного: факт о человеке или проекте, договорённость со сроком — с полями about и until. Если владелец указал связь проекта, решения и материала, сохраняй её в links как названия соответствующих тем; не придумывай связи. Факт из файла запоминай с source (путь в рабочей папке) и quote (дословная цитата), если она есть: память сохранит проверяемую ссылку и покажет, не изменился ли файл. Профиль владельца (как к нему обращаться, чем занимается) — remember с kind «profile»: он читается всегда и не устаревает. В text профиля и договорённости пиши слова владельца так, как он их сказал («зови меня Абду»): тогда запись без вопроса. Пароли, ключи и коды не записывай.',
@@ -205,6 +214,8 @@ const cfg = makeConfig(ROOT);
 
 const DATA_DIR = cfg('NOX_DATA_DIR') || path.join(ROOT, 'data');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+// Свои звуковые паки: встроенный «nox» генерируется кодом в папку данных, папки владельца — рядом.
+const SOUND_PACKS_DIR = path.join(DATA_DIR, 'sound-packs');
 // Скрипты библиотеки читают песочницу из окружения: они запускаются с наследованием env.
 process.env.JARVIS_SANDBOX = WORKSPACE;
 const WORKSPACE_DIRS = ['inbox', 'notes', 'reports', 'rag'];
@@ -236,6 +247,25 @@ function saveSettings(patch) {
   // Через временный файл: сбой записи не должен стереть настройки (режим, бюджет, отметки).
   writeFileAtomic(SETTINGS_FILE, JSON.stringify(next, null, 2));
 }
+
+// Пока идёт ход любого агента (чат, пространство, миссия, задача, экран), компьютер не засыпает:
+// долгие поручения не должны обрываться сном. Экран по-прежнему может гаснуть (идея Hermes).
+const keepAwake = createKeepAwake({ blocker: powerSaveBlocker, mode: readSettings().keepAwake });
+const agentRun = Agent.prototype.run;
+Agent.prototype.run = function runWithKeepAwake(...args) {
+  keepAwake.begin();
+  const done = () => {
+    try { keepAwake.end(); } catch { /* блокировщик уже снят системой */ }
+  };
+  let result;
+  try {
+    result = agentRun.apply(this, args);
+  } catch (err) {
+    done();
+    throw err;
+  }
+  return result && typeof result.finally === 'function' ? result.finally(done) : (done(), result);
+};
 
 // Разговор хранится между запусками. Обрезаем по границе сообщения пользователя,
 // чтобы ответы инструментов не остались без своего вызова.
@@ -463,6 +493,7 @@ function showHands(active) {
   });
   handsWin.setAlwaysOnTop(true, 'screen-saver');
   handsWin.setIgnoreMouseEvents(true);
+  attachWindowGuards(handsWin);
   handsWin.once('ready-to-show', () => { if (escStop.active && handsWin && !handsWin.isDestroyed()) handsWin.showInactive(); });
   handsWin.loadFile(path.join(__dirname, 'renderer', 'hands.html'));
 }
@@ -490,6 +521,7 @@ const baseTools = guardDesktopTools([
   ...uiToolset,
   ...mouseToolset,
   ...clipboardTools(),
+  ...displayTools(),
   ...mediaTools(),
   ...imageTools({ workspace: WORKSPACE }),
   ...skillsTools(skills),
@@ -559,6 +591,9 @@ const mcpManager = new McpManager({
   register: (tool) => tools.register(tool),
   unregister: (name) => tools.unregister(name),
   allowed: () => readSettings().mcpAllow,
+  // Отпечатки инструментов MCP: по ним видно, что сервер после обновления подменил описания.
+  snapshotLoad: () => readSettings().mcpToolSnapshots || {},
+  snapshotSave: (snapshots) => saveSettings({ mcpToolSnapshots: snapshots }),
 });
 // Инструменты задач (runtime.chatTools) регистрируются ниже, сразу после сборки.
 // Фоновые задачи не создают и не отменяют другие задачи: иначе они могут плодить себя.
@@ -570,6 +605,8 @@ for (const tool of autonomousTools(withOwnWorkspace(baseTools, ownWorkspaceTools
 // Автономных запусков команд нет: модель их не вызывает.
 const commandTools = new ToolRegistry();
 for (const tool of [...baseTools, ...libraryTools(library)]) commandTools.register(tool);
+// Закрытие окон нужно и быстрым фразам («закрой окна», «закрой окно»): то же, что в чате, но с замком рук.
+for (const tool of guardDesktopTools(windowsCloseTools({ keepPids: allJarvisPids }), desktopLock)) commandTools.register(tool);
 let workspaceCommandStores = null;
 
 function commandRuntimeForSpace(space) {
@@ -613,8 +650,12 @@ function buildMessage(text, files) {
   return parts.length ? `${parts.join('\n\n')}\n\n${text}` : text;
 }
 
-// Подтверждения ждут владельца без автоотказа. Стоп отклоняет все ожидающие.
-const approvals = new ApprovalBroker();
+// Подтверждения: без ответа действие отменяется само через 30 с (голосовой контроль не должен висеть).
+// Автоотмена сообщает окну approval_closed: карточка подтверждения исчезает, а не остаётся призраком.
+const approvals = new ApprovalBroker({
+  autoCancelMs: DEFAULT_AUTO_CANCEL_MS,
+  onAutoCancel: (id, reason) => emitToWindow({ type: 'approval_closed', id, decision: 'reject', cancelled: true, reason }),
+});
 const journal = new Journal(path.join(DATA_DIR, 'journal.jsonl'));
 // Аварийный стоп: один выключатель на процесс. Включается из трея, горячей клавишей и не даёт начать новые действия.
 const stopSwitch = new StopSwitch();
@@ -1004,6 +1045,9 @@ setSpeaker((text, signal) => {
   return provider.speak(text, { signal });
 });
 let replyText = '';
+// Что было в ходе: действия и был ли провал. По ним решается, говорить ответ или только показать.
+let turnTools = [];
+let turnFailed = false;
 
 function voiceEnabled() {
   return readSettings().voice === true;
@@ -1168,6 +1212,7 @@ function openMini() {
     },
   });
   miniWin.setAlwaysOnTop(true, 'screen-saver');
+  attachWindowGuards(miniWin);
   miniWin.once('ready-to-show', () => { if (miniWin && !miniWin.isDestroyed()) miniWin.showInactive(); });
   miniWin.on('closed', () => { miniWin = null; });
   miniWin.loadFile(path.join(__dirname, 'renderer', 'mini.html'));
@@ -1185,9 +1230,18 @@ function emitToWindow(event) {
   const task = event.type === 'task' && event.taskId ? runtime.queue.get(event.taskId) : null;
   const visibleEvent = task ? { ...event, workspaceId: task.workspaceId || 'default' } : event;
   if (event.type === 'tool_start') { captureRecordedTool(event); if (BEEP_TOOLS.has(event.name)) beepIds.add(event.id); }
-  // «Дзинь» после удавшейся команды окон; громкость и тихий режим — из настроек.
+  if (event.type === 'tool_result') {
+    // Состав хода для доставки ответа: какие действия были и не провалились ли они.
+    turnTools.push(event.name);
+    if (event.ok === false || event.verifiedStatus === 'failed') turnFailed = true;
+  }
+  // Свой звук после удавшейся команды окон: мотив из встроенного пака, громкость и тихий режим — из настроек.
   if (event.type === 'tool_result' && beepIds.delete(event.id) && event.ok && event.verifiedStatus !== 'failed') {
-    playBeep({ volume: voiceOptionsFromSettings().volume, quiet: readSettings().quiet === true });
+    playSound('done', { dir: SOUND_PACKS_DIR, packId: DEFAULT_PACK_ID, volume: voiceOptionsFromSettings().volume, quiet: readSettings().quiet === true });
+  }
+  if (event.type === 'approval_request') {
+    // Ожидание решения владельца — мягкий двойной мотив, чтобы вопрос не потерялся.
+    playSound('waiting', { dir: SOUND_PACKS_DIR, packId: DEFAULT_PACK_ID, volume: voiceOptionsFromSettings().volume, quiet: readSettings().quiet === true });
   }
   sendToWindow(visibleEvent);
   if (event.type === 'done') escStop.disarm();
@@ -1207,8 +1261,19 @@ function emitToWindow(event) {
   if (event.type === 'text') replyText += event.delta;
   if (event.type === 'done') {
     // Остановленный ход не озвучиваем: оборванный текст — не ответ владельцу.
-    if (event.cancelled !== true && event.status !== 'cancelled') speakReply(replyText);
+    if (event.cancelled !== true && event.status !== 'cancelled') {
+      // «Тише»: видимый успех остаётся строкой в окне, ошибка и обычный ответ звучат как раньше.
+      const delivery = classifyDelivery({
+        text: replyText,
+        tools: turnTools,
+        failed: turnFailed,
+        terse: readSettings().terseReplies !== false,
+      });
+      if (delivery.mode === 'full') speakReply(replyText);
+    }
     replyText = '';
+    turnTools = [];
+    turnFailed = false;
   }
 }
 
@@ -1266,13 +1331,25 @@ let scopedDone = false;
 function emitScoped(event) {
   observeTurnEvent(event);
   if (event.type === 'tool_start') captureRecordedTool(event);
+  if (event.type === 'tool_result') {
+    turnTools.push(event.name);
+    if (event.ok === false || event.verifiedStatus === 'failed') turnFailed = true;
+  }
   sendToWindow(event);
   if (event.type === 'approval_request') notifyApproval(event);
   if (event.type === 'text') replyText += event.delta;
   if (event.type === 'done') {
     scopedDone = true;
-    speakReply(replyText);
+    const delivery = classifyDelivery({
+      text: replyText,
+      tools: turnTools,
+      failed: turnFailed,
+      terse: readSettings().terseReplies !== false,
+    });
+    if (delivery.mode === 'full') speakReply(replyText);
     replyText = '';
+    turnTools = [];
+    turnFailed = false;
   }
 }
 
@@ -1495,6 +1572,7 @@ function regionOverlay(bounds) {
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
     });
     ov.setAlwaysOnTop(true, 'screen-saver');
+    attachWindowGuards(ov);
     let done = false;
     const finish = (rect) => {
       if (done) return;
@@ -1779,16 +1857,22 @@ ipcMain.handle('chat:send', async (event, text, files) => {
       }
       const currentSpace = workspaceHub.book.open(scoped.current().id);
       const commandRuntime = commandRuntimeForSpace(currentSpace);
-      const command = commandRuntime.store.findByPhrase(phrase);
-      if (command) {
-        const out = await runCommandNow(command, {
-          ...commandRuntime,
-          journal: { append: (entry) => journal.append({ ...entry, workspaceId: currentSpace.id }) },
-          emit: emitScoped,
-          dealStore: workspaceDeals.store(currentSpace.id),
-        });
-        scoped.remember(phrase, commandReply(command, out));
-        return { ok: true, command: command.name };
+      // Фраза может быть склейкой: «ютуб и громкость 30». Запускаем по порядку, половину не начинаем.
+      const matches = matchSequence(phrase, commandRuntime.store);
+      if (matches.length > 0) {
+        const ranNames = [];
+        for (const { command } of matches) {
+          const out = await runCommandNow(command, {
+            ...commandRuntime,
+            journal: { append: (entry) => journal.append({ ...entry, workspaceId: currentSpace.id }) },
+            emit: emitScoped,
+            dealStore: workspaceDeals.store(currentSpace.id),
+          });
+          scoped.remember(phrase, commandReply(command, out));
+          ranNames.push(command.name);
+          if (out && out.ok === false) break;
+        }
+        return { ok: true, command: ranNames.join(', ') };
       }
       const offline = parseOffline(phrase);
       if (offline) {
@@ -1831,18 +1915,30 @@ ipcMain.handle('chat:send', async (event, text, files) => {
       await replyDirect(currencyText);
       return { ok: true, command: 'курс' };
     }
-    // Сначала ищем фразу среди команд владельца, потом среди готовых команд библиотеки.
+    // Сначала ищем фразу среди команд владельца (с необязательными глаголами и склейкой),
+    // потом среди готовых команд библиотеки.
+    const matches = matchSequence(phrase, commands);
+    if (matches.length > 0) {
+      const ranNames = [];
+      for (const { command } of matches) {
+        const out = await runCommandNow(command);
+        // Ярлык в историю: иначе следующая фраза («а теперь 50») не увидит, что было раньше.
+        agent.remember(phrase, commandReply(command, out));
+        ranNames.push(command.name);
+        if (out && out.ok === false) break;
+      }
+      saveConversation();
+      return { ok: true, command: ranNames.join(', ') };
+    }
     const libEntry = libraryByPhrase.get(normalize(phrase));
     const libCmd = libEntry
       ? { id: `lib:${libEntry.id}`, name: libEntry.title, steps: [{ tool: `lib_${libEntry.id}`, args: {} }] }
       : null;
-    const cmd = commands.findByPhrase(phrase) || libCmd;
-    if (cmd) {
-      const out = await runCommandNow(cmd);
-      // Ярлык в историю: иначе следующая фраза («а теперь 50») не увидит, что было раньше.
-      agent.remember(phrase, commandReply(cmd, out));
+    if (libCmd) {
+      const out = await runCommandNow(libCmd);
+      agent.remember(phrase, commandReply(libCmd, out));
       saveConversation();
-      return { ok: true, command: cmd.name };
+      return { ok: true, command: libCmd.name };
     }
     // Короткие фразы («громкость 50», «окна свернуть», «таймер 5 минут», «открой ютуб») — без модели.
     const offline = parseOffline(phrase);
@@ -2089,7 +2185,7 @@ ipcMain.handle('commands:list', (event) => {
 ipcMain.handle('packs:install', (event, id) => {
   if (!fromWindow(event)) return { ok: false, error: 'forbidden' };
   if (id == null) {
-    return { ok: true, packs: PACKS.map((p) => ({ id: p.id, title: p.title, description: p.description, total: availableCommands(p).length })) };
+    return { ok: true, packs: describePacks(currentCommandRuntime().store.list()) };
   }
   try {
     const added = seedPackCommands(currentCommandRuntime().store, [String(id)]);
@@ -2380,22 +2476,31 @@ async function remoteTurn(text, media) {
     const isPlainText = !media || !media.kind;
     if (!prompt) return media ? '' : 'Готово.';
     if (isPlainText) {
-      const cmd = commands.findByPhrase(prompt);
-      if (cmd) {
-        const blocked = cmd.steps.find((step) => !remoteAllowed(commandTools.get(step.tool)));
-        if (blocked) return remoteRefusal(cmd.name);
-        const out = await runCommand(cmd, {
-          tools: commandTools,
-          policy: modes,
-          approvals: null,
-          journal: { append: (e) => journal.append({ ...e, source: 'telegram' }) },
-          emit: () => {},
-          workspace: WORKSPACE,
-          mode: 'full',
-          stop: stopSwitch,
-        });
-        commands.markRun(cmd.id);
-        return commandReply(cmd, out);
+      // Склейка из Telegram: сначала проверяем ВСЕ команды на доступность с телефона,
+      // иначе половина сценария выполнится, а вторая откажет.
+      const matches = matchSequence(prompt, commands);
+      if (matches.length > 0) {
+        const blockedCommand = matches.map((item) => item.command).find((command) =>
+          (command.steps || []).some((step) => !remoteAllowed(commandTools.get(step.tool)))
+        );
+        if (blockedCommand) return remoteRefusal(blockedCommand.name);
+        const replies = [];
+        for (const { command } of matches) {
+          const out = await runCommand(command, {
+            tools: commandTools,
+            policy: modes,
+            approvals: null,
+            journal: { append: (e) => journal.append({ ...e, source: 'telegram' }) },
+            emit: () => {},
+            workspace: WORKSPACE,
+            mode: 'full',
+            stop: stopSwitch,
+          });
+          commands.markRun(command.id);
+          replies.push(commandReply(command, out));
+          if (out && out.ok === false) break;
+        }
+        return replies.join(' ');
       }
     }
     if (!remoteAgent) buildRemoteAgent();
@@ -2573,7 +2678,7 @@ ipcMain.handle('mode:set', (event, next) => {
 });
 
 // Переключатели главного экрана. Принимаем только известные ключи и логические значения.
-const SETTING_KEYS = new Set(['voice', 'alwaysOnTop', 'quiet', 'autoStart', 'screenAuto', 'memoryAuto', 'motion', 'dictation', 'clipboardHistory', 'desktopOverlay', 'alwaysListen']);
+const SETTING_KEYS = new Set(['voice', 'alwaysOnTop', 'quiet', 'autoStart', 'screenAuto', 'memoryAuto', 'motion', 'dictation', 'clipboardHistory', 'desktopOverlay', 'alwaysListen', 'terseReplies']);
 
 ipcMain.handle('settings:get', (event) => {
   if (!fromWindow(event)) return null;
@@ -2593,6 +2698,8 @@ ipcMain.handle('settings:get', (event) => {
     thinking: ['medium', 'high'].includes(s.thinking) ? s.thinking : 'low',
     screenAuto: s.screenAuto === true,
     memoryAuto: s.memoryAuto !== false,
+    // «Тише озвучивать очевидное» включено по умолчанию: выключается явным false.
+    terseReplies: s.terseReplies !== false,
     musicService: SERVICES[s.musicService] ? s.musicService : null,
     ownerBuild: OWNER_BUILD,
     workspace: workspaceHub && workspaceHub.chat() ? workspaceHub.chat().root() : WORKSPACE,
@@ -2629,6 +2736,14 @@ ipcMain.handle('settings:set', (event, key, value) => {
     saveSettings({ voicePersona: id || null });
     applyVoiceOptions();
     return { ok: true, persona: resolvePersona(id).id };
+  }
+  // Режим «не спать»: off / while-working / always. Действует сразу, без перезапуска приложения.
+  if (key === 'keepAwake') {
+    const mode = ['off', 'while-working', 'always'].includes(value) ? value : null;
+    if (!mode) return { ok: false };
+    saveSettings({ keepAwake: mode });
+    keepAwake.setMode(mode);
+    return { ok: true, mode };
   }
   if (!SETTING_KEYS.has(key) || typeof value !== 'boolean') return { ok: false };
   if (key === 'autoStart') {
@@ -2921,6 +3036,13 @@ async function buildDeskSources(workspaceId) {
   try { downloadReport = readDownloadsForDesk(); } catch (err) { console.warn(`стол: загрузки не прочитаны: ${err.message}`); }
   let mcpState = null;
   try { mcpState = mcpManager.state(); } catch (err) { console.warn(`стол: MCP не прочитан: ${err.message}`); }
+  // Новости: ленты параллельно, кэш 30 минут. Холодный вызов ограничен 5 с и не держит окно.
+  let newsSource = null;
+  try {
+    newsSource = await fetchNews({ cachePath: path.join(DATA_DIR, NEWS_CACHE_FILE), timeoutMs: 5000, limit: 8 });
+  } catch (err) {
+    console.warn(`стол: новости не прочитаны: ${err.message}`);
+  }
   return {
     os: { cpus: os.cpus(), totalmem: os.totalmem(), freemem: os.freemem(), platform: os.platform(), arch: os.arch(), release: os.release(), uptime: os.uptime() },
     tasks: taskList,
@@ -2936,6 +3058,7 @@ async function buildDeskSources(workspaceId) {
     notes: noteList,
     downloads: downloadReport,
     mcp: mcpState,
+    news: newsSource,
   };
 }
 
@@ -3175,6 +3298,99 @@ function sendDictationEvent(event) {
   if (win && !win.isDestroyed()) win.webContents.send('dictation:event', event);
 }
 
+// ── Режим микрофона: «Слушаю» → «Только имя» → «Микрофон выкл».
+// Машина состояний — src/voice/modes.js; здесь только применение к раннеру и окну.
+let dictationMode = voiceModes.normalizeState(readSettings().dictationMode);
+let dictationUiRequested = false; // у текущего раннера полная диктовка, а не только имя
+let dictationHotkeyOk = false;    // зарегистрировалась ли Ctrl+Alt+M
+
+function dictationStatusPayload() {
+  return {
+    mode: dictationMode,
+    label: voiceModes.statusText(dictationMode),
+    full: dictationUiRequested,
+    recording: Boolean(dictationProc),
+  };
+}
+
+function sendDictationStatus(reply = '') {
+  sendDictationEvent({ type: 'mode', ...dictationStatusPayload(), ...(reply ? { reply } : {}) });
+}
+
+// Фоновый раннер слушал только имя: для полной диктовки перезапускаем его (старый сначала закрывается).
+let dictationRestartTimer = null;
+function restartDictationFull() {
+  if (dictationRestartTimer) return;
+  stopDictation();
+  let tries = 0;
+  const tick = () => {
+    dictationRestartTimer = null;
+    if (readSettings().dictation !== true || dictationMode !== 'listening') return;
+    if (dictationProc) {
+      if (tries >= 40) return; // раннер не закрылся за ~4 с: не гонимся за ним молча
+      tries += 1;
+      dictationRestartTimer = setTimeout(tick, 100);
+      return;
+    }
+    startDictation({ uiRequested: true });
+  };
+  dictationRestartTimer = setTimeout(tick, 100);
+}
+
+// Сменить режим микрофона: off останавливает распознавание, quiet слушает только имя,
+// listening снова слушает всё. Источник — окно, горячая клавиша, трей или голос.
+function setDictationMode(next, { reply = '', persist = true } = {}) {
+  const target = voiceModes.normalizeState(next);
+  dictationMode = target;
+  if (persist) saveSettings({ dictationMode: target });
+  if (readSettings().dictation === true) {
+    if (target === 'off') {
+      if (dictationProc) stopDictation();
+    } else if (!dictationProc) {
+      startDictation({ uiRequested: target === 'listening' });
+    } else if (target === 'listening' && dictationUiRequested !== true) {
+      restartDictationFull(); // «Слушаю» обещает всю речь, а не только имя
+    }
+  }
+  sendDictationStatus(reply);
+  refreshTrayMenu();
+  return { ok: true, ...dictationStatusPayload() };
+}
+
+// Клик по индикатору, пункт трея и Ctrl+Alt+M: следующий режим по кругу.
+function cycleDictationMode() {
+  if (readSettings().dictation !== true) {
+    sendToWindow({ type: 'notice', message: 'Диктовка выключена в настройках.' });
+    return { ok: false, reason: 'disabled' };
+  }
+  return setDictationMode(voiceModes.nextState(dictationMode));
+}
+
+// Голосом сменить режим: «тихий режим», «слушай меня», «хватит слушать». В поле фраза не попадает.
+function applyVoiceMode(result) {
+  if (!result || result.action === 'none') return;
+  setDictationMode(result.state, { reply: result.reply });
+}
+
+// Голосом ответить на ожидающие подтверждения. true — фраза была ответом и в чат её не отправляем.
+function answerApprovalsByVoice(text) {
+  if (!approvals.list().length) return false;
+  const answer = parseApprovalAnswer(text);
+  if (!answer) return false;
+  if (answer === 'cancelAll') {
+    const count = approvals.cancelAll('голосом: останови команду');
+    sendToWindow({ type: 'notice', message: count ? `Отменил ожидающие подтверждения: ${count}.` : 'Ожидающих подтверждений нет.' });
+    return true;
+  }
+  const [first] = approvals.list();
+  if (!first || !approvals.respond(first.id, answer)) return false;
+  // Ответ снимает статус «ждёт подтверждения» у задачи с мандатом — так же, как ответ из окна.
+  if (resolvedApproval(runtime.queue)) runtime.saveTasks(runtime.queue.list());
+  emitToWindow({ type: 'approval_closed', id: first.id, decision: answer, cancelled: false });
+  sendToWindow({ type: 'notice', message: answer === 'once' ? 'Подтверждаю действием.' : 'Отклоняю.' });
+  return true;
+}
+
 // Обращение «Джарвис» в начале сказанного: команда открывает окно и уходит в чат как обычное сообщение.
 // Кулдаун гасит повтор одного распознавания, а слова без команды («Джарвис…») окно получает отдельно.
 const wakeRouter = createWakeRouter({
@@ -3189,6 +3405,7 @@ const wakeRouter = createWakeRouter({
 // Запуск распознавания: по кнопке (uiRequested) или фоном, если включено «Слушать «Джарвис» всегда».
 function startDictation({ uiRequested }) {
   replySpeech.stop();
+  if (dictationMode === 'off') return { ok: true }; // выключенный микрофон сам не включается
   if (dictationProc) return { ok: true };
   let child;
   try {
@@ -3210,9 +3427,18 @@ function startDictation({ uiRequested }) {
       stopCurrentTurn();
       sendToWindow({ type: 'notice', message: 'Останавливаю текущий ответ. Новое поручение останется в поле ввода.' });
     },
+    // Тихий режим и фразы режима разбирает роутер; «Джарвис» проверяется для quiet.
+    getMode: () => dictationMode,
+    onMode: (result) => applyVoiceMode(result),
+    hasWake: (text) => {
+      const found = extractWake(text);
+      return Boolean(found && found.woke);
+    },
     emit: (ev) => {
-      // Фраза с обращением и командой не дублируется в поле ввода: она сразу уходит в чат.
       if (ev.type === 'text') {
+        // 1) Голосом отвечаем на ожидающие подтверждения (только когда они есть).
+        if (answerApprovalsByVoice(ev.text)) return;
+        // 2) Фраза с обращением и командой не дублируется в поле ввода: она сразу уходит в чат.
         const found = extractWake(ev.text);
         if (found && found.woke) {
           if (found.command) {
@@ -3229,6 +3455,7 @@ function startDictation({ uiRequested }) {
     },
   });
   dictationRouter = route;
+  dictationUiRequested = uiRequested === true;
   let stdoutBuf = '';
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', (chunk) => {
@@ -3245,18 +3472,22 @@ function startDictation({ uiRequested }) {
   child.on('close', () => {
     if (dictationProc !== child) return; // новый сеанс уже начат или стоп подтверждён
     dictationProc = null;
+    dictationUiRequested = false;
     route.close();
     if (dictationRouter === route) dictationRouter = null;
+    sendDictationStatus(); // индикатор честно показывает «Микрофон выкл», пока слушаем не всё
     sendDictationEvent({ type: 'state', state: 'stopped' });
   });
   dictationProc = child;
+  sendDictationStatus();
   return { ok: true };
 }
 
 ipcMain.handle('dictation:start', (event) => {
   if (!fromWindow(event)) return { ok: false };
   if (readSettings().dictation !== true) return { ok: false, reason: 'disabled' };
-  return startDictation({ uiRequested: true });
+  // Кнопка микрофона — полная диктовка: из тихого режима возвращает к «Слушаю».
+  return setDictationMode('listening');
 });
 
 // Остановка распознавания: кнопка, выключение «Слушать всегда» или выход.
@@ -3276,7 +3507,13 @@ function stopDictation() {
   return { ok: true };
 }
 
-ipcMain.handle('dictation:stop', (event) => (fromWindow(event) ? stopDictation() : { ok: false }));
+ipcMain.handle('dictation:stop', (event) => (fromWindow(event) ? setDictationMode('off') : { ok: false }));
+
+// Окно: включить режим (индикатор/горячая клавиша) и узнать текущий статус.
+ipcMain.handle('dictation:mode', (event, mode) => (fromWindow(event) ? setDictationMode(mode) : { ok: false }));
+ipcMain.handle('dictation:state', (event) => (fromWindow(event)
+  ? { ok: true, ...dictationStatusPayload(), hotkeyOk: dictationHotkeyOk }
+  : { ok: false }));
 
 ipcMain.handle('approval:respond', (event, id, decision) => {
   if (!fromWindow(event)) return { ok: false };
@@ -3320,9 +3557,16 @@ function toggleWindow() {
 const WINDOW_BG = /^#[0-9a-f]{6}$/i;
 
 ipcMain.handle('window:setBackground', (event, color) => {
-  if (!fromWindow(event) || !WINDOW_BG.test(String(color))) return { ok: false };
-  win.setBackgroundColor(color);
-  if (readSettings().windowBg !== color) saveSettings({ windowBg: color });
+  if (!fromWindow(event)) return { ok: false };
+  const value = String(color || '');
+  // Прозрачный режим: страница сама рисует фон, подложка должна пропускать рабочий стол.
+  if (value === '#00000000') {
+    win.setBackgroundColor(value);
+    return { ok: true, transparent: true };
+  }
+  if (!WINDOW_BG.test(value)) return { ok: false };
+  win.setBackgroundColor(value);
+  if (readSettings().windowBg !== value) saveSettings({ windowBg: value });
   return { ok: true };
 });
 
@@ -3342,6 +3586,7 @@ ipcMain.handle('mcp:state', (event) => (fromWindow(event) ? mcpManager.state() :
 ipcMain.handle('mcp:add', (event, name, target, args) => (fromWindow(event) ? mcpManager.add(name, target, args) : { ok: false }));
 ipcMain.handle('mcp:toggle', (event, name, disabled) => (fromWindow(event) ? mcpManager.toggle(name, disabled) : { ok: false }));
 ipcMain.handle('mcp:remove', (event, name) => (fromWindow(event) ? mcpManager.remove(name) : { ok: false }));
+ipcMain.handle('mcp:approve', (event, name) => (fromWindow(event) ? mcpManager.approve(name) : { ok: false }));
 
 ipcMain.handle('account:state', (event) => (fromWindow(event) && account ? account.state() : { enabled: false }));
 ipcMain.handle('account:register', (event, email, password) => (fromWindow(event) && account ? account.register(String(email), String(password)) : { ok: false }));
@@ -3373,8 +3618,10 @@ function createWindow() {
     show: false,
     title: 'Джарвис — Nox Assistant',
     icon: windowIcon(),
-    // Цвет последней темы: без вспышки при открытии и без чужой каймы при растягивании. Тему хранит окно, см. window:setBackground.
-    backgroundColor: WINDOW_BG.test(readSettings().windowBg) ? readSettings().windowBg : '#0C0F26',
+    // Окно прозрачное: фон рисует страница (тема или прозрачность/радиус из «Вид»).
+    // Подложка окна не перекрывает скруглённые углы; при нулевых ручках страница всё равно закрашивает фон.
+    transparent: true,
+    backgroundColor: '#00000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -3384,6 +3631,7 @@ function createWindow() {
   });
   win.setMenuBarVisibility(false);
   win.setAlwaysOnTop(readSettings().alwaysOnTop === true);
+  attachWindowGuards(win);
   // Учёт расходов заблокирован — одна заметка после загрузки окна (раньше её некому показать).
   if (meterNotice) win.webContents.once('did-finish-load', () => sendToWindow({ type: 'task', status: null, message: meterNotice }));
   applyMotion(win.webContents);
@@ -3426,6 +3674,16 @@ function buildTrayMenu() {
         refreshTrayMenu();
       },
     },
+    // Режим микрофона — тот же, что у индикатора в окне и Ctrl+Alt+M.
+    {
+      label: 'Микрофон',
+      enabled: readSettings().dictation === true,
+      submenu: [
+        { label: 'Слушаю', type: 'radio', checked: dictationMode === 'listening', click: () => setDictationMode('listening') },
+        { label: 'Только имя «Джарвис»', type: 'radio', checked: dictationMode === 'quiet', click: () => setDictationMode('quiet') },
+        { label: 'Микрофон выключен', type: 'radio', checked: dictationMode === 'off', click: () => setDictationMode('off') },
+      ],
+    },
     { type: 'separator' },
     { label: 'Аварийный стоп (Ctrl+Alt+Shift+K)', enabled: !stopSwitch.isStopped(), click: emergencyStop },
     { label: 'Возобновить после стопа', enabled: stopSwitch.isStopped(), click: resumeAfterStop },
@@ -3454,6 +3712,8 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     app.setAppUserModelId('Nox.Jarvis');
     ensureWorkspace();
+    // Встроенный звуковой пак: мотивы пишутся кодом один раз в папку данных, чужих файлов нет.
+    try { ensureBuiltinPack(path.join(SOUND_PACKS_DIR, DEFAULT_PACK_ID)); } catch (err) { console.warn(`звуки: пак не создан: ${err.message}`); }
     initWorkspaceHub();
     seedDefaults();
     // Браузер для ссылок: из настроек, если указан и существует, иначе первый найденный.
@@ -3505,6 +3765,10 @@ if (!app.requestSingleInstanceLock()) {
     const registered = globalShortcut.register(SHORTCUT, toggleWindow);
     if (!registered) console.warn(`Горячая клавиша ${SHORTCUT} занята другим приложением`);
     const stopRegistered = globalShortcut.register(STOP_SHORTCUT, emergencyStop);
+    // Ctrl+Alt+M — режим микрофона. Занятую другим приложением клавишу честно пропускаем:
+    // режим остаётся доступен кликом по индикатору и пунктом в трее.
+    dictationHotkeyOk = globalShortcut.register(DICTATION_SHORTCUT, cycleDictationMode);
+    if (!dictationHotkeyOk) console.warn(`Горячая клавиша ${DICTATION_SHORTCUT} занята: режим микрофона переключается из окна и трея`);
     registerCommandHotkeys();
     startTelegram();
     // До первого хода: старт без конца в журнале скорости значит, что вызов оборвал прошлый запуск.
@@ -3524,6 +3788,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', () => {
     quitting = true;
+    keepAwake.stop();
     agent.stop();
     saveConversation();
     scheduler.stop();

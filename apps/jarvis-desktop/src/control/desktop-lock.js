@@ -4,7 +4,7 @@
 // Владелец важнее фона: пока он за компьютером, фоновая задача окна не трогает. На заблокированном экране рук нет ни у кого.
 // desktop_click/desktop_type — составные руки (нажатие и ввод по id): они вызывают ui_click/ui_type
 // напрямую, поэтому замок и Esc нужны на них самих, иначе новая пара обходила бы очередь рук.
-const DESKTOP_TOOLS = new Set(['ui_click', 'ui_type', 'ui_keys', 'ui_focus', 'ui_set_toggle', 'ui_close_window', 'app_open', 'app_close', 'url_open', 'windows_focus', 'windows_close_all', 'windows_minimize_all', 'windows_restore_all', 'monitor_off', 'mouse_click', 'mouse_scroll', 'desktop_click', 'desktop_type']);
+const DESKTOP_TOOLS = new Set(['ui_click', 'ui_type', 'ui_keys', 'ui_focus', 'ui_set_toggle', 'ui_close_window', 'app_open', 'app_close', 'url_open', 'windows_focus', 'windows_close_all', 'window_close_active', 'windows_minimize_all', 'windows_restore_all', 'monitor_off', 'mouse_click', 'mouse_scroll', 'desktop_click', 'desktop_type']);
 // Открыть ссылку или программу не трогает ни мышь, ни клавиатуру владельца: такие действия не ждут паузы в его вводе.
 const OWNER_FREE_TOOLS = new Set(['url_open', 'app_open']);
 // shortcut: shell_run и library_run замком не закрыты, что они делают с окнами, из кода не видно; закрыть, если начнут мешать рукам.

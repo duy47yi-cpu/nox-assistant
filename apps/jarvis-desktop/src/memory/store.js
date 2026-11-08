@@ -181,9 +181,14 @@ function isExpired(item, now = Date.now()) {
   return now - Date.parse(item.usedAt || item.createdAt) > NOTE_LIFE_DAYS * DAY_MS;
 }
 
-// Просроченные и sensitive скрыты, пока явно не попросили.
-function visible(item, { includeExpired = false, includeSensitive = false } = {}) {
-  return (includeExpired || !isExpired(item)) && (includeSensitive || !item.sensitive);
+// Просроченные, sensitive и заменённые новой версией скрыты, пока явно не попросили.
+// История версий — это память для аудита, а не текущие факты: поиск и профиль видят только актуальное.
+// Забытые (forgottenAt) скрыты так же: запись остаётся в файле как история, но не всплывает в ответах.
+function visible(item, { includeExpired = false, includeSensitive = false, includeSuperseded = false, includeForgotten = false } = {}) {
+  return (includeExpired || !isExpired(item))
+    && (includeSensitive || !item.sensitive)
+    && (includeSuperseded || !item.supersededBy)
+    && (includeForgotten || !item.forgottenAt);
 }
 
 // Простая проверка, не защита: страховка от случайной записи пароля или ключа.
@@ -210,7 +215,7 @@ class MemoryStore {
   // Добавляет запись. Пустой текст отклоняется, длинный обрезается до MAX_TEXT символов.
   // Необязательные: about (о ком или о чём), links (about других записей), until (дата устаревания), sensitive (паспорт, деньги, здоровье).
   // source — проверяемая ссылка на файл {path, sha256, size, at, quote?}; сам диск здесь не читается, файл готовит инструмент.
-  add({ text, kind = DEFAULT_KIND, about, links, until, sensitive, source } = {}) {
+  add({ text, kind = DEFAULT_KIND, about, links, until, sensitive, source, supersedes } = {}) {
     const clean = String(text ?? '').trim();
     if (!clean) throw new Error('пустой текст');
     if (looksSecret(clean)) throw new Error('похоже на пароль или ключ, не записываю');
@@ -239,6 +244,12 @@ class MemoryStore {
     }
     if (sensitive) record.sensitive = true;
     if (sourceRecord) record.source = sourceRecord;
+    // Ссылка на заменённые версии: по ней видно, откуда пришёл текущий факт.
+    const versionIds = (Array.isArray(supersedes) ? supersedes : [])
+      .map((id) => String(id).trim())
+      .filter(Boolean)
+      .slice(0, MAX_LINKS);
+    if (versionIds.length) record.supersedes = versionIds;
     const data = this._load();
     data.items.push(record);
     if (data.items.length > MAX_ITEMS) {
@@ -364,7 +375,7 @@ class MemoryStore {
   // Всё про одно имя: записи с этим about и связанные с ними на один шаг. Просроченные не прячем: их отметит вызывающий.
   about(name, limit = DEFAULT_LIST_LIMIT) {
     const n = toLimit(limit, DEFAULT_LIST_LIMIT);
-    const items = this._load().items.filter((item) => !item.sensitive);
+    const items = this._load().items.filter((item) => !item.sensitive && !item.supersededBy && !item.forgottenAt);
     const direct = items.filter((item) => aboutHas(item.about, name));
     const related = items.filter((i) => !direct.includes(i) && direct.some((d) => linked(d, i)));
     const found = [...direct, ...related].reverse().slice(0, n);
@@ -373,13 +384,18 @@ class MemoryStore {
   }
 
   // Последние записи, новые сверху.
-  // opts (необязательно): includeSensitive=false прячет sensitive, includeExpired=false прячет просроченные.
-  // Без opts поведение прежнее: отдаются все записи, новые сверху (этим пользуются learn и тесты).
+  // opts (необязательно): includeSensitive=false прячет sensitive, includeExpired=false прячет просроченные,
+  // includeSuperseded=true показывает и заменённые версии (по умолчанию история скрыта, видны только текущие).
   list(limit = DEFAULT_LIST_LIMIT, opts = {}) {
     const n = toLimit(limit, DEFAULT_LIST_LIMIT);
     // Для просмотра по умолчанию отдаём всё (включая просроченное и чувствительное):
     // прятать их можно только явно, false.
-    const filter = { includeExpired: opts.includeExpired !== false, includeSensitive: opts.includeSensitive !== false };
+    const filter = {
+      includeExpired: opts.includeExpired !== false,
+      includeSensitive: opts.includeSensitive !== false,
+      includeSuperseded: opts.includeSuperseded === true,
+      includeForgotten: opts.includeForgotten === true,
+    };
     const items = this._load().items.filter((item) => visible(item, filter));
     return items.slice(-n).reverse();
   }
@@ -431,6 +447,35 @@ class MemoryStore {
       // Авто-извлечение фактов (learn.js) такие записи сюда не передаёт вовсе.
       if (patch.sensitive === true) next.sensitive = true;
       else delete next.sensitive;
+    }
+    // Замена версии: старая запись остаётся в файле, но перестаёт быть текущей (см. visible).
+    if ('supersededBy' in patch) {
+      const by = String(patch.supersededBy ?? '').trim();
+      if (by) next.supersededBy = by;
+      else delete next.supersededBy;
+    }
+    if ('supersedes' in patch) {
+      const ids = (Array.isArray(patch.supersedes) ? patch.supersedes : [])
+        .map((id) => String(id).trim())
+        .filter(Boolean)
+        .slice(0, MAX_LINKS);
+      if (ids.length) next.supersedes = ids;
+      else delete next.supersedes;
+    }
+    // Забывание с причиной (идея Supermemory): запись остаётся в файле как история.
+    if ('forgottenAt' in patch) {
+      const at = String(patch.forgottenAt ?? '').trim();
+      if (at) {
+        if (Number.isNaN(Date.parse(at))) throw new Error('забывание: нужна дата');
+        next.forgottenAt = new Date(at).toISOString();
+      } else {
+        delete next.forgottenAt;
+      }
+    }
+    if ('forgetReason' in patch) {
+      const reason = String(patch.forgetReason ?? '').trim().slice(0, 200);
+      if (reason) next.forgetReason = reason;
+      else delete next.forgetReason;
     }
     next.updatedAt = new Date().toISOString();
     const at = data.items.findIndex((entry) => entry.id === id);

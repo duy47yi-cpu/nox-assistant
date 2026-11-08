@@ -1,7 +1,7 @@
 'use strict';
 
-// Паки команд «Монтаж», «Игры», «Браузер»: структура, фразы, настоящие инструменты и клавиши,
-// гейт по белому списку клавиш, экспорт/импорт файла команд и повторный seed без дублей.
+// Паки команд: структура, фразы, настоящие инструменты и клавиши, гейт по белому списку клавиш и
+// списку инструментов, сводка для окна, экспорт/импорт файла команд и повторный seed без дублей.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -13,14 +13,16 @@ const {
 } = require('../src/commands/store');
 const { SAMPLE_COMMANDS } = require('../src/commands/samples');
 const { uiTools } = require('../src/tools/ui');
+const { systemTools } = require('../src/tools/system');
 const {
-  PACKS, getPack, availableCommands, unsupportedCommands, buildPackCommandJson, seedPackCommands, missingKeys,
+  PACKS, PACK_TOOLS, getPack, availableCommands, unsupportedCommands, buildPackCommandJson, describePacks,
+  seedPackCommands, missingKeys,
 } = require('../src/commands/packs');
 
-const PACK_IDS = ['montage', 'games', 'browser'];
+const PACK_IDS = ['montage', 'games', 'browser', 'windows', 'explorer', 'text', 'media', 'sites', 'apps'];
 
-// Реестр инструментов — из настоящего ui.js, а не из списка в тесте.
-const tools = new Map(uiTools().map((tool) => [tool.name, tool]));
+// Реестр инструментов — из настоящих ui.js и system.js, а не из списка в тесте.
+const tools = new Map([...uiTools(), ...systemTools].map((tool) => [tool.name, tool]));
 const availableNames = (packId) => availableCommands(packId).map((command) => command.name);
 const allPacks = () => PACKS.map((pack) => getPack(pack.id));
 
@@ -30,14 +32,15 @@ function tmpStore(t) {
   return new CommandStore(path.join(dir, 'commands.json'));
 }
 
-test('есть минимум три пака: монтаж, игры, браузер', () => {
+test('девять паков: монтаж, игры, браузер, окна, проводник, текст, музыка, сайты, программы', () => {
   assert.deepEqual(PACKS.map((pack) => pack.id), PACK_IDS);
   for (const pack of PACKS) {
     assert.equal(typeof pack.title, 'string');
     assert.ok(pack.title.trim().length > 0, pack.id);
     assert.equal(typeof pack.description, 'string');
-    // В описании честно сказано про активное окно: команда не ищет программу сама.
-    assert.match(pack.description, /активн(ом|ого) окн/i, pack.id);
+    assert.ok(pack.hint && pack.hint.trim().length > 0, `${pack.id}: нет подсказки «что нужно»`);
+    // Паки, где клавиши идут в активное окно, говорят об этом честно: команда не ищет программу сама.
+    if (pack.activeWindow) assert.match(pack.description, /активн(ом|ого) окн|переднем плане|сверху/i, pack.id);
     assert.ok(Array.isArray(pack.commands) && pack.commands.length > 0, pack.id);
     assert.ok(availableCommands(pack).length > 0, `${pack.id}: нет выполнимых команд`);
   }
@@ -87,22 +90,35 @@ test('фразы уникальны во всех паках и не конфл�
   }
 });
 
-test('каждый шаг — настоящий ui_keys; опасных инструментов нет', () => {
+test('каждый шаг — один из PACK_TOOLS (клавиши, фиксированный сайт, программа); опасных инструментов нет', () => {
+  assert.deepEqual(PACK_TOOLS, ['ui_keys', 'url_open', 'app_open']);
   for (const pack of PACKS) {
     for (const command of pack.commands) {
       for (const step of command.steps) {
         const tool = tools.get(step.tool);
         assert.ok(tool, `${command.name}: нет инструмента ${step.tool}`);
-        assert.equal(tool.name, 'ui_keys');
+        assert.ok(PACK_TOOLS.includes(step.tool), `${command.name}: ${step.tool} не разрешён в паке`);
+        assert.equal(tool.name, step.tool);
         assert.equal(DANGEROUS_TOOLS.has(step.tool), false, `${command.name}: ${step.tool}`);
         assert.equal(step.tool.startsWith('mission_') || step.tool.startsWith('command_'), false);
-        assert.equal(typeof (step.args && step.args.keys), 'string', `${command.name}: нет клавиш`);
+        if (step.tool === 'ui_keys') assert.equal(typeof (step.args && step.args.keys), 'string', `${command.name}: нет клавиш`);
       }
     }
   }
-  // Опасное в паке не только по имени инструмента: у всех шагов нет своих путей и команд оболочки.
+  // Опасное в паке не только по имени инструмента: нет команд оболочки, закрытия окон и удаления.
   const text = JSON.stringify(PACKS);
-  assert.doesNotMatch(text, /shell_run|pc_shutdown|app_close|mail_send/);
+  assert.doesNotMatch(text, /shell_run|pc_shutdown|app_close|mail_send|ui_close_window/);
+});
+
+test('сайты в паке только https и фиксированные; программы только из короткого списка', () => {
+  const sites = getPack('sites').commands.flatMap((command) => command.steps);
+  assert.ok(sites.length >= 5);
+  for (const step of sites) {
+    assert.equal(step.tool, 'url_open');
+    assert.match(step.args.url, /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(\/[\w\-./%?=&]*)?$/i, step.args.url);
+  }
+  const apps = getPack('apps').commands.flatMap((command) => command.steps).map((step) => step.args.name);
+  assert.deepEqual(apps.sort(), ['calc', 'mspaint', 'notepad', 'snippingtool']);
 });
 
 test('все клавиши паков есть в белом списке: невыполнимых команд нет, экспорт получает все', () => {
@@ -121,6 +137,28 @@ test('гейт по белому списку по-прежнему отсека
   assert.deepEqual(missingKeys(withKeys('win+r')), ['win+r']);
   assert.deepEqual(missingKeys(withKeys('delete')), ['delete']);
   assert.deepEqual(missingKeys(withKeys('ctrl+k')), []);
+  // Новые клавиши паков: окна, проводник, текст, медиа — все в белом списке.
+  for (const key of ['win+shift+s', 'ctrl+shift+escape', 'alt+up', 'f2', 'media_playpause', 'volume_mute', 'ctrl+plus']) {
+    assert.deepEqual(missingKeys(withKeys(key)), [], key);
+  }
+  // Инструмент вне PACK_TOOLS отсекается, даже без клавиш.
+  assert.deepEqual(missingKeys({ name: 'проба', steps: [{ tool: 'shell_run', args: {} }] }), ['shell_run']);
+});
+
+test('сводка для окна: сколько команд уже стоят, что внутри, пустой список — ноль установленных', (t) => {
+  const empty = describePacks([]);
+  assert.equal(empty.length, PACK_IDS.length);
+  for (const pack of empty) {
+    assert.equal(pack.installed, 0, pack.id);
+    assert.equal(pack.total, availableCommands(pack.id).length, pack.id);
+    assert.equal(pack.commands.length, pack.total, pack.id);
+    assert.ok(pack.hint, pack.id);
+  }
+  const store = tmpStore(t);
+  seedPackCommands(store, ['games']);
+  const summary = describePacks(store.list());
+  assert.equal(summary.find((pack) => pack.id === 'games').installed, availableNames('games').length);
+  assert.equal(summary.find((pack) => pack.id === 'text').installed, 0);
 });
 
 test('выполнимые команды: все клавиши проходят parseKeys', () => {
@@ -129,6 +167,7 @@ test('выполнимые команды: все клавиши проходя�
     for (const command of availableCommands(pack)) {
       assert.ok(command.steps.length > 0);
       for (const step of command.steps) {
+        if (step.tool !== 'ui_keys') continue;
         const parsed = parseKeys(step.args.keys);
         assert.equal(parsed.ok, true, `${command.name}: ${parsed.error}`);
         assert.ok(parsed.tokens.length > 0);
@@ -174,7 +213,7 @@ test('повторный seed не дублирует команды', (t) => {
   const total = PACK_IDS.reduce((sum, id) => sum + availableCommands(id).length, 0);
   assert.equal(first.length, total);
   assert.equal(store.list().length, total);
-  // Имена в порядке паков и команд: монтаж, затем игры, затем браузер.
+  // Имена в порядке паков и команд.
   const expected = PACK_IDS.flatMap((id) => availableNames(id));
   assert.deepEqual(first, expected);
   assert.deepEqual(seedPackCommands(store), []);
@@ -202,6 +241,18 @@ test('seed по выбранным пакам добавляет только и
   assert.equal(store.list().some((item) => item.name.startsWith('Монтаж:')), false);
 });
 
+test('пак «Сайты» и пак «Программы» сохраняются и выгружаются как обычные команды', (t) => {
+  for (const id of ['sites', 'apps']) {
+    const json = buildPackCommandJson(id);
+    const target = tmpStore(t);
+    const preview = previewCommandImport(json, target);
+    assert.equal(preview.ok, true, preview.error);
+    const applied = applyCommandImport(json, target, { confirm: true });
+    assert.equal(applied.ok, true, applied.error);
+    assert.equal(target.list().length, availableCommands(id).length, id);
+  }
+});
+
 test('фраза, занятая чужой командой, не перезаписывается и не роняет seed', (t) => {
   const store = tmpStore(t);
   store.save({
@@ -226,6 +277,8 @@ test('после seed фразы находят команды паков', (t) 
   assert.equal(store.findByPhrase('Новая вкладка.').name, 'Браузер: новая вкладка');
   assert.equal(store.findByPhrase('кадр назад в монтаже').name, 'Монтаж: кадр назад');
   assert.equal(store.findByPhrase('прыжок в игре').name, 'Игры: прыжок');
+  assert.equal(store.findByPhrase('пауза музыки').name, 'Музыка: пауза или продолжить');
+  assert.equal(store.findByPhrase('зайди в почту').name, 'Сайт: почта');
 });
 
 test('неизвестный пак в seed — ошибка до записи', (t) => {
@@ -253,7 +306,7 @@ test('каждый выполнимый шаг проходит политику
           hasPathParam: false,
         });
         assert.notEqual(verdict, 'deny', `${command.name}: ${step.tool} отклонён политикой`);
-        // ui_keys — действие (T1): в ручном режиме спрашивается, а не выполняется молча.
+        // Клавиши, сайты и программы — T1: в ручном режиме спрашиваются, а не выполняются молча.
         if (tool.risk === 'T1') assert.equal(verdict, 'ask', `${command.name}: ${step.tool} должно спрашиваться`);
       }
     }

@@ -32,11 +32,12 @@ function runCapture(cmd, args, { timeoutMs = 20000 } = {}) {
 }
 
 class ScreenStreamer {
-  constructor({ ffmpeg = 'ffmpeg', tmpDir, log = () => {}, onLive = null } = {}) {
+  constructor({ ffmpeg = 'ffmpeg', tmpDir, log = () => {}, onLive = null, isBusy = null } = {}) {
     this.ffmpeg = ffmpeg;
     this.tmpDir = tmpDir;
     this.log = log;
     this.onLive = onLive; // async (jpegBuffer, meta) => void
+    this.isBusy = isBusy; // () => boolean: пока агент работает, кадры не снимаем
     this.running = false;
     this.intervalMs = 1500;
     this.idleResendMs = 12000;
@@ -108,6 +109,12 @@ class ScreenStreamer {
   async _loop() {
     let failures = 0;
     while (this.running) {
+      // Пока агент работает, захват экрана молчит: ffmpeg не должен отнимать CPU у хода.
+      if (this.isBusy && this.isBusy()) {
+        this.lastHash = null; // после хода отправим один свежий кадр
+        await new Promise((r) => setTimeout(r, Math.max(this.intervalMs, 1000)));
+        continue;
+      }
       try {
         await this._tick();
         failures = 0;
@@ -127,3 +134,73 @@ class ScreenStreamer {
 }
 
 module.exports = { ScreenStreamer };
+
+// Настоящая трансляция в Telegram: пользователь запускает «трансляцию» в видеочате
+// (Telegram Desktop показывает RTMP-адрес), бот отправляет туда картинку экрана ffmpeg-ом.
+class RtmpStreamer {
+  constructor({ ffmpeg = 'ffmpeg', log = () => {}, onExit = null } = {}) {
+    this.ffmpeg = ffmpeg;
+    this.log = log;
+    this.onExit = onExit;
+    this.child = null;
+    this.url = null;
+    this.restartTimer = null;
+  }
+
+  get running() {
+    return Boolean(this.child);
+  }
+
+  start(url, { fps = 15, width = 1280, bitrate = '2500k' } = {}) {
+    const clean = String(url || '').trim();
+    if (!/^rtmps?:\/\//i.test(clean)) throw new Error('нужен адрес rtmp:// или rtmps://');
+    this.stop({ silent: true });
+    this.url = clean;
+    this._spawn({ fps, width, bitrate });
+  }
+
+  _spawn({ fps = 15, width = 1280, bitrate = '2500k' } = {}) {
+    const args = [
+      '-hide_banner', '-loglevel', 'error',
+      '-f', 'gdigrab', '-framerate', String(fps), '-i', 'desktop',
+      '-vf', `scale=${width}:-2`,
+      '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency',
+      '-g', '30', '-b:v', bitrate, '-maxrate', bitrate, '-bufsize', '5000k',
+      '-pix_fmt', 'yuv420p',
+      '-f', 'flv', this.url,
+    ];
+    const child = spawn(this.ffmpeg, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    this.child = child;
+    let err = '';
+    child.stderr.on('data', (chunk) => {
+      err += chunk.toString('utf8');
+      if (err.length > 4000) err = err.slice(-4000);
+    });
+    child.on('error', (e) => this.log(`трансляция: ${e.message}`));
+    child.on('close', (code) => {
+      this.child = null;
+      const reason = err.trim().split('\n').slice(-2).join(' | ');
+      this.log(`трансляция остановилась (ffmpeg ${code})${reason ? `: ${reason}` : ''}`);
+      if (this.restartTimer) {
+        this.restartTimer = setTimeout(() => {
+          if (this.url && !this.child) this._spawn({ fps, width, bitrate });
+        }, 3000);
+      }
+    });
+  }
+
+  stop({ silent = false } = {}) {
+    this.url = null;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
+    if (this.child) {
+      try { this.child.kill('SIGKILL'); } catch { /* уже умер */ }
+      this.child = null;
+      if (!silent) this.log('трансляция выключена');
+    }
+  }
+}
+
+module.exports.RtmpStreamer = RtmpStreamer;

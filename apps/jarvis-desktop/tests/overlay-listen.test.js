@@ -33,7 +33,7 @@ test('«Слушать «Джарвис» всегда»: фоновое рас�
   assert.match(main, /if \(!uiRequested && ev\.type === 'text'\) return;/);
   assert.match(main, /key === 'alwaysListen'\) \{ if \(value\) startDictation\(\{ uiRequested: false \}\); else stopDictation\(\); \}/);
   assert.match(main, /readSettings\(\)\.alwaysListen === true\) startDictation\(\{ uiRequested: false \}\)/);
-  assert.match(main, /'desktopOverlay', 'alwaysListen'\]/);
+  assert.match(main, /'desktopOverlay', 'alwaysListen', 'terseReplies'\]/);
   assert.match(read('renderer', 'index.html'), /data-setting="alwaysListen"/);
   assert.match(read('renderer', 'app.js'), /'alwaysListen'/);
 });

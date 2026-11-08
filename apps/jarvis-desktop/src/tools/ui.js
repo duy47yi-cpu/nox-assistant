@@ -26,6 +26,8 @@ const MAX_KEY_TOKENS = 20;
 const MAX_OCCURRENCE = 1000;
 const LIMIT_DEFAULT = 40;
 const LIMIT_MAX = 60;
+// Уровень, которым найдена цель (лестница поиска): что показать владельцу и модели.
+const RESOLUTION_WORDS = { automationId: 'по AutomationId', name: 'по точному имени', 'name-part': 'по части имени' };
 
 // ---------------------------------------------------------------------------
 // Части PowerShell-скриптов. Только постоянный текст, значений пользователя здесь нет.
@@ -115,6 +117,9 @@ const PS_UIA = [
   '  $cr.Add($AE::NameProperty)',
   '  $cr.Add($AE::ControlTypeProperty)',
   '  $cr.Add($AE::IsEnabledProperty)',
+  '  $cr.Add($AE::IsPasswordProperty)',
+  '  $cr.Add($AE::IsOffscreenProperty)',
+  '  $cr.Add($AE::HasKeyboardFocusProperty)',
   '  $cr.Add($AE::AutomationIdProperty)',
   '  $cr.Add($AE::BoundingRectangleProperty)',
   '  $cr.Add([System.Windows.Automation.ValuePattern]::ValueProperty)',
@@ -160,7 +165,14 @@ const PS_TARGET = [
   "  if ($occ -le 0 -and $m.Count -gt 1) { return @{ status = 'ambiguous'; count = $m.Count; matches = $top } }",
   '  if ($occ -le 0) { $occ = 1 }',
   "  if ($occ -gt $m.Count) { return @{ status = 'out_of_range'; count = $m.Count; matches = $top } }",
-  "  return @{ status = 'ok'; element = $m[$occ - 1]; count = $m.Count }",
+  '  $chosen = $m[$occ - 1]',
+  // Каким уровнем нашли цель (лестница поиска): AutomationId точнее имени, подстрока — слабее.
+  "  $resolution = 'name'",
+  "  $chosenAid = ''",
+  '  try { $chosenAid = [string]$chosen.Cached.AutomationId } catch {}',
+  "  if ($chosenAid -ne '' -and $chosenAid -ceq $needle) { $resolution = 'automationId' }",
+  "  elseif ((Cut $chosen.Cached.Name 1000) -ine $needle) { $resolution = 'name-part' }",
+  "  return @{ status = 'ok'; element = $chosen; count = $m.Count; resolution = $resolution }",
   '}',
   'function Get-Occurrence {',
   '  $o = 0',
@@ -309,30 +321,34 @@ const ELEMENTS_MAIN = [
   '  $w = Find-JWindow ([string]$env:JARVIS_UI_WINDOW)',
   "  if ($null -eq $w) { $script:R = @{ status = 'no_window' }; return }",
   '  $filter = Cut ([string]$env:JARVIS_UI_FILTER) 200',
-  '  $limit = 40',
-  '  [void][int]::TryParse([string]$env:JARVIS_UI_LIMIT, [ref]$limit)',
-  '  if ($limit -lt 1 -or $limit -gt 60) { $limit = 40 }',
+  // Собираем все подходящие элементы (до 300): порядок, лимит и бюджет считает JS ниже,
+  // чтобы фокус и текст результата не вытеснялись сорока кнопками (идея Ghosthand).
+  '  $scanMax = 300',
   '  $items = New-Object System.Collections.ArrayList',
   '  $total = 0',
-  '  $budget = 0',
-  '  $cut = $false',
   "  $interactive = @('Button','Edit','MenuItem','ListItem','Hyperlink','CheckBox','RadioButton','ComboBox','TabItem','TreeItem','DataItem','Slider','Spinner','SplitButton')",
   '  foreach ($e in (Get-JElements $w)) {',
+  '    $off = $false',
+  '    try { $off = [bool]$e.Cached.IsOffscreen } catch {}',
+  '    $pw = $false',
+  '    try { $pw = [bool]$e.Cached.IsPassword } catch {}',
   '    $n = Cut $e.Cached.Name 100',
   "    $v = ''",
-  '    try { $v = Cut ([string]$e.GetCachedPropertyValue([System.Windows.Automation.ValuePattern]::ValueProperty)) 80 } catch {}',
+  '    if ($pw) { $v = "[скрыто]" } else { try { $v = Cut ([string]$e.GetCachedPropertyValue([System.Windows.Automation.ValuePattern]::ValueProperty)) 80 } catch {} }',
   '    $t = TypeOf $e.Cached.ControlType',
   '    $r = $e.Cached.BoundingRectangle',
   '    $b = $null',
   '    if (-not $r.IsEmpty -and $r.Width -gt 0 -and $r.Height -gt 0) { $b = [ordered]@{ x = [int]$r.X; y = [int]$r.Y; w = [int]$r.Width; h = [int]$r.Height } }',
+  "    if ($off -and $null -eq $b) { continue }",
   "    if ($n -eq '' -and $v -eq '' -and -not ($null -ne $b -and $interactive -contains $t)) { continue }",
   "    if ($filter -ne '' -and -not ((Has $n $filter) -or (Has $t $filter))) { continue }",
   '    $total++',
-  '    if ($items.Count -ge $limit -or $budget -gt 6500) { $cut = $true; continue }',
-  '    $budget += $n.Length + $v.Length + $t.Length + 70',
-  '    [void]$items.Add([ordered]@{ name = $n; type = $t; enabled = [bool]$e.Cached.IsEnabled; value = $v; bounds = $b })',
+  '    if ($items.Count -ge $scanMax) { continue }',
+  '    $focused = $false',
+  '    try { $focused = [bool]$e.Cached.HasKeyboardFocus } catch {}',
+  '    [void]$items.Add([ordered]@{ name = $n; type = $t; enabled = [bool]$e.Cached.IsEnabled; isPassword = $pw; value = $v; bounds = $b; focused = $focused })',
   '  }',
-  "  $script:R = @{ status = 'ok'; window = (Cut $w.Current.Name 120); total = $total; truncated = $cut; items = $items }",
+  "  $script:R = @{ status = 'ok'; window = (Cut $w.Current.Name 120); total = $total; truncated = ($total -gt $items.Count); items = $items }",
   '}',
 ].join('\n');
 const ELEMENTS_SCRIPT = buildScript([PS_HEAD, PS_UIA, ELEMENTS_MAIN, PS_TAIL]);
@@ -428,7 +444,7 @@ const CLICK_MAIN = [
   '    if ((ConvertTo-Json -Compress -Depth 4 -InputObject @($a, $ta)) -ne $sb) { break }',
   '  }',
   "  $check = @{ before = $b1; after = $a; target = $tb; targetAfter = $ta; noisy = ($b0.count -ne $b1.count) }",
-  "  $script:R = @{ status = 'ok'; window = $title; element = $info; method = $method; count = $f.count; check = $check }",
+  "  $script:R = @{ status = 'ok'; window = $title; element = $info; method = $method; count = $f.count; resolution = $f.resolution; check = $check }",
   '}',
 ].join('\n');
 const CLICK_SCRIPT = buildScript([PS_HEAD, PS_USER32, PS_UIA, PS_TARGET, PS_FOREGROUND, PS_SUGGEST, PS_CHECK, PS_PAYMENT, CLICK_MAIN, PS_TAIL]);
@@ -471,11 +487,13 @@ const TYPE_MAIN = [
   '  $title = Cut $w.Current.Name 120',
   '  $name = [string]$env:JARVIS_UI_NAME',
   '  $focused = $false',
+  '  $resolvedBy = $null',
   "  if ($name.Trim() -ne '') {",
   '    $f = Find-JTarget $w $name (Get-Occurrence)',
   "    if ($f.status -ne 'ok') { $f.window = $title; $script:R = $f; return }",
   '    $t = $f.element',
   '    $info = Short $t',
+  '    $resolvedBy = $f.resolution',
   "    if (-not $t.Cached.IsEnabled) { $script:R = @{ status = 'disabled'; window = $title; element = $info }; return }",
   '  } else {',
   "    if (-not (Set-JForeground $w)) { $script:R = @{ status = 'no_focus'; window = $title }; return }",
@@ -487,7 +505,7 @@ const TYPE_MAIN = [
   '  $p = $null',
   '  if ($t.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$p) -and -not $p.Current.IsReadOnly) {',
   '    $p.SetValue([string]$env:JARVIS_UI_TEXT)',
-  "    $script:R = @{ status = 'ok'; window = $title; element = $info; method = 'value'; check = (Get-JReadback $w 'value') }",
+  "    $script:R = @{ status = 'ok'; window = $title; element = $info; method = 'value'; resolution = $resolvedBy; check = (Get-JReadback $w 'value') }",
   '    return',
   '  }',
   // Многострочный текст с клавиатуры отправил бы Enter — не делаем этого.
@@ -499,7 +517,7 @@ const TYPE_MAIN = [
   "  if (-not (Test-JForeground $h)) { $script:R = @{ status = 'no_focus'; window = $title }; return }",
   '  Add-Type -AssemblyName System.Windows.Forms',
   '  [System.Windows.Forms.SendKeys]::SendWait([string]$env:JARVIS_UI_SENDKEYS)',
-  "  $script:R = @{ status = 'ok'; window = $title; element = $info; method = 'sendkeys'; check = (Get-JReadback $w 'sendkeys') }",
+  "  $script:R = @{ status = 'ok'; window = $title; element = $info; method = 'sendkeys'; resolution = $resolvedBy; check = (Get-JReadback $w 'sendkeys') }",
   '}',
 ].join('\n');
 const TYPE_SCRIPT = buildScript([PS_HEAD, PS_USER32, PS_UIA, PS_TARGET, PS_FOREGROUND, PS_CHECK, TYPE_READBACK, TYPE_MAIN, PS_TAIL]);
@@ -636,7 +654,7 @@ const TOGGLE_MAIN = [
   '    for ($j = 0; $j -lt 10 -and $now -eq $before; $j++) { Start-Sleep -Milliseconds 150; $now = [string]$p.Current.ToggleState }',
   '    if ($now -eq $before) { break }',
   '  }',
-  "  $script:R = @{ status = 'ok'; window = $title; element = $info; was = $was; now = $now; changed = ($now -ne $was) }",
+  "  $script:R = @{ status = 'ok'; window = $title; element = $info; was = $was; now = $now; changed = ($now -ne $was); resolution = $f.resolution }",
   '}',
 ].join('\n');
 const TOGGLE_SCRIPT = buildScript([PS_HEAD, PS_UIA, PS_TARGET, PS_SUGGEST, PS_PAYMENT, TOGGLE_MAIN, PS_TAIL]);
@@ -649,11 +667,21 @@ const WAIT_MAIN = [
   "  if ($null -eq $w) { $script:R = @{ status = 'no_window' }; return }",
   '  $needle = Cut ([string]$env:JARVIS_UI_NAME) 1000',
   '  $found = $false',
+  '  $enabled = $false',
+  '  $visible = $false',
+  '  $focused = $false',
   '  foreach ($e in (Get-JElements $w)) {',
   '    $n = Cut $e.Cached.Name 1000',
-  "    if ($n -ne '' -and (Has $n $needle)) { $found = $true; break }",
+  "    if ($n -ne '' -and (Has $n $needle)) {",
+  '      $found = $true',
+  '      try { $enabled = [bool]$e.Cached.IsEnabled } catch {}',
+  '      try { $visible = -not [bool]$e.Cached.IsOffscreen } catch {}',
+  '      try { $focused = [bool]$e.Cached.HasKeyboardFocus } catch {}',
+  '      break',
+  '    }',
   '  }',
-  "  $script:R = @{ status = 'ok'; found = $found }",
+  "  $state = [ordered]@{ enabled = $enabled; visible = $visible; focused = $focused }",
+  "  $script:R = @{ status = 'ok'; found = $found; state = $state }",
   '}',
 ].join('\n');
 const WAIT_SCRIPT = buildScript([PS_HEAD, PS_UIA, WAIT_MAIN, PS_TAIL]);
@@ -735,6 +763,34 @@ const KEY_MAP = Object.freeze({
   'win+ctrl+d': '', // новый рабочий стол
   'win+shift+s': '', // фрагмент экрана
   'win+plus': '', // экранная лупа: Win + «+»
+  // Для паков (окна, проводник, текст, браузер, звук). Alt+F4, Delete без shift и Win+R сюда не входят.
+  'alt+left': '', // назад (проводник, браузер)
+  'alt+right': '', // вперёд
+  'alt+up': '', // папка выше в проводнике
+  'ctrl+shift+escape': '', // диспетчер задач
+  'ctrl+shift+tab': '^+{TAB}', // предыдущая вкладка
+  'ctrl+shift+t': '^+t', // вернуть закрытую вкладку
+  'ctrl+shift+z': '^+z', // повтор правки
+  'ctrl+e': '^e', // поиск в проводнике
+  'ctrl+f': '^f', // поиск на странице или в тексте
+  'ctrl+h': '^h', // замена в тексте
+  'ctrl+x': '^x', // вырезать
+  'ctrl+y': '^y', // повтор правки
+  'ctrl+i': '^i', // курсив
+  'ctrl+u': '^u', // подчёркивание
+  'ctrl+home': '^{HOME}', // начало документа
+  'ctrl+end': '^{END}', // конец документа
+  'ctrl+plus': '^{+}', // масштаб страницы крупнее
+  'ctrl+minus': '^-', // масштаб страницы мельче
+  'ctrl+0': '^0', // обычный масштаб
+  'f2': '{F2}', // переименовать выбранное
+  // Медиа-клавиши: работают с любым плеером Windows, окно плеера не нужно.
+  'media_playpause': '', // пауза или продолжить
+  'media_next': '', // следующий трек
+  'media_prev': '', // предыдущий трек
+  'volume_up': '', // громкость на один шаг
+  'volume_down': '', // громкость на один шаг тише
+  'volume_mute': '', // звук вкл/выкл
 });
 
 // Заголовок окна с именем файла («привет.txt — Блокнот»): то же правило, что в policy/modes.js для перезаписи.
@@ -744,7 +800,8 @@ const SAVED_FILE_TITLE = /\.[a-z0-9]{1,5}(\s|$)/i;
 // win — клавиша Win (VK_LWIN): сочетания с ней идут только этим путём.
 // '.' — VK_OEM_PERIOD, plus — VK_OEM_PLUS (лупа Windows вызывается Win + «+»).
 // delete — VK_DELETE, нужен только для shift+delete; f5 — VK_F5.
-const VK_CODES = Object.freeze({ win: 91, ctrl: 17, shift: 16, tab: 9, enter: 13, escape: 27, space: 32, up: 38, down: 40, left: 37, right: 39, pageup: 33, pagedown: 34, home: 36, end: 35, delete: 46, f5: 116, '.': 190, plus: 187, a: 65, b: 66, c: 67, d: 68, e: 69, i: 73, k: 75, l: 76, m: 77, n: 78, o: 79, q: 81, s: 83, t: 84, v: 86, w: 87, z: 90 });
+// alt — VK_MENU (18); f2 — VK_F2; media_* и volume_* — клавиши мультимедиа Windows (VK 173–179).
+const VK_CODES = Object.freeze({ win: 91, ctrl: 17, shift: 16, alt: 18, tab: 9, enter: 13, escape: 27, space: 32, up: 38, down: 40, left: 37, right: 39, pageup: 33, pagedown: 34, home: 36, end: 35, delete: 46, f2: 113, f5: 116, '.': 190, plus: 187, minus: 189, '0': 48, a: 65, b: 66, c: 67, d: 68, e: 69, f: 70, h: 72, i: 73, k: 75, l: 76, m: 77, n: 78, o: 79, q: 81, s: 83, t: 84, u: 85, v: 86, w: 87, x: 88, y: 89, z: 90, volume_mute: 173, volume_down: 174, volume_up: 175, media_next: 176, media_prev: 177, media_playpause: 179 });
 function keysToVk(tokens) {
   return tokens.map((t) => t.split('+').map((k) => VK_CODES[k]).join(',')).join(';');
 }
@@ -964,6 +1021,80 @@ function focusVerdict(check) {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Маскирование паролей, API-ключей и номеров карт в значениях полей (Ghosthand SecretSanitizer + Adamdesgns screen-guard).
+const PASSWORD_LABEL_RE = /парол|password|passcode|pin[-_\s]?code|пин[-_\s]?код|секрет|secret|api[-_\s]?key|токен|token|cvv|cvc/i;
+const SECRET_VALUE_RE = /\b(?:sk-[a-zA-Z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{16,}|AIza[0-9A-Za-z_-]{20,}|xox[baprs]-[0-9A-Za-z-]{10,}|Bearer\s+[A-Za-z0-9._~+/=-]{10,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4})\b/;
+
+function sanitizeUiElementValue(it) {
+  const raw = String((it && it.value) ?? '').slice(0, 80);
+  if (!raw || raw === '[скрыто]') return raw;
+  if (it && it.isPassword) return '[скрыто]';
+  const name = String((it && it.name) ?? '');
+  const type = String((it && it.type) ?? '');
+  if ((type === 'Edit' || type === 'Document') && PASSWORD_LABEL_RE.test(name)) return '[скрыто]';
+  if (SECRET_VALUE_RE.test(raw)) return '[скрыто]';
+  return raw;
+}
+
+// Порядок элементов для модели (идея Ghosthand): фокус и управляемые элементы — первыми,
+// под текст результата резервируются места, чтобы он не вытеснялся кнопками.
+// Лимит и бюджет символов применяются после ранжирования; на вход — уже проверенные элементы.
+const RANK_INTERACTIVE = new Set([
+  'Button', 'Edit', 'MenuItem', 'ListItem', 'Hyperlink', 'CheckBox', 'RadioButton',
+  'ComboBox', 'TabItem', 'TreeItem', 'DataItem', 'Slider', 'Spinner', 'SplitButton',
+]);
+const ELEMENTS_BUDGET = 6500;
+const RESULT_RESERVE = 8;
+
+function rankElements(items, { limit = LIMIT_DEFAULT, budget = ELEMENTS_BUDGET, reserve = RESULT_RESERVE } = {}) {
+  const entries = (Array.isArray(items) ? items : []).map((item, index) => ({ item, index }));
+  const category = (entry) => {
+    const item = entry.item || {};
+    if (item.focus === true) return 0;
+    if (RANK_INTERACTIVE.has(String(item.type || ''))) return 1;
+    return item.name || item.value ? 2 : 3;
+  };
+  const coord = (entry, field) => {
+    const value = entry.item && entry.item.bounds ? Number(entry.item.bounds[field]) : NaN;
+    return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+  };
+  const compare = (a, b) => category(a) - category(b)
+    || coord(a, 'y') - coord(b, 'y')
+    || coord(a, 'x') - coord(b, 'x')
+    || a.index - b.index;
+  entries.sort(compare);
+  const n = Math.max(1, Math.min(LIMIT_MAX, Number(limit) || LIMIT_DEFAULT));
+  const textEntries = entries.filter((entry) => category(entry) === 2);
+  const keepText = Math.min(reserve, textEntries.length, Math.floor(n / 2));
+  let picked = entries.slice(0, n);
+  const taken = new Set(picked.map((entry) => entry.index));
+  const textIn = picked.filter((entry) => category(entry) === 2).length;
+  if (textIn < keepText) {
+    const extra = textEntries.filter((entry) => !taken.has(entry.index)).slice(0, keepText - textIn);
+    if (extra.length) {
+      // Освобождаем места в хвосте (не фокус и не текст), чтобы результат остался в выдаче.
+      const tail = picked.filter((entry) => category(entry) !== 0 && category(entry) !== 2);
+      const drop = new Set(tail.slice(-extra.length).map((entry) => entry.index));
+      picked = picked.filter((entry) => !drop.has(entry.index)).concat(extra).sort(compare);
+    }
+  }
+  const shown = [];
+  let used = 0;
+  let truncated = entries.length > n;
+  for (const entry of picked) {
+    const item = entry.item || {};
+    const cost = String(item.name || '').length + String(item.value || '').length + String(item.type || '').length + 70;
+    if (used + cost > budget) {
+      truncated = true;
+      continue;
+    }
+    used += cost;
+    shown.push(item);
+  }
+  return { items: shown, truncated };
+}
+
 // Инструменты.
 
 function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
@@ -1059,13 +1190,15 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
       );
       if (result) return result;
       if (parsed.status !== 'ok') return statusFailure(parsed, { window: w.value });
-      const items = (Array.isArray(parsed.items) ? parsed.items : parsed.items ? [parsed.items] : []).map((it) => {
+      const mapped = (Array.isArray(parsed.items) ? parsed.items : parsed.items ? [parsed.items] : []).map((it) => {
         const item = {
           name: String((it && it.name) ?? ''),
           type: String((it && it.type) ?? ''),
           enabled: Boolean(it && it.enabled),
-          value: String((it && it.value) ?? '').slice(0, 80),
+          value: sanitizeUiElementValue(it),
         };
+        // Фокус нужен порядку выдачи: он важнее соседних кнопок. Поле только при true — старый вид ответа не ломается.
+        if (it && it.focused === true) item.focus = true;
         // Координаты нужны сцене для запасного нажатия мышью. Нет валидных — поля нет, чтобы старый вид ответа не ломался.
         const b = it && it.bounds;
         if (b && typeof b === 'object') {
@@ -1074,12 +1207,15 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
         }
         return item;
       });
-      const total = Number(parsed.total) || items.length;
-      const more = total > items.length ? ` (из ${total}; сузь filter)` : '';
+      // Фокус и текст результата — вперёд, резерв под результат; лимит и бюджет применяются здесь.
+      const ranked = rankElements(mapped, { limit: l.value });
+      const total = Number(parsed.total) || mapped.length;
+      const truncated = Boolean(parsed.truncated) || ranked.truncated;
+      const more = total > ranked.items.length ? ` (показано ${ranked.items.length} из ${total}; сузь filter)` : '';
       return {
         ok: true,
-        summary: `окно «${parsed.window}»: элементов ${items.length}${more}`,
-        data: { window: String(parsed.window || ''), total, truncated: Boolean(parsed.truncated), elements: items },
+        summary: `окно «${parsed.window}»: элементов ${ranked.items.length}${more}`,
+        data: { window: String(parsed.window || ''), total, truncated, elements: ranked.items },
       };
     },
   };
@@ -1113,10 +1249,12 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
       if (result) return result;
       if (parsed.status !== 'ok') return statusFailure(parsed, { window: w.value, name: n.value, occurrence: o.value });
       const el = parsed.element || {};
+      const resolution = parsed.resolution ? String(parsed.resolution) : '';
+      const found = resolution ? `, найден ${RESOLUTION_WORDS[resolution] || resolution}` : '';
       return {
         ok: true,
-        summary: `нажато «${el.name || n.value}» (${el.type || '?'}) в окне «${parsed.window}», способ: ${parsed.method}`,
-        data: { window: parsed.window, element: el, method: parsed.method, check: parsed.check },
+        summary: `нажато «${el.name || n.value}» (${el.type || '?'}) в окне «${parsed.window}», способ: ${parsed.method}${found}`,
+        data: { window: parsed.window, element: el, method: parsed.method, ...(resolution ? { resolution } : {}), check: parsed.check },
       };
     },
     async verify(args, result) {
@@ -1173,10 +1311,11 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
       if (parsed.status !== 'ok') return statusFailure(parsed, { window: w.value, name: n.value, occurrence: o.value });
       const el = parsed.element || {};
       const how = parsed.method === 'value' ? 'значение поля заменено' : 'напечатано с клавиатуры';
+      const resolution = parsed.resolution ? String(parsed.resolution) : '';
       return {
         ok: true,
         summary: `введено ${text.length} симв. в «${el.name || el.type || 'поле'}» окна «${parsed.window}» (${how})`,
-        data: { window: parsed.window, element: el, method: parsed.method, length: text.length, check: parsed.check },
+        data: { window: parsed.window, element: el, method: parsed.method, ...(resolution ? { resolution } : {}), length: text.length, check: parsed.check },
       };
     },
     async verify(args, result) {
@@ -1324,10 +1463,11 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
       const was = String(parsed.was || '').toLowerCase();
       const now = String(parsed.now || '').toLowerCase();
       const label = el.name || n.value;
+      const resolution = parsed.resolution ? String(parsed.resolution) : '';
       return {
         ok: true,
         summary: parsed.changed ? `«${label}» переключён: ${was} → ${now}` : `«${label}» уже ${now}, ничего не нажато`,
-        data: { window: parsed.window, element: el, was, now, changed: Boolean(parsed.changed) },
+        data: { window: parsed.window, element: el, was, now, changed: Boolean(parsed.changed), ...(resolution ? { resolution } : {}) },
       };
     },
     async verify(args, result) {
@@ -1338,17 +1478,27 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
     },
   };
 
-  // Ожидание элемента в окне: опрос каждые 250 мс, общий срок timeout_ms. Окна нет — для appear «нет», для gone «элемента нет».
+  // Ожидание элемента и его состояния: опрос каждые 250 мс, общий срок timeout_ms.
+  // until: появился/исчез/стал доступен/недоступен/видим/получил фокус (идея pywinauto).
+  const WAIT_UNTIL = ['appear', 'gone', 'enabled', 'disabled', 'visible', 'focused'];
+  const WAIT_WORDS = {
+    appear: 'элемент появился',
+    gone: 'элемент исчез',
+    enabled: 'элемент стал доступен',
+    disabled: 'элемент стал недоступен',
+    visible: 'элемент стал видим',
+    focused: 'элемент получил фокус',
+  };
   const uiWait = {
     name: 'ui_wait',
-    description: `Ждать, пока в окне появится элемент с именем (until=appear, по умолчанию) или исчезнет (until=gone). window — часть заголовка окна; name — точное или частичное имя элемента. timeout_ms до ${WAIT_MAX_MS}, по умолчанию ${WAIT_DEFAULT_MS}. Только чтение.`,
+    description: `Ждать появления элемента (until=appear), исчезновения (gone), доступности (enabled), недоступности (disabled), видимости (visible) или фокуса (focused). window — часть заголовка окна; name — точное или частичное имя элемента. timeout_ms до ${WAIT_MAX_MS}, по умолчанию ${WAIT_DEFAULT_MS}. Только чтение.`,
     risk: 'T0',
     parameters: {
       type: 'object',
       properties: {
         window: { type: 'string', minLength: 1, maxLength: MAX_WINDOW },
         name: { type: 'string', minLength: 1, maxLength: MAX_NAME },
-        until: { type: 'string', enum: ['appear', 'gone'], default: 'appear' },
+        until: { type: 'string', enum: WAIT_UNTIL, default: 'appear' },
         timeout_ms: { type: 'integer', minimum: 1, maximum: WAIT_MAX_MS },
       },
       required: ['window', 'name'],
@@ -1359,14 +1509,13 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
       const n = strArg(args && args.name, { label: 'name (имя элемента)', max: MAX_NAME });
       if (n.error) return fail(n.error);
       const until = args && args.until === undefined ? 'appear' : args && args.until;
-      if (until !== 'appear' && until !== 'gone') return fail('until: appear или gone');
+      if (!WAIT_UNTIL.includes(until)) return fail(`until: ${WAIT_UNTIL.join(', ')}`);
       const timeoutMs = args && args.timeout_ms === undefined ? WAIT_DEFAULT_MS : Number(args && args.timeout_ms);
       if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > WAIT_MAX_MS) return fail(`timeout_ms от 1 до ${WAIT_MAX_MS}`);
       const signal = ctx && ctx.signal;
-      const want = until === 'appear';
-      const env = { JARVIS_UI_WINDOW: w.value, JARVIS_UI_NAME: n.value, JARVIS_UI_SELF_PID: pidEnv };
+      const env = { JARVIS_UI_WINDOW: w.value, JARVIS_UI_NAME: n.value, JARVIS_UI_UNTIL: until, JARVIS_UI_SELF_PID: pidEnv };
 
-      // Один опрос: true/false — видно ли элемент; null — опрос не удался (это не «нет элемента»).
+      // Один опрос: найденный элемент и его состояние; null — опрос не дал ответа (это не «нет элемента»).
       async function probe() {
         let res;
         try {
@@ -1382,8 +1531,24 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
           return null;
         }
         if (!parsed || typeof parsed !== 'object') return null;
-        if (parsed.status === 'no_window') return false;
-        if (parsed.status === 'ok' && typeof parsed.found === 'boolean') return parsed.found;
+        if (parsed.status === 'no_window') return { found: false, state: null };
+        if (parsed.status === 'ok' && typeof parsed.found === 'boolean') {
+          return { found: parsed.found, state: parsed.state && typeof parsed.state === 'object' ? parsed.state : null };
+        }
+        return null;
+      }
+
+      // Выполнено ли условие: true/false; null — состояние не прочитано (неизвестно, а не «нет»).
+      function satisfied(snapshot) {
+        if (!snapshot || typeof snapshot.found !== 'boolean') return null;
+        const found = snapshot.found === true;
+        if (until === 'appear') return found;
+        if (until === 'gone') return !found;
+        if (!found || !snapshot.state) return null;
+        if (until === 'enabled') return snapshot.state.enabled === true;
+        if (until === 'disabled') return snapshot.state.enabled === false;
+        if (until === 'visible') return snapshot.state.visible === true;
+        if (until === 'focused') return snapshot.state.focused === true;
         return null;
       }
 
@@ -1391,22 +1556,25 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
       const started = Date.now();
       for (;;) {
         if (signal && signal.aborted) return stopped;
-        const seen = await probe();
+        const snapshot = await probe();
         if (signal && signal.aborted) return stopped;
+        const seen = snapshot ? satisfied(snapshot) : null;
+        const lastState = snapshot && snapshot.state ? snapshot.state : null;
         const ms = Date.now() - started;
-        if (seen === want) {
+        if (seen === true) {
           return {
             ok: true,
-            summary: want ? `элемент появился за ${ms} мс` : `элемент исчез за ${ms} мс`,
-            data: { window: w.value, name: n.value, until, seen, ms },
+            summary: `${WAIT_WORDS[until]} за ${ms} мс`,
+            data: { window: w.value, name: n.value, until, seen: true, ms, ...(lastState ? { state: lastState } : {}) },
           };
         }
         const left = timeoutMs - ms;
         if (left <= 0) {
+          const asked = until === 'appear' ? 'появился ли' : until === 'gone' ? 'исчез ли' : `выполнено ли условие «${until}»`;
           const summary = seen === null
-            ? `опросить не удалось за ${timeoutMs} мс: ${want ? 'появился ли' : 'исчез ли'} элемент, неизвестно`
-            : `${want ? 'элемент не появился' : 'элемент не исчез'} за ${timeoutMs} мс`;
-          return { ok: false, summary, data: { window: w.value, name: n.value, until, seen, ms } };
+            ? `опросить не удалось за ${timeoutMs} мс: ${asked}, неизвестно`
+            : `${until === 'appear' ? 'элемент не появился' : until === 'gone' ? 'элемент не исчез' : `${WAIT_WORDS[until]} не дождались`} за ${timeoutMs} мс`;
+          return { ok: false, summary, data: { window: w.value, name: n.value, until, seen, ms, ...(lastState ? { state: lastState } : {}) } };
         }
         await sleep(Math.min(WAIT_STEP_MS, left), signal);
       }
@@ -1420,4 +1588,4 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
   return [uiWindows, uiElements, uiClick, uiType, uiKeys, uiFocus, uiCloseWindow, uiSetToggle, uiWait];
 }
 
-module.exports = { uiTools, clickVerdict, typeVerdict, keysVerdict, focusVerdict, escapeSendKeys, parseKeys, keysToVk, parseWindows, parseJsonOutput, KEY_MAP, SCRIPTS };
+module.exports = { uiTools, clickVerdict, typeVerdict, keysVerdict, focusVerdict, escapeSendKeys, parseKeys, keysToVk, parseWindows, parseJsonOutput, sanitizeUiElementValue, rankElements, KEY_MAP, SCRIPTS };

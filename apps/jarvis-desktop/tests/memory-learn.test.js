@@ -86,13 +86,15 @@ describe('запись памяти после хода', () => {
     assert.equal(store.list().length, 1);
   });
 
-  test('противоречие не перезаписывает старую запись', (t) => {
+  test('противоречие сохраняет новую версию, а старую — как историю', (t) => {
     const store = tempStore(t);
     learnFromTurn({ store, text: 'я живу в Москве' });
     const result = learnFromTurn({ store, text: 'я живу в Питере' });
-    assert.equal(result.added.length, 0);
+    assert.equal(result.added.length, 1);
     assert.ok(result.conflicts.length > 0);
-    assert.match(store.list()[0].text, /Москве/);
+    assert.equal(result.replaced.length, 1);
+    assert.match(store.list()[0].text, /Питере/);
+    assert.equal(store.list(10, { includeSuperseded: true }).length, 2);
   });
 
   test('выключенная авто-память ничего не пишет', (t) => {

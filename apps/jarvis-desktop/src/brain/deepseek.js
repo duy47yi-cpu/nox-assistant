@@ -43,10 +43,90 @@ function httpError(status, text) {
   return codedError('http', `Модель ответила ошибкой ${status}: ${String(detail).slice(0, 300)}`, { status });
 }
 
+// Починка строковых литералов JSON в аргументах инструмента (по образцу Leon AI agent-utils):
+// неэкранированные обратные слеши путей Windows (C:\Users\...), сырые переводы строк и табуляции,
+// а также неэкранированные кавычки внутри строкового значения.
+function repairJsonStringLiterals(input) {
+  const src = String(input ?? '');
+  let inString = false;
+  let inWinPath = false;
+  let escaped = false;
+  let out = '';
+
+  const nextNonSpace = (start) => {
+    for (let j = start; j < src.length; j += 1) {
+      const ch = src[j];
+      if (ch && !/\s/.test(ch)) return ch;
+    }
+    return '';
+  };
+
+  for (let i = 0; i < src.length; i += 1) {
+    const ch = src[i];
+    if (!inString) {
+      if (ch === '"') {
+        inString = true;
+        inWinPath = /^[A-Za-z]:\\(?!\\)/.test(src.slice(i + 1));
+      }
+      out += ch;
+      continue;
+    }
+    if (escaped) {
+      out += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\n') { out += '\\n'; continue; }
+    if (ch === '\r') { out += '\\r'; continue; }
+    if (ch === '\t') { out += '\\t'; continue; }
+    if (ch === '\\') {
+      const next = src[i + 1];
+      if (inWinPath && next !== '\\' && next !== '"') {
+        out += '\\\\';
+        continue;
+      }
+      const validEscape = next === '"' || next === '\\' || next === '/'
+        || next === 'b' || next === 'f' || next === 'n' || next === 'r' || next === 't'
+        || (next === 'u' && /^[0-9a-fA-F]{4}$/.test(src.slice(i + 2, i + 6)));
+      if (validEscape) {
+        out += ch;
+        escaped = true;
+      } else {
+        out += '\\\\';
+      }
+      continue;
+    }
+    if (ch === '"') {
+      const next = nextNonSpace(i + 1);
+      if (next === '' || next === ',' || next === '}' || next === ']' || next === ':') {
+        inString = false;
+        inWinPath = false;
+        out += ch;
+      } else {
+        out += '\\"';
+      }
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 // Аргументы приходят строкой JSON. Пустая строка означает «без параметров».
 function parseArgs(raw) {
   const text = String(raw ?? '');
-  const parsed = text.trim() === '' ? {} : JSON.parse(text);
+  let parsed;
+  if (text.trim() === '') {
+    parsed = {};
+  } else {
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      const repaired = repairJsonStringLiterals(text);
+      if (repaired === text) throw err;
+      parsed = JSON.parse(repaired);
+    }
+  }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('аргументы должны быть JSON-объектом');
   }
@@ -389,4 +469,4 @@ class DeepSeekClient {
   }
 }
 
-module.exports = { DeepSeekClient, normalizeReasoning };
+module.exports = { DeepSeekClient, normalizeReasoning, repairJsonStringLiterals, parseArgs };

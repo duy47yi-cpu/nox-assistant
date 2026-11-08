@@ -40,8 +40,10 @@ const PLAIN_GIT_CHECKOUT = /^\s*git(?:\.exe)?\s+(?:-C\s+(?:"[^";|&`$<>\r\n]*"|'[
 // «Оформить заказ» и похожие формы добавляем только парой слов: одно «оформить» или «заказ» встречается
 // и в безопасных кнопках («Оформить», «Заказать звонок»), поэтому по отдельности их не ловим.
 const PAY_ELEMENT = /(оплат|купить|покупк|подписк|оформить\s+(?:заказ|покупк)|подтверд\S*\s+заказ|checkout|\bpay\b|\bbuy\b|\bsubscribe\b|\btransfer\b|\bplace\s+(?:the\s+)?order\b|\bcomplete\s+(?:the\s+)?(?:order|purchase)\b)/i;
-// Сайт оплаты: отдельный адрес — верный признак платежа.
-const PAY_BROWSER_HOST = /stripe|paypal|klarna|checkout|qiwi|yoomoney/i;
+// Сайт оплаты: отдельный адрес — верный признак платежа (включая криптобиржи и шлюзы из Adamdesgns screen-guard).
+const PAY_BROWSER_HOST = /stripe|paypal|klarna|checkout|qiwi|yoomoney|coinbase|binance|kraken|venmo|cash\.app|wise\.com|revolut/i;
+// Менеджеры паролей и хранилища ключей: любое обращение к их окнам требует подтверждения владельца.
+const CREDENTIAL_WINDOW_RE = /bitwarden|1password|keepass|lastpass|dashlane|enpass|credential\s*manager|диспетчер\s*учетных\s*данных|связка\s*ключей/i;
 // Удаление: прямой запрос владельца в полном доступе обрабатывается отдельно.
 const DELETE_TOOL_NAME = /(^|_)(delete|remove|trash|erase|purge|wipe|unlink)(_|$)/i;
 
@@ -101,8 +103,9 @@ function inSession(sessionAllow, name, args) {
 // в остальных режимах спрашиваем (а не отказываем).
 const HARD_TOOL_NAME = /(^|_)(delete|remove|send|pay|payment|transfer|purchase|buy)(_|$)/i;
 const HARD_SHELL = /Remove-Item|\bdel\b|\berase\b|\brmdir\b|\brd\b|Send-MailMessage|sendmail|smtp|checkout|payment/i;
-const HARD_WINDOW = /telegram|ayugram|whatsapp|discord|viber|gmail|outlook|почта|mail\.ru|сбер|тинькофф|tinkoff|альфа-банк|банк|bank|wallet|кошел|paypal|оплат/i;
+const HARD_WINDOW = /telegram|ayugram|whatsapp|discord|viber|gmail|outlook|почта|mail\.ru|сбер|тинькофф|tinkoff|альфа-банк|банк|bank|wallet|кошел|paypal|оплат|bitwarden|1password|keepass|lastpass|dashlane|enpass|credential\s*manager|диспетчер\s*учетных\s*данных/i;
 const HARD_UI = new Set(['mouse_click', 'mouse_scroll', 'windows_focus', 'ui_focus', 'ui_type', 'ui_keys', 'ui_click', 'ui_set_toggle']);
+const READ_UI = new Set(['ui_elements', 'ui_wait']);
 
 // Браузер: у вызова только номер элемента, поэтому адрес сверяется с открытой страницей.
 const HARD_BROWSER = new Set(['browser_click', 'browser_type']);
@@ -345,6 +348,9 @@ function hardDeny({ name, args }) {
   if (HARD_UI.has(n) && HARD_WINDOW.test(String((args && args.window) || ''))) {
     return 'запрет: ввод в окне почты, мессенджера или банка';
   }
+  if (READ_UI.has(n) && CREDENTIAL_WINDOW_RE.test(String((args && args.window) || ''))) {
+    return 'запрет: чтение окна менеджера паролей';
+  }
   if (HARD_BROWSER.has(n) && HARD_BROWSER_HOST.test(String(browserHost()))) {
     return 'запрет: действие на сайте почты, мессенджера или банка';
   }
@@ -437,4 +443,17 @@ function decide({ mode, name, risk, args, workspace, sessionAllow, hasPathParam 
   return 'ask';
 }
 
-module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe };
+const POLICY_PATTERNS = Object.freeze({
+  PAY_TOOL_NAME,
+  PAY_SHELL,
+  PAY_ELEMENT,
+  PAY_BROWSER_HOST,
+  CREDENTIAL_WINDOW_RE,
+  DELETE_TOOL_NAME,
+  HARD_TOOL_NAME,
+  HARD_SHELL,
+  HARD_WINDOW,
+  HARD_BROWSER_HOST,
+});
+
+module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe, POLICY_PATTERNS };

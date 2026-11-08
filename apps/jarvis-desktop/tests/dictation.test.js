@@ -92,3 +92,69 @@ test('поздний результат закрытой диктовки не �
   assert.equal(stops, 0);
   assert.deepEqual(events, []);
 });
+
+test('тихий режим: слова без обращения «Джарвис» не уходят в чат и не останавливают ход', () => {
+  let stops = 0;
+  const events = [];
+  const accept = createDictationRouter({
+    isBusy: () => true,
+    interrupt: () => { stops += 1; },
+    emit: (event) => events.push(event),
+    getMode: () => 'quiet',
+    hasWake: (text) => /^джарвис/i.test(text),
+  });
+  accept({ type: 'text', text: 'просто болтовня' });
+  accept({ type: 'text', text: 'открой ютуб' });
+  assert.deepEqual(events, []);
+  assert.equal(stops, 0);
+  accept({ type: 'text', text: 'Джарвис, открой ютуб' });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].text, 'Джарвис, открой ютуб');
+  assert.equal(stops, 1);
+});
+
+test('команда режима перехватывается: в поле не печатается, ход не останавливает', () => {
+  let stops = 0;
+  const events = [];
+  const modes = [];
+  const accept = createDictationRouter({
+    isBusy: () => true,
+    interrupt: () => { stops += 1; },
+    emit: (event) => events.push(event),
+    getMode: () => 'listening',
+    onMode: (result) => modes.push(result),
+  });
+  accept({ type: 'text', text: 'тихий режим' });
+  accept({ type: 'text', text: 'хватит слушать' });
+  accept({ type: 'text', text: 'слушай меня' });
+  assert.deepEqual(events, [], 'фразы режима не попадают в поле');
+  assert.equal(stops, 0);
+  assert.deepEqual(modes.map((m) => m.action), ['set-quiet', 'set-off', 'set-listening']);
+});
+
+test('выключенный режим: поздние строки распознавания игнорируются', () => {
+  const events = [];
+  const accept = createDictationRouter({
+    isBusy: () => false,
+    interrupt: () => {},
+    emit: (event) => events.push(event),
+    getMode: () => 'off',
+  });
+  accept({ type: 'text', text: 'поздняя фраза' });
+  accept({ type: 'state', state: 'stopped' });
+  assert.deepEqual(events, [{ type: 'state', state: 'stopped' }], 'служебные события проходят');
+});
+
+test('ошибка обработчика режима не ломает диктовку', () => {
+  const events = [];
+  const accept = createDictationRouter({
+    isBusy: () => false,
+    interrupt: () => {},
+    emit: (event) => events.push(event),
+    getMode: () => 'listening',
+    onMode: () => { throw new Error('окно упало'); },
+  });
+  assert.doesNotThrow(() => accept({ type: 'text', text: 'тихий режим' }));
+  accept({ type: 'text', text: 'обычная фраза' });
+  assert.deepEqual(events.map((e) => e.text), ['обычная фраза']);
+});

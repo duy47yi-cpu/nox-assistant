@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { DeepSeekClient } = require('../src/brain/deepseek');
+const { DeepSeekClient, repairJsonStringLiterals } = require('../src/brain/deepseek');
 
 // Фейковый fetch: записывает вызовы и отдаёт заданный статус и тело.
 function fakeFetch(status, body) {
@@ -75,6 +75,35 @@ test('битый JSON в аргументах даёт argsError, а не иск
   const res = await client.chat({ messages: [] });
   assert.equal(res.toolCalls[0].args, null);
   assert.ok(res.toolCalls[0].argsError);
+});
+
+test('repairJsonStringLiterals: чинит пути Windows, переводы строк и неэкранированные кавычки в аргументах', async () => {
+  assert.equal(typeof repairJsonStringLiterals, 'function');
+  const rawWinPath = '{"path":"C:\\Users\\admin\\todo.md","text":"первая строка\nвторая"}';
+  const rawInnerQuotes = '{"window":"Блокнот","name":"кнопка "Сохранить" сейчас"}';
+  const fetchImpl = fakeFetch(200, {
+    choices: [{
+      message: {
+        content: '',
+        tool_calls: [
+          { id: 'c_win', function: { name: 'workspace_write', arguments: rawWinPath } },
+          { id: 'c_q', function: { name: 'ui_click', arguments: rawInnerQuotes } },
+        ],
+      },
+    }],
+  });
+  const client = new DeepSeekClient({ baseUrl: 'https://api.example/v1', apiKey: 'k', model: 'm', fetchImpl });
+  const res = await client.chat({ messages: [] });
+  assert.equal(res.toolCalls[0].argsError, null);
+  assert.deepEqual(res.toolCalls[0].args, {
+    path: 'C:\\Users\\admin\\todo.md',
+    text: 'первая строка\nвторая',
+  });
+  assert.equal(res.toolCalls[1].argsError, null);
+  assert.deepEqual(res.toolCalls[1].args, {
+    window: 'Блокнот',
+    name: 'кнопка "Сохранить" сейчас',
+  });
 });
 
 test('HTTP-ошибка → code=http и статус', async () => {

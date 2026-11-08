@@ -380,11 +380,21 @@ test('main.js: разбор во время хода стоит раньше о�
   assert.match(app, /side\.reply/);
 });
 
-test('фон окна: только проверенный цвет из настроек, окно сообщает цвет темы', () => {
+test('фон окна: только проверенный цвет из настроек, прозрачный режим отдельным маркером', () => {
   const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
-  assert.match(main, /WINDOW_BG\.test\(readSettings\(\)\.windowBg\)/);
-  assert.match(main, /!WINDOW_BG\.test\(String\(color\)\)/);
-  assert.match(fs.readFileSync(path.join(__dirname, '..', 'renderer', 'app.js'), 'utf8'), /setWindowBackground/);
+  // Окно прозрачное: фон рисует страница (тема, прозрачность и радиус из «Вид»).
+  assert.match(main, /transparent: true/);
+  assert.match(main, /backgroundColor: '#00000000'/);
+  // Непрозрачный цвет по-прежнему проверяется регулярным выражением, прозрачный маркер — отдельно.
+  assert.match(main, /value === '#00000000'/);
+  assert.match(main, /!WINDOW_BG\.test\(value\)/);
+  assert.match(main, /WINDOW_BG = \/\^#\[0-9a-f\]\{6\}\$\/i/);
+  const app = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'app.js'), 'utf8');
+  assert.match(app, /setWindowBackground/);
+  // При включённой прозрачности или радиусе страница отдаёт подложке прозрачный маркер.
+  assert.match(app, /'#00000000'/);
+  assert.match(app, /winAlpha/);
+  assert.match(app, /winRadius/);
 });
 
 // --- 5. Аварийный стоп ----------------------------------------------------

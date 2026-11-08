@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { ApprovalBroker } = require('../src/policy/approvals');
+const { ApprovalBroker, DEFAULT_AUTO_CANCEL_MS, parseApprovalAnswer } = require('../src/policy/approvals');
 
 test('respond резолвит ожидание решением once, session и reject', async () => {
   const broker = new ApprovalBroker({ timeoutMs: 1000 });
@@ -65,3 +65,92 @@ test('cancel по id и cancelPrefix по id задачи: ожидание — 
   assert.equal(broker.respond('t10:c1', 'once'), true);
   assert.equal(await again, 'once');
 });
+
+test('автоотмена: по умолчанию 30 секунд, запрос отменяется сам и причина известна', async () => {
+  assert.equal(DEFAULT_AUTO_CANCEL_MS, 30000);
+  assert.equal(new ApprovalBroker().autoCancelMs, 30000);
+  const broker = new ApprovalBroker({ autoCancelMs: 20 });
+  const payload = { id: 'auto-1', name: 'shell_run' };
+  const waiting = broker.request(payload);
+  assert.equal(typeof payload.autoCancelAt, 'number', 'окно получает время автоотмены');
+  assert.equal(await waiting, 'reject');
+  assert.equal(broker.respond('auto-1', 'once'), false, 'поздний ответ не принимается');
+  assert.equal(broker.closedReason('auto-1'), 'время на подтверждение вышло');
+  assert.deepEqual(broker.list(), []);
+});
+
+test('автоотмена сообщает окну id и причину, а не молчит', async () => {
+  const expired = [];
+  const broker = new ApprovalBroker({ autoCancelMs: 15, onAutoCancel: (id, reason) => expired.push({ id, reason }) });
+  await broker.request({ id: 'auto-2', name: 'publish_post' });
+  assert.deepEqual(expired, [{ id: 'auto-2', reason: 'время на подтверждение вышло' }]);
+});
+
+test('ask() — тот же запрос с таймером', async () => {
+  const broker = new ApprovalBroker({ autoCancelMs: 15 });
+  assert.equal(await broker.ask({ id: 'ask-1', name: 'ui_click' }), 'reject');
+  assert.equal(broker.closedReason('ask-1'), 'время на подтверждение вышло');
+});
+
+test('явный timeoutMs важнее автоотмены; autoCancelMs: 0 — ждать без ограничения', async () => {
+  const fast = new ApprovalBroker({ timeoutMs: 10, autoCancelMs: 60000 });
+  const payload = { id: 'fast-1' };
+  const waiting = fast.request(payload);
+  assert.equal(await waiting, 'reject');
+  const slow = new ApprovalBroker({ autoCancelMs: 0 });
+  const pending = slow.request({ id: 'slow-1' });
+  assert.equal(slow.remaining('slow-1'), null, 'таймера нет');
+  assert.equal(slow.list().length, 1, 'запрос ждёт владельца');
+  slow.respond('slow-1', 'once');
+  assert.equal(await pending, 'once');
+});
+
+test('remaining() считает секунды до автоотмены по внедрённому времени', async () => {
+  let clock = 1000;
+  const broker = new ApprovalBroker({ autoCancelMs: 30000, now: () => clock });
+  const waiting = broker.request({ id: 'rem-1' });
+  assert.equal(broker.remaining('rem-1'), 30000);
+  clock += 12000;
+  assert.equal(broker.remaining('rem-1'), 18000);
+  clock += 18000;
+  assert.equal(broker.remaining('rem-1'), 0);
+  assert.equal(broker.remaining('нет-такого'), null);
+  broker.respond('rem-1', 'once');
+  assert.equal(await waiting, 'once');
+  assert.equal(broker.remaining('rem-1'), null, 'решённый запрос времени не показывает');
+});
+
+test('фразовый ответ: «да/давай/подтверждаю/правильно» — согласие', () => {
+  for (const phrase of ['да', 'Да!', 'давай', 'Подтверждаю', 'правильно', 'да, давай', 'разрешаю']) {
+    assert.equal(parseApprovalAnswer(phrase), 'once', phrase);
+  }
+});
+
+test('фразовый ответ: «нет/отмена/не надо/стоп» — отказ', () => {
+  for (const phrase of ['нет', 'Нет.', 'отмена', 'не надо', 'стоп', 'отменить', 'не подтверждаю']) {
+    assert.equal(parseApprovalAnswer(phrase), 'reject', phrase);
+  }
+});
+
+test('фразовый ответ: «останови команду» снимает все ожидающие', () => {
+  for (const phrase of ['останови команду', 'Останови команду!', 'отмени все подтверждения']) {
+    assert.equal(parseApprovalAnswer(phrase), 'cancelAll', phrase);
+  }
+});
+
+test('обычная речь — не ответ на подтверждение', () => {
+  for (const phrase of ['открой ютуб', 'сколько время', 'да нет наверное', '', '   ', null, 42]) {
+    assert.equal(parseApprovalAnswer(phrase), null, String(phrase));
+  }
+});
+
+test('фраза снимает все ожидающие подтверждения через cancelAll', async () => {
+  const broker = new ApprovalBroker({ autoCancelMs: 0 });
+  const a = broker.request({ id: 'v-1' });
+  const b = broker.request({ id: 'v-2' });
+  assert.equal(parseApprovalAnswer('останови команду'), 'cancelAll');
+  assert.equal(broker.cancelAll('голосом: останови команду'), 2);
+  assert.deepEqual([await a, await b], ['reject', 'reject']);
+  assert.equal(broker.closedReason('v-1'), 'голосом: останови команду');
+});
+

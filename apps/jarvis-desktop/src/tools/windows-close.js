@@ -29,6 +29,40 @@ const SCRIPT = [
   'ConvertTo-Json -Compress -InputObject $out',
 ].join('\n');
 
+// window_close_active: закрыть окно, которое сейчас сверху. JARVIS_CLOSE=0 — только проверить, что будет закрыто.
+// Окно Джарвиса, оболочка Windows и диалог (не главное окно программы) не закрываются. Ответ — статус одной строкой.
+const ACTIVE_SCRIPT = [
+  "try { [Console]::OutputEncoding = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false } catch {}",
+  "if (-not ('Nox.JarvisFg' -as [type])) { Add-Type -Name JarvisFg -Namespace Nox -MemberDefinition '[DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);' }",
+  '$h = [Nox.JarvisFg]::GetForegroundWindow()',
+  '$fpid = [uint32]0',
+  '[void][Nox.JarvisFg]::GetWindowThreadProcessId($h, [ref]$fpid)',
+  '$keep = @($env:JARVIS_KEEP_PIDS -split "," | Where-Object { $_ } | ForEach-Object { [int]$_ })',
+  '$names = @($env:JARVIS_KEEP_NAMES -split ",")',
+  '$p = if ($h -ne [IntPtr]::Zero) { Get-Process -Id ([int]$fpid) -ErrorAction SilentlyContinue } else { $null }',
+  '$status = "none"; $title = ""; $name = ""',
+  'if ($null -ne $p) {',
+  '  $title = [string]$p.MainWindowTitle; $name = [string]$p.ProcessName',
+  '  if (($keep -contains $p.Id) -or ($names -contains $p.ProcessName) -or ($PID -eq $p.Id)) { $status = "protected" }',
+  '  elseif ($p.MainWindowHandle -ne $h) { $status = "not_main" }',
+  '  elseif ($env:JARVIS_CLOSE -ne "1") { $status = "would_close" }',
+  '  else {',
+  '    [void]$p.CloseMainWindow()',
+  '    $deadline = (Get-Date).AddSeconds(3)',
+  '    while ((Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200; $p.Refresh(); if ($p.HasExited -or $p.MainWindowHandle -eq [IntPtr]::Zero) { break } }',
+  '    $status = if ($p.HasExited -or $p.MainWindowHandle -eq [IntPtr]::Zero) { "closed" } else { "still_open" }',
+  '  }',
+  '}',
+  '$title = $title.Substring(0, [Math]::Min(120, $title.Length))',
+  'ConvertTo-Json -Compress -InputObject ([pscustomobject]@{ status = $status; name = $name; title = $title })',
+].join('\n');
+
+function parseActive(stdout) {
+  const text = String(stdout || '').trim();
+  const parsed = text ? JSON.parse(text) : {};
+  return { status: String(parsed.status || 'none'), name: String(parsed.name || ''), title: String(parsed.title || '') };
+}
+
 function parseList(stdout) {
   const text = String(stdout || '').trim();
   if (!text) return [];
@@ -90,7 +124,33 @@ function windowsCloseTools({ runner = runPowerShell, keepPids = () => [process.p
       };
     },
   };
-  return [closeAll];
+  const closeActive = {
+    name: 'window_close_active',
+    description: 'Закрыть окно, которое сейчас сверху: как по крестику, программа может спросить о сохранении. Окна Джарвиса и оболочки Windows не трогает.',
+    risk: 'T2',
+    parameters: { type: 'object', properties: {} },
+    explain: () => 'закроет окно, которое сейчас сверху; несохранённое программа предложит сохранить',
+    async run(args, ctx = {}) {
+      const res = await runner(ACTIVE_SCRIPT, env(true), { timeoutMs: TIMEOUT_MS, signal: ctx.signal });
+      if (!res.ok) return { ok: false, summary: res.summary, data: {} };
+      let win;
+      try { win = parseActive(res.data && res.data.stdout); } catch { return { ok: false, summary: 'не удалось прочитать активное окно', data: {} }; }
+      const label = win.title ? `«${win.title}»` : 'окно';
+      if (win.status === 'closed') return { ok: true, summary: `закрыто ${label}`, data: { status: win.status, title: win.title } };
+      if (win.status === 'still_open') return { ok: false, summary: `${label} не закрылось: программа, возможно, ждёт ответа о сохранении`, data: { status: win.status, title: win.title } };
+      if (win.status === 'protected') return { ok: false, summary: 'это окно Джарвиса или Windows, его не закрываю', data: { status: win.status } };
+      if (win.status === 'not_main') return { ok: false, summary: 'сверху диалог, а не окно программы: закройте его сами', data: { status: win.status } };
+      return { ok: false, summary: 'активного окна нет', data: { status: win.status } };
+    },
+    // Статус уже проверен самим скриптом после закрытия; здесь только сверка с ответом.
+    async verify(args, result) {
+      const status = result && result.data && result.data.status;
+      if (status === 'closed') return { status: 'confirmed', evidence: 'окно пропало после команды закрыть' };
+      if (status === 'still_open') return { status: 'failed', evidence: 'окно осталось открытым' };
+      return { status: 'unknown', evidence: 'статус окна не получен' };
+    },
+  };
+  return [closeAll, closeActive];
 }
 
-module.exports = { windowsCloseTools, parseList, KEEP_NAMES };
+module.exports = { windowsCloseTools, parseList, parseActive, KEEP_NAMES, ACTIVE_SCRIPT };

@@ -83,7 +83,7 @@ test('создание, переключение, переименование, 
   const work = store.create('default', { name: 'Работа', template: 'work' });
   assert.equal(work.name, 'Работа');
   assert.equal(work.template, 'work');
-  assert.equal(work.widgets.length, 6);
+  assert.equal(work.widgets.length, 7, 'в «Работе» теперь есть виджет новостей');
   assert.equal(store.active('default').id, work.id, 'новый стол становится активным');
 
   const study = store.create('default', { name: 'Учёба', template: 'study' });
@@ -207,10 +207,10 @@ test('девять шаблонов: шесть прежних и ночь, ра
   assert.deepEqual(empty.widgets, []);
   const avatar = store.get('default', store.list('default').find((d) => d.template === 'avatar').id);
   assert.deepEqual(avatar.widgets.map((w) => w.type), ['orb']);
-  assert.deepEqual(template('work').widgets.map((w) => w.type).sort(), ['commands', 'currency', 'system', 'tasks', 'today', 'weather']);
+  assert.deepEqual(template('work').widgets.map((w) => w.type).sort(), ['commands', 'currency', 'news', 'system', 'tasks', 'today', 'weather']);
   // Новые шаблоны: только существующие типы, сетка 12×12, материализация даёт id.
   assert.deepEqual(template('night').widgets.map((w) => w.type).sort(), ['orb', 'reminders', 'system']);
-  assert.deepEqual(template('dev').widgets.map((w) => w.type).sort(), ['commands', 'notes', 'system', 'tasks']);
+  assert.deepEqual(template('dev').widgets.map((w) => w.type).sort(), ['commands', 'news', 'notes', 'system', 'tasks']);
   assert.deepEqual(template('stream').widgets.map((w) => w.type).sort(), ['apps', 'music', 'pet', 'system']);
   for (const id of ['night', 'dev', 'stream']) {
     const made = templateWidgets(id, { newId: () => uuid(70) });
@@ -223,13 +223,17 @@ test('девять шаблонов: шесть прежних и ночь, ра
   }
 });
 
-test('каталог: 16 типов, у каждого настоящий источник или честная пометка', () => {
+test('каталог: 17 типов, у каждого настоящий источник или честная пометка', () => {
   const ids = WIDGET_TYPES.map((w) => w.id).sort();
   assert.deepEqual(ids, [
     'apps', 'commands', 'currency', 'downloads', 'goals', 'mcp', 'missions',
-    'music', 'notes', 'orb', 'pet', 'reminders', 'system', 'tasks', 'today', 'weather',
+    'music', 'news', 'notes', 'orb', 'pet', 'reminders', 'system', 'tasks', 'today', 'weather',
   ]);
-  assert.equal(WIDGET_TYPES.length, 16);
+  assert.equal(WIDGET_TYPES.length, 17);
+  const newsType = WIDGET_TYPES.find((w) => w.id === 'news');
+  assert.equal(newsType.title, 'Новости');
+  assert.equal(newsType.defaultW, 4);
+  assert.equal(newsType.defaultH, 3);
   for (const id of WIDGET_TYPES.map((w) => w.id)) assert.ok(isWidgetType(id));
   for (const banned of ['finance', 'home', 'calendar', 'files', 'holodeck']) assert.equal(isWidgetType(banned), false);
   // Каждый шаблон использует только типы из каталога — поймает опечатку в шаблоне.
@@ -734,6 +738,43 @@ test('новые типы: notes скрывает личное, downloads чит
   assert.equal(data.mcp('мусор').state, 'error');
 });
 
+test('новости: ok/stale/empty/error, только http(s), лимит и источники', () => {
+  const now = Date.parse('2026-11-07T10:00:00Z');
+  const base = {
+    ok: true,
+    items: [
+      { title: 'Марс', link: 'https://example.com/mars', date: '2026-11-07T09:00:00.000Z', summary: 'Кратко', source: 'NASA' },
+      { title: 'Вторая', link: 'https://example.com/second', date: '2026-11-06T09:00:00.000Z', summary: '', source: null },
+      { title: 'Без ссылки', link: 'javascript:alert(1)' },
+      { title: 'Относительная', link: '/news/1' },
+      { title: '   ', link: 'https://example.com/blank' },
+    ],
+    fetchedAt: now - 60 * 1000,
+    sources: [{ url: 'https://feed.example/a', title: 'NASA' }],
+  };
+  const ok = data.news(base, { now });
+  assert.equal(ok.state, 'ok');
+  assert.deepEqual(ok.value.items.map((i) => i.title), ['Марс', 'Вторая']);
+  assert.equal(ok.value.items[0].link, 'https://example.com/mars');
+  assert.equal(ok.value.items[0].date, '2026-11-07T09:00:00.000Z');
+  assert.equal(ok.value.total, 2);
+  assert.equal(ok.value.sources.length, 1);
+  // Лимит из config виджета.
+  assert.equal(data.news(base, { now, limit: 1 }).value.items.length, 1);
+  // Старое время кэша — stale с прежними записями, а не пустота.
+  const byAge = data.news({ ...base, fetchedAt: now - 60 * 60 * 1000 }, { now });
+  assert.equal(byAge.state, 'stale');
+  assert.equal(byAge.value.items.length, 2);
+  // Прямая пометка от источника тоже даёт stale.
+  assert.equal(data.news({ ...base, stale: true }, { now }).state, 'stale');
+  assert.equal(data.news({ ok: true, items: [] }, { now }).state, 'empty');
+  assert.equal(data.news(null).state, 'empty');
+  assert.equal(data.news('мусор').state, 'error');
+  const failed = data.news({ ok: false, reason: 'timeout' }, { now });
+  assert.equal(failed.state, 'error');
+  assert.equal(failed.error, 'timeout');
+});
+
 test('питомец: всегда ok, фиксированные настроения, данных не читает', () => {
   const idle = data.pet();
   assert.equal(idle.state, 'ok');
@@ -765,6 +806,11 @@ test('buildWidget: сборка по типу, одинаковый формат
     notes: [{ id: 'n1', text: 'Запись', kind: 'note' }],
     downloads: [{ name: 'файл.zip', size: 1024, mtimeMs: Date.parse('2026-11-01T00:00:00Z') }],
     mcp: { servers: [{ name: 'files', transport: 'stdio', status: 'connected', toolCount: 2 }] },
+    news: {
+      ok: true,
+      items: [{ title: 'Новость', link: 'https://example.com/news', date: '2026-11-07T09:00:00.000Z', summary: 'Кратко', source: 'NASA' }],
+      fetchedAt: Date.parse('2026-11-07T10:00:00Z'),
+    },
   };
   for (const type of data.DATA_TYPES) {
     const result = data.buildWidget(type, sources);
@@ -775,7 +821,7 @@ test('buildWidget: сборка по типу, одинаковый формат
     if (type === 'pet') assert.equal(result.state, 'ok');
   }
   // Источники не переданного типа дают честный empty, а не выдуманные числа.
-  for (const type of ['goals', 'missions', 'reminders', 'notes', 'downloads', 'mcp']) {
+  for (const type of ['goals', 'missions', 'reminders', 'notes', 'downloads', 'mcp', 'news']) {
     assert.equal(data.buildWidget(type, {}).state, 'empty');
   }
   assert.throws(() => data.buildWidget('holodeck', sources), /неизвестный тип/);

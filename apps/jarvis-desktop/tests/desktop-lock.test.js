@@ -147,3 +147,58 @@ test('составные руки desktop_click и desktop_type тоже под 
   // Хук Esc получает оба составных действия: иначе Esc не взведётся на новом пути.
   assert.ok(onAction.includes('desktop_click') && onAction.includes('desktop_type'), `хук Esc: ${onAction.join(', ')}`);
 });
+
+test('защита окон Electron: запрет window.open, блокировка внешней навигации и предохранитель цикла падений', () => {
+  const { describeDeniedUrl, createWindowOpenHandler, createCrashLoopGuard, attachWindowGuards } = require('../src/control/stop');
+
+  assert.equal(describeDeniedUrl('https://evil.example/secret?token=123#frag'), 'https://evil.example/secret');
+  assert.equal(describeDeniedUrl('javascript:alert(1)'), 'javascript:');
+  assert.equal(describeDeniedUrl('not a url'), '<invalid-url>');
+
+  const logs = [];
+  const openHandler = createWindowOpenHandler((msg) => logs.push(msg));
+  assert.deepEqual(openHandler({ url: 'https://example.com/a?b=1' }), { action: 'deny' });
+  assert.equal(logs.length, 1);
+  assert.ok(logs[0].includes('https://example.com/a'));
+  assert.ok(!logs[0].includes('b=1'), 'query-параметры не должны попадать в лог');
+
+  // Предохранитель цикла падений: не более 3 перезагрузок за 60 секунд
+  let now = 1000;
+  const guard = createCrashLoopGuard({ maxCrashes: 3, windowMs: 60000, now: () => now });
+  assert.equal(guard.shouldReload('crashed'), true);
+  now += 1000;
+  assert.equal(guard.shouldReload('oom'), true);
+  now += 1000;
+  assert.equal(guard.shouldReload('crashed'), true);
+  now += 1000;
+  assert.equal(guard.shouldReload('crashed'), false, '4-е падение подряд в окне 60 с блокируется');
+  assert.equal(guard.shouldReload('clean-exit'), false, 'обычный выход не перезагружает окно');
+  now += 61000;
+  assert.equal(guard.shouldReload('crashed'), true, 'после истечения окна 60 с счётчик сбрасывается');
+
+  // Подключение к BrowserWindow
+  const handlers = {};
+  let reloaded = 0;
+  const fakeWin = {
+    isDestroyed: () => false,
+    webContents: {
+      setWindowOpenHandler: (fn) => { handlers.windowOpen = fn; },
+      on: (event, fn) => { handlers[event] = fn; },
+      reload: () => { reloaded += 1; },
+    },
+  };
+  attachWindowGuards(fakeWin, { log: (m) => logs.push(m) });
+  assert.deepEqual(handlers.windowOpen({ url: 'https://evil.example/' }), { action: 'deny' });
+
+  let prevented = false;
+  handlers['will-navigate']({ preventDefault: () => { prevented = true; } }, 'https://evil.example/phish');
+  assert.equal(prevented, true, 'внешняя навигация блокируется');
+
+  let filePrevented = false;
+  handlers['will-navigate']({ preventDefault: () => { filePrevented = true; } }, 'file:///D:/nox-release/renderer/index.html');
+  assert.equal(filePrevented, false, 'локальный file:// разрешён');
+
+  handlers['render-process-gone']({}, { reason: 'crashed', exitCode: 1 });
+  assert.equal(reloaded, 1, 'первое падение перезагружает окно');
+});
+

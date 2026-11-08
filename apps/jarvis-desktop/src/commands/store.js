@@ -15,6 +15,10 @@ const { looksSecretEgress } = require('../memory/store');
 const MAX_NAME = 80;
 const MAX_PHRASES = 5;
 const MAX_PHRASE = 120;
+// Необязательные стартовые глаголы команды («открой», «запусти», «зайди в»): их немного,
+// и они короткие, иначе удобная подстановка превратится в угадывание.
+const MAX_OPTIONAL_PHRASES = 10;
+const MAX_OPTIONAL_PHRASE = 80;
 const MAX_STEPS = 20;
 const MAX_TOOL = 60;
 
@@ -65,6 +69,7 @@ const SECRET_ARG_KEY = /^(?:password|passwd|pwd|secret|token|api_?key|apikey|acc
 const CHANGE_LABELS = {
   name: 'имя',
   phrases: 'фразы',
+  optionalPhrases: 'стартовые глаголы',
   steps: 'шаги',
   enabled: 'включённость',
   hotkey: 'горячая клавиша',
@@ -127,6 +132,27 @@ function checkPhrases(phrases) {
     if (phrase === '') throw new Error('фраза: пустая строка');
     if (len(phrase) > MAX_PHRASE) throw new Error(`фраза длиннее ${MAX_PHRASE} символов`);
     if (seen.has(phrase)) throw new Error(`фраза повторяется в команде: «${phrase}»`);
+    seen.add(phrase);
+    out.push(phrase);
+  }
+  return out;
+}
+
+// Необязательные фразы команды: стартовые глаголы вроде «открой», «запусти», «зайди в».
+// Это не триггеры запуска, а оболочка просьбы перед фразой (см. src/commands/match.js),
+// поэтому повторы между командами разрешены, а внутри одной команды — нет.
+function checkOptionalPhrases(phrases) {
+  if (phrases === undefined || phrases === null) return [];
+  if (!Array.isArray(phrases)) throw new Error('стартовые глаголы: нужен массив строк');
+  if (phrases.length > MAX_OPTIONAL_PHRASES) throw new Error(`стартовых глаголов не больше ${MAX_OPTIONAL_PHRASES}`);
+  const seen = new Set();
+  const out = [];
+  for (const raw of phrases) {
+    if (typeof raw !== 'string') throw new Error('стартовый глагол: нужна строка');
+    const phrase = normalize(raw);
+    if (phrase === '') throw new Error('стартовый глагол: пустая строка');
+    if (len(phrase) > MAX_OPTIONAL_PHRASE) throw new Error(`стартовый глагол длиннее ${MAX_OPTIONAL_PHRASE} символов`);
+    if (seen.has(phrase)) throw new Error(`стартовый глагол повторяется в команде: «${phrase}»`);
     seen.add(phrase);
     out.push(phrase);
   }
@@ -320,7 +346,9 @@ function displayValue(field, value) {
       return `${tool} ${brief.length > 120 ? `${brief.slice(0, 117)}…` : brief}`;
     }).join(' → ') || '—';
   }
-  if (field === 'phrases') return Array.isArray(value) && value.length ? value.join(' | ') : '—';
+  if (field === 'phrases' || field === 'optionalPhrases') {
+    return Array.isArray(value) && value.length ? value.join(' | ') : '—';
+  }
   if (field === 'collections') return Array.isArray(value) && value.length ? value.join(', ') : '—';
   if (field === 'enabled') return value ? 'включена' : 'выключена';
   if (value === null || value === undefined || value === '') return '—';
@@ -328,7 +356,7 @@ function displayValue(field, value) {
   return String(value);
 }
 
-const STEP_FIELDS = ['name', 'phrases', 'steps', 'enabled', 'hotkey', 'folder', 'collections', 'origin', 'createdAt'];
+const STEP_FIELDS = ['name', 'phrases', 'optionalPhrases', 'steps', 'enabled', 'hotkey', 'folder', 'collections', 'origin', 'createdAt'];
 
 // Отпечаток содержания: по нему видно, изменится команда при импорте или нет.
 // Дата изменения (updatedAt) и последний запуск (lastRunAt) в содержание не входят: это не свойства команды.
@@ -337,6 +365,7 @@ function contentKey(cmd) {
     schemaVersion: COMMAND_SCHEMA_VERSION,
     name: typeof cmd.name === 'string' ? cmd.name.trim() : '',
     phrases: Array.isArray(cmd.phrases) ? cmd.phrases.map((p) => String(p)) : [],
+    optionalPhrases: Array.isArray(cmd.optionalPhrases) ? cmd.optionalPhrases.map((p) => String(p)) : [],
     steps: Array.isArray(cmd.steps) ? cmd.steps.map((s) => ({ tool: String(s && s.tool), args: s && s.args ? s.args : {} })) : [],
     enabled: cmd.enabled !== false,
     hotkey: cmd.hotkey || null,
@@ -381,6 +410,10 @@ function buildRecord(cmd, items, existing, { nowIso = new Date().toISOString(), 
   const schemaVersion = checkSchemaVersion(cmd.schemaVersion);
   const name = checkName(cmd.name);
   const phrases = checkPhrases(cmd.phrases);
+  // Старые записи без поля сохраняют пустой список: правка в редакторе его не теряет.
+  const optionalPhrases = cmd.optionalPhrases === undefined
+    ? (existing && Array.isArray(existing.optionalPhrases) ? existing.optionalPhrases.slice() : [])
+    : checkOptionalPhrases(cmd.optionalPhrases);
   const steps = checkSteps(cmd.steps, { strictArgs, warnings });
   const enabled = checkEnabled(cmd.enabled, existing ? existing.enabled : true);
   const createdAt = cmd.createdAt === undefined
@@ -416,6 +449,7 @@ function buildRecord(cmd, items, existing, { nowIso = new Date().toISOString(), 
     schemaVersion,
     name,
     phrases,
+    optionalPhrases,
     steps,
     enabled,
     createdAt,
@@ -604,6 +638,8 @@ function sanitizeImportedCommand(raw, label, warnings) {
   const schemaVersion = checkSchemaVersion(raw.schemaVersion);
   const name = checkName(raw.name);
   const phrases = checkPhrases(raw.phrases);
+  // Старый файл без поля читается как команда без стартовых глаголов.
+  const optionalPhrases = checkOptionalPhrases(raw.optionalPhrases);
   const steps = checkSteps(raw.steps, { strictArgs: true, warnings, prefix: `${label}, ` });
   const enabled = checkEnabled(raw.enabled, true);
   const hotkey = raw.hotkey === undefined ? null : checkHotkey(raw.hotkey);
@@ -616,7 +652,7 @@ function sanitizeImportedCommand(raw, label, warnings) {
     ? raw.id.trim()
     : undefined;
   const createdAt = raw.createdAt === undefined || raw.createdAt === null ? undefined : checkIso(raw.createdAt, 'createdAt');
-  const command = { schemaVersion, name, phrases, steps, enabled, hotkey, folder, collections, origin };
+  const command = { schemaVersion, name, phrases, optionalPhrases, steps, enabled, hotkey, folder, collections, origin };
   if (id) command.id = id;
   if (createdAt) command.createdAt = createdAt;
   return command;
@@ -718,6 +754,7 @@ function exportCommandPack(commands, { now = new Date() } = {}) {
     try {
       const name = checkName(cmd && cmd.name);
       const phrases = checkPhrases(cmd && cmd.phrases);
+      const optionalPhrases = checkOptionalPhrases(cmd && cmd.optionalPhrases);
       const rawSteps = Array.isArray(cmd.steps) ? cmd.steps : [];
       const steps = checkSteps(rawSteps, { strictArgs: true, warnings, prefix: `${label}, ` });
       const enabled = checkEnabled(cmd.enabled, true);
@@ -732,6 +769,7 @@ function exportCommandPack(commands, { now = new Date() } = {}) {
         schemaVersion: COMMAND_SCHEMA_VERSION,
         name,
         phrases,
+        optionalPhrases,
         steps,
         enabled,
         hotkey,
@@ -882,6 +920,7 @@ module.exports = {
   checkHotkey,
   checkName,
   checkPhrases,
+  checkOptionalPhrases,
   checkSteps,
   checkFolder,
   checkCollections,
@@ -892,6 +931,8 @@ module.exports = {
   MAX_STEPS,
   MAX_NAME,
   MAX_PHRASES,
+  MAX_OPTIONAL_PHRASES,
+  MAX_OPTIONAL_PHRASE,
   MAX_IMPORT_BYTES,
   MAX_IMPORT_COMMANDS,
   MAX_IMPORT_STEPS,

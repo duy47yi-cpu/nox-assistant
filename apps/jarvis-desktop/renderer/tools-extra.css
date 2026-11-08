@@ -427,3 +427,21 @@
 /* Кнопки карточки «Освободить место»: общий низ диалога (.editor-foot) с отрицательными
  * полями и фоном .bg выходил за карточку тёмной полосой — внутри карточки он не нужен. */
 .ext-card .editor-foot { position: static; margin: 8px 0 0; padding: 0; background: none; border-top: 0; }
+
+/* Готовые паки: карточки в «Командах». Цвета только из токенов темы. */
+.pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--sp-3); margin-top: var(--sp-3); }
+.pack-card { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; padding: var(--sp-3) var(--sp-4); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.pack-card[data-state="installed"] { border-color: var(--ok-line); }
+.pack-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.pack-head h3 { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-strong); color: var(--text); }
+.pack-count { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; }
+.pack-desc, .pack-hint, .pack-state { margin: 0; font-size: var(--fs-sm); line-height: 18px; color: var(--text-2); }
+.pack-hint { color: var(--text-3); }
+.pack-state { color: var(--text); font-weight: var(--fw-medium); }
+.pack-card[data-state="installed"] .pack-state { color: var(--ok); }
+.pack-install { align-self: flex-start; }
+.pack-list { font-size: var(--fs-sm); color: var(--text-2); }
+.pack-list summary { cursor: pointer; color: var(--text); }
+.pack-list ul { margin: var(--sp-2) 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--sp-1); }
+.pack-list li { display: flex; flex-direction: column; gap: 2px; }
+.pack-phrase { color: var(--text-3); font-size: var(--fs-xs); }

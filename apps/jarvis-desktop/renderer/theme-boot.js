@@ -139,8 +139,16 @@
   const BLURS = { off: ['Без размытия', 0], m: ['Как в теме', 20], l: ['Стекло', 28] };
   // Фон окна: цвет темы с её градиентом или спокойный сплошной.
   const BGS = { theme: ['Как в теме', 'theme'], solid: ['Сплошной', 'solid'] };
+  // Прозрачность и радиус самого окна. Ключи — проценты и пиксели строкой: так их хранит jarvis.look
+  // (как остальные id настроек). 0 % прозрачности и 0 px радиуса — как было до настройки.
+  const WIN_ALPHAS = {
+    0: ['Как сейчас', 0], 5: ['5 %', 5], 10: ['10 %', 10], 15: ['15 %', 15], 20: ['20 %', 20],
+    25: ['25 %', 25], 30: ['30 %', 30], 35: ['35 %', 35], 40: ['40 %', 40], 45: ['45 %', 45],
+    50: ['50 %', 50], 55: ['55 %', 55], 60: ['60 %', 60],
+  };
+  const WIN_RADII = { 0: ['Прямые', 0], 8: ['8', 8], 14: ['14', 14], 22: ['22', 22], 28: ['28', 28] };
   const FS = { '2xs': 11, xs: 12, sm: 13, md: 14, read: 15, lg: 16, xl: 20, '2xl': 24 };
-  const LOOK_DEFAULT = { ui: 'inter', head: 'sitka', reply: 'head', size: 'm', round: 'm', panel: 'm', orb: 'm', blur: 'm', bg: 'theme', glow: true };
+  const LOOK_DEFAULT = { ui: 'inter', head: 'sitka', reply: 'head', size: 'm', round: 'm', panel: 'm', orb: 'm', blur: 'm', bg: 'theme', glow: true, winAlpha: '0', winRadius: '0' };
   let look = { ...LOOK_DEFAULT };
 
   // Битое сохранённое значение не должно ломать окно: каждая настройка проверяется по своему списку,
@@ -159,6 +167,8 @@
       blur: pickId(BLURS, v.blur, LOOK_DEFAULT.blur),
       bg: pickId(BGS, v.bg, LOOK_DEFAULT.bg),
       glow: v.glow !== false,
+      winAlpha: pickId(WIN_ALPHAS, v.winAlpha, LOOK_DEFAULT.winAlpha),
+      winRadius: pickId(WIN_RADII, v.winRadius, LOOK_DEFAULT.winRadius),
     };
   }
   function applyLook() {
@@ -188,6 +198,16 @@
     if (look.bg === 'solid') r.dataset.bg = 'solid';
     else delete r.dataset.bg;
     if (look.glow === false) r.dataset.glow = 'off'; else delete r.dataset.glow;
+    // Прозрачность окна: --win-alpha — доля прозрачности 0..0.6 (0 — как сейчас, фон непрозрачный).
+    // Радиус окна: --win-radius в пикселях, 0 — прямые углы. Читает presence.css; текст не трогается.
+    const winPercent = (WIN_ALPHAS[look.winAlpha] || WIN_ALPHAS['0'])[1];
+    const winRadius = (WIN_RADII[look.winRadius] || WIN_RADII['0'])[1];
+    r.style.setProperty('--win-alpha', String(winPercent / 100));
+    r.style.setProperty('--win-radius', `${winRadius}px`);
+    // Флаг для CSS: при прозрачности подложкой становится фон окна, а не сплошной body.
+    if (winPercent > 0) r.dataset.winAlpha = 'on'; else delete r.dataset.winAlpha;
+    // Радиус без прозрачности тоже требует прозрачной подложки: иначе углы закрасит body.
+    if (winRadius > 0) r.dataset.winRadius = 'on'; else delete r.dataset.winRadius;
   }
   function setLook(patch) {
     look = sanitizeLook({ ...look, ...(patch && typeof patch === 'object' ? patch : {}) });
@@ -227,7 +247,7 @@
 
   window.JarvisTheme = {
     IDS, resolve, apply, ACCENTS, setAccent, getAccent: () => accent, getAccentInfo: () => ({ ...accentInfo }), normHex, MIN_CONTRAST,
-    FONTS, SIZES, ROUNDS, PANELS, ORBS, BLURS, BGS, LOOK_DEFAULT, sanitizeLook,
+    FONTS, SIZES, ROUNDS, PANELS, ORBS, BLURS, BGS, WIN_ALPHAS, WIN_RADII, LOOK_DEFAULT, sanitizeLook,
     contrast, readable, getLook: () => ({ ...look }), setLook, resetLook, resetToTheme,
   };
 })();

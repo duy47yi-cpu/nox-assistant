@@ -245,9 +245,24 @@ function diffScene(prev, next) {
   };
 }
 
+// Подпись состояния сцены: окно, фокус и устойчивые поля элементов в постоянном порядке.
+// Равные подписи означают, что экран не изменился, даже если порядок элементов другой.
+function sceneSignature(scene) {
+  if (!scene) return '';
+  const elements = (Array.isArray(scene.elements) ? scene.elements : [])
+    .map((element) => [element.id, element.role, element.name, element.value, element.enabled === false ? 0 : 1])
+    .sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : String(a[0]) > String(b[0]) ? 1 : 0));
+  return JSON.stringify({
+    window: scene.window ? scene.window.title : '',
+    focused: scene.focused ? scene.focused.id || scene.focused.name || '' : '',
+    elements,
+  });
+}
+
 module.exports = {
   buildScene,
   diffScene,
+  sceneSignature,
   sceneText,
   elementLine,
   elementKey,

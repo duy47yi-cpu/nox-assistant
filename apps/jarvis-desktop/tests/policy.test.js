@@ -137,4 +137,22 @@ describe('неизвестный риск и sessionAllow', () => {
     const sessionAllow = new Set([allowKey('mystery', {})]);
     assert.equal(decide({ mode: 'auto', name: 'mystery', risk: undefined, args: {}, workspace: WS, sessionAllow }), 'allow');
   });
+
+  test('менеджеры паролей в окнах и крипто/платёжные хосты защищены политикой', () => {
+    const { hardDeny, isPayment, setBrowserHost, POLICY_PATTERNS } = require('../src/policy/modes');
+    assert.equal(Object.isFrozen(POLICY_PATTERNS), true, 'POLICY_PATTERNS должен быть заморожен');
+
+    for (const win of ['Bitwarden', '1Password — Vault', 'KeePassXC', 'Диспетчер учетных данных']) {
+      assert.ok(hardDeny({ name: 'ui_type', args: { window: win, text: 'x' } }), `hardDeny для ${win}`);
+      assert.equal(decide({ mode: 'auto', name: 'ui_elements', risk: 'T0', args: { window: win }, workspace: WS }), 'ask', `ui_elements в auto для ${win} должен спрашивать`);
+    }
+
+    try {
+      setBrowserHost(() => 'checkout.coinbase.com');
+      assert.equal(isPayment({ name: 'browser_click', args: { index: 1 } }), true);
+      assert.equal(decide({ mode: 'full', name: 'browser_click', risk: 'T1', args: { index: 1 }, workspace: WS }), 'deny');
+    } finally {
+      setBrowserHost(() => '');
+    }
+  });
 });

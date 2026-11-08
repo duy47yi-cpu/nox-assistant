@@ -19,9 +19,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { TelegramClient, sleep } = require('./lib/telegram');
+const { TelegramClient, sleep, chunkText } = require('./lib/telegram');
 const { runTurn, DEFAULT_EXE, DEFAULT_CLI } = require('./lib/dsh');
-const { ScreenStreamer } = require('./lib/screen');
+const { ScreenStreamer, RtmpStreamer } = require('./lib/screen');
 const { Store } = require('./lib/store');
 
 const HOME_DIR = path.join(os.homedir(), '.dsh', 'telegram-harness');
@@ -43,6 +43,7 @@ const DEFAULTS = {
   autoScreen: true,
   ffmpeg: 'ffmpeg',
   screen: { intervalMs: 1500, idleResendMs: 12000, width: 1280, quality: 6 },
+  rtmp: { fps: 15, width: 1280, bitrate: '2500k' },
   slowNoticeMs: 60000,
   promptPrefix: '[Telegram] Отвечай кратко, по-русски. Ты работаешь на этом ПК с полным доступом: открывай приложения (Claude, ChatGPT/Codex, Roblox Studio), запускай codex и claude в терминале, правь файлы. ',
 };
@@ -240,6 +241,37 @@ async function runOne(name, item) {
   const started = Date.now();
   let result;
 
+  // Живой ответ: первые слова уходят в чат сразу, дальше сообщение правится на месте.
+  // Так человек видит, что работа идёт, а не ждёт молчания.
+  let streamId = null;
+  let streamText = '';
+  let streamAt = 0;
+  let streamBusy = false;
+  const streamFlush = async () => {
+    if (!to || streamBusy) return;
+    streamBusy = true;
+    try {
+      const body = streamText.trim();
+      if (!body) return;
+      if (!streamId) {
+        const message = await tg.sendMessage(to, body);
+        streamId = message && message.message_id;
+      } else {
+        await tg.editText(to, streamId, body);
+      }
+      streamAt = Date.now();
+    } catch (err) {
+      log(`поток текста: ${err.message}`);
+    } finally {
+      streamBusy = false;
+    }
+  };
+  const onEvent = (event) => {
+    if (!event || event.type !== 'text' || typeof event.text !== 'string') return;
+    streamText += event.text;
+    if (!streamId || Date.now() - streamAt >= 1200) streamFlush().catch(() => {});
+  };
+
   try {
     stopTyping = startTyping(to);
     if (config.slowNoticeMs > 0) {
@@ -260,6 +292,7 @@ async function runOne(name, item) {
       timeoutMs: config.turnTimeoutMs,
       log,
       onProgress: () => {},
+      onEvent,
     });
     rt.handle = turn;
     if (rt.abortRequested) {
@@ -279,21 +312,41 @@ async function runOne(name, item) {
   }
 
   const seconds = Math.round((Date.now() - started) / 1000);
+  const finalText = (result.text || '').trim();
   if (result.aborted) {
-    const tail = result.text ? `\n\nЧастичный ответ:\n${result.text}` : '';
-    await reply(`⏹ Остановил.${tail}`);
+    const tail = finalText ? `⏹ Остановил.\n\nЧастичный ответ:\n${finalText}` : '⏹ Остановил.';
+    if (streamId) {
+      try { await tg.editText(to, streamId, tail); } catch { await reply(tail); }
+    } else {
+      await reply(tail);
+    }
     return;
   }
-  if (result.error && !result.text) {
-    await reply(`⚠️ Ошибка harness: ${result.error}`);
+  if (result.error && !finalText) {
+    const message = `⚠️ Ошибка harness: ${result.error}`;
+    if (streamId) {
+      try { await tg.editText(to, streamId, message); } catch { await reply(message); }
+    } else {
+      await reply(message);
+    }
     return;
   }
-  const text = (result.text || '').trim();
-  if (!text) {
-    await reply('Готово.');
+  if (!finalText) {
+    if (streamId) {
+      try { await tg.editText(to, streamId, 'Готово.'); } catch { /* не критично */ }
+    } else {
+      await reply('Готово.');
+    }
     return;
   }
-  await reply(text);
+  if (streamId) {
+    // Итог дописываем в то же сообщение; что не влезло — уходит новыми.
+    const parts = chunkText(finalText);
+    try { await tg.editText(to, streamId, parts[0]); } catch (err) { log(`поток финал: ${err.message}`); }
+    for (let i = 1; i < parts.length; i += 1) await reply(parts[i]);
+  } else {
+    await reply(finalText);
+  }
   if (seconds > 120) log(`ход ${name}: ${seconds} c`);
 }
 
@@ -350,6 +403,8 @@ const screen = new ScreenStreamer({
   ffmpeg: config.ffmpeg,
   tmpDir: path.join(MEDIA_DIR, 'screen'),
   log,
+  // Пока идёт ход агента, кадры не снимаем: иначе ffmpeg отнимает CPU у ответа.
+  isBusy: () => activeTurns > 0,
   onLive: async (buf) => {
     const to = chatId();
     if (!to) return;
@@ -393,6 +448,10 @@ function stopScreen() {
   log('экран выключен');
 }
 
+// Настоящая трансляция в Telegram-эфир: адрес RTMP владелец берёт в Telegram
+// (видеочат → «Начать трансляцию» → «Трансляция с помощью…»). Сюда уходит экран.
+const rtmp = new RtmpStreamer({ ffmpeg: config.ffmpeg, log });
+
 // ── Команды ──────────────────────────────────────────────────────────────────
 
 const HELP = [
@@ -409,6 +468,7 @@ const HELP = [
   'Экран:',
   '/screen on | off — живая картинка экрана (одно сообщение обновляется на месте)',
   '/shot — один снимок экрана',
+  '/stream <rtmp-адрес> | off — настоящая трансляция в Telegram-эфир',
   '',
   'Перебивание: если написать «перебей …», «поменяй …», «исправь …», «заново …»,',
   'текущий ход снимается и сразу выполняется новое указание.',
@@ -489,8 +549,23 @@ async function handleCommand(text) {
     await reply(`Показ экрана: ${screenStatus()}\n/screen on | off`);
     return true;
   }
-  if (cmd === '/shot' || cmd === '/screen_shot') {
+  if (cmd === '/stream' || cmd === '/rtmp') {
+    const url = rest[0] || '';
+    if (!url || url === 'off' || url === 'stop') {
+      rtmp.stop();
+      await reply('🛰 Трансляцию выключил.');
+      return true;
+    }
     try {
+      rtmp.start(url, config.rtmp);
+      log('трансляция включена');
+      await reply('🛰 Трансляция включена: экран уходит в Telegram-эфир. Выключить — /stream off');
+    } catch (err) {
+      await reply(`Не получилось: ${err.message}`);
+    }
+    return true;
+  }
+  if (cmd === '/shot' || cmd === '/screen_shot') {    try {
       const buf = await screen.shot();
       await tg.sendPhoto(chatId(), buf, { fileName: 'shot.png', caption: new Date().toLocaleString('ru-RU') });
     } catch (err) {
@@ -595,10 +670,22 @@ async function pollLoop() {
         await reply(`⚠️ ${err && err.message}`);
       }
     }
+    // Пауза между длинными опросами: без неё Telegram иногда отвечает 409 Conflict
+    // (предыдущий опрос ещё не закрыт на его стороне).
+    await sleep(400);
   }
 }
 
 async function main() {
+  // Скрытая самопроверка: один ход агента с отправкой ответа владельцу, без опроса Telegram.
+  if (process.argv[2] === '--selftest') {
+    const prompt = process.argv.slice(3).join(' ') || 'Ответь одним словом: работает';
+    log('самопроверка: ход агента');
+    await runOne('main', { prompt });
+    log('самопроверка: готово');
+    return;
+  }
+
   takeLock();
   log('бот запущен');
   try {
@@ -631,6 +718,7 @@ function shutdown(signal) {
   stopRequested = true;
   log(`остановка по ${signal}`);
   screen.stop();
+  rtmp.stop({ silent: true });
   for (const [name, rt] of runtime) {
     if (rt.handle) { try { rt.handle.abort(); } catch { /* уже остановлен */ } log(`сессия ${name}: ход снят при остановке`); }
   }

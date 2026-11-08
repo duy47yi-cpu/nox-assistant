@@ -18,6 +18,7 @@ const SKIP_CODES = new Set(['ENOENT', 'EACCES', 'EPERM', 'EBUSY']);
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_DEPTH = 8;
 const MAX_CHUNK = 800;
+const MIN_SENTENCE = 12; // короче — приклеиваем к соседнему предложению, а не делаем отдельный кусок
 const MAX_SNIPPET = 300;
 const MAX_AGE_MS = 60 * 1000;
 const DEFAULT_LIMIT = 5;
@@ -58,13 +59,163 @@ function toPosix(rel) {
   return rel.split(path.sep).join('/');
 }
 
-// Режет текст по пустым строкам; абзац длиннее MAX_CHUNK режется на куски по MAX_CHUNK символов.
+// Предложения: делим после .!?… и по переводу строки; короткие обрывки («Да.») приклеиваем к соседнему.
+function sentencePieces(text) {
+  const parts = String(text ?? '')
+    .split(/(?<=[.!?…])\s+|\n+/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const merged = [];
+  for (const part of parts) {
+    const short = Array.from(part).length < MIN_SENTENCE;
+    const prev = merged[merged.length - 1];
+    if (short && prev) merged[merged.length - 1] = `${prev} ${part}`;
+    else merged.push(part);
+  }
+  // Первый короткий обрывок приклеиваем к следующему предложению: отдельным куском он бесполезен.
+  if (merged.length > 1 && Array.from(merged[0]).length < MIN_SENTENCE) {
+    merged[1] = `${merged[0]} ${merged[1]}`;
+    merged.shift();
+  }
+  return merged;
+}
+
+// Слишком длинное предложение режем по последнему пробелу в пределах лимита; без пробелов — по символу.
+function splitLongPiece(piece) {
+  const out = [];
+  let rest = Array.from(piece);
+  while (rest.length > MAX_CHUNK) {
+    let cut = 0;
+    for (let k = MAX_CHUNK; k > 0; k -= 1) {
+      if (/\s/u.test(rest[k - 1])) { cut = k; break; }
+    }
+    if (!cut) cut = MAX_CHUNK;
+    out.push(rest.slice(0, cut).join('').trimEnd());
+    rest = rest.slice(cut);
+    while (rest.length && /\s/u.test(rest[0])) rest.shift();
+  }
+  if (rest.length) out.push(rest.join('').trimEnd());
+  return out.filter(Boolean);
+}
+
+// Упаковка предложений в куски не длиннее MAX_CHUNK: по одному предложению, между ними пробел.
+function packPieces(pieces) {
+  const chunks = [];
+  let buf = '';
+  let size = 0;
+  for (const piece of pieces) {
+    const len = Array.from(piece).length;
+    if (!buf) {
+      buf = piece;
+      size = len;
+    } else if (size + 1 + len <= MAX_CHUNK) {
+      buf += ` ${piece}`;
+      size += 1 + len;
+    } else {
+      chunks.push(buf);
+      buf = piece;
+      size = len;
+    }
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+
+// Markdown-разметка (идея Chonkie): блоки кода (``` или ~~~) и таблицы держим целиком, если помещаются.
+// Иначе маркеры ``` в куски не тащим: половина блока бесполезна и путает поиск.
+function markdownSegments(text) {
+  const lines = String(text ?? '').split(/\r?\n/);
+  const segments = [];
+  let textLines = [];
+  let tableLines = [];
+  let fence = null;
+  const flushTable = () => {
+    if (tableLines.length) { segments.push({ kind: 'lines', text: tableLines.join('\n') }); tableLines = []; }
+  };
+  const flushText = () => {
+    flushTable();
+    if (textLines.length) { segments.push({ kind: 'text', text: textLines.join('\n') }); textLines = []; }
+  };
+  for (const line of lines) {
+    if (fence) {
+      fence.lines.push(line);
+      if (line.trim() === fence.marker) {
+        segments.push({ kind: 'lines', text: fence.lines.join('\n') });
+        fence = null;
+      }
+      continue;
+    }
+    const marker = line.trim().startsWith('```') ? '```' : line.trim().startsWith('~~~') ? '~~~' : '';
+    if (marker) {
+      flushText();
+      fence = { marker, lines: [line] };
+      continue;
+    }
+    if (/^\s*\|/.test(line)) {
+      if (textLines.length) { segments.push({ kind: 'text', text: textLines.join('\n') }); textLines = []; }
+      tableLines.push(line);
+      continue;
+    }
+    flushTable();
+    textLines.push(line);
+  }
+  if (fence) segments.push({ kind: 'lines', text: fence.lines.join('\n') });
+  flushText();
+  return segments;
+}
+
+// Строки кода/таблицы в куски не длиннее MAX_CHUNK: строка целиком, слишком длинная — по слову.
+function packLines(lines) {
+  const chunks = [];
+  let buf = [];
+  let size = 0;
+  for (const line of lines) {
+    const cps = Array.from(line);
+    if (cps.length > MAX_CHUNK) {
+      if (buf.length) { chunks.push(buf.join('\n')); buf = []; size = 0; }
+      chunks.push(...splitLongPiece(line));
+      continue;
+    }
+    if (size + cps.length + (buf.length ? 1 : 0) > MAX_CHUNK) {
+      chunks.push(buf.join('\n'));
+      buf = [];
+      size = 0;
+    }
+    buf.push(line);
+    size += cps.length + (buf.length > 1 ? 1 : 0);
+  }
+  if (buf.length) chunks.push(buf.join('\n'));
+  return chunks.filter(Boolean);
+}
+
+// Блок кода или таблица: целиком, если помещается; иначе по строкам, без половинок fence.
+function splitMarkupSegment(segment) {
+  const trimmed = segment.text.trim();
+  if (!trimmed) return [];
+  if (Array.from(trimmed).length <= MAX_CHUNK) return [trimmed];
+  const lines = segment.text.split(/\r?\n/).filter((line) => {
+    const marker = line.trim();
+    return !marker.startsWith('```') && !marker.startsWith('~~~');
+  });
+  return packLines(lines);
+}
+
+// Режет текст по пустым строкам; длинный абзац — по границам предложений, а не посреди слова.
+// Блоки кода и таблицы не рвутся между кусками (идея Chonkie).
 function splitChunks(text) {
   const chunks = [];
-  for (const block of text.split(/\r?\n[ \t]*\r?\n/)) {
-    const cps = Array.from(block.trim());
-    for (let i = 0; i < cps.length; i += MAX_CHUNK) {
-      chunks.push(cps.slice(i, i + MAX_CHUNK).join(''));
+  for (const segment of markdownSegments(text)) {
+    if (segment.kind === 'lines') {
+      chunks.push(...splitMarkupSegment(segment));
+      continue;
+    }
+    for (const block of segment.text.split(/\r?\n[ \t]*\r?\n/)) {
+      const trimmed = block.trim();
+      if (!trimmed) continue;
+      const pieces = sentencePieces(trimmed).flatMap((piece) => (
+        Array.from(piece).length > MAX_CHUNK ? splitLongPiece(piece) : [piece]
+      ));
+      chunks.push(...packPieces(pieces));
     }
   }
   return chunks;

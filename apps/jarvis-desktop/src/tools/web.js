@@ -223,16 +223,52 @@ function isPrivateV4(host) {
   if (!ip) return false;
   const a = Number(ip[1]);
   const b = Number(ip[2]);
+  const c = Number(ip[3]);
   return (
     a === 0 ||
     a === 10 ||
     a === 127 ||
     (a === 192 && b === 168) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) || // 192.0.0.0/24 и 192.0.2.0/24 (TEST-NET-1)
+    (a === 192 && b === 88 && c === 99) || // 6to4 relay anycast
     (a === 172 && b >= 16 && b <= 31) ||
     (a === 169 && b === 254) ||
-    (a === 100 && b >= 64 && b <= 127) || // общая сеть провайдера
+    (a === 100 && b >= 64 && b <= 127) || // общая сеть провайдера (CGNAT)
+    (a === 198 && (b === 18 || b === 19)) || // 198.18.0.0/15 (benchmark)
+    (a === 198 && b === 51 && c === 100) || // 198.51.100.0/24 (TEST-NET-2)
+    (a === 203 && b === 0 && c === 113) || // 203.0.113.0/24 (TEST-NET-3)
     a >= 224 // групповые и зарезервированные
   );
+}
+
+// Разворачивает IPv6-адрес в массив из 8 16-битных чисел (включая :: и встроенный IPv4 в хвосте).
+function expandIpv6(raw) {
+  let addr = String(raw || '').toLowerCase().replace(/%.*$/, '');
+  const v4Tail = /:(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(addr);
+  if (v4Tail) {
+    const o1 = Number(v4Tail[1]);
+    const o2 = Number(v4Tail[2]);
+    const o3 = Number(v4Tail[3]);
+    const o4 = Number(v4Tail[4]);
+    if ([o1, o2, o3, o4].some((n) => n > 255)) return null;
+    const hi = ((o1 << 8) | o2).toString(16);
+    const lo = ((o3 << 8) | o4).toString(16);
+    addr = addr.slice(0, v4Tail.index) + ':' + hi + ':' + lo;
+  }
+  const halves = addr.split('::');
+  if (halves.length > 2) return null;
+  const left = halves[0] ? halves[0].split(':') : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const missing = 8 - left.length - right.length;
+  if ((halves.length === 1 && missing !== 0) || (halves.length === 2 && missing < 1)) return null;
+  const words = [...left, ...Array(Math.max(0, missing)).fill('0'), ...right];
+  if (words.length !== 8) return null;
+  const nums = words.map((w) => (/^[0-9a-f]{1,4}$/.test(w) ? parseInt(w, 16) : NaN));
+  return nums.some(Number.isNaN) ? null : nums;
+}
+
+function wordsToV4(hi, lo) {
+  return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
 }
 
 // Адрес из DNS: true, если он ведёт в локальную сеть или на сам компьютер. Непонятное — тоже true.
@@ -241,16 +277,35 @@ function isPrivateAddress(address) {
   const kind = net.isIP(ip);
   if (kind === 4) return isPrivateV4(ip);
   if (kind !== 6) return true;
-  // IPv4 внутри IPv6 (::ffff:10.0.0.1) проверяем как IPv4; прочие адреса, начинающиеся с «::», — служебные.
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(ip);
-  if (mapped) return isPrivateV4(mapped[1]);
-  if (ip.startsWith('::')) return true;
-  const first = parseInt(ip.split(':')[0], 16);
+  const w = expandIpv6(ip);
+  if (!w) return true;
+  const [w0, w1, w2, w3, w4, w5, w6, w7] = w;
+  const first6Zero = w0 === 0 && w1 === 0 && w2 === 0 && w3 === 0 && w4 === 0 && w5 === 0;
+  // :: (unspecified), ::1 (loopback) и IPv4-совместимые ::x.y.z.w
+  if (first6Zero) {
+    if (w6 === 0 && (w7 === 0 || w7 === 1)) return true;
+    return isPrivateV4(wordsToV4(w6, w7));
+  }
+  // IPv4-mapped ::ffff:a.b.c.d (включая полную форму 0:0:0:0:0:ffff:7f00:1)
+  if (w0 === 0 && w1 === 0 && w2 === 0 && w3 === 0 && w4 === 0 && w5 === 0xffff) {
+    return isPrivateV4(wordsToV4(w6, w7));
+  }
+  // NAT64: 64:ff9b::/96 (проверяем встроенный IPv4) и локальный 64:ff9b:1::/48
+  if (w0 === 0x0064 && w1 === 0xff9b) {
+    if (w2 === 0 && w3 === 0 && w4 === 0 && w5 === 0) return isPrivateV4(wordsToV4(w6, w7));
+    if (w2 === 1) return true;
+  }
+  // 6to4: 2002::/16 — первые 32 бита после 2002 содержат IPv4-адрес
+  if (w0 === 0x2002) {
+    return isPrivateV4(wordsToV4(w1, w2));
+  }
+  // Teredo (2001:0000::/32) и документационный диапазон (2001:db8::/32)
+  if (w0 === 0x2001 && (w1 === 0x0000 || w1 === 0x0db8)) return true;
   return (
-    (first & 0xfe00) === 0xfc00 || // fc00::/7 частные
-    (first & 0xffc0) === 0xfe80 || // fe80::/10 локальные в канале
-    (first & 0xffc0) === 0xfec0 || // fec0::/10 старые локальные
-    (first & 0xff00) === 0xff00 //    ff00::/8 групповые
+    (w0 & 0xfe00) === 0xfc00 || // fc00::/7 частные (ULA)
+    (w0 & 0xffc0) === 0xfe80 || // fe80::/10 локальные в канале
+    (w0 & 0xffc0) === 0xfec0 || // fec0::/10 старые локальные
+    (w0 & 0xff00) === 0xff00 //    ff00::/8 групповые
   );
 }
 
@@ -290,6 +345,9 @@ function checkFetchUrl(raw, base) {
     throw new UserError('некорректный адрес');
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new UserError('адрес не разрешён');
+  }
+  if (url.username || url.password) {
     throw new UserError('адрес не разрешён');
   }
   if (isBlockedHost(url.hostname)) {

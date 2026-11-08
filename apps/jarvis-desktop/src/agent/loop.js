@@ -6,6 +6,7 @@ const { decide: defaultDecide, allowKey, isOneShot } = require('../policy/modes'
 const { isTaintSource, isForeignTextSource } = require('../policy/taint');
 const { TurnLog } = require('./turnlog');
 const { checkEffect } = require('./effects');
+const { makeToolContext } = require('./tool-context');
 const { uniqueSearchMatch } = require('../tools/install');
 
 // Лимит вызовов инструментов за один ход: защита от зацикливания модели.
@@ -168,6 +169,22 @@ function compactOld(m) {
     return copy;
   }
   if (m.role === 'tool' && typeof m.content === 'string' && m.content.length > OLD_TOOL_CHARS) {
+    // Сжатие не должно прятать честную пометку проверки: иначе старый шаг выглядит подтверждённым.
+    try {
+      const parsed = JSON.parse(m.content);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const summary = typeof parsed.summary === 'string' ? parsed.summary.slice(0, 300) : undefined;
+        const compact = {
+          ok: parsed.ok === true,
+          ...(summary ? { summary } : {}),
+          ...(parsed.verified ? { verified: parsed.verified } : {}),
+          truncated: true,
+        };
+        return { ...m, content: JSON.stringify(compact) };
+      }
+    } catch {
+      // не JSON: сжимаем как раньше
+    }
     return { ...m, content: `${m.content.slice(0, OLD_TOOL_CHARS)} …(обрезано)` };
   }
   return m;
@@ -254,6 +271,7 @@ class Agent {
     this._startedAt = null; // ISO-время начала запуска
     this._calls = []; // безопасная сводка шагов запуска для done.history (без аргументов и текстов)
     this._verification = { confirmed: 0, unverified: 0, failed: 0, reads: 0 };
+    this._unverifiedStreak = 0; // сколько действий подряд осталось без подтверждения (для подсказки модели)
   }
 
   // Первый запрос после простоя в разы медленнее: соединение и кэш промпта холодные. Прогрев тем же началом запроса, один токен ответа.
@@ -297,6 +315,7 @@ class Agent {
     this._step = 0;
     this._calls = [];
     this._verification = { confirmed: 0, unverified: 0, failed: 0, reads: 0 };
+    this._unverifiedStreak = 0;
     const text = userText == null ? '' : String(userText);
     this._turn = {
       id: randomUUID().slice(0, 8),
@@ -416,7 +435,11 @@ class Agent {
         return this._endTurn();
       }
 
-      let calls = (res.toolCalls || []).map((c) => ({ ...c, id: c.id || randomUUID() }));
+      let calls = (res.toolCalls || []).map((c) => {
+        const tool = c && c.name ? this.tools.get(c.name) : null;
+        const args = !c.argsError && tool ? coerceToolArgs(tool, c.args) : c.args;
+        return { ...c, id: c.id || randomUUID(), args };
+      });
       // Инструменты на этом шаге запрещены: вызовы, если модель их всё же прислала, не выполняем.
       if (answerOnly) calls = [];
       const text = res.content || (answerOnly && calls.length === 0 ? LOOP_FALLBACK : '');
@@ -685,6 +708,9 @@ class Agent {
     else if (callStatus === 'unverified') this._verification.unverified += 1;
     else if (result.verified === 'confirmed') this._verification.confirmed += 1;
     else this._verification.reads += 1;
+    // Серия действий без подтверждения (идея Browser Use): после двух подскажем не повторять вслепую.
+    if (callStatus === 'confirmed' || result.verified === 'confirmed') this._unverifiedStreak = 0;
+    else if (callStatus === 'unverified' || callStatus === 'failed') this._unverifiedStreak = (this._unverifiedStreak || 0) + 1;
     if (this._calls.length < 200) {
       this._calls.push({
         callId: call.id, step, tool: call.name, risk, status: callStatus,
@@ -795,6 +821,19 @@ class Agent {
     return note ? `отклонено: ${note}` : 'отклонено';
   }
 
+  // Предпросмотр изменения для окна подтверждения: инструмент сам знает, что показать.
+  // Сбой предпросмотра не мешает подтверждению: диалог работает как раньше, просто без патча.
+  _preview(tool, args) {
+    if (!tool || typeof tool.preview !== 'function') return null;
+    try {
+      const preview = tool.preview(args);
+      if (!preview || typeof preview.diff !== 'string' || !preview.diff) return null;
+      return preview;
+    } catch {
+      return null;
+    }
+  }
+
   async _askApproval(tool, call, signal, info = {}) {
     if (!this.approvals) return 'reject';
     // id совпадает с id вызова: интерфейс сводит approval_request и tool_start в одну запись истории.
@@ -808,6 +847,8 @@ class Agent {
       explain = ''; // пояснение инструмента упало: причина всё равно должна быть понятной
     }
     const reasonParts = [safeWords(`режим «${this.mode}»`), safeWords(`риск ${tool.risk || 'не указан'}`), explain, safeWords(note)].filter(Boolean);
+    // Предпросмотр изменения (если инструмент умеет): окно покажет, что именно изменится, до кнопок.
+    const preview = this._preview(tool, call.args);
     const payload = {
       id: call.id,
       name: tool.name,
@@ -816,6 +857,7 @@ class Agent {
       reason: reasonParts.join('; ') || 'действие требует вашего разрешения',
       // Для отправки, публикации и удаления «до перезапуска» не предлагаем: каждое действие — отдельное согласие.
       allowSession: !isOneShot(tool.name),
+      ...(preview ? { preview } : {}),
     };
     this._status('waiting_approval', {
       status: 'awaiting_approval', step: info.step, label: STEP_WORDS.awaiting_approval,
@@ -841,7 +883,17 @@ class Agent {
 
   async _execute(tool, args, signal, info = {}) {
     try {
-      const ctx = { workspace: this.workspace, signal, background: this.background };
+      // Единый контекст прогона: режим, заражение, фон, ход и шаг. Инструмент не может его изменить.
+      const ctx = makeToolContext({
+        workspace: this.workspace,
+        signal,
+        mode: this.mode,
+        tainted: this._tainted === true,
+        handsTainted: this._foreign === true,
+        background: this.background,
+        runId: this._runId,
+        step: info && Number.isInteger(info.step) ? info.step : null,
+      });
       const r = await tool.run(args, ctx);
       const out = {
         ok: Boolean(r && r.ok),
@@ -894,6 +946,13 @@ class Agent {
     this._pendingImages = [];
   }
 
+  // Подсказка после серии неподтверждённых действий: не считать сделанным и не повторять то же.
+  _steerHint() {
+    const n = this._unverifiedStreak || 0;
+    if (n < 2) return '';
+    return `Подряд не подтверждено шагов: ${n}. Не повторяй то же вслепую: сначала прочитай состояние (screen_look, desktop_observe, browser_read или чтение файла), затем смени способ или скажи, что именно не получилось.`;
+  }
+
   _messages() {
     // systemPrompt может быть строкой или функцией: функция вызывается на каждом ходу (нужно для времени).
     const text = typeof this.systemPrompt === 'function' ? this.systemPrompt() : this.systemPrompt;
@@ -902,7 +961,7 @@ class Agent {
     // Всё, что до последнего сообщения пользователя, — прошлые ходы: их отправляем сжатыми.
     let lastUser = recent.length - 1;
     while (lastUser >= 0 && (recent[lastUser].role !== 'user' || recent[lastUser].fromTool)) lastUser -= 1;
-    const stamp = [this.clock ? this.clock() : '', this._turnContext].filter(Boolean).join('\n');
+    const stamp = [this.clock ? this.clock() : '', this._turnContext, this._steerHint()].filter(Boolean).join('\n');
     return head.concat(recent.map((m, i) => {
       const msg = stamp && i === lastUser ? stampMessage(m, stamp) : m;
       return wireMessage(msg, i >= lastUser);
@@ -1022,4 +1081,55 @@ class Agent {
   }
 }
 
-module.exports = { Agent, MAX_TOOL_STEPS, MAX_REPEATS, repairToolHistory, PROGRESS_STATUSES, safeTarget };
+const TRIM_STRING_KEYS = new Set(['path', 'from', 'to', 'url', 'file', 'window', 'app']);
+
+// Мягкое приведение типов аргументов по JSON-схеме инструмента (по образцу Leon AI tool-executor):
+// число в строке ("15" → 15), логический флаг ("true"/"false" → boolean), одноэлементный массив
+// в скалярную строку и обрезка краевых пробелов у путей/адресов (текстовое содержимое не трогается).
+function coerceToolArgs(tool, rawArgs) {
+  if (!rawArgs || typeof rawArgs !== 'object' || Array.isArray(rawArgs)) return rawArgs;
+  const props = tool && tool.parameters && tool.parameters.properties;
+  if (!props || typeof props !== 'object') return rawArgs;
+  let changed = false;
+  const out = { ...rawArgs };
+  for (const [key, spec] of Object.entries(props)) {
+    if (!Object.prototype.hasOwnProperty.call(out, key) || !spec || typeof spec !== 'object') continue;
+    let val = out[key];
+    const type = spec.type;
+    if (type === 'string') {
+      if (Array.isArray(val) && val.length === 1 && typeof val[0] === 'string') {
+        val = val[0];
+        changed = true;
+      }
+      if (typeof val === 'string' && TRIM_STRING_KEYS.has(key)) {
+        const trimmed = val.trim();
+        if (trimmed !== '' && trimmed !== val) {
+          val = trimmed;
+          changed = true;
+        }
+      }
+      out[key] = val;
+    } else if (type === 'integer' && typeof val === 'string' && /^-?\d+$/.test(val.trim())) {
+      const n = Number(val.trim());
+      if (Number.isSafeInteger(n)) {
+        out[key] = n;
+        changed = true;
+      }
+    } else if (type === 'number' && typeof val === 'string' && val.trim() !== '') {
+      const n = Number(val.trim());
+      if (Number.isFinite(n)) {
+        out[key] = n;
+        changed = true;
+      }
+    } else if (type === 'boolean' && typeof val === 'string') {
+      const lower = val.trim().toLowerCase();
+      if (lower === 'true' || lower === 'false') {
+        out[key] = lower === 'true';
+        changed = true;
+      }
+    }
+  }
+  return changed ? out : rawArgs;
+}
+
+module.exports = { Agent, MAX_TOOL_STEPS, MAX_REPEATS, repairToolHistory, PROGRESS_STATUSES, safeTarget, coerceToolArgs };

@@ -22,6 +22,13 @@ const BACKUPS_DIR = 'backups';
 const MAX_BACKUPS = 50;
 const PER_FILE_BACKUPS = 20;
 const MAX_BACKUP_BYTES = 8 * 1024 * 1024;
+// Предпросмотр изменений перед подтверждением записи: короткий unified diff, а не весь файл.
+const MAX_DIFF_LINES = 20;        // сколько изменённых строк показываем
+const MAX_DIFF_CONTEXT = 2;       // строк контекста вокруг изменения
+const MAX_DIFF_SOURCE_LINES = 400; // больше строк одного файла не сравниваем
+const MAX_DIFF_BYTES = 256 * 1024; // больше не читаем ради предпросмотра
+const MAX_DIFF_LINE_CHARS = 300;   // одна очень длинная строка не раздувает окно
+const MAX_DIFF_CHARS = 6000;       // общий предел текста предпросмотра
 
 function fail(err) {
   return { ok: false, summary: err && err.message ? err.message : String(err), data: {} };
@@ -116,6 +123,127 @@ function fileDigest(file) {
   const after = fs.statSync(file);
   if (bytes.length !== before.size || !stableStat(before, after)) return null;
   return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+// ---- Предпросмотр изменений файла: короткий unified diff до подтверждения записи.
+
+// Строки для сравнения: переводы строк приводятся к \n, последний пустой хвост не считается строкой.
+function diffTextLines(text) {
+  const normalized = String(text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  if (!normalized) return [];
+  const lines = normalized.split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  return lines;
+}
+
+function clipDiffLine(line) {
+  return line.length > MAX_DIFF_LINE_CHARS ? `${line.slice(0, MAX_DIFF_LINE_CHARS)}…` : line;
+}
+
+// Сравнение по строкам (LCS). У больших файлов сравниваются только первые MAX_DIFF_SOURCE_LINES строк,
+// и предпросмотр честно помечает, что показал не всё.
+function diffLineOps(before, after) {
+  const a = before.slice(0, MAX_DIFF_SOURCE_LINES);
+  const b = after.slice(0, MAX_DIFF_SOURCE_LINES);
+  const sourceTruncated = a.length < before.length || b.length < after.length;
+  const n = a.length;
+  const m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i -= 1) {
+    for (let j = m - 1; j >= 0; j -= 1) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const ops = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      ops.push({ kind: ' ', text: a[i] });
+      i += 1;
+      j += 1;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      ops.push({ kind: '-', text: a[i] });
+      i += 1;
+    } else {
+      ops.push({ kind: '+', text: b[j] });
+      j += 1;
+    }
+  }
+  while (i < n) {
+    ops.push({ kind: '-', text: a[i] });
+    i += 1;
+  }
+  while (j < m) {
+    ops.push({ kind: '+', text: b[j] });
+    j += 1;
+  }
+  return { ops, sourceTruncated };
+}
+
+// Куски патча вокруг изменений: не больше MAX_DIFF_LINES изменённых строк и MAX_DIFF_CHARS символов.
+function buildDiff(pathLabel, before, after) {
+  const { ops, sourceTruncated } = diffLineOps(before, after);
+  let additions = 0;
+  let deletions = 0;
+  const changes = [];
+  for (let k = 0; k < ops.length; k += 1) {
+    if (ops[k].kind === '+') additions += 1;
+    else if (ops[k].kind === '-') deletions += 1;
+    else continue;
+    changes.push(k);
+  }
+  if (!changes.length) return { diff: '', additions: 0, deletions: 0, truncated: sourceTruncated };
+  // Изменения ближе двух контекстов друг к другу показываются одним куском, а не построчно.
+  const ranges = [];
+  let start = changes[0];
+  let end = changes[0];
+  for (const k of changes.slice(1)) {
+    if (k - end - 1 <= MAX_DIFF_CONTEXT * 2) end = k;
+    else { ranges.push([start, end]); start = k; end = k; }
+  }
+  ranges.push([start, end]);
+  const out = [`--- a/${pathLabel}`, `+++ b/${pathLabel}`];
+  let shown = 0;
+  let chars = 0;
+  let cut = false;
+  for (const [changeStart, changeEnd] of ranges) {
+    const from = Math.max(0, changeStart - MAX_DIFF_CONTEXT);
+    const to = Math.min(ops.length - 1, changeEnd + MAX_DIFF_CONTEXT);
+    const lines = [];
+    let last = from - 1;
+    for (let k = from; k <= to; k += 1) {
+      const op = ops[k];
+      const isChange = op.kind !== ' ';
+      if (isChange && shown >= MAX_DIFF_LINES) { cut = true; break; }
+      const text = op.kind + clipDiffLine(op.text);
+      if (chars + text.length + 1 > MAX_DIFF_CHARS) { cut = true; break; }
+      if (isChange) shown += 1;
+      chars += text.length + 1;
+      lines.push(text);
+      last = k;
+    }
+    if (!lines.length) break;
+    // Заголовок куска описывает только напечатанные строки: обрезанный патч не должен врать о диапазоне.
+    let oldStart = 1;
+    let newStart = 1;
+    for (let k = 0; k < from; k += 1) {
+      if (ops[k].kind !== '+') oldStart += 1;
+      if (ops[k].kind !== '-') newStart += 1;
+    }
+    let oldCount = 0;
+    let newCount = 0;
+    for (let k = from; k <= last; k += 1) {
+      if (ops[k].kind !== '+') oldCount += 1;
+      if (ops[k].kind !== '-') newCount += 1;
+    }
+    out.push(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`);
+    out.push(...lines);
+    if (cut) break;
+  }
+  const truncated = sourceTruncated || cut;
+  if (truncated) out.push('… изменения не помещаются целиком');
+  return { diff: out.join('\n'), additions, deletions, truncated };
 }
 
 // Целое от 1 до max; undefined возвращает fallback; иное значение возвращает null (ошибка).
@@ -510,6 +638,42 @@ function workspaceTools(index) {
         return fail(err);
       }
     },
+    // Предпросмотр до записи: что именно изменится. Только чтение — ни файл, ни backups не трогаются.
+    // Окно подтверждения показывает патч до кнопок; отказ владельца ничего не пишет.
+    preview(args = {}) {
+      try {
+        const rel = cleanPath(args.path);
+        if (!rel || rel.length > MAX_PATH) return null;
+        const content = typeof args.content === 'string' ? args.content : '';
+        if (!content || content.length > MAX_CONTENT) return null;
+        const abs = writeTarget(index, rel, TEXT_EXTENSIONS);
+        const exists = fs.existsSync(abs);
+        if (exists) {
+          if (fs.statSync(abs).isDirectory()) return null;
+          // Запись всё равно будет отклонена — предпросмотр не нужен.
+          if (reportsOnly(index, abs)) return null;
+          if (fs.statSync(abs).size > MAX_DIFF_BYTES) {
+            return {
+              path: relOf(abs), created: false, diff: '', additions: 0, deletions: 0,
+              truncated: true, note: 'файл больше 256 КБ: предпросмотр не построен',
+            };
+          }
+        }
+        const before = exists ? diffTextLines(fs.readFileSync(abs, 'utf8')) : [];
+        const built = buildDiff(relOf(abs), before, diffTextLines(content));
+        return {
+          path: relOf(abs),
+          created: !exists,
+          diff: built.diff,
+          additions: built.additions,
+          deletions: built.deletions,
+          truncated: built.truncated,
+          ...(built.diff ? {} : { note: 'содержимое не изменится' }),
+        };
+      } catch {
+        return null; // предпросмотр не обязателен: диалог подтверждения работает и без него
+      }
+    },
     // Проверка эффекта: файл на диске существует и содержит именно записанный текст.
     async verify(args = {}, result = {}) {
       if (!result.data || !result.data.path) return { status: 'unknown', evidence: 'нет пути результата' };
@@ -637,6 +801,37 @@ function workspaceTools(index) {
         return result;
       } catch (err) {
         return fail(err);
+      }
+    },
+    // Предпросмотр переноса/копии: что изменится в файле назначения (или что он появится).
+    preview(args = {}) {
+      try {
+        const from = cleanPath(args.from);
+        const to = cleanPath(args.to);
+        if (!from || !to || from.length > MAX_PATH || to.length > MAX_PATH) return null;
+        const src = index.resolveInside(from);
+        if (!fs.existsSync(src) || fs.statSync(src).isDirectory()) return null;
+        if (!isTextFile(src) || fs.statSync(src).size > MAX_DIFF_BYTES) return null;
+        const dst = writeTarget(index, to, [path.extname(src).toLowerCase()]);
+        if (pathKey(dst) === pathKey(src)) return null;
+        const exists = fs.existsSync(dst);
+        if (exists) {
+          if (fs.statSync(dst).isDirectory() || args.overwrite !== true) return null;
+          if (reportsOnly(index, dst) || fs.statSync(dst).size > MAX_DIFF_BYTES) return null;
+        }
+        const before = exists ? diffTextLines(fs.readFileSync(dst, 'utf8')) : [];
+        const after = diffTextLines(fs.readFileSync(src, 'utf8'));
+        const built = buildDiff(relOf(dst), before, after);
+        return {
+          path: relOf(dst),
+          created: !exists,
+          diff: built.diff,
+          additions: built.additions,
+          deletions: built.deletions,
+          truncated: built.truncated,
+        };
+      } catch {
+        return null;
       }
     },
     // Сверка небольших файлов: для папок и переноса источник до операции не сохранён.
@@ -795,6 +990,32 @@ function workspaceTools(index) {
         };
       } catch (err) {
         return fail(err);
+      }
+    },
+    // Предпросмотр восстановления: что вернётся из выбранной копии.
+    preview(args = {}) {
+      try {
+        const rel = cleanPath(args.path);
+        const backupRel = cleanPath(args.backup);
+        if (!rel || !backupRel || rel.length > MAX_PATH) return null;
+        const abs = writeTarget(index, rel, null);
+        const src = backupPathInside(root, backupRel);
+        if (copyKeyOf(path.basename(src)) !== backupKey(abs, root)) return null;
+        if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory() || !isTextFile(abs)) return null;
+        if (fs.statSync(src).size > MAX_BACKUP_BYTES || fs.statSync(abs).size > MAX_DIFF_BYTES) return null;
+        const before = diffTextLines(fs.readFileSync(abs, 'utf8'));
+        const after = diffTextLines(readCapped(src, MAX_BACKUP_BYTES).toString('utf8'));
+        const built = buildDiff(relOf(abs), before, after);
+        return {
+          path: relOf(abs),
+          created: false,
+          diff: built.diff,
+          additions: built.additions,
+          deletions: built.deletions,
+          truncated: built.truncated,
+        };
+      } catch {
+        return null;
       }
     },
     // Проверка эффекта: файл на диске побайтно совпадает с восстановленной копией.

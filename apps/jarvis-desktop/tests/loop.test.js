@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { Agent, MAX_TOOL_STEPS } = require('../src/agent/loop');
+const { Agent, MAX_TOOL_STEPS, coerceToolArgs } = require('../src/agent/loop');
 const { ToolRegistry } = require('../src/tools/registry');
 const { Journal } = require('../src/journal/journal');
 const { ApprovalBroker } = require('../src/policy/approvals');
@@ -351,4 +351,62 @@ test('заглушка без ключа отвечает текстом без 
 
   assert.deepEqual(events.map(kind), ['status:thinking', 'text', 'done', 'status:idle']);
   assert.match(events[1].delta, /не подключён к модели/);
+});
+
+test('coerceToolArgs: приводит типы по схеме инструмента и обрезает пробелы в путях', async (t) => {
+  assert.equal(typeof coerceToolArgs, 'function');
+  const dir = setup(t);
+  let receivedArgs = null;
+  const customTool = {
+    name: 'custom_write',
+    risk: 'T0',
+    description: 'test',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        minutes: { type: 'integer' },
+        ratio: { type: 'number' },
+        overwrite: { type: 'boolean' },
+        content: { type: 'string' },
+      },
+    },
+    async run(args) {
+      receivedArgs = args;
+      return { ok: true, summary: 'записано' };
+    },
+  };
+  const brain = scriptedBrain([
+    {
+      toolCalls: [{
+        id: 'cw1',
+        name: 'custom_write',
+        args: {
+          path: ['  notes/todo.md  '],
+          minutes: '15',
+          ratio: '2.5',
+          overwrite: 'true',
+          content: '  сохранить пробелы  ',
+        },
+      }],
+    },
+    { content: 'Готово' },
+  ]);
+  const agent = new Agent({
+    brain,
+    tools: registry(customTool),
+    journal: new Journal(path.join(dir, 'journal.jsonl')),
+    mode: 'auto',
+    workspace: dir,
+  });
+
+  await agent.run('запиши');
+
+  assert.deepEqual(receivedArgs, {
+    path: 'notes/todo.md',
+    minutes: 15,
+    ratio: 2.5,
+    overwrite: true,
+    content: '  сохранить пробелы  ',
+  });
 });

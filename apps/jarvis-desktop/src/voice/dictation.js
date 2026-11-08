@@ -1,5 +1,8 @@
 'use strict';
 
+// Режимы микрофона: чистые переходы и фразы (src/voice/modes.js).
+const { handlePhrase, normalizeState, DEFAULT_STATE } = require('./modes');
+
 // Разбор потока событий раннера диктовки: встроенное распознавание Windows, без облака.
 // Раннер (PowerShell) печатает в stdout по одной JSON-строке на событие:
 //   {"type":"text","text":"сказанное"} — распознанная фраза;
@@ -114,13 +117,34 @@ function describeError(event) {
 
 // Одна сессия диктовки может остановить ход только один раз. Слова попадают в поле ввода,
 // но не отправляются сами: владелец видит, что именно распознано.
-function createDictationRouter({ isBusy, interrupt, emit }) {
+//
+// Режим микрофона (src/voice/modes.js) решает, что делать со сказанным:
+// - фразы «тихий режим», «слушай меня», «хватит слушать» перехватываются (onMode) и в поле не печатаются;
+// - в quiet в поле и в чат уходит только фраза с обращением «Джарвис» (hasWake), остальное молча пропускается;
+// - в off поздние строки раннера игнорируются: распознавание уже остановлено.
+function createDictationRouter({ isBusy, interrupt, emit, getMode = () => DEFAULT_STATE, onMode = null, hasWake = null } = {}) {
   let interrupted = false;
   let closed = false;
+  const currentMode = () => normalizeState(getMode());
+  const wakeSpoken = (text) => typeof hasWake === 'function' && hasWake(text) === true;
   const route = (event) => {
     if (closed || !event) return;
     if (event.type === 'text') {
       if (!validText(event.text)) return;
+      const modeResult = handlePhrase(event.text, currentMode());
+      if (modeResult.action !== 'none') {
+        if (typeof onMode === 'function') {
+          try {
+            onMode(modeResult, event);
+          } catch {
+            // сбой обработчика не должен останавливать распознавание
+          }
+        }
+        return;
+      }
+      const mode = currentMode();
+      if (mode === 'off') return; // распознавание остановлено, поздняя строка не нужна
+      if (mode === 'quiet' && !wakeSpoken(event.text)) return; // тихий режим: только имя
       if (!interrupted && isBusy()) {
         interrupted = true;
         interrupt();

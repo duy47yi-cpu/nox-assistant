@@ -2,6 +2,7 @@
 // Сочетания клавиш отправляем через keybd_event: SendKeys не умеет нажимать клавишу Win.
 const { runPowerShell, probeProcess, pollUntil } = require('./system');
 const { cannotVerify } = require('../agent/effects');
+const { READ_SCRIPT: CLIPBOARD_READ } = require('./clipboard');
 
 const MAX_WAIT_MS = 10000;
 
@@ -191,6 +192,60 @@ const pcShutdown = {
   verify: cannotVerify('система приняла команду, само выключение после него не проверить'),
 };
 
-const desktopTools = [wait, windowsMinimizeAll, windowsRestoreAll, monitorOff, appClose, speak, pcShutdown];
+// Чтение вслух: буфер обмена (текст, который владелец скопировал). Длинный текст режем по предложениям:
+// голос говорит короткими кусками, а не одним куском на минуту. Больше READ_LIMIT символов не читаем.
+const READ_CHUNK = 220;
+const READ_LIMIT = 1500;
 
-module.exports = { desktopTools, comboScript, setSpeaker, MAX_WAIT_MS, MINIMIZE_SCRIPT, RESTORE_SCRIPT };
+function splitForSpeech(text) {
+  let rest = String(text || '').replace(/\s+/g, ' ').trim().slice(0, READ_LIMIT);
+  const parts = [];
+  while (rest) {
+    if (rest.length <= READ_CHUNK) { parts.push(rest); break; }
+    let cut = rest.lastIndexOf('. ', READ_CHUNK);
+    if (cut < 80) cut = rest.lastIndexOf(' ', READ_CHUNK);
+    if (cut <= 0) cut = READ_CHUNK;
+    parts.push(rest.slice(0, cut + 1).trim());
+    rest = rest.slice(cut + 1).trim();
+  }
+  return parts.filter(Boolean);
+}
+
+// Говорит куски по очереди; остановка — через signal (кнопка «Стоп» или аварийный стоп).
+async function speakChunks(parts, say, signal) {
+  for (const part of parts) {
+    if (signal && signal.aborted) break;
+    await say(part, signal);
+  }
+}
+
+const readClipboardAloud = {
+  name: 'read_clipboard_aloud',
+  description: `Прочитать вслух текст из буфера обмена (до ${READ_LIMIT} символов). Сначала скопируйте нужный текст; если буфер пуст, так и скажу.`,
+  risk: 'T1',
+  parameters: { type: 'object', properties: {} },
+  async run(args, ctx = {}) {
+    if (!speaker) return { ok: false, summary: 'голос не подключён', data: {} };
+    const res = await runPowerShell(CLIPBOARD_READ, {}, { signal: ctx.signal, timeoutMs: 10000 });
+    if (!res.ok) return { ok: false, summary: res.summary, data: {} };
+    const text = String((res.data && res.data.stdout) || '').trim();
+    if (!text) return { ok: false, summary: 'буфер пуст: скопируйте текст и попросите снова', data: {} };
+    const parts = splitForSpeech(text);
+    try {
+      await speakChunks(parts, speaker, ctx.signal);
+    } catch (err) {
+      return { ok: false, summary: `голос: ${err.message}`, data: {} };
+    }
+    const truncated = text.length > READ_LIMIT;
+    return {
+      ok: true,
+      summary: `прочитано ${Math.min(text.length, READ_LIMIT)} символов${truncated ? ', дальше не читаю' : ''}`,
+      data: { chars: text.length, parts: parts.length, truncated },
+    };
+  },
+  verify: cannotVerify('голос отработал, но услышан ли звук, узнать нельзя'),
+};
+
+const desktopTools = [wait, windowsMinimizeAll, windowsRestoreAll, monitorOff, appClose, speak, pcShutdown, readClipboardAloud];
+
+module.exports = { desktopTools, comboScript, setSpeaker, MAX_WAIT_MS, MINIMIZE_SCRIPT, RESTORE_SCRIPT, splitForSpeech, speakChunks, READ_LIMIT, READ_CHUNK };

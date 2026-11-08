@@ -686,6 +686,31 @@
     }
     const voiceTest = $('#voiceTest');
     if (voiceTest) voiceTest.addEventListener('click', () => testVoice(voiceTest));
+    // Режим сна — строковая настройка, поэтому отдельно от переключателей-галочек.
+    const keepAwake = $('#setKeepAwake');
+    if (keepAwake) keepAwake.addEventListener('change', () => changeKeepAwake(keepAwake.value));
+  }
+
+  // Режим «не спать»: off / while-working / always. Сохраняется сразу, окно показывает выбор как есть.
+  async function changeKeepAwake(value) {
+    if (!has('setSetting')) return;
+    const prev = S.settings.keepAwake || 'while-working';
+    S.settings.keepAwake = value;
+    syncToggles();
+    let ok = false;
+    let why = '';
+    try {
+      const r = await call('setSetting', 'keepAwake', value);
+      ok = !(r && r.ok === false);
+      if (r && r.error) why = String(r.error);
+    } catch (err) {
+      why = errText(err);
+    }
+    if (!ok) {
+      S.settings.keepAwake = prev;
+      syncToggles();
+      toast('Настройка не сохранилась' + (why ? ': ' + why : ''), 'error');
+    }
   }
 
   // Проверка голоса: пробная фраза через настоящее ядро. Ключ голоса читается из .env заново,
@@ -717,6 +742,11 @@
     for (const inp of $$('[data-local="orbAnim"]')) inp.checked = S.orbAnim;
     const voiceTest = $('#voiceTest');
     if (voiceTest) voiceTest.disabled = !has('voiceTest');
+    const keepAwake = $('#setKeepAwake');
+    if (keepAwake) {
+      keepAwake.value = ['off', 'while-working', 'always'].includes(S.settings.keepAwake) ? S.settings.keepAwake : 'while-working';
+      keepAwake.disabled = !can;
+    }
     syncDictationVisible();
   }
 
@@ -996,6 +1026,7 @@
       const s = await call('getSettings');
       if (s && typeof s === 'object') {
         for (const k of SETTING_KEYS) S.settings[k] = s[k] === true;
+        if (['off', 'while-working', 'always'].includes(s.keepAwake)) S.settings.keepAwake = s.keepAwake;
         if (TIER_NAMES[s.modelTier]) S.tier = s.modelTier;
         S.workspace = s.workspace ? String(s.workspace) : '';
         S.folders = Array.isArray(s.connectedFolders) ? s.connectedFolders.map(String) : [];
@@ -1106,7 +1137,17 @@
   // Фон самого окна Electron — под тему: иначе при растягивании видна чужая кайма.
   function syncWindowBackground() {
     if (!has('setWindowBackground')) return;
-    call('setWindowBackground', getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()).catch(() => {});
+    // Прозрачность и скругление окна — из «Вид». При включённой прозрачности или радиусе
+    // подложку окна отдаём странице ('#00000000'), иначе она перекрыла бы углы и фон.
+    let look = {};
+    try {
+      look = window.JarvisTheme && typeof window.JarvisTheme.getLook === 'function' ? window.JarvisTheme.getLook() : {};
+    } catch { look = {}; }
+    const alpha = Number(look.winAlpha) || 0;
+    const radius = Number(look.winRadius) || 0;
+    const transparent = alpha > 0 || radius > 0;
+    const color = transparent ? '#00000000' : getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    call('setWindowBackground', color).catch(() => {});
   }
 
   function refreshOrbColors() {
@@ -1122,6 +1163,8 @@
   document.addEventListener('jarvis:toast', (e) => toast(e.detail.text, e.detail.kind));
   // Свой цвет акцента (accent.js, theme-boot.js): шар и фон окна читают цвет заново.
   document.addEventListener('jarvis:accent', () => requestAnimationFrame(refreshOrbColors));
+  // Ручки «Вид» (тема, прозрачность и радиус окна): подложка окна обновляется сразу.
+  document.addEventListener('jarvis:look', () => requestAnimationFrame(syncWindowBackground));
 
   function setTheme(next) {
     if (!THEMES.includes(next)) return;
@@ -1456,7 +1499,67 @@
   }
 
   // ── Подтверждения ─────────────────────────────────────────────
-  const A = { queue: [], busy: false };
+  const A = { queue: [], busy: false, countdownTimer: null };
+
+  // Обратный отсчёт до автоотмены: время приходит из ядра (autoCancelAt), окно только показывает.
+  // Элемент строится из JS: разметку диалога в index.html не трогаем.
+  function ensureApprovalCountdown() {
+    let elc = $('#apCountdown');
+    if (elc) return elc;
+    const dlg = $('#approvalDialog');
+    if (!dlg) return null;
+    elc = document.createElement('p');
+    elc.id = 'apCountdown';
+    elc.hidden = true;
+    elc.setAttribute('role', 'status');
+    elc.style.cssText = 'margin:10px 0 0;font-size:var(--fs-xs);color:var(--text-3)';
+    const actions = dlg.querySelector('.dialog-actions');
+    const form = dlg.querySelector('form');
+    if (actions && actions.parentNode) actions.parentNode.insertBefore(elc, actions);
+    else if (form) form.appendChild(elc);
+    else dlg.appendChild(elc);
+    return elc;
+  }
+
+  function stopApprovalCountdown() {
+    if (A.countdownTimer) { clearInterval(A.countdownTimer); A.countdownTimer = null; }
+  }
+
+  function startApprovalCountdown(cur) {
+    stopApprovalCountdown();
+    const elc = ensureApprovalCountdown();
+    if (!elc) return;
+    const at = Number(cur && cur.autoCancelAt);
+    if (!Number.isFinite(at) || at <= 0) { elc.hidden = true; return; }
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((at - Date.now()) / 1000));
+      if (left <= 0) {
+        elc.textContent = 'Время вышло — действие отменяется…';
+        elc.style.color = 'var(--err)';
+        return;
+      }
+      elc.textContent = 'Без ответа отменится через ' + left + ' ' + U.plural(left, ['секунду', 'секунды', 'секунд']);
+      elc.style.color = left <= 10 ? 'var(--warn)' : 'var(--text-3)';
+    };
+    elc.hidden = false;
+    tick();
+    A.countdownTimer = setInterval(tick, 250);
+  }
+
+  // Строки предпросмотра изменений: плюсы и минусы разного цвета, служебные строки патча приглушены.
+  function renderDiff(pre, text) {
+    pre.textContent = '';
+    for (const line of String(text).split('\n')) {
+      const row = document.createElement('span');
+      row.className = 'ap-diff-line';
+      if (line.startsWith('+++') || line.startsWith('---')) row.classList.add('ap-diff-head');
+      else if (line.startsWith('@@')) row.classList.add('ap-diff-hunk');
+      else if (line.startsWith('+')) row.classList.add('ap-diff-add');
+      else if (line.startsWith('-')) row.classList.add('ap-diff-del');
+      row.textContent = line + '\n';
+      pre.appendChild(row);
+    }
+  }
 
   function approvalPush(ev) {
     if (!ev.id || A.queue.some((q) => q.id === ev.id)) return;
@@ -1532,6 +1635,7 @@
     const dlg = $('#approvalDialog');
     const cur = A.queue[0];
     if (!cur) {
+      stopApprovalCountdown();
       if (dlg.open) dlg.close();
       return;
     }
@@ -1553,6 +1657,29 @@
     reason.textContent = cur.reason ? U.scrub(cur.reason) : '';
     reason.hidden = !cur.reason;
     $('#apArgs').textContent = U.argsPretty(cur.args);
+    // Предпросмотр изменений файла: показываем до кнопок, чтобы владелец видел, что именно перезапишется.
+    const preview = cur.preview && typeof cur.preview.diff === 'string' && cur.preview.diff ? cur.preview : null;
+    const previewBox = $('#apPreview');
+    if (previewBox) {
+      previewBox.hidden = !preview;
+      const diffEl = $('#apDiff');
+      const title = $('#apPreviewTitle');
+      if (preview) {
+        const stats = [];
+        if (preview.additions) stats.push('+' + preview.additions);
+        if (preview.deletions) stats.push('−' + preview.deletions);
+        const name = preview.path ? ' ' + preview.path : '';
+        const what = preview.created ? 'Новый файл' : 'Изменится файл';
+        title.textContent = what + name + (stats.length ? ' (' + stats.join(', ') + ')' : '')
+          + (preview.truncated ? ' — показано не всё' : '');
+        renderDiff(diffEl, preview.diff);
+      } else {
+        diffEl.textContent = '';
+        title.textContent = '';
+      }
+    }
+    // Автоотмена: честно показываем, сколько осталось до отказа (30 с задаёт ядро).
+    startApprovalCountdown(cur);
     if (fresh) $('#apDetails').open = false;
     for (const b of $$('[data-decision]', dlg)) b.disabled = false;
     // Отправка, публикация и удаление: «На сессию» не предлагаем (см. loop.js, allowSession).
@@ -1593,6 +1720,7 @@
     dlg.addEventListener('cancel', (e) => { e.preventDefault(); answerApproval('reject'); });
     // После закрытия фокус возвращается туда, где был.
     dlg.addEventListener('close', () => {
+      stopApprovalCountdown();
       delete dlg.dataset.current;
       const back = A.returnFocus;
       A.returnFocus = null;
@@ -2300,22 +2428,124 @@
   }
 
   // ── Диктовка ──────────────────────────────────────────────────
-  // Кнопка микрофона у поля ввода. Мост: dictation:start/stop и события dictation:event
-  // ({type:'state'|'text'|'error'}). Распознанное только дописывается в поле — отправляет человек.
-  const DICT = { recording: false, busy: false, hint: '' };
+  // Кнопка микрофона и честный индикатор режима. Мост: dictation:start/stop/mode/state
+  // и события dictation:event ({type:'state'|'text'|'error'|'wake'|'mode'}).
+  // Режимы: «Слушаю» — вся речь; «Только имя» — в поле и чат только «Джарвис, …»; «Микрофон выкл».
+  const DICT = { recording: false, busy: false, hint: '', mode: 'listening', full: false, hotkeyOk: true };
+  const DICT_STATES = ['listening', 'quiet', 'off'];
+  const DICT_LABELS = { listening: 'Слушаю', quiet: 'Только имя', off: 'Микрофон выкл' };
+  const DICT_COLORS = { listening: 'var(--ok)', quiet: 'var(--warn)', off: 'var(--text-3)' };
+
+  // Индикатор строится из JS: разметку index.html правит другой агент, её не трогаем.
+  function ensureDictationIndicator() {
+    let elm = $('#dictationStateBtn');
+    if (elm) return elm;
+    const dock = document.querySelector('.stage-dock');
+    if (!dock) return null;
+    elm = document.createElement('button');
+    elm.type = 'button';
+    elm.id = 'dictationStateBtn';
+    elm.hidden = true;
+    elm.style.cssText = [
+      'display:inline-flex', 'align-items:center', 'gap:6px',
+      'margin:0 0 6px', 'padding:3px 9px', 'border:1px solid var(--border)',
+      'border-radius:999px', 'background:var(--surface-2)', 'color:var(--text-2)',
+      'font:inherit', 'font-size:var(--fs-xs)', 'cursor:pointer',
+    ].join(';');
+    const dot = document.createElement('span');
+    dot.setAttribute('aria-hidden', 'true');
+    dot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:currentColor;flex:none';
+    const label = document.createElement('span');
+    elm.append(dot, label);
+    elm.addEventListener('click', () => { cycleDictationMode(); });
+    const hint = $('#composerHint');
+    if (hint && hint.parentNode === dock) dock.insertBefore(elm, hint);
+    else dock.appendChild(elm);
+    return elm;
+  }
+
+  // Подпись честная: если микрофон не слушает или выключен, «Слушаю» не показываем.
+  function dictationIndicatorView() {
+    if (S.settings.dictation !== true) return null;
+    if (!DICT.recording || DICT.mode === 'off') return { label: DICT_LABELS.off, color: DICT_COLORS.off, mode: 'off' };
+    if (DICT.mode === 'quiet' || DICT.full === false) return { label: DICT_LABELS.quiet, color: DICT_COLORS.quiet, mode: 'quiet' };
+    return { label: DICT_LABELS.listening, color: DICT_COLORS.listening, mode: 'listening' };
+  }
+
+  function renderDictationIndicator() {
+    const elm = ensureDictationIndicator();
+    if (!elm) return;
+    const view = dictationIndicatorView();
+    if (!view) { elm.hidden = true; return; }
+    elm.hidden = false;
+    elm.dataset.mode = view.mode;
+    elm.title = 'Микрофон: ' + view.label + '. Нажмите, чтобы переключить (Ctrl+Alt+M)';
+    elm.setAttribute('aria-label', 'Режим микрофона: ' + view.label + '. Переключить');
+    const dot = elm.firstElementChild;
+    const label = elm.lastElementChild;
+    if (dot) dot.style.background = view.color;
+    if (label) label.textContent = view.label;
+  }
 
   function syncDictationVisible() {
     const btn = $('#dictationBtn');
-    if (!btn) return;
     const on = S.settings.dictation === true && has('dictationStart') && has('onDictationEvent');
     if (!on && DICT.recording) stopDictation(); // выключили в настройках посреди записи
-    btn.hidden = !on;
+    if (btn) btn.hidden = !on;
+    renderDictationIndicator();
+  }
+
+  function nextDictationMode() {
+    const i = DICT_STATES.indexOf(DICT.mode);
+    return DICT_STATES[(i + 1) % DICT_STATES.length];
+  }
+
+  // Клик по индикатору: микрофон не слушает — включить полную диктовку, иначе следующий режим по кругу.
+  async function cycleDictationMode() {
+    if (S.settings.dictation !== true) { toast('Включите диктовку в настройках'); return; }
+    if (!has('dictationMode')) return;
+    const target = DICT.recording ? nextDictationMode() : 'listening';
+    try {
+      const r = await call('dictationMode', target);
+      if (r && r.ok === false) {
+        toast(r.reason === 'disabled' ? 'Включите диктовку в настройках' : 'Режим не переключился', 'error');
+        return;
+      }
+      if (r) applyDictationModeEvent({ type: 'mode', mode: r.mode, full: r.full === true, recording: r.recording === true });
+    } catch (e) {
+      toast('Режим не переключился: ' + errText(e), 'error');
+    }
+  }
+
+  // Событие режима из ядра: подпись, полнота диктовки и ответ владельцу (тост).
+  function applyDictationModeEvent(ev) {
+    if (ev && DICT_STATES.includes(ev.mode)) DICT.mode = ev.mode;
+    if (ev && typeof ev.full === 'boolean') DICT.full = ev.full;
+    if (ev && typeof ev.recording === 'boolean') setRecordingUI(ev.recording);
+    if (DICT.recording) setRecordingHint(); // подсказка зависит от режима
+    renderDictationIndicator();
+    if (ev && typeof ev.reply === 'string' && ev.reply.trim()) toast(ev.reply.trim());
+  }
+
+  async function refreshDictationState() {
+    if (!has('dictationState')) return;
+    try {
+      const r = await call('dictationState');
+      if (!r || r.ok === false) return;
+      DICT.hotkeyOk = r.hotkeyOk !== false;
+      applyDictationModeEvent({ type: 'mode', mode: r.mode, full: r.full === true, recording: r.recording === true });
+    } catch {
+      // старая сборка без моста: остаётся кнопка микрофона, индикатор скрыт
+    }
   }
 
   function setRecordingHint() {
     const hint = $('#composerHint');
     if (!DICT.hint) DICT.hint = hint.textContent; // прежний текст вернём после остановки
-    hint.textContent = 'Распознанная речь остановит текущий ход и появится в поле. Нажмите ещё раз, чтобы закончить';
+    // В тихом режиме слова без имени не попадут в поле — подсказка не должна обещать обратное.
+    hint.textContent = (DICT.mode === 'quiet' || DICT.full === false)
+      ? 'Слушаю только имя «Джарвис»: скажите «Джарвис, открой ютуб». Ctrl+Alt+M — режим микрофона'
+      : 'Распознанная речь остановит текущий ход и появится в поле. Нажмите ещё раз, чтобы закончить';
     hint.dataset.recording = 'true';
     hint.hidden = false;
   }
@@ -2332,8 +2562,10 @@
     if (DICT.recording === on) return;
     DICT.recording = on;
     const btn = $('#dictationBtn');
-    if (on) btn.setAttribute('data-recording', 'true');
-    else btn.removeAttribute('data-recording');
+    if (btn) {
+      if (on) btn.setAttribute('data-recording', 'true');
+      else btn.removeAttribute('data-recording');
+    }
     if (on) setRecordingHint();
     else restoreRecordingHint();
     // Шар и заголовок показывают «Слушаю», пока идёт распознавание.
@@ -2341,6 +2573,7 @@
       tracker.setListening(on);
       renderStatus();
     }
+    renderDictationIndicator();
   }
 
   async function startDictation() {
@@ -2397,20 +2630,37 @@
 
   function onDictationEvent(ev) {
     if (!ev || typeof ev !== 'object') return;
-    if (ev.type === 'state' && ev.state === 'listening') setRecordingUI(true);
-    else if (ev.type === 'state' && ev.state === 'stopped') setRecordingUI(false);
+    if (ev.type === 'mode') { applyDictationModeEvent(ev); return; }
+    if (ev.type === 'state' && ev.state === 'listening') { setRecordingUI(true); renderDictationIndicator(); }
+    else if (ev.type === 'state' && ev.state === 'stopped') { setRecordingUI(false); renderDictationIndicator(); }
     else if (ev.type === 'error') {
       setRecordingUI(false); // ошибка запуска приходит без события stopped
+      renderDictationIndicator();
       toast(String(ev.message || 'Диктовка не удалась'), 'error');
     } else if (ev.type === 'text') dictationText(ev.text);
     else if (ev.type === 'wake') wakeCommand(ev.command);
   }
 
   function initDictation() {
-    if (!has('onDictationEvent') || !has('dictationStart')) return; // старая сборка без моста: кнопка остаётся скрытой
-    $('#dictationBtn').addEventListener('click', () => { if (DICT.recording) stopDictation(); else startDictation(); });
+    ensureDictationIndicator();
+    if (!has('onDictationEvent') || !has('dictationStart')) {
+      renderDictationIndicator();
+      return; // старая сборка без моста: кнопка и индикатор остаются скрытыми
+    }
+    const btn = $('#dictationBtn');
+    if (btn) btn.addEventListener('click', () => { if (DICT.recording) stopDictation(); else startDictation(); });
     window.jarvis.onDictationEvent(onDictationEvent); // подписка один раз
+    // Если глобальную Ctrl+Alt+M заняло другое приложение (ядро сообщает hotkeyOk: false),
+    // ловим сочетание в окне — режим остаётся доступен с клавиатуры.
+    document.addEventListener('keydown', (e) => {
+      if (DICT.hotkeyOk !== false) return;
+      if (e.ctrlKey && e.altKey && !e.shiftKey && (e.code === 'KeyM' || e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        cycleDictationMode();
+      }
+    });
     syncDictationVisible();
+    refreshDictationState();
   }
 
   // ── Поле ввода: состояния ─────────────────────────────────────
@@ -3137,7 +3387,7 @@
     if (K.draft) renderSteps();
   }
 
-  // Паки: список из ядра, «Установить» ставит команды пака по клику.
+  // Паки: карточки из ядра (describePacks). «Установить» ставит команды пака по клику и не запускает их.
   async function renderPacks() {
     if (!has('installPack')) return;
     let box = $('#cmdPacks');
@@ -3156,34 +3406,81 @@
     box.replaceChildren();
     const h = document.createElement('h2');
     h.className = 'field-label';
-    h.textContent = 'Паки';
-    box.appendChild(h);
-    for (const p of packs) {
-      const row = document.createElement('div');
-      row.className = 'row';
-      const text = document.createElement('p');
-      text.className = 'note';
-      text.textContent = `${p.title} · ${p.total} команд. ${p.description}`;
-      const btn = document.createElement('button');
-      btn.className = 'btn btn-secondary btn-sm';
-      btn.type = 'button';
-      btn.textContent = 'Установить';
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        try {
-          const r = await call('installPack', p.id);
-          if (!r || !r.ok) throw new Error((r && r.error) || 'не получилось');
-          toast(r.added ? `Установлено ${r.added} команд` : 'Уже установлено', r.added ? 'ok' : undefined);
-          await loadCommands();
-        } catch (e) {
-          toast('Не получилось: ' + errText(e), 'error');
-        } finally {
-          btn.disabled = false;
-        }
-      });
-      row.append(text, btn);
-      box.appendChild(row);
+    h.textContent = 'Готовые паки';
+    const intro = document.createElement('p');
+    intro.className = 'note';
+    intro.textContent = 'Наборы команд для программ. Ставятся только по кнопке и сами ничего не запускают: сначала откройте нужную программу.';
+    const grid = document.createElement('div');
+    grid.className = 'pack-grid';
+    for (const p of packs) grid.appendChild(packCard(p));
+    box.append(h, intro, grid);
+  }
+
+  function packCard(p) {
+    const total = Number(p.total) || 0;
+    const installed = Number(p.installed) || 0;
+    const all = total > 0 && installed >= total;
+    const card = document.createElement('article');
+    card.className = 'pack-card';
+    card.dataset.pack = String(p.id || '');
+    if (all) card.dataset.state = 'installed';
+
+    const head = document.createElement('div');
+    head.className = 'pack-head';
+    const title = document.createElement('h3');
+    title.textContent = p.title;
+    const count = document.createElement('span');
+    count.className = 'pack-count';
+    count.textContent = `${total} ${U.plural(total, ['команда', 'команды', 'команд'])}`;
+    head.append(title, count);
+
+    const desc = document.createElement('p');
+    desc.className = 'pack-desc';
+    desc.textContent = p.description;
+    const hint = document.createElement('p');
+    hint.className = 'pack-hint';
+    hint.textContent = p.hint;
+    const state = document.createElement('p');
+    state.className = 'pack-state';
+    state.textContent = all ? 'Все команды установлены' : installed ? `Установлено ${installed} из ${total}` : 'Не установлено';
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-secondary btn-sm pack-install';
+    btn.type = 'button';
+    btn.textContent = all ? 'Установлено' : installed ? 'Дополнить' : 'Установить';
+    btn.disabled = all;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const r = await call('installPack', p.id);
+        if (!r || !r.ok) throw new Error((r && r.error) || 'не получилось');
+        toast(r.added ? `«${p.title}»: добавлено ${r.added}` : `«${p.title}» уже установлен`, r.added ? 'ok' : undefined);
+        await loadCommands();
+      } catch (e) {
+        toast('Не получилось: ' + errText(e), 'error');
+        btn.disabled = false;
+      }
+    });
+
+    const details = document.createElement('details');
+    details.className = 'pack-list';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Что внутри';
+    const list = document.createElement('ul');
+    for (const c of p.commands || []) {
+      const li = document.createElement('li');
+      const name = document.createElement('span');
+      name.textContent = c.name;
+      const phrase = document.createElement('span');
+      phrase.className = 'pack-phrase';
+      phrase.textContent = `«${c.phrase}»`;
+      li.append(name, phrase);
+      list.appendChild(li);
     }
+    details.append(summary, list);
+
+    card.append(head, desc, hint, state, btn, details);
+    return card;
   }
 
   async function loadCommands() {
@@ -3206,7 +3503,7 @@
     }
     $('#cmdNew').disabled = !has('saveCommand');
     renderCmdList();
-    if (!$('#cmdPacks')) renderPacks();
+    renderPacks();
     if (!K.draft) renderEditor();
   }
 

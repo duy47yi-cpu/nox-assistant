@@ -386,6 +386,13 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
     },
     mcpToggle: async (name, disabled) => { const s = mcpStub.find((x) => x.name === name); if (s) s.disabled = disabled; return { ok: true, servers: mcpStub.map((x) => ({ ...x })) }; },
     mcpRemove: async (name) => { const i = mcpStub.findIndex((x) => x.name === name); if (i >= 0) mcpStub.splice(i, 1); return { ok: true, servers: mcpStub.map((x) => ({ ...x })) }; },
+    mcpApprove: async (name) => {
+      const s = mcpStub.find((x) => x.name === name);
+      if (!s || s.status !== 'drift') return { ok: false, error: 'Подтверждать нечего' };
+      s.status = 'connected';
+      s.drift = null;
+      return { ok: true, servers: mcpStub.map((x) => ({ ...x })) };
+    },
     getSettings: async () => ({ ...settings, voiceVolume: 1, voiceRate: 1, voiceSpeaker: null, clipboardHistory: settings.clipboardHistory === true }),
     voiceState: async () => ({ ok: true, provider: 'local', available: true, reason: null, cloudAvailable: false, options: { speaker: settings.voiceSpeaker || null, volume: settings.voiceVolume ?? 1, rate: settings.voiceRate ?? 1 } }),
     voiceVoices: async () => ({ ok: true, voices: [{ id: 'baya', title: 'Бая' }, { id: 'aidar', title: 'Айдар' }] }),
@@ -673,7 +680,11 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
     },
 
     installPack: async (id) => {
-      const packs = [{ id: 'montage', title: 'Монтаж', description: 'Нажатия в активном окне редактора.', total: 2 }];
+      const have0 = new Set(commands.map((c) => c.name));
+      const packs = [
+        { id: 'montage', title: 'Монтаж', description: 'Монтаж: нажатия в активном окне редактора. Окно редактора должно быть на переднем плане.', hint: 'Нужно окно редактора на переднем плане', total: 2, installed: ['Монтаж: сохранить', 'Монтаж: отменить'].filter((n) => have0.has(n)).length, commands: [{ name: 'Монтаж: сохранить', phrase: 'сохрани монтаж' }, { name: 'Монтаж: отменить', phrase: 'отмени в монтаже' }] },
+        { id: 'sites', title: 'Сайты', description: 'Открывает сайт в браузере по умолчанию.', hint: 'Открывает сайт в браузере по умолчанию', total: 1, installed: 0, commands: [{ name: 'Сайт: почта', phrase: 'зайди в почту' }] },
+      ];
       if (id == null) return { ok: true, packs };
       if (!packs.some((p) => p.id === id)) return { ok: false, error: 'пак не найден' };
       const have = new Set(commands.map((c) => c.name));

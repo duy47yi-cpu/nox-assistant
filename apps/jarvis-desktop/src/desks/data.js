@@ -21,6 +21,7 @@
 //   notes    — MemoryStore.list(): [{id, text, kind, about, sensitive, updatedAt}];
 //   downloads — downloads-cleanup.analyze(folder) или список файлов [{name,size,mtimeMs}];
 //   mcp      — mcpManager.state(): {servers: [{name, transport, status, toolCount, ...}]};
+//   news     — fetchNews(): {ok, items:[{title,link,date,summary,source}], fetchedAt, stale, reason};
 //   pet      — декоративная анимация: данных нет, источник не читается вообще.
 
 const DATA_STATES = Object.freeze(['ok', 'empty', 'error', 'stale']);
@@ -29,6 +30,7 @@ const DATA_STATES = Object.freeze(['ok', 'empty', 'error', 'stale']);
 const DEFAULTS = Object.freeze({
   weatherMaxAgeMs: 45 * 60 * 1000, // кэш open-meteo обновляется раз в 30 минут
   currencyMaxAgeMs: 20 * 60 * 1000, // кэш курса ЦБ — 15 минут
+  newsMaxAgeMs: 30 * 60 * 1000, // кэш новостей — 30 минут
   tasksLimit: 10,
   todayLimit: 10,
   appsLimit: 6,
@@ -40,6 +42,7 @@ const DEFAULTS = Object.freeze({
   notesLimit: 5,
   downloadsLimit: 5,
   mcpLimit: 6,
+  newsLimit: 5,
 });
 
 // Настроения питомца — фиксированный набор. Это не данные источника и не «показания»:
@@ -589,6 +592,52 @@ function mcp(source, options = {}) {
   });
 }
 
+// Новости: настоящие записи fetchNews. Ссылка — только http(s), иначе запись не показываем.
+// Старый кэш (или прямо помеченный stale) даёт state stale с прежними записями, не пустоту.
+function news(source, options = {}) {
+  const { now = Date.now() } = options;
+  const limit = clampLimit(options.limit, DEFAULTS.newsLimit, 20);
+  const maxAgeMs = Number.isInteger(options.maxAgeMs) && options.maxAgeMs > 0 ? options.maxAgeMs : DEFAULTS.newsMaxAgeMs;
+  if (source === undefined || source === null) return result('news', 'empty', null);
+  if (!isPlainObject(source)) return result('news', 'error', null, 'bad_source');
+  if (source.ok === false) {
+    return result('news', 'error', null, typeof source.reason === 'string' ? source.reason : 'network');
+  }
+  if (!Array.isArray(source.items)) return result('news', 'error', null, 'bad_source');
+  const items = [];
+  for (const raw of source.items) {
+    if (!isPlainObject(raw) || typeof raw.title !== 'string' || !raw.title.trim()) continue;
+    const link = typeof raw.link === 'string' ? raw.link.trim() : '';
+    if (!/^https?:\/\//i.test(link)) continue;
+    const date = typeof raw.date === 'string' && Number.isFinite(new Date(raw.date).getTime())
+      ? new Date(raw.date).toISOString() : null;
+    items.push({
+      title: shortText(raw.title.trim(), 200),
+      link: link.slice(0, 2000),
+      date,
+      summary: typeof raw.summary === 'string' ? shortText(raw.summary, 300) : '',
+      source: typeof raw.source === 'string' ? shortText(raw.source, 60) : null,
+    });
+  }
+  if (!items.length) return result('news', 'empty', { items: [], total: 0 });
+  const fetchedAt = finite(source.fetchedAt);
+  const stale = source.stale === true || (fetchedAt !== null && now - fetchedAt > maxAgeMs);
+  const sources = Array.isArray(source.sources)
+    ? source.sources
+      .filter((item) => isPlainObject(item) && typeof item.url === 'string')
+      .map((item) => ({
+        url: shortText(item.url, 300),
+        title: typeof item.title === 'string' ? shortText(item.title, 60) : null,
+      }))
+    : [];
+  return result('news', stale ? 'stale' : 'ok', {
+    items: items.slice(0, limit),
+    total: items.length,
+    fetchedAt: fetchedAt === null ? null : new Date(fetchedAt).toISOString(),
+    sources,
+  });
+}
+
 // Питомец: декоративная анимация. Данных нет и не читается, поэтому state всегда ok;
 // настроение — только из фиксированного набора, иначе спокойное.
 function pet(source) {
@@ -615,6 +664,7 @@ const BUILDERS = Object.freeze({
   notes: (sources, options) => notes(sources.notes, options),
   downloads: (sources, options) => downloads(sources.downloads, options),
   mcp: (sources, options) => mcp(sources.mcp, options),
+  news: (sources, options) => news(sources.news, options),
   pet: () => pet(null),
 });
 
@@ -672,6 +722,7 @@ module.exports = {
   notes,
   downloads,
   mcp,
+  news,
   pet,
   buildWidget,
   buildDeskData,

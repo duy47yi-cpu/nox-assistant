@@ -6,6 +6,12 @@ const path = require('path');
 // Инструменты, у которых аргумент text — набранный текст (в том числе пароли). В журнал пишем только длину.
 const TYPED_TEXT_TOOLS = new Set(['ui_type', 'clipboard_set', 'browser_type']);
 
+// Ротация журнала (идея Hermes): живой файл не больше 10 МБ, прошлые — .1, .2, .3.
+// Чтение и поиск идут по всей цепочке, поэтому история не теряется.
+const JOURNAL_MAX_BYTES = 10 * 1024 * 1024;
+const JOURNAL_BACKUPS = 3;
+const MAX_ROTATED_FILES = 10;
+
 // Копия аргументов для журнала: набранный текст заменяется на «[скрыто, N симв.]». Сами аргументы не меняются.
 function maskArgs(tool, args) {
   if (tool === 'command_create' && args && Array.isArray(args.steps)) {
@@ -91,9 +97,27 @@ function maskSecrets(value, depth = 0) {
 
 // Журнал действий: одна JSON-строка на запись, только дописывание.
 class Journal {
-  constructor(filePath) {
+  // maxBytes/backups — для проверок; в приложении берутся значения по умолчанию.
+  constructor(filePath, { maxBytes = JOURNAL_MAX_BYTES, backups = JOURNAL_BACKUPS } = {}) {
     if (!filePath) throw new Error('Journal: нужен путь к файлу');
     this.filePath = filePath;
+    this.maxBytes = Number.isFinite(maxBytes) && maxBytes > 0 ? maxBytes : JOURNAL_MAX_BYTES;
+    this.backups = Number.isInteger(backups) && backups >= 1 ? backups : JOURNAL_BACKUPS;
+  }
+
+  // Сдвиг цепочки: .N удаляется, .N-1 → .N, живой файл → .1. Ошибка не теряет запись: файл остаётся на месте.
+  _rotate() {
+    const oldest = `${this.filePath}.${this.backups}`;
+    fs.rmSync(oldest, { force: true });
+    for (let i = this.backups - 1; i >= 1; i -= 1) {
+      const from = `${this.filePath}.${i}`;
+      const to = `${this.filePath}.${i + 1}`;
+      if (!fs.existsSync(from)) continue;
+      fs.rmSync(to, { force: true });
+      fs.renameSync(from, to);
+    }
+    fs.renameSync(this.filePath, `${this.filePath}.1`);
+    return true;
   }
 
   append(entry = {}) {
@@ -107,6 +131,12 @@ class Journal {
     const stored = maskSecrets(record);
     fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
     fs.appendFileSync(this.filePath, JSON.stringify(stored) + '\n', 'utf8');
+    // Рост ограничиваем после записи: запись уже сохранена, сбой ротации не теряет её.
+    try {
+      if (fs.statSync(this.filePath).size > this.maxBytes) this._rotate();
+    } catch {
+      // Не удалось повернуть (файл занят): журнал продолжает расти, данные на месте.
+    }
     return stored;
   }
 }
@@ -178,18 +208,42 @@ function dateFilter(value, label) {
   return ms;
 }
 
-// Все записи файла, новые сверху, с вычисленным статусом.
+// Файлы журнала от новых к старым: живой, .1, .2 … Пропуск в цепочке останавливает обход.
+function journalChain(file) {
+  const files = [file];
+  for (let i = 1; i <= MAX_ROTATED_FILES; i += 1) {
+    const part = `${file}.${i}`;
+    if (!fs.existsSync(part)) break;
+    files.push(part);
+  }
+  return files;
+}
+
+// Содержимое всей цепочки в хронологическом порядке: старые файлы сначала, живой — последним.
+// Отсутствующий живой файл — не ошибка: после ротации записей в нём ещё может не быть.
+function readJournalChain(file) {
+  const files = journalChain(file).reverse();
+  let raw = '';
+  for (const part of files) {
+    let text;
+    try {
+      text = fs.readFileSync(part, 'utf8');
+    } catch (err) {
+      if (err && err.code === 'ENOENT') continue;
+      return { problem: `журнал не прочитан: ${err && err.message ? err.message : err}` };
+    }
+    raw += `${text.replace(/^\uFEFF/, '')}\n`;
+  }
+  return { raw };
+}
+
+// Все записи цепочки журнала, новые сверху, с вычисленным статусом.
 function loadHistory(file) {
   const empty = { items: [], total: 0, skipped: 0, problem: null };
   if (typeof file !== 'string' || !file) return { ...empty, problem: 'журнал: не задан путь к файлу' };
-  let raw;
-  try {
-    raw = fs.readFileSync(file, 'utf8');
-  } catch (err) {
-    if (err && err.code === 'ENOENT') return empty;
-    return { ...empty, problem: `журнал не прочитан: ${err && err.message ? err.message : err}` };
-  }
-  const parsed = parseJournalLines(raw.replace(/^\uFEFF/, ''));
+  const chain = readJournalChain(file);
+  if (chain.problem) return { ...empty, problem: chain.problem };
+  const parsed = parseJournalLines(chain.raw);
   const rows = parsed.entries.map((entry, index) => {
     const ms = msOf(entry.ts);
     return { entry, index, ms: ms === null ? 0 : ms };

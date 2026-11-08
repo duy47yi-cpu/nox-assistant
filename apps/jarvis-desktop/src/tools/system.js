@@ -417,6 +417,9 @@ const urlOpen = {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       return { ok: false, summary: 'разрешены только http и https', data: {} };
     }
+    if (url.username || url.password) {
+      return { ok: false, summary: 'адреса с учётными данными не разрешены', data: {} };
+    }
     // explorer.exe открывает адрес в браузере по умолчанию. Его код выхода не означает ошибку,
     // поэтому смотрим только на то, запустился ли процесс. Без PowerShell: это быстро.
     return new Promise((resolve) => {

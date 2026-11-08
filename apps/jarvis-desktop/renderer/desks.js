@@ -29,6 +29,12 @@
     folder_required: 'папка загрузок не указана',
     not_found: 'папки загрузок нет',
     not_directory: 'это не папка',
+    timeout: 'источник не ответил вовремя',
+    no_urls: 'источники новостей не заданы',
+    no_fetch: 'загрузка сейчас недоступна',
+    bad_xml: 'источник вернул неверный формат',
+    bad_response: 'источник ответил непонятно',
+    bad_input: 'источник прислал пустой ответ',
   };
 
   // Питомец — только украшение: фиксированные настроения, никаких «показаний».
@@ -38,6 +44,14 @@
     connected: 'подключён', connecting: 'подключается', error: 'ошибка',
     disabled: 'выключен', idle: 'не подключён',
   };
+
+  function errorText(code) {
+    if (!code) return 'причина неизвестна';
+    if (errorWords[code]) return errorWords[code];
+    const http = /^http_(\d+)$/.exec(String(code));
+    if (http) return `источник ответил ошибкой ${http[1]}`;
+    return 'причина неизвестна';
+  }
 
   const taskStatusWords = {
     draft: 'черновик', queued: 'в очереди', running: 'в работе', paused: 'на паузе',
@@ -60,6 +74,13 @@
     const n = Number(ts);
     if (!Number.isFinite(n)) return '';
     return new Date(n).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Дата новости без года: в маленьком виджете важнее «когда», а не полный штамп.
+  function shortDate(ts) {
+    const n = Number(ts);
+    if (!Number.isFinite(n)) return '';
+    return new Date(n).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
   }
 
   function label(text) {
@@ -90,7 +111,7 @@
         el('p', { class: 'desk-widget-note', text: 'декоративная анимация — без данных и показаний' }));
     }
     if (state === 'error') {
-      return el('p', { class: 'desk-widget-state', 'data-state': 'error', text: 'Не получилось: ' + (errorWords[datum && datum.error] || 'причина неизвестна') });
+      return el('p', { class: 'desk-widget-state', 'data-state': 'error', text: 'Не получилось: ' + errorText(datum && datum.error) });
     }
     if (state === 'empty') {
       const words = {
@@ -109,6 +130,7 @@
         notes: 'Записей в памяти нет',
         downloads: 'Папка загрузок пуста или ещё не передана',
         mcp: 'MCP-сервисы не подключены',
+        news: 'Новостей нет',
         pet: 'Питомец',
       };
       return el('p', { class: 'desk-widget-state', 'data-state': 'empty', text: words[type] || stateWords.empty });
@@ -237,6 +259,20 @@
       }))));
       if (value && Number.isFinite(value.connected)) {
         parts.push(el('p', { class: 'desk-widget-note', text: `подключено: ${value.connected} из ${value.total}` }));
+      }
+    } else if (type === 'news') {
+      const items = (value && Array.isArray(value.items)) ? value.items : [];
+      // Только текст: без кликов и сети. Ссылка в записи есть, но виджет её не открывает.
+      parts.push(el('ul', { class: 'desk-list' }, ...items.map((item) => el('li', { class: 'desk-list-item' },
+        el('span', { class: 'desk-list-text' },
+          el('span', { text: item.title }),
+          item.summary ? el('span', { class: 'desk-widget-note', style: 'display:block;', text: item.summary }) : null),
+        el('span', {
+          class: 'desk-list-note',
+          text: [item.source, item.date ? shortDate(item.date) : ''].filter(Boolean).join(' · '),
+        })))));
+      if (value && value.fetchedAt) {
+        parts.push(el('p', { class: 'desk-widget-note', text: 'получено ' + shortDate(value.fetchedAt) }));
       }
     }
     if (!parts.length) parts.push(el('p', { class: 'desk-widget-state', text: 'Нет данных' }));

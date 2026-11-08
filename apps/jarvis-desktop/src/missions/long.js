@@ -35,10 +35,48 @@ function readNotes(item) {
 }
 
 // Записки — всё после последнего «ЗАПИСКИ» в тексте блока. Без пометки — хвост текста блока, чтобы находки не пропали.
-function saveNotes(item, text) {
+function saveNotes(item, text, checkpoint = '') {
   const at = text.lastIndexOf(NOTES_MARK);
   const body = (at >= 0 ? text.slice(at + NOTES_MARK.length).replace(/^[\s*:#]+/, '') : text).slice(-NOTES_CHARS);
-  writeFileAtomic(notesFile(item), `# Цель\n${item.goal}\n\n${body}\n`);
+  const tail = checkpoint ? `\n${checkpoint}\n` : '';
+  writeFileAtomic(notesFile(item), `# Цель\n${item.goal}\n\n${body}\n${tail}`);
+}
+
+// Снимок блока для продолжения (идея LangGraph): одна машиночитаемая строка в записках.
+// Следующий блок читает её и не повторяет уже подтверждённые шаги.
+function checkpointLine({ block = 0, outcome = 'unknown', done = [], confirmed = 0, unverified = 0, at = new Date().toISOString() } = {}) {
+  const names = (Array.isArray(done) ? done : []).map((name) => String(name || '').trim()).filter(Boolean);
+  return `checkpoint: block=${Number(block) || 0} outcome=${String(outcome || 'unknown')} confirmed=${Number(confirmed) || 0} unverified=${Number(unverified) || 0} done=[${names.join(',')}] at=${String(at)}`;
+}
+
+// Последний снимок из записок; null, если строки нет.
+function readCheckpoint(text) {
+  const lines = String(text || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('checkpoint:'));
+  if (!lines.length) return null;
+  const raw = lines[lines.length - 1];
+  const out = { raw, block: 0, outcome: '', confirmed: 0, unverified: 0, done: [], at: null };
+  for (const match of raw.slice('checkpoint:'.length).matchAll(/([a-z]+)=(\[[^\]]*\]|\S+)/g)) {
+    const key = match[1];
+    const value = match[2];
+    if (key === 'done') out.done = value.slice(1, -1).split(',').map((item) => item.trim()).filter(Boolean);
+    else if (key === 'block' || key === 'confirmed' || key === 'unverified') out[key] = Number(value) || 0;
+    else if (key === 'outcome') out.outcome = value;
+    else if (key === 'at') out.at = value;
+  }
+  return out;
+}
+
+// Добавить снимок к запискам, не теряя их: текст блока мог не прийти.
+function appendCheckpoint(item, checkpoint) {
+  try {
+    const current = readNotes(item).replace(/\n?checkpoint:[^\n]*/g, '').trimEnd();
+    writeFileAtomic(notesFile(item), `${current}\n\n${checkpoint}\n`);
+  } catch {
+    // записки недоступны: отчёт блока всё равно сохранён
+  }
 }
 
 // Руки: то, что можно сверить чтением или снимком. Закрытие окон, команды и выключение сюда не входят.
@@ -209,16 +247,34 @@ class LongTasks {
       signal.addEventListener('abort', onAbort, { once: true });
       const left = Math.max(1, Math.round((deadline - this.now().getTime()) / 60000));
       const notes = readNotes(item);
+      // Снимок прошлого блока (если есть): явно говорим, что уже подтверждено, чтобы не повторять.
+      const savedCheckpoint = readCheckpoint(notes);
+      const checkpointHint = savedCheckpoint
+        ? `\nСнимок прошлого блока: ${savedCheckpoint.raw}\nУже подтверждено: ${savedCheckpoint.done.length ? savedCheckpoint.done.join(', ') : 'нет'} — не повторяй эти шаги.\n`
+        : '';
       const restart = lookFirst ? 'Приложение перезапускалось, прошлый блок оборвался. Первым шагом сделай снимок экрана (screen_look) и сверь с записками. Действия, результат которых в записках не подтверждён, не повторяй.\n' : '';
-      const { outcome } = await agent.run(`${restart}Цель: ${item.goal}\nОсталось времени: ${left} мин.\nЗаписки:\n${notes}\n\nПродолжай.`);
+      const { outcome } = await agent.run(`${restart}Цель: ${item.goal}\nОсталось времени: ${left} мин.\nЗаписки:\n${notes}${checkpointHint}\n\nПродолжай.`);
       signal.removeEventListener('abort', onAbort);
       lookFirst = agent.lookFirst;
       const text = texts.join('').trim();
       blocks += 1;
-      this._patch(item.id, { blocks });
+      // Снимок блока: чем кончился и какие шаги уже подтверждены (идея LangGraph).
+      const checkpoint = checkpointLine({
+        block: blocks,
+        outcome,
+        done: (agent._calls || [])
+          .filter((call) => call.verified === 'confirmed' || call.status === 'confirmed')
+          .map((call) => call.tool),
+        confirmed: agent._verification ? agent._verification.confirmed : 0,
+        unverified: agent._verification ? agent._verification.unverified : 0,
+        at: this.now().toISOString(),
+      });
+      this._patch(item.id, { blocks, checkpoint });
       if (text) {
         fs.appendFileSync(item.report, `\n## Блок ${blocks}\n\n${text}\n`, 'utf8');
-        saveNotes(item, text);
+        saveNotes(item, text, checkpoint);
+      } else {
+        appendCheckpoint(item, checkpoint);
       }
       if (budgetHit) return this._finish(item, 'budget', 'кончился дневной бюджет на модель, собранное в отчёте');
       // Пауза: записки и срок остаются, продолжение — long_task_resume, когда владелец разобрался.
@@ -286,4 +342,4 @@ function longTools(tasks) {
   ];
 }
 
-module.exports = { LongTasks, longTools, longPolicy, HANDS, DONE_MARK, MAX_HOURS };
+module.exports = { LongTasks, longTools, longPolicy, HANDS, DONE_MARK, MAX_HOURS, checkpointLine, readCheckpoint, saveNotes, readNotes, notesFile };
