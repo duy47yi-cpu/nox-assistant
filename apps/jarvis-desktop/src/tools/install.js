@@ -72,7 +72,7 @@ function installTools({ runner = runPowerShell } = {}) {
   return [
     {
       name: 'app_search',
-      description: 'Найти программу для установки в каталоге winget: имя, Id, версия. Только поиск, ничего не ставит.',
+      description: 'Найти программу для установки в каталоге winget: имя, Id, версия. Только поиск для установки, ничего не ставит; поиск идёт секунды. Чтобы запустить уже установленную программу или нажимать в ней, app_search не нужен — это делает app_open.',
       risk: 'T0',
       parameters: { type: 'object', properties: { query: { type: 'string', minLength: 2, maxLength: 80 } }, required: ['query'] },
       async run(args = {}, ctx = {}) {
