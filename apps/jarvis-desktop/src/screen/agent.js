@@ -9,14 +9,20 @@ const { ToolRegistry } = require('../tools/registry');
 
 const SCREEN_TOOL_NAMES = ['screen_look', 'ui_elements', 'ui_click', 'ui_type', 'ui_keys', 'ui_focus', 'app_open', 'ui_wait'];
 const MAX_SCREEN_STEPS = 40;
+// Безопасные шаги, которые можно выполнить подряд одним ответом модели (до 3): код выполнит их
+// по очереди и остановится после первой ошибки. Опасные шаги (отправка, оплата, удаление,
+// установка, Enter после ввода) в серию не собираются: они всегда идут отдельным ответом с вопросом.
+const SAFE_BATCH = new Set(['ui_click', 'ui_type', 'ui_keys', 'ui_focus']);
+const MAX_SAFE_BATCH = 3;
 const TASK_PHRASE = /^сделай на экране[\s:,—-]*([\s\S]*)$/i;
 // Подпись статуса, пока ждём подтверждения: та же, что в Agent, но здесь она своя, чтобы не менять loop.js.
 const WAITING_WORDS = 'жду вашего решения';
 
 const SCREEN_PROMPT = [
-  'Ты Джарвис и работаешь на экране владельца по одному шагу.',
-  'Начни со снимка экрана (screen_look). Потом за один ответ делай ровно один шаг: найди элементы (ui_elements), нажми (ui_click), введи текст (ui_type), нажми клавиши (ui_keys), переключи окно (ui_focus), запусти программу (app_open) или подожди (ui_wait).',
-  'После каждого действия ты получаешь свежий снимок экрана: сверь по нему, что шаг сработал, и только потом выбирай следующий.',
+  'Ты Джарвис и работаешь на экране владельца по шагам.',
+  'Начни со снимка экрана (screen_look). Дальше за один ответ делай один шаг: найди элементы (ui_elements), нажми (ui_click), введи текст (ui_type), нажми клавиши (ui_keys), переключи окно (ui_focus), запусти программу (app_open) или подожди (ui_wait).',
+  'Если шаги очевидны и безопасны (нажатия, ввод, клавиши, переключение окна), можно отдать 2–3 таких шага одним ответом: код выполнит их по порядку и остановится после первой ошибки. Опасные шаги — отправка, оплата, удаление, установка, Enter после ввода текста — выполняются только отдельным ответом: подтверждение спросит код, после отказа не повторяй шаг.',
+  'После действия ты получаешь свежий снимок экрана: сверь по нему, что шаг сработал, и только потом выбирай следующий.',
   'Оплату не делай. Если не уверен, что шаг сработал, не повторяй его, а скажи владельцу.',
   'Перед отправкой, оплатой, удалением, установкой и Enter после ввода текста подтверждение спросит код: после отказа не повторяй шаг и скажи, что остановился.',
   'Когда задача выполнена, коротко скажи, что сделано и что видно на экране.',
@@ -123,6 +129,9 @@ class ScreenAgent extends Agent {
   // Политика решает по режиму; опасный шаг агент экрана спрашивает всегда, даже в «Полном доступе».
   // Запрет политики (оплата, запреты modes.js) остаётся запретом: вопросом его не заменяем.
   _verdict(tool, args) {
+    // Исход предыдущего шага неизвестен (снимка нет, проверка не прошла, отказ): остальные шаги
+    // серии не выполняем, чтобы не действовать вслепую.
+    if (this._unsure()) return 'deny';
     const verdict = super._verdict(tool, args);
     if (verdict !== 'allow') return verdict;
     return isDangerousStep(tool.name, args, { typed: this._typed }) ? 'ask' : verdict;
@@ -137,8 +146,19 @@ class ScreenAgent extends Agent {
       return { content, toolCalls: [] };
     }
     const res = await super._callModel(round, answerOnly, signal);
-    // Один шаг за раз: остальное модель решит заново по свежему снимку.
-    if (res && Array.isArray(res.toolCalls) && res.toolCalls.length > 1) return { ...res, toolCalls: res.toolCalls.slice(0, 1) };
+    // Безопасные шаги (до 3) можно выполнить подряд одним ответом: код выполнит их по порядку и
+    // остановится после первой ошибки. Опасный шаг или чтение (снимок, поиск элементов, запуск)
+    // остаются по одному за ответ — им нужен свежий результат до следующего выбора.
+    if (res && Array.isArray(res.toolCalls) && res.toolCalls.length > 1) {
+      let n = 0;
+      while (n < res.toolCalls.length && n < MAX_SAFE_BATCH) {
+        const call = res.toolCalls[n];
+        if (!call || !SAFE_BATCH.has(call.name) || isDangerousStep(call.name, call.args, { typed: this._typed })) break;
+        n += 1;
+      }
+      if (n === 0) n = 1;
+      if (n < res.toolCalls.length) return { ...res, toolCalls: res.toolCalls.slice(0, n) };
+    }
     return res;
   }
 
@@ -212,6 +232,13 @@ class ScreenAgent extends Agent {
       this._noScreen = true;
     }
     return out;
+  }
+
+  // Снимок после серии действий: модели хватает последнего состояния, промежуточные картинки
+  // не нужны (каждый шаг всё равно получил свою проверку). Это заметно короче запрос.
+  _flushImages() {
+    if (this._pendingImages.length > 1) this._pendingImages = this._pendingImages.slice(-1);
+    super._flushImages();
   }
 
   _endTurn() {
