@@ -12,7 +12,10 @@ const MAX_LIMIT = 60;
 const MAX_TEXT = 2000;
 const ID_RE = /^e[0-9a-f]{6}$/;
 // Пауза после действия: интерфейс успевает перерисоваться, дельта становится осмысленной.
+// ui_click и ui_type уже сами ждут изменения/значения, поэтому после них хватает короткой паузы;
+// запасной клик мышью в центр — дольше, там пауза больше.
 const SETTLE_MS = 150;
+const SETTLE_FAST_MS = 60;
 // Сколько действий подряд без изменений на экране считаем застоем: дальше вслепую не действуем.
 const STALL_LIMIT = 3;
 // Типы, среди которых ui_type ищет поле: его номер вхождения считается только по ним.
@@ -233,7 +236,7 @@ function observeTools(ui = [], { mouse = [] } = {}) {
           if (!element.name && !mouseClick) return { ok: false, summary: `у элемента ${id} нет подписи, а mouse_click недоступен; сделай новый desktop_observe`, data: {} };
           return action || { ok: false, summary: 'нажатие не выполнено', data: {} };
         }
-        await delay(SETTLE_MS);
+        await delay(fallback ? SETTLE_MS : SETTLE_FAST_MS);
         const state = await after(scene, ctx);
         const tail = tailOf(state);
         return {
@@ -308,7 +311,7 @@ function observeTools(ui = [], { mouse = [] } = {}) {
           text: args.text,
         }, ctx);
         if (!action || !action.ok) return action || { ok: false, summary: 'ввод не выполнен', data: {} };
-        await delay(SETTLE_MS);
+        await delay(SETTLE_FAST_MS);
         const state = await after(sceneBefore, ctx);
         const tail = tailOf(state);
         return {

@@ -142,7 +142,10 @@ const PS_TARGET = [
   '  $needle = Cut $needle 1000',
   '  $exact = New-Object System.Collections.ArrayList',
   '  $part = New-Object System.Collections.ArrayList',
+  // Число элементов, которые пришлось перебрать: тот же обход, что и у поиска, поэтому отдельный счётчик бесплатен.
+  '  $script:JTotal = 0',
   '  foreach ($e in (Get-JElements $w)) {',
+  '    $script:JTotal += 1',
   '    $n = Cut $e.Cached.Name 1000',
   // Точное совпадение и по AutomationId: у поля «Имя файла» в окнах сохранения Windows он всегда 1001, а имя — текущий текст поля.
   "    $aid = ''",
@@ -256,6 +259,19 @@ const PS_CHECK = [
   "  try { $f = Find-JTarget $w $needle $occ } catch { return @{ found = 'error' } }",
   "  if ($f.status -ne 'ok') { return @{ found = [string]$f.status } }",
   '  $e = $f.element',
+  "  $s = [ordered]@{ found = 'ok'; name = $null; enabled = $null; toggle = $null; selected = $null; expand = $null }",
+  '  try {',
+  '    $s.name = Cut $e.Current.Name 80',
+  '    $s.enabled = [bool]$e.Current.IsEnabled',
+  '    $p = $null',
+  '    if ($e.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$p)) { $s.toggle = [string]$p.Current.ToggleState }',
+  '    if ($e.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$p)) { $s.selected = [bool]$p.Current.IsSelected }',
+  '    if ($e.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$p)) { $s.expand = [string]$p.Current.ExpandCollapseState }',
+  "  } catch { $s.found = 'error' }",
+  '  return $s',
+  '}',
+  // Состояние уже найденного элемента: без повторного обхода дерева (его только что нашли по имени).
+  'function Get-JStateOf($e) {',
   "  $s = [ordered]@{ found = 'ok'; name = $null; enabled = $null; toggle = $null; selected = $null; expand = $null }",
   '  try {',
   '    $s.name = Cut $e.Current.Name 80',
@@ -400,6 +416,8 @@ const CLICK_MAIN = [
   "  if ($f.status -eq 'not_found') { $f.window = $title; $f.suggestions = (Get-JSuggestions $w ([string]$env:JARVIS_UI_NAME)); $script:R = $f; return }",
   "  if ($f.status -ne 'ok') { $f.window = $title; $script:R = $f; return }",
   '  $t = $f.element',
+  // Число элементов в момент поиска: второй замер нужен только чтобы заметить «шумное» окно.
+  '  $b0c = $script:JTotal',
   '  $info = Short $t',
   "  if (-not $t.Cached.IsEnabled) { $script:R = @{ status = 'disabled'; window = $title; element = $info }; return }",
   // Оплату не нажимаем даже по безобидному имени: смотрим сам элемент и родителей до окна.
@@ -408,11 +426,11 @@ const CLICK_MAIN = [
   '  $needle = [string]$env:JARVIS_UI_NAME',
   '  $h = [IntPtr][int64]$w.Current.NativeWindowHandle',
   '  $wpid = [int]$w.Current.ProcessId',
-  // Два замера до действия: если число элементов меняется само, по нему судить нельзя.
-  '  $b0 = Get-JWinState $w $h $wpid',
-  '  Start-Sleep -Milliseconds 200',
+  // Второй замер до действия: если число элементов меняется само, по нему судить нельзя.
+  '  Start-Sleep -Milliseconds 100',
   '  $b1 = Get-JWinState $w $h $wpid',
-  '  $tb = Get-JTargetState $w $needle $occ',
+  // Состояние цели — из уже найденного элемента: повторный обход дерева не нужен.
+  '  $tb = Get-JStateOf $t',
   '  $p = $null',
   "  $method = ''",
   "  if ($t.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); $method = 'invoke' }",
@@ -437,13 +455,15 @@ const CLICK_MAIN = [
   "    $method = 'click'",
   '  }',
   '  $sb = ConvertTo-Json -Compress -Depth 4 -InputObject @($b1, $tb)',
-  '  for ($i = 0; $i -lt 3; $i++) {',
-  '    Start-Sleep -Milliseconds 250',
+  // Ждём изменение короткими шагами: обычно оно видно уже через 100 мс.
+  '  $delays = @(100, 200, 400)',
+  '  for ($i = 0; $i -lt $delays.Count; $i++) {',
+  '    Start-Sleep -Milliseconds $delays[$i]',
   '    $a = Get-JWinState $w $h $wpid',
   '    $ta = Get-JTargetState $w $needle $occ',
   '    if ((ConvertTo-Json -Compress -Depth 4 -InputObject @($a, $ta)) -ne $sb) { break }',
   '  }',
-  "  $check = @{ before = $b1; after = $a; target = $tb; targetAfter = $ta; noisy = ($b0.count -ne $b1.count) }",
+  "  $check = @{ before = $b1; after = $a; target = $tb; targetAfter = $ta; noisy = ($b0c -ne $b1.count) }",
   "  $script:R = @{ status = 'ok'; window = $title; element = $info; method = $method; count = $f.count; resolution = $f.resolution; check = $check }",
   '}',
 ].join('\n');
@@ -455,8 +475,10 @@ const TYPE_READBACK = [
   'function Get-JReadback($w, [string]$method) {',
   '  $want = Norm ([string]$env:JARVIS_UI_TEXT)',
   "  $out = @{ found = 'ok'; known = $false; matches = $false; length = 0 }",
-  '  for ($i = 0; $i -lt 4; $i++) {',
-  '    Start-Sleep -Milliseconds 150',
+  // Первое чтение — сразу: значение через ValuePattern появляется мгновенно; дальше — с паузами.
+  '  $delays = @(0, 100, 200, 300)',
+  '  for ($i = 0; $i -lt $delays.Count; $i++) {',
+  '    Start-Sleep -Milliseconds $delays[$i]',
   '    $e = $null',
   "    if (([string]$env:JARVIS_UI_NAME).Trim() -ne '') {",
   '      $f = Find-JTarget $w ([string]$env:JARVIS_UI_NAME) (Get-Occurrence)',
@@ -582,8 +604,9 @@ const KEYS_MAIN = [
   '      Start-Sleep -Milliseconds 40',
   '    }',
   '  } else { [System.Windows.Forms.SendKeys]::SendWait([string]$env:JARVIS_UI_KEYS) }',
-  '  for ($i = 0; $i -lt 3; $i++) {',
-  '    Start-Sleep -Milliseconds 200',
+  '  $delays = @(60, 150, 300)',
+  '  for ($i = 0; $i -lt $delays.Count; $i++) {',
+  '    Start-Sleep -Milliseconds $delays[$i]',
   '    $a = Get-JKeyState',
   '    if ((ConvertTo-Json -Compress -InputObject $a) -ne $sb) { break }',
   '  }',
@@ -600,7 +623,7 @@ const FOCUS_MAIN = [
   '  $title = Cut $w.Current.Name 120',
   "  if (-not (Set-JForeground $w)) { $script:R = @{ status = 'no_focus'; window = $title }; return }",
   // Повторное чтение чуть позже: окно могло сразу потерять передний план.
-  '  Start-Sleep -Milliseconds 150',
+  '  Start-Sleep -Milliseconds 40',
   '  $h = [IntPtr][int64]$w.Current.NativeWindowHandle',
   "  $script:R = @{ status = 'ok'; window = $title; check = @{ foreground = [bool](Test-JForeground $h) } }",
   '}',
@@ -620,8 +643,13 @@ const CLOSE_MAIN = [
   '  $h = [IntPtr][int64]$w.Current.NativeWindowHandle',
   "  if ($h -eq [IntPtr]::Zero) { $script:R = @{ status = 'no_handle'; window = $title }; return }",
   '  [void][JarvisUi.User32]::PostMessage($h, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)',
-  '  Start-Sleep -Milliseconds 1000',
-  "  $script:R = @{ status = 'ok'; window = $title; closed = (-not [JarvisUi.User32]::IsWindow($h)) }",
+  // Окно обычно закрывается сразу: ждём исчезновения короткими шагами, но не дольше прежней секунды.
+  '  $closed = $false',
+  '  for ($i = 0; $i -lt 20; $i++) {',
+  '    Start-Sleep -Milliseconds 50',
+  '    if (-not [JarvisUi.User32]::IsWindow($h)) { $closed = $true; break }',
+  '  }',
+  "  $script:R = @{ status = 'ok'; window = $title; closed = $closed }",
   '}',
 ].join('\n');
 const CLOSE_SCRIPT = buildScript([PS_HEAD, PS_USER32, PS_UIA, CLOSE_MAIN, PS_TAIL]);
@@ -650,8 +678,9 @@ const TOGGLE_MAIN = [
   '  for ($i = 0; $i -lt 2 -and $now -ne $want; $i++) {',
   '    $before = $now',
   '    $p.Toggle()',
-  // Окно могло не успеть: второй Toggle вслепую отменил бы первый.
-  '    for ($j = 0; $j -lt 10 -and $now -eq $before; $j++) { Start-Sleep -Milliseconds 150; $now = [string]$p.Current.ToggleState }',
+  // Состояние читаем сразу: флажок обычно переключается мгновенно; пауза — только если ещё не изменилось.
+  '    $now = [string]$p.Current.ToggleState',
+  '    for ($j = 0; $j -lt 10 -and $now -eq $before; $j++) { Start-Sleep -Milliseconds 80; $now = [string]$p.Current.ToggleState }',
   '    if ($now -eq $before) { break }',
   '  }',
   "  $script:R = @{ status = 'ok'; window = $title; element = $info; was = $was; now = $now; changed = ($now -ne $was); resolution = $f.resolution }",
