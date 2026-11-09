@@ -176,16 +176,47 @@ test('Enter без ввода текста не спрашивает', async (t)
   assert.equal(runs.filter((r) => r.name === 'ui_keys').length, 1);
 });
 
-test('один шаг за ответ модели и снимок после действия', async (t) => {
+test('безопасные шаги одним ответом и снимок после серии', async (t) => {
   const brain = brainOf((n) => (n === 1
     ? { toolCalls: [call('screen_look'), call('ui_click', { window: 'Блокнот', name: 'Файл' })] }
     : n === 2 ? { toolCalls: [call('ui_click', { window: 'Блокнот', name: 'Файл' }), call('ui_type', { window: 'Блокнот', text: 'x' })] } : { content: 'Готово' }));
   const { agent, runs, journal } = setup(t, { brain });
   const res = await agent.run('нажми Файл');
   assert.equal(res.outcome, 'answer');
-  assert.deepEqual(runs.map((r) => r.name), ['screen_look', 'ui_click', 'screen_look']);
-  assert.deepEqual(journal().map((r) => r.tool), ['screen_look', 'ui_click']);
-  assert.ok(agent.history.some((m) => m.image && m.fromTool));
+  // Первый ответ — снимок отдельно. Второй: два безопасных шага подряд, после каждого свой снимок.
+  assert.deepEqual(runs.map((r) => r.name), ['screen_look', 'ui_click', 'screen_look', 'ui_type', 'screen_look']);
+  assert.deepEqual(journal().map((r) => r.tool), ['screen_look', 'ui_click', 'ui_type']);
+  // Картинки: стартовый снимок и один последний после серии, а не по картинке на каждый шаг.
+  assert.equal(agent.history.filter((m) => m.image && m.fromTool).length, 2);
+});
+
+test('опасный шаг не выполняется серией вместе с безопасными', async (t) => {
+  const brain = brainOf((n) => (n === 1 ? { toolCalls: [call('screen_look')] }
+    : n === 2 ? {
+      toolCalls: [
+        call('ui_click', { window: 'Блокнот', name: 'Файл' }),
+        call('ui_click', { window: 'Почта', name: 'Отправить' }),
+        call('ui_type', { window: 'Блокнот', text: 'x' }),
+      ],
+    } : { content: 'Готово' }));
+  const { agent, runs } = setup(t, { brain });
+  const res = await agent.run('нажми Файл, потом Отправить');
+  assert.equal(res.outcome, 'answer');
+  // В серию попал только безопасный шаг; опасный и следующий за ним остались на отдельный ответ.
+  const actions = runs.filter((r) => r.name !== 'screen_look');
+  assert.deepEqual(actions.map((r) => r.name), ['ui_click']);
+  assert.equal(actions[0].args.name, 'Файл');
+});
+
+test('серия останавливается после неудачного шага', async (t) => {
+  const brain = brainOf((n) => (n === 1 ? { toolCalls: [call('screen_look')] }
+    : n === 2 ? { toolCalls: [call('ui_click', { window: 'Блокнот', name: 'Файл' }), call('ui_type', { window: 'Блокнот', text: 'x' })] }
+      : { content: 'Готово' }));
+  const { agent, runs } = setup(t, { brain, verdict: 'failed' });
+  const res = await agent.run('нажми');
+  assert.equal(res.outcome, 'needs_human');
+  // Первый шаг не подтвердился: второй шаг серии не выполняется.
+  assert.deepEqual(runs.map((r) => r.name), ['screen_look', 'ui_click']);
 });
 
 for (const failure of ['ошибка', 'без картинки']) {

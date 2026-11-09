@@ -237,7 +237,7 @@ const OPEN_SCRIPT = [
   '$deadline = (Get-Date).AddMilliseconds(6000)',
   '$new = @()',
   // Программы Магазина (Калькулятор, Параметры) показывают уже существующее скрытое окно: тогда признак — новое активное окно.
-  'do { Start-Sleep -Milliseconds 200; $now = Tops; $new = @($now.Keys | Where-Object { -not $before.ContainsKey($_) }); $fg = [int64][JarvisOpen.W]::GetForegroundWindow(); if ($new.Count -eq 0 -and $fg -ne $fg0 -and $now.ContainsKey($fg)) { $new = @($fg) } } while ($new.Count -eq 0 -and (Get-Date) -lt $deadline)',
+  'do { Start-Sleep -Milliseconds 100; $now = Tops; $new = @($now.Keys | Where-Object { -not $before.ContainsKey($_) }); $fg = [int64][JarvisOpen.W]::GetForegroundWindow(); if ($new.Count -eq 0 -and $fg -ne $fg0 -and $now.ContainsKey($fg)) { $new = @($fg) } } while ($new.Count -eq 0 -and (Get-Date) -lt $deadline)',
   "$t = ''; $wpid = 0; $wname = ''; $wpath = ''",
   'if ($new.Count -gt 0) {',
   '  $h = [IntPtr][int64]$new[0]',
