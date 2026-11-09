@@ -504,7 +504,8 @@ const backgroundBrowserPage = new BrowserPage({ createWindow: electronWindow });
 // Запрет банков и почты срабатывает, если туда зашло любое из двух окон: так строже, а не слабее.
 modes.setBrowserHost(() => `${browserPage.host()} ${backgroundBrowserPage.host()}`);
 const uiToolset = uiTools({ selfPid: process.pid, runner: psHost.run });
-const mouseToolset = mouseTools({ selfPid: process.pid });
+// Мышь — в том же живом PowerShell, что ui_*: новый процесс и сборка C# через Add-Type на каждое нажатие не нужны.
+const mouseToolset = mouseTools({ selfPid: process.pid, runner: psHost.run });
 const baseTools = guardDesktopTools([
   ...systemTools,
   ...windowsTools(),
@@ -549,7 +550,7 @@ const DAILY_LIMIT_USD = 1;
 
 const tools = new ToolRegistry();
 // Снимок экрана — только в основном реестре (не в фоновых задачах): его разрешает владелец на каждый ход.
-for (const tool of [...baseTools, ...missionTools(missions, { workspaceId: 'default' }), ...dealTools(deals, refreshDeals), ...libraryModelTools(library), ...screenTools({ allowed: () => screenAllowed }), ...regionTools({ take: () => regionPending, clear: () => { regionPending = null; } }), ...commandModelTools(commands, () => new Set(commandTools.list().map((t) => t.name)), {
+for (const tool of [...baseTools, ...missionTools(missions, { workspaceId: 'default' }), ...dealTools(deals, refreshDeals), ...libraryModelTools(library), ...screenTools({ allowed: () => screenAllowed, capture: psHost.run }), ...regionTools({ take: () => regionPending, clear: () => { regionPending = null; } }), ...commandModelTools(commands, () => new Set(commandTools.list().map((t) => t.name)), {
   onChange: () => registerCommandHotkeys(),
   hotkeyActive: (key) => registeredCommandHotkeys.has(key),
   toolDefs: () => commandTools.list(),
@@ -1954,7 +1955,7 @@ ipcMain.handle('chat:send', async (event, text, files) => {
       keepBusy = true;
       const screenRef = dealOpen(phrase);
       const running = new ScreenAgent({
-        brain: runtime.guardedBrain, tools, look: screenTools({ allowed: () => true })[0], policy: modes, approvals, journal,
+        brain: runtime.guardedBrain, tools, look: screenTools({ allowed: () => true, capture: psHost.run })[0], policy: modes, approvals, journal,
         emit: emitToWindow, mode, workspace: WORKSPACE, turnsLog: TURNS_LOG, stop: stopSwitch,
       });
       screenAgent = running;

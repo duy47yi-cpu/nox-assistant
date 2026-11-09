@@ -4,6 +4,8 @@
 // Координаты — точки снимка screen_look (он сжат до ширины SHOT_WIDTH, скрипт пересчитывает в настоящие).
 // Окно указывается обязательно: точка должна лежать в нём, а чужое окно поверх не получит нажатие.
 // Значения только через переменные окружения, окна самого Джарвиса исключены.
+// Скрипт идёт в общем живом PowerShell (ps-host), как ui_*: без нового powershell.exe и без повторной
+// сборки C# через Add-Type на каждое нажатие. Поэтому ранний выход — return: exit закрыл бы общий процесс.
 const { runPowerShell } = require('./system');
 const { MAX_WIDTH: SHOT_WIDTH } = require('./screen');
 
@@ -68,7 +70,7 @@ const SCRIPT = [
   '  $self = 0; [void][int]::TryParse([string]$env:JARVIS_UI_SELF_PID, [ref]$self)',
   '  $need = [string]$env:JARVIS_MOUSE_WINDOW',
   '  $p = Get-Process | Where-Object { $_.Id -ne $self -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle.IndexOf($need, [StringComparison]::OrdinalIgnoreCase) -ge 0 } | Select-Object -First 1',
-  "  if ($null -eq $p) { Out @{ status = 'no_window' }; exit }",
+  "  if ($null -eq $p) { Out @{ status = 'no_window' }; return }",
   '  $h = $p.MainWindowHandle',
   '  $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds',
   `  $shot = [Math]::Min(${SHOT_WIDTH}, $b.Width)`,
@@ -76,12 +78,15 @@ const SCRIPT = [
   "  if ($env:JARVIS_MOUSE_UNITS -eq 'physical') { $x = [int]$env:JARVIS_MOUSE_X; $y = [int]$env:JARVIS_MOUSE_Y }",
   '  $r = New-Object JarvisMouse.User32+RECT',
   '  [void][JarvisMouse.User32]::GetWindowRect($h, [ref]$r)',
-  "  if ($x -lt $r.Left -or $x -ge $r.Right -or $y -lt $r.Top -or $y -ge $r.Bottom) { Out @{ status = 'outside'; title = $p.MainWindowTitle }; exit }",
-  '  [void][JarvisMouse.User32]::SetForegroundWindow($h)',
-  '  Start-Sleep -Milliseconds 150',
-  "  if ([JarvisMouse.User32]::GetForegroundWindow() -ne $h) { Out @{ status = 'no_focus'; title = $p.MainWindowTitle }; exit }",
+  "  if ($x -lt $r.Left -or $x -ge $r.Right -or $y -lt $r.Top -or $y -ge $r.Bottom) { Out @{ status = 'outside'; title = $p.MainWindowTitle }; return }",
+  // Окно уже впереди (второй клик в том же окне) — не активируем заново и не ждём 150 мс.
+  '  if ([JarvisMouse.User32]::GetForegroundWindow() -ne $h) {',
+  '    [void][JarvisMouse.User32]::SetForegroundWindow($h)',
+  '    Start-Sleep -Milliseconds 150',
+  '  }',
+  "  if ([JarvisMouse.User32]::GetForegroundWindow() -ne $h) { Out @{ status = 'no_focus'; title = $p.MainWindowTitle }; return }",
   '  $pt = New-Object JarvisMouse.User32+POINT; $pt.X = $x; $pt.Y = $y',
-  "  if ([JarvisMouse.User32]::GetAncestor([JarvisMouse.User32]::WindowFromPoint($pt), 2) -ne $h) { Out @{ status = 'occluded'; title = $p.MainWindowTitle }; exit }",
+  "  if ([JarvisMouse.User32]::GetAncestor([JarvisMouse.User32]::WindowFromPoint($pt), 2) -ne $h) { Out @{ status = 'occluded'; title = $p.MainWindowTitle }; return }",
   '  [void][JarvisMouse.User32]::SetCursorPos($x, $y)',
   '  Start-Sleep -Milliseconds 40',
   "  if ($env:JARVIS_MOUSE_ACTION -eq 'scroll') { [JarvisMouse.User32]::mouse_event(0x0800, 0, 0, [int]$env:JARVIS_MOUSE_DELTA, [UIntPtr]::Zero) }",
@@ -89,9 +94,9 @@ const SCRIPT = [
   "    $down = 0x0002; $up = 0x0004; if ($env:JARVIS_MOUSE_ACTION -eq 'right') { $down = 0x0008; $up = 0x0010 }",
   "    $times = 1; if ($env:JARVIS_MOUSE_ACTION -eq 'double') { $times = 2 }",
   "    for ($i = 0; $i -lt $times; $i++) {",
-  "      if (Test-JPaymentAtPoint $x $y) { Out @{ status = 'payment'; title = $p.MainWindowTitle }; exit }",
+  "      if (Test-JPaymentAtPoint $x $y) { Out @{ status = 'payment'; title = $p.MainWindowTitle }; return }",
   '      $danger = Test-JDangerAtPoint $x $y',
-  "      if ($danger) { Out @{ status = 'danger'; kind = $danger; title = $p.MainWindowTitle }; exit }",
+  "      if ($danger) { Out @{ status = 'danger'; kind = $danger; title = $p.MainWindowTitle }; return }",
   '      [JarvisMouse.User32]::mouse_event($down, 0, 0, 0, [UIntPtr]::Zero); [JarvisMouse.User32]::mouse_event($up, 0, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60',
   '    }',
   '  }',
