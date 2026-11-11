@@ -39,6 +39,9 @@ const APPROVAL_REASON = 'инструмент требует подтвержд�
 // Значения нарочно щедрые: обычная работа укладывается в минуты, а не в десятки минут.
 const MODEL_TIMEOUT_MS = 15 * 60 * 1000;
 const TOOL_TIMEOUT_MS = 10 * 60 * 1000;
+// После стопа инструмент должен остановиться сам. Глухой к сигналу не держит исполнителя дольше этого срока.
+const STOP_GRACE_MS = 5000;
+const HUNG = Symbol('hung');
 // Метка «не ответил вовремя»: отличает зависание от обычной ошибки вызова.
 const TIMEOUT = Symbol('timeout');
 // Причина терминальной блокировки: прерванный шаг-действие без проверки повторять вслепую нельзя.
@@ -75,6 +78,21 @@ function linkedAbort(parentSignal) {
 // Короткий — держит процесс: иначе event loop пустеет раньше, чем таймер сработает,
 // и ожидание обрывается вместо срабатывания таймаута.
 const KEEP_ALIVE_MS = 60 * 1000;
+
+// Метка HUNG через ms после отмены задачи (стоп). dispose снимает слушатель и таймер.
+function afterAbort(signal, ms) {
+  let timer = null;
+  let off = () => {};
+  const promise = new Promise((resolve) => {
+    const arm = () => { timer = setTimeout(() => resolve(HUNG), ms); };
+    if (signal.aborted) arm();
+    else {
+      signal.addEventListener('abort', arm, { once: true });
+      off = () => signal.removeEventListener('abort', arm);
+    }
+  });
+  return { promise, dispose: () => { off(); if (timer) clearTimeout(timer); } };
+}
 function withLocalTimeout(promise, ms, local, onTimeout) {
   if (!Number.isFinite(ms) || ms <= 0) return promise;
   let timer = null;
@@ -863,7 +881,7 @@ function fileSafe(id) {
 function createExecutor({
   queue, saveTasks, brain, runTool, toolSpecs, approvals, stop, journal, resolve, emit, costOf, costSummary,
   now = () => Date.now(), sandboxReportsDir = 'reports', memoryBrief = null,
-  modelTimeoutMs = MODEL_TIMEOUT_MS, toolTimeoutMs = TOOL_TIMEOUT_MS,
+  modelTimeoutMs = MODEL_TIMEOUT_MS, toolTimeoutMs = TOOL_TIMEOUT_MS, stopGraceMs = STOP_GRACE_MS,
 } = {}) {
   if (!queue || typeof queue.get !== 'function' || typeof queue.start !== 'function') {
     throw new Error('createExecutor: нужна очередь задач (TaskQueue)');
@@ -1339,7 +1357,7 @@ function createExecutor({
   // 'once' — выполнить один раз; 'reject' — не выполнять, ход продолжается; HALT — стоп или статус сменили снаружи.
   async function askOwner(state, call, risk) {
     const { taskId } = state;
-    const id = `${taskId}:${call.id}`;
+    const id = `${taskId}:${crypto.randomUUID()}`;
     settleTime(state);
     state.since = null;
     queue.waitApproval(taskId);
@@ -1351,7 +1369,7 @@ function createExecutor({
     try {
       if (approvals && typeof approvals.request === 'function') {
         decision = await approvals.request({
-          id, name: call.name, args: call.args, risk, reason: APPROVAL_REASON, allowSession: false,
+          id, approvalId: id, taskId, callId: call.id, name: call.name, args: structuredClone(call.args), risk, reason: APPROVAL_REASON, allowSession: false,
         });
       }
     } catch {
@@ -1384,10 +1402,18 @@ function createExecutor({
   // Поздний результат такого вызова не применяется: что он успел сделать, неизвестно, задача уже на паузе.
   async function execute(state, name, args) {
     const local = linkedAbort(state.controller.signal);
+    const grace = afterAbort(state.controller.signal, stopGraceMs);
     let timedOut = false;
     try {
       const toolCall = runTool(name, args, { signal: local.signal, taskId: state.taskId });
-      const r = await withLocalTimeout(toolCall, toolTimeoutMs, local, () => { timedOut = true; });
+      const r = await withLocalTimeout(Promise.race([toolCall, grace.promise]), toolTimeoutMs, local, () => { timedOut = true; });
+      if (r === HUNG) {
+        Promise.resolve(toolCall).then(
+          (late) => note(state.taskId, { tool: name, args, decision: 'late', ok: Boolean(late && late.ok), summary: `завершилось после стопа: ${String(late && late.summary != null ? late.summary : '')}` }),
+          (err) => note(state.taskId, { tool: name, args, decision: 'late', ok: false, summary: `поздний ответ инструмента после стопа: ошибка (${errText(err)})` }),
+        );
+        return { ok: false, summary: `инструмент не остановился за ${minutes(stopGraceMs)} после стопа`, timeout: true, hung: true };
+      }
       if (r === TIMEOUT) {
         // Гонка уже обработала возможную ошибку; записываем в журнал, что поздний ответ пришёл.
         // Шаги и факты не учитываем: вызов не завершился, его исход неизвестен.
@@ -1402,6 +1428,7 @@ function createExecutor({
       if (timedOut) return { ok: false, summary: `инструмент не ответил за ${minutes(toolTimeoutMs)}`, timeout: true };
       return { ok: false, summary: `ошибка: ${errText(err)}` };
     } finally {
+      grace.dispose();
       local.dispose();
     }
   }
@@ -1457,7 +1484,9 @@ function createExecutor({
     const risk = known.risk || 'T1';
     let decision = 'allow';
     if (known.requiresApproval === true) {
+      const approvedAction = JSON.stringify({ name, args });
       decision = await askOwner(state, call, risk);
+      if (JSON.stringify({ name: call.name, args }) !== approvedAction) decision = 'reject';
       if (decision === HALT) return { halt: true };
       if (decision === 'reject') {
         note(taskId, { tool: name, args, risk, decision: 'reject', ok: false, summary: 'отклонено владельцем' });
@@ -1473,7 +1502,7 @@ function createExecutor({
     // Зависший вызов: что он успел сделать, неизвестно, поэтому дальше не идём и не повторяем вслепую.
     if (result.timeout) {
       note(taskId, { tool: name, args, risk, decision: 'timeout', ok: false, summary: result.summary });
-      pauseTask(state, `${name} не ответил за ${minutes(toolTimeoutMs)}: результат неизвестен, проверьте и поручите заново`);
+      pauseTask(state, `${name} ${result.hung ? `не остановился за ${minutes(stopGraceMs)} после стопа` : `не ответил за ${minutes(toolTimeoutMs)}`}: результат неизвестен, проверьте и поручите заново`);
       return { halt: true };
     }
     queue.addUsage(taskId, { steps: 1 });

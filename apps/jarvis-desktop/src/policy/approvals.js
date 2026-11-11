@@ -46,6 +46,11 @@ function parseApprovalAnswer(text) {
   return null;
 }
 
+function voiceApprovalTarget() {
+  // Задержанное распознавание не привязано к конкретному запросу.
+  return null;
+}
+
 // Ожидание решения владельца с автоотменой. Явный timeoutMs (число) важнее автоотмены;
 // autoCancelMs: 0 или null — ждать без ограничения (см. remaining()).
 class ApprovalBroker {
@@ -55,7 +60,9 @@ class ApprovalBroker {
     this._now = typeof now === 'function' ? now : () => Date.now();
     this._onAutoCancel = typeof onAutoCancel === 'function' ? onAutoCancel : null;
     this._pending = new Map(); // id -> { resolve, timer, timerMs, payload }
+    this._usedIds = new Set();
     this._closed = new Map(); // id -> причина отмены: отменённое подтверждение использовать нельзя
+    this._shown = null; // { id, token }: какой запрос окно показывает владельцу прямо сейчас
   }
 
   // Если id не передан, генерируем и записываем обратно в payload,
@@ -64,8 +71,8 @@ class ApprovalBroker {
   request(payload = {}) {
     if (!payload.id) payload.id = randomUUID();
     const id = payload.id;
-    if (this._pending.has(id)) this._settle(id, 'reject');
-    this._closed.delete(id); // новый запрос с тем же id — новое ожидание
+    if (this._usedIds.has(id)) throw new Error('Идентификатор подтверждения уже использован');
+    this._usedIds.add(id);
     const timerMs = this._timerMs();
     const expiresAt = timerMs ? this._now() + timerMs : null;
     if (expiresAt) payload.autoCancelAt = expiresAt;
@@ -75,7 +82,7 @@ class ApprovalBroker {
         : null;
       // Таймер не держит процесс: в приложении событийный цикл жив, в тестах не тянет время.
       if (timer && typeof timer.unref === 'function') timer.unref();
-      this._pending.set(id, { resolve, timer, timerMs, payload: { ...payload } });
+      this._pending.set(id, { resolve, timer, timerMs, payload: structuredClone(payload) });
     });
   }
 
@@ -113,6 +120,21 @@ class ApprovalBroker {
     return ids.length;
   }
 
+  // Окно показало запрос владельцу: новый токен показа, прежний показ (любого запроса) больше не действует.
+  // null — запрос уже не ждёт ответа.
+  markShown(id) {
+    if (!this._pending.has(id)) return null;
+    const token = randomUUID();
+    this._shown = { id, token };
+    return token;
+  }
+
+  // Разрешение из окна принимается, только если окно отвечает на тот показ, что сейчас на экране (R3-01).
+  isShown(id, token) {
+    return Boolean(this._shown) && this._pending.has(id) && this._shown.id === id
+      && typeof token === 'string' && this._shown.token === token;
+  }
+
   // Почему запрос больше не принимает ответ (он был отменён), или null.
   closedReason(id) {
     return this._closed.has(id) ? this._closed.get(id) : null;
@@ -127,7 +149,7 @@ class ApprovalBroker {
 
   // Что ждёт решения владельца: для списка подтверждений в окне (autoCancelAt — для отсчёта).
   list() {
-    return [...this._pending.values()].map((entry) => ({ ...entry.payload }));
+    return [...this._pending.values()].map((entry) => structuredClone(entry.payload));
   }
 
   _timerMs() {
@@ -161,6 +183,7 @@ class ApprovalBroker {
     if (!entry) return false;
     if (entry.timer) clearTimeout(entry.timer);
     this._pending.delete(id);
+    if (this._shown && this._shown.id === id) this._shown = null;
     entry.resolve(decision);
     return true;
   }
@@ -176,4 +199,5 @@ module.exports = {
   CANCEL_ALL_PHRASES,
   normalizeAnswerText,
   parseApprovalAnswer,
+  voiceApprovalTarget,
 };

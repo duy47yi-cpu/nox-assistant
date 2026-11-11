@@ -77,6 +77,14 @@
     if (on) (panel.querySelector('input:checked') || panel.querySelector('input')).focus();
   }
 
+  // Значения поменяли в «Настройках» → поле у чата показывает то же самое, без перезапуска.
+  document.addEventListener('jarvis:tier', (e) => {
+    const d = (e && e.detail) || {};
+    if (MODELS.some(([k]) => k === d.tier)) model.inputs[d.tier].checked = true;
+    if (LEVELS.some(([k]) => k === d.level)) level.inputs[d.level].checked = true;
+    render();
+  });
+
   trigger.addEventListener('click', () => open(panel.hidden));
   // Esc закрывает только панель: дальше событие не идёт, иначе оно остановило бы Джарвиса.
   panel.addEventListener('keydown', (e) => {

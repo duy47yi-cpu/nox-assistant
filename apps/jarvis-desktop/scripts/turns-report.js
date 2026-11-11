@@ -89,8 +89,20 @@ function main() {
   const total = turns.map((t) => t.ms);
   const modelShare = turns.reduce((a, t) => a + t.modelMs, 0) / Math.max(1, turns.reduce((a, t) => a + t.ms, 0));
   console.log('\nСводка:');
-  console.log(`  ход: медиана ${sec(pct(total, 0.5))}, 90% ${sec(pct(total, 0.9))}, максимум ${sec(Math.max(0, ...total))}`);
-  console.log(`  вызов модели: медиана ${sec(pct(models.map((m) => m.ms), 0.5))}, 90% ${sec(pct(models.map((m) => m.ms), 0.9))}`);
+  // p50/p95/p99: при малом числе ходов верхние значения совпадают с максимумом — это не распределение.
+  const spread = (values) => `p50 ${sec(pct(values, 0.5))}, p95 ${sec(pct(values, 0.95))}, p99 ${sec(pct(values, 0.99))} (n=${values.filter((v) => Number.isFinite(v)).length})`;
+  console.log(`  ход: ${spread(total)}, максимум ${sec(Math.max(0, ...total))}`);
+  console.log(`  до первого текста: ${spread(turns.map((t) => t.firstTextMs).filter((v) => Number.isFinite(v)))}`);
+  console.log(`  вызов модели: ${spread(models.map((m) => m.ms))}`);
+  const toolRecs = records.filter((r) => r.kind === 'tool' && turns.some((t) => t.turn === r.turn) && r.decision !== 'deny' && r.decision !== 'reject' && r.decision !== 'stop');
+  console.log(`  инструмент: ${spread(toolRecs.map((x) => x.ms))}`);
+  const byTool = new Map();
+  for (const x of toolRecs) byTool.set(x.name, [...(byTool.get(x.name) || []), x.ms]);
+  const slow = [...byTool.entries()].map(([name, ms]) => [name, pct(ms, 0.5), ms.length]).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  if (slow.length) console.log(`  самые медленные инструменты (медиана): ${slow.map(([name, ms, n]) => `${name} ${sec(ms)} ×${n}`).join(', ')}`);
+  const promptSum = models.reduce((a, m) => a + (m.promptTokens || 0), 0);
+  const cachedSum = models.reduce((a, m) => a + (m.cachedTokens || 0), 0);
+  if (promptSum) console.log(`  вход из кэша: ${Math.round((cachedSum / promptSum) * 100)}% (если падает — цена растёт в разы)`);
   console.log(`  вызовов модели на ход: в среднем ${(models.length / Math.max(1, turns.length)).toFixed(1)}`);
   console.log(`  доля времени модели: ${Math.round(modelShare * 100)}%`);
   const prompt = models.map((m) => m.promptTokens).filter((v) => Number.isFinite(v));

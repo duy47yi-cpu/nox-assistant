@@ -365,6 +365,7 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       state.mode = mode;
       return { ok: true, mode };
     },
+    markApprovalShown: async (id) => (pending.has(id) ? { ok: true, token: 'stub-' + id } : { ok: false }),
     respondApproval: async (id, decision) => {
       const resolve = pending.get(id);
       if (!resolve || !['once', 'session', 'reject'].includes(decision)) return { ok: false };

@@ -303,7 +303,8 @@ function memoryTools(store) {
         return {
           ok: true,
           summary: `найдено записей: ${found.length}`,
-          data: found.map((record) => viewWithSource(record, ctx)),
+          // id нужен, чтобы forget мог убрать найденную запись.
+          data: found.map((record) => ({ id: record.id, ...viewWithSource(record, ctx) })),
         };
       } catch (err) {
         return fail(err);

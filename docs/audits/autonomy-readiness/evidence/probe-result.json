@@ -1,0 +1,265 @@
+{
+  "at": "2026-11-11T13:59:25.316Z",
+  "node": "v24.22.1",
+  "checks": {
+    "ui": {
+      "windowsSample": "{\"windows\":[{\"title\":\"NoxAuditProbe\",\"process\":\"powershell\",\"handle\":7801430},{\"title\":\"ChatGPT\",\"process\":\"ChatGPT\",\"handle\":66970},{\"title\":\"Claude\",\"process\":\"claude\",\"handle\":132046},{\"title\":\"‎duostars (FREE AI BOT MEOW) @ ‎abu (24162)\",\"process\":\"AyuGram\",\"handle\":787988},{\"title\":\"Загрузки — проводник\",\"process\":\"explorer\",\"handle\":3278758},{\"title\":\"Cua.AgentCursorOverlay.default\",\"process",
+      "windowFound": true,
+      "windowFoundAfterMs": 1759,
+      "uiElements": {
+        "ok": true,
+        "coldMs": 79,
+        "warmMs": 35,
+        "summary": "окно «NoxAuditProbe»: элементов 3"
+      },
+      "elementSample": [
+        {
+          "name": "State idle",
+          "type": "Pane",
+          "enabled": true,
+          "bounds": {
+            "x": 158,
+            "y": 181,
+            "w": 300,
+            "h": 23
+          }
+        },
+        {
+          "name": "ProbeButton",
+          "type": "Pane",
+          "enabled": true,
+          "bounds": {
+            "x": 158,
+            "y": 221,
+            "w": 150,
+            "h": 23
+          }
+        },
+        {
+          "name": "DisabledButton",
+          "type": "Pane",
+          "enabled": false,
+          "bounds": {
+            "x": 338,
+            "y": 221,
+            "w": 150,
+            "h": 23
+          }
+        }
+      ],
+      "disabledReported": [
+        false
+      ],
+      "observe": {
+        "ok": true,
+        "ms": 93,
+        "summary": "окно «NoxAuditProbe»: элементов 3",
+        "textChars": 196
+      },
+      "sceneButton": {
+        "id": "e59d11c",
+        "role": "Pane",
+        "enabled": true,
+        "bounds": {
+          "x": 158,
+          "y": 221,
+          "w": 150,
+          "h": 23
+        }
+      },
+      "sceneDisabled": {
+        "id": "e9556f3",
+        "enabled": false
+      },
+      "click": {
+        "ok": true,
+        "ms": 1562,
+        "summary": "нажал «ProbeButton»; появилось 1, исчезло 1",
+        "verified": "confirmed",
+        "evidence": "сменилось активное окно"
+      },
+      "stateAfterClick": [
+        "State clicked"
+      ],
+      "clickReallyHappened": true,
+      "clickDisabled": {
+        "ok": false,
+        "summary": "элемент «DisabledButton» в окне «NoxAuditProbe» выключен (недоступен)",
+        "verified": null
+      },
+      "type": {
+        "ok": false,
+        "ms": 46,
+        "summary": "поля ввода «ProbeField» в окне «NoxAuditProbe» нет (кнопки и надписи для ввода не берутся). Если курсор уже стоит в нужном поле (новая папка, окно сохранения), вызови ui_type без name."
+      },
+      "staleId": {
+        "ok": false,
+        "summary": "элемент e000000 исчез или изменился; сделай новый desktop_observe"
+      }
+    },
+    "agent": {
+      "multiStep": {
+        "run": {
+          "ok": true,
+          "outcome": "answer"
+        },
+        "ms": 40,
+        "steps": [
+          {
+            "status": "succeeded",
+            "ok": true,
+            "decision": "allow",
+            "verifiedStatus": null,
+            "summary": "в «reports»: 2"
+          },
+          {
+            "status": "succeeded",
+            "ok": true,
+            "decision": "allow",
+            "verifiedStatus": null,
+            "summary": "прочитано: 71 байт"
+          },
+          {
+            "status": "succeeded",
+            "ok": true,
+            "decision": "allow",
+            "verifiedStatus": null,
+            "summary": "прочитано: 69 байт"
+          },
+          {
+            "status": "succeeded",
+            "ok": true,
+            "decision": "allow",
+            "verifiedStatus": "confirmed",
+            "summary": "записал"
+          }
+        ],
+        "fileWritten": true
+      },
+      "cancel": {
+        "run": {
+          "ok": false,
+          "outcome": "stopped"
+        },
+        "stopToReturnMs": 66,
+        "toolFinished": false,
+        "toolSawAbort": true,
+        "doneEvents": 1,
+        "lateText": false
+      },
+      "cancelDeafTool": {
+        "run": {
+          "ok": false,
+          "outcome": "stopped"
+        },
+        "doneEventAfterStopMs": 1,
+        "toolFinishedAfterStopMs": 597,
+        "results": [
+          {
+            "status": "succeeded",
+            "ok": true,
+            "decision": "allow",
+            "verifiedStatus": null,
+            "summary": "завершилось после запроса остановки: сделал после стопа"
+          }
+        ]
+      },
+      "falseSuccess": {
+        "run": {
+          "ok": true,
+          "outcome": "answer"
+        },
+        "steps": [
+          {
+            "status": "failed",
+            "ok": false,
+            "decision": "allow",
+            "verifiedStatus": "failed",
+            "summary": "не подтверждено: файла на диске нет"
+          },
+          {
+            "status": "unverified",
+            "ok": true,
+            "decision": "allow",
+            "verifiedStatus": "unverified",
+            "summary": "нажал"
+          }
+        ],
+        "doneStatus": "failed",
+        "doneVerification": {
+          "confirmed": 0,
+          "unverified": 1,
+          "failed": 1,
+          "reads": 0,
+          "total": 2
+        },
+        "journal": [
+          {
+            "tool": "probe_liar",
+            "ok": false,
+            "status": "failed",
+            "verifiedStatus": "failed"
+          },
+          {
+            "tool": "probe_blind",
+            "ok": true,
+            "status": "unverified",
+            "verifiedStatus": "unverified"
+          }
+        ]
+      },
+      "loopGuard": {
+        "run": {
+          "ok": false,
+          "outcome": "loop"
+        },
+        "steps": [
+          "succeeded:allow",
+          "succeeded:allow",
+          "failed:deny"
+        ]
+      },
+      "outsideWrite": {
+        "run": {
+          "ok": true,
+          "outcome": "answer"
+        },
+        "steps": [
+          {
+            "status": "failed",
+            "ok": false,
+            "decision": "reject",
+            "verifiedStatus": null,
+            "summary": "отклонено"
+          }
+        ],
+        "fileExists": false,
+        "asked": true
+      },
+      "taint": {
+        "run": {
+          "ok": true,
+          "outcome": "answer"
+        },
+        "asked": true,
+        "clicked": false,
+        "steps": [
+          {
+            "status": "succeeded",
+            "ok": true,
+            "decision": "allow",
+            "verifiedStatus": null,
+            "summary": "прочитано: 71 байт"
+          },
+          {
+            "status": "failed",
+            "ok": false,
+            "decision": "reject",
+            "verifiedStatus": null,
+            "summary": "отклонено"
+          }
+        ]
+      }
+    }
+  }
+}

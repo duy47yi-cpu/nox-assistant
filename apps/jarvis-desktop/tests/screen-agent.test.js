@@ -110,11 +110,11 @@ test('опасный клик в полном доступе спрашивае�
     : n === 2 ? { toolCalls: [call('ui_click', { window: 'Telegram', name: 'Отправить' }, 'send-ok')] } : { content: 'Сообщение отправлено.' }));
   const { agent, runs, events, approvals, journal } = setup(t, { brain, mode: 'full' });
   const turn = agent.run('отправь сообщение');
-  assert.ok(await waitFor(() => events.some((e) => e.type === 'approval_request' && e.id === 'send-ok')), 'владельца спросили');
-  const request = events.find((e) => e.type === 'approval_request' && e.id === 'send-ok');
+  assert.ok(await waitFor(() => events.some((e) => e.type === 'approval_request' && e.callId === 'send-ok')), 'владельца спросили');
+  const request = events.find((e) => e.type === 'approval_request' && e.callId === 'send-ok');
   // «На сессию» для отправки не предлагаем: каждое действие — отдельное согласие.
   assert.equal(request.allowSession, false);
-  approvals.respond('send-ok', 'once');
+  approvals.respond(request.id, 'once');
   const res = await turn;
   assert.equal(res.outcome, 'answer');
   assert.equal(runs.filter((r) => r.name === 'ui_click').length, 1);
@@ -155,8 +155,9 @@ test('Enter после ввода текста спрашивает и выпо�
         : { content: 'Сообщение отправлено.' }));
   const { agent, runs, events, approvals, journal } = setup(t, { brain, mode: 'full' });
   const turn = agent.run('напиши и отправь');
-  assert.ok(await waitFor(() => events.some((e) => e.type === 'approval_request' && e.id === 'enter-ok')), 'владельца спросили перед Enter');
-  approvals.respond('enter-ok', 'once');
+  assert.ok(await waitFor(() => events.some((e) => e.type === 'approval_request' && e.callId === 'enter-ok')), 'владельца спросили перед Enter');
+  const request = events.find((e) => e.type === 'approval_request' && e.callId === 'enter-ok');
+  approvals.respond(request.id, 'once');
   const res = await turn;
   assert.equal(res.outcome, 'answer');
   assert.deepEqual(
@@ -246,14 +247,14 @@ test('опасная кнопка спрашивает владельца', asyn
   const { agent, runs, events, approvals, journal } = setup(t, { brain, mode: 'auto' });
   const turn = agent.run('отправь сообщение');
   // В «Авто» снимок тоже спрашивает: разрешаем его, на кнопку отказываем.
-  const asked = (id) => events.some((e) => e.type === 'approval_request' && e.id === id);
+  const asked = (id) => events.some((e) => e.type === 'approval_request' && e.callId === id);
   for (let i = 0; i < 200 && !asked('tg'); i += 1) {
     const shot = events.find((e) => e.type === 'approval_request' && e.name === 'screen_look' && !e.answered);
     if (shot) { shot.answered = true; approvals.respond(shot.id, 'once'); }
     await new Promise((r) => setImmediate(r));
   }
   assert.ok(events.some((e) => e.type === 'approval_request' && e.name === 'ui_click'));
-  approvals.respond('tg', 'reject');
+  approvals.respond(events.find((e) => e.type === 'approval_request' && e.callId === 'tg').id, 'reject');
   await turn;
   assert.equal(runs.filter((r) => r.name === 'ui_click').length, 0);
   assert.equal(journal().find((r) => r.tool === 'ui_click').decision, 'reject');

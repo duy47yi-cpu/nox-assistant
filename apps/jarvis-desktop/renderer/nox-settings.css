@@ -1,0 +1,797 @@
+/* Nox — раздел «Настройки», визуальный слой Phase 3.3.
+ *
+ * Подключается последним и ограничен body[data-view="settings"] / .view-settings: чат,
+ * «Команды», «Подключения» и «Журнал» не меняются. Токены и каркас — те же, что у разделов
+ * «Команды» и «Подключения» (design-system.md, navigation-layout.md), экран — settings-ui.md,
+ * макет — previews/04-settings.png. Все существующие карточки, идентификаторы и обработчики
+ * остаются на месте: здесь только внешний вид и раскладка nav + main. */
+
+/* ── 1. Токены раздела ──────────────────────────────────────────── */
+body[data-view="settings"] {
+  --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-head: var(--font);
+  --font-display: var(--font);
+  --font-reply: var(--font);
+  --nox-bg: #0F0F10;
+  --nox-surface-1: #141415;
+  --nox-surface-2: #18181B;
+  --nox-surface-3: #1C1C1F;
+  --nox-surface-4: #232326;
+  --nox-border: #2A2A2E;
+  --nox-border-strong: #34343A;
+  --nox-text-1: #F1F1F3;
+  --nox-text-2: #9A9AA0;
+  --nox-text-3: #6B6B70;
+  --nox-text-ghost: #3A3A3E;
+  --nox-accent: #2E9AC1;
+  --nox-accent-hover: #3AAAD6;
+  --nox-accent-active: #2280A8;
+  --nox-accent-ink: #061217;
+  --nox-accent-soft: color-mix(in srgb, #2E9AC1 14%, transparent);
+  --nox-accent-line: color-mix(in srgb, #2E9AC1 42%, transparent);
+  --nox-ok: #3DD68C;
+  --nox-warn: #F5A524;
+  --nox-err: #FF5C5C;
+  --nox-gap: 8px;
+  --rail-w: 52px;
+  --nox-font: var(--font);
+  --nox-mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-default: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur-normal: 200ms;
+  background: transparent;
+  color: var(--nox-text-1);
+}
+html:has(body[data-view="settings"]) { background: transparent; }
+
+@media (max-width: 1000px) {
+  body[data-view="settings"] { --rail-w: 46px; }
+}
+
+/* ── 2. Каркас окна ───────────────────────────────────────────── */
+body[data-view="settings"] .app {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+  height: 100vh;
+  background: var(--nox-bg);
+  border: 1px solid color-mix(in srgb, var(--nox-border) 80%, transparent);
+  border-radius: 12px;
+  overflow: clip;
+  isolation: isolate;
+}
+body[data-view="settings"] .app::before,
+body[data-view="settings"] .app::after,
+body[data-view="settings"] .theme-fx,
+body[data-view="settings"] .contour,
+body[data-view="settings"] .banner-wrap { display: none !important; }
+body[data-view="settings"] .main { min-width: 0; min-height: 0; background: transparent; }
+body[data-view="settings"] .topbar { display: none; }
+body[data-view="settings"] .views { flex: 1; min-height: 0; }
+body[data-view="settings"] :focus-visible { outline: 2px solid var(--nox-accent); outline-offset: 2px; }
+body[data-view="settings"] ::-webkit-scrollbar { width: 6px; height: 6px; }
+body[data-view="settings"] ::-webkit-scrollbar-thumb { background: var(--nox-text-ghost); border: 0; border-radius: 3px; }
+body[data-view="settings"] ::-webkit-scrollbar-thumb:hover { background: var(--nox-text-3); }
+
+body[data-view="settings"] .rail {
+  width: var(--rail-w);
+  padding: 8px 6px;
+  align-items: center;
+  background: var(--nox-surface-2);
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  overflow: visible;
+  -webkit-app-region: drag;
+}
+body[data-view="settings"] .rail-brand {
+  width: 36px; height: 36px; margin: 0 0 14px;
+  justify-content: center;
+  -webkit-app-region: drag;
+}
+body[data-view="settings"] .rail-brand-text { display: none; }
+body[data-view="settings"] .rail-mark {
+  position: relative;
+  width: 18px; height: 18px;
+  border: 1.6px solid var(--nox-text-1);
+  border-radius: 50%;
+  background: none;
+  box-shadow: none;
+  transform: rotate(-28deg);
+}
+body[data-view="settings"] .rail-list { gap: 4px; align-items: center; width: auto; }
+body[data-view="settings"] .rail-item,
+body[data-view="settings"] .rail-toggle {
+  width: 36px; height: 36px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  border-radius: 10px;
+  color: var(--nox-text-3);
+  -webkit-app-region: no-drag;
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+body[data-view="settings"] .rail-item:hover,
+body[data-view="settings"] .rail-toggle:hover {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, transparent);
+  color: var(--nox-text-1);
+  transform: none;
+}
+body[data-view="settings"] .rail-item[aria-current="page"] { background: var(--nox-accent-soft); color: var(--nox-accent); }
+body[data-view="settings"] .rail-item[aria-current="page"] .rail-icon { color: var(--nox-accent); }
+body[data-view="settings"] .rail-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -9px; top: 7px;
+  width: 4px; height: 22px;
+  border-radius: 0 3px 3px 0;
+  background: var(--nox-accent);
+}
+body[data-view="settings"] .rail-icon svg { width: 18px; height: 18px; }
+body[data-view="settings"] .rail-label { display: none; }
+body[data-view="settings"] .rail-count {
+  top: 2px; right: 2px;
+  min-width: 15px; height: 15px;
+  padding: 0 3px;
+  font-size: 10px; line-height: 13px;
+  background: var(--nox-accent); border: 0; color: var(--nox-accent-ink);
+  font-family: var(--nox-mono); font-weight: 600;
+}
+body[data-view="settings"] .rail-dot { top: 7px; right: 7px; width: 6px; height: 6px; }
+body[data-view="settings"] .rail-foot { margin-top: auto; width: 36px; align-items: center; gap: 6px; }
+body[data-view="settings"] .rail-account {
+  width: 32px; height: 32px;
+  border: 1px solid var(--nox-border);
+  border-radius: 50%;
+  color: var(--nox-text-2);
+}
+body[data-view="settings"] .rail-account:hover { border-color: var(--nox-border-strong); }
+body[data-view="settings"] #railToggle { display: none; }
+
+/* ── 3. Панель раздела ────────────────────────────────────────── */
+.view-settings { display: block; padding: 0; overflow: hidden; height: 100%; }
+.view-settings[hidden] { display: none; }
+#setPanel {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--nox-surface-2);
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.nox-set-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 72px;
+  padding: 0 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--nox-border) 62%, transparent);
+  -webkit-app-region: drag;
+}
+.nox-set-head button,
+.nox-set-head input { -webkit-app-region: no-drag; }
+.nox-set-title {
+  margin: 0 auto 0 0;
+  font: 600 24px/30px var(--nox-font);
+  letter-spacing: -0.01em;
+  color: var(--nox-text-1);
+  min-width: 0;
+}
+.nox-set-status {
+  flex: none;
+  font: 400 12px/16px var(--nox-font);
+  color: var(--nox-text-3);
+  min-width: 0;
+  max-width: 320px;
+  text-align: right;
+}
+.nox-set-status[data-tone="err"] { color: var(--nox-err); }
+.nox-win-controls { display: flex; align-items: center; gap: 2px; margin-left: 2px; }
+.nox-win-btn {
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-3);
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+.nox-win-btn:hover { background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); color: var(--nox-text-1); }
+.nox-win-btn[data-act="close"]:hover { background: color-mix(in srgb, var(--nox-err) 14%, transparent); color: var(--nox-err); }
+.nox-win-btn svg { width: 14px; height: 14px; }
+
+/* Тело: nav 252 слева + main справа, gap 12 (settings-ui.md §1.1). */
+#setBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px 16px;
+}
+#setMain {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+/* ── 4. Навигация, поиск, чипы ────────────────────────────────── */
+.set-nav.nox-set-nav {
+  grid-column: auto;
+  grid-row: auto;
+  position: static;
+  align-self: stretch;
+  flex: none;
+  width: 252px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  background: var(--nox-surface-1);
+  overflow-y: auto;
+}
+.nox-set-searchwrap { position: relative; flex: none; }
+.nox-set-searchwrap [data-icon] {
+  position: absolute;
+  left: 12px; top: 50%;
+  transform: translateY(-50%);
+  width: 16px; height: 16px;
+  color: var(--nox-text-3);
+  pointer-events: none;
+}
+.nox-set-search {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px 0 36px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-1);
+  font: 400 13px/18px var(--nox-font);
+}
+.nox-set-search::placeholder { color: var(--nox-text-3); }
+.nox-set-search:focus { outline: none; border-color: var(--nox-accent-line); }
+.nox-set-search::-webkit-search-cancel-button { -webkit-appearance: none; }
+.nox-set-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: none; }
+.nox-chip-filter {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nox-text-2);
+  font: 500 12px/1 var(--nox-font);
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+.nox-chip-filter:hover { border-color: var(--nox-border-strong); color: var(--nox-text-1); }
+.nox-chip-filter[aria-pressed="true"] {
+  background: var(--nox-accent-soft);
+  border-color: var(--nox-accent-line);
+  color: var(--nox-accent);
+}
+.set-nav-head {
+  display: none;
+  padding: 2px 8px 0;
+  margin: 0;
+  font: 500 11px/16px var(--nox-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nox-text-3);
+}
+#setNavList { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.set-nav-item.nox-set-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-2);
+  font: 500 14px/20px var(--nox-font);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+.set-nav-item.nox-set-item:hover { background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); color: var(--nox-text-1); }
+.set-nav-item.nox-set-item[aria-current="true"] { background: var(--nox-accent-soft); color: var(--nox-accent); }
+.set-nav-item.nox-set-item .nox-set-item-icon { flex: none; width: 16px; height: 16px; color: var(--nox-text-3); }
+.set-nav-item.nox-set-item[aria-current="true"] .nox-set-item-icon { color: var(--nox-accent); }
+.set-nav-item.nox-set-item .nox-set-item-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-nav-item.nox-set-item .nox-set-item-chev {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  color: var(--nox-accent);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-default);
+}
+.set-nav-item.nox-set-item[aria-current="true"] .nox-set-item-chev { opacity: 0.9; }
+.nox-set-navnote { margin: 0; padding: 8px; font: 400 12px/16px var(--nox-font); color: var(--nox-text-3); }
+
+/* ── 5. Карточки параметров ───────────────────────────────────── */
+.page.settings { display: flex; flex-direction: column; gap: 12px; max-width: none; margin: 0; }
+.view-settings > .page { grid-column: auto; grid-row: auto; }
+
+.set-section {
+  display: block;
+  padding: 20px;
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  background: var(--nox-surface-1);
+  box-shadow: none;
+}
+.set-section[hidden] { display: none; }
+.set-section.set-cat-hidden { display: none; }
+
+.set-title {
+  margin: 0;
+  font: 600 16px/22px var(--nox-font);
+  letter-spacing: -0.01em;
+  color: var(--nox-text-1);
+}
+.set-title-row { display: flex; align-items: center; gap: 8px; min-height: 22px; }
+.set-title-row .counter { margin-left: auto; }
+.set-subtitle { margin: 0; font: 600 13px/18px var(--nox-font); color: var(--nox-text-1); }
+.set-section > .set-hint:first-of-type,
+.set-section > .set-sub {
+  display: block;
+  margin: 4px 0 0;
+  font: 400 12px/17px var(--nox-font);
+  color: var(--nox-text-2);
+}
+.set-hint {
+  display: block;
+  margin: 2px 0 0;
+  font: 400 12px/17px var(--nox-font);
+  color: var(--nox-text-2);
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.set-row + .set-row { border-top: 1px solid color-mix(in srgb, var(--nox-border) 45%, transparent); }
+.set-row.set-filtered,
+.ext-card.set-filtered { display: none; }
+.set-text { flex: 1 1 auto; min-width: 0; display: block; }
+.set-name { display: block; font: 500 14px/20px var(--nox-font); color: var(--nox-text-1); }
+.set-row > .set-text > .set-hint { margin-top: 2px; }
+.set-row > .set-text > .set-hint:empty { display: none; }
+
+/* Переключатель 32×20. */
+body[data-view="settings"] .switch {
+  flex: none;
+  position: relative;
+  width: 32px;
+  height: 20px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--nox-surface-4);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-default);
+}
+body[data-view="settings"] .switch::after {
+  content: "";
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--nox-text-3);
+  transition: transform var(--dur-fast) var(--ease-default), background var(--dur-fast) var(--ease-default);
+}
+body[data-view="settings"] .switch:checked { background: var(--nox-accent); }
+body[data-view="settings"] .switch:checked::after { background: #fff; transform: translateX(12px); }
+body[data-view="settings"] .switch:disabled { opacity: 0.45; cursor: default; }
+
+/* Поля и списки 40 px. */
+body[data-view="settings"] .input {
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-1);
+  font: 500 13px/18px var(--nox-font);
+}
+body[data-view="settings"] select.input {
+  min-width: 200px;
+  max-width: 220px;
+  padding-right: 32px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--nox-text-2) 50%), linear-gradient(135deg, var(--nox-text-2) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 17px, calc(100% - 11px) 17px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  appearance: none;
+  -webkit-appearance: none;
+}
+body[data-view="settings"] .input:focus { outline: none; border-color: var(--nox-accent-line); }
+body[data-view="settings"] .input:disabled { opacity: 0.5; }
+body[data-view="settings"] .input-sm { height: 36px; font-size: 13px; }
+body[data-view="settings"] select.input.input-sm { height: 40px; }
+body[data-view="settings"] .accent-hex { width: 132px; text-transform: uppercase; font-family: var(--nox-mono); }
+
+/* Кнопки. */
+body[data-view="settings"] .btn {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-1);
+  font: 500 13px/18px var(--nox-font);
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+body[data-view="settings"] .btn:hover:not(:disabled) { border-color: var(--nox-border-strong); background: var(--nox-surface-4); }
+body[data-view="settings"] .btn:disabled { opacity: 0.45; cursor: default; }
+body[data-view="settings"] .btn [data-icon] { width: 16px; height: 16px; }
+body[data-view="settings"] .btn-sm { height: 32px; padding: 0 12px; font-size: 12px; }
+body[data-view="settings"] .btn-secondary { background: var(--nox-surface-3); border-color: var(--nox-border); color: var(--nox-text-1); }
+body[data-view="settings"] .btn-ghost { background: transparent; border-color: transparent; color: var(--nox-text-2); }
+body[data-view="settings"] .btn-danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--nox-err) 42%, transparent);
+  color: var(--nox-err);
+}
+body[data-view="settings"] .btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--nox-err) 14%, transparent); border-color: var(--nox-err); }
+
+/* Ползунки. */
+body[data-view="settings"] .range {
+  flex: none;
+  width: 220px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--nox-accent);
+  background: transparent;
+  cursor: pointer;
+}
+body[data-view="settings"] .range:disabled { opacity: 0.45; cursor: default; }
+body[data-view="settings"] .voice-opts .set-text { max-width: none; }
+body[data-view="settings"] .voice-pick-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; flex: none; }
+
+/* Сегменты (размер текста, скругление, варианты сферы). */
+body[data-view="settings"] .seg {
+  flex: none;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--nox-border);
+  border-radius: 10px;
+  background: var(--nox-surface-3);
+}
+body[data-view="settings"] .seg-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-2);
+  font: 500 12px/1 var(--nox-font);
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+body[data-view="settings"] .seg-btn:hover { color: var(--nox-text-1); }
+body[data-view="settings"] .seg-btn[aria-checked="true"],
+body[data-view="settings"] .seg-btn[aria-pressed="true"] { background: var(--nox-accent-soft); color: var(--nox-accent); }
+
+/* Радио «Режим доступа». */
+body[data-view="settings"] .set-radios { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+body[data-view="settings"] .set-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 0;
+  padding: 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: var(--nox-surface-2);
+  cursor: pointer;
+}
+body[data-view="settings"] .set-radio:hover { border-color: var(--nox-border-strong); }
+body[data-view="settings"] .set-radio input[type="radio"] {
+  flex: none;
+  width: 16px; height: 16px;
+  margin: 3px 0 0;
+  accent-color: var(--nox-accent);
+}
+body[data-view="settings"] .set-radio:has(input:checked) {
+  border-color: var(--nox-accent-line);
+  background: color-mix(in srgb, var(--nox-accent) 8%, var(--nox-surface-2));
+}
+
+/* ── 6. Тема, акцент, вид шара, настройки шара ─────────────────── */
+body[data-view="settings"] .theme-pick {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 6px;
+  max-width: 640px;
+}
+body[data-view="settings"] .theme-opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 5px 6px;
+  border: 1px solid var(--nox-border);
+  border-radius: 10px;
+  background: var(--nox-surface-2);
+  color: var(--nox-text-2);
+  font: 500 10px/13px var(--nox-font);
+  text-align: left;
+  overflow: hidden;
+}
+body[data-view="settings"] .theme-opt:hover { border-color: var(--nox-border-strong); color: var(--nox-text-1); }
+body[data-view="settings"] .theme-opt[aria-checked="true"] { border-color: var(--nox-accent-line); background: var(--nox-accent-soft); color: var(--nox-accent); }
+body[data-view="settings"] .theme-mini { flex: none; width: 30px; height: 30px; border-radius: 6px; overflow: hidden; }
+body[data-view="settings"] .theme-mini .tm-rail,
+body[data-view="settings"] .theme-mini .tm-panel { display: none; }
+body[data-view="settings"] .theme-mini canvas { width: 100%; height: 100%; }
+body[data-view="settings"] .theme-opt > .theme-mini + * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+body[data-view="settings"] .orb-pick { flex: none; display: inline-flex; gap: 6px; }
+body[data-view="settings"] .orb-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 10px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font: 500 12px/1 var(--nox-font);
+}
+body[data-view="settings"] .orb-opt canvas { width: 24px; height: 24px; }
+body[data-view="settings"] .orb-opt:hover { border-color: var(--nox-border-strong); color: var(--nox-text-1); }
+body[data-view="settings"] .orb-opt[aria-checked="true"] { border-color: var(--nox-accent-line); background: var(--nox-accent-soft); color: var(--nox-accent); }
+
+body[data-view="settings"] .accent-pick { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end; }
+body[data-view="settings"] .accent-swatches { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+body[data-view="settings"] .accent-opt {
+  position: relative;
+  width: 24px; height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--nox-border);
+  background: var(--swatch, transparent);
+}
+body[data-view="settings"] .accent-opt[aria-checked="true"] { box-shadow: 0 0 0 2px var(--nox-surface-1), 0 0 0 4px var(--nox-accent); }
+body[data-view="settings"] .accent-note:empty { display: none; }
+body[data-view="settings"] .accent-note { margin-top: 2px; }
+body[data-view="settings"] .orb-tune { display: flex; flex-direction: column; gap: 0; }
+
+/* Настройки сферы Nox (новые контролы). */
+.set-sphere-grid { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 20px; margin-top: 8px; align-items: start; }
+.set-sphere-controls { min-width: 0; display: flex; flex-direction: column; gap: 0; }
+.set-sphere-controls .set-row { min-height: 48px; }
+.set-sphere-preview {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  border: 1px solid var(--nox-border);
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 45%, #10222B 0%, #0F0F10 70%);
+  overflow: hidden;
+}
+.set-sphere-preview canvas { width: 190px; height: 190px; display: block; }
+.set-sphere-cap {
+  position: absolute;
+  left: 12px; bottom: 10px;
+  font: 500 11px/14px var(--nox-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nox-text-3);
+}
+.nox-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--nox-border);
+  border-radius: 999px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-3);
+  font: 500 10px/1 var(--nox-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.nox-badge[data-tone="accent"] { border-color: var(--nox-accent-line); background: var(--nox-accent-soft); color: var(--nox-accent); }
+.set-preview-note { margin: 10px 0 0; padding: 8px 10px; border: 1px dashed var(--nox-border); border-radius: 8px; color: var(--nox-text-3); font: 400 12px/17px var(--nox-font); }
+.set-preview-note b { color: var(--nox-text-2); font-weight: 500; }
+.set-sphere-foot { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.set-sphere-foot .set-sphere-gap { flex: 1 1 auto; }
+
+/* ── 7. Служебные блоки внутри карточек ───────────────────────── */
+body[data-view="settings"] .counter {
+  font: 500 11px/16px var(--nox-font);
+  color: var(--nox-text-3);
+}
+body[data-view="settings"] .note {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-2);
+  color: var(--nox-text-2);
+  font: 400 12px/17px var(--nox-font);
+}
+body[data-view="settings"] .note[hidden] { display: none; }
+body[data-view="settings"] .note-warn { border-color: color-mix(in srgb, var(--nox-warn) 40%, transparent); color: var(--nox-warn); }
+body[data-view="settings"] .note-err { border-color: color-mix(in srgb, var(--nox-err) 40%, transparent); color: var(--nox-err); }
+body[data-view="settings"] .hint {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border: 1px dashed color-mix(in srgb, var(--nox-warn) 45%, transparent);
+  border-radius: 8px;
+  color: var(--nox-text-2);
+  font: 400 12px/17px var(--nox-font);
+}
+body[data-view="settings"] .hint[hidden] { display: none; }
+body[data-view="settings"] .hint code { font-family: var(--nox-mono); font-size: 11px; color: var(--nox-text-1); }
+body[data-view="settings"] .form-error {
+  margin: 8px 0 0;
+  color: var(--nox-err);
+  font: 400 12px/17px var(--nox-font);
+}
+body[data-view="settings"] .form-error[hidden] { display: none; }
+
+body[data-view="settings"] .ext-card {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: var(--nox-surface-2);
+}
+body[data-view="settings"] .ext-card > .set-title-row { margin-bottom: 4px; }
+body[data-view="settings"] .ext-card .set-row { min-height: 48px; }
+body[data-view="settings"] .ext-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+
+body[data-view="settings"] .memory-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+body[data-view="settings"] .memory-list:empty { display: none; }
+body[data-view="settings"] .memory-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 10px;
+  background: var(--nox-surface-2);
+}
+body[data-view="settings"] .memory-item .set-text { flex: 1 1 auto; }
+body[data-view="settings"] .editor-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+body[data-view="settings"] .editor-foot-gap { flex: 1 1 auto; }
+body[data-view="settings"] .snip-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+body[data-view="settings"] .snip-form input.input { flex: 1 1 140px; max-width: 220px; }
+body[data-view="settings"] .snip-form textarea.input { flex: 2 1 220px; height: 64px; padding: 8px 12px; resize: vertical; }
+body[data-view="settings"] .snip-form .btn { align-self: flex-end; }
+body[data-view="settings"] .path-box {
+  display: block;
+  max-width: 520px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--nox-mono);
+  font-size: 12px;
+  color: var(--nox-text-2);
+}
+body[data-view="settings"] .brain-state { display: flex; align-items: center; gap: 8px; font: 500 14px/20px var(--nox-font); }
+body[data-view="settings"] .brain-state .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nox-text-3); }
+body[data-view="settings"] .brain-state[data-ok="yes"] .dot { background: var(--nox-ok); }
+body[data-view="settings"] .brain-state[data-ok="no"] .dot { background: var(--nox-err); }
+body[data-view="settings"] .brain-state[data-ok="down"] .dot { background: var(--nox-warn); }
+body[data-view="settings"] .brain-model { font: 400 11px/16px var(--nox-mono); color: var(--nox-text-3); }
+body[data-view="settings"] #ownerProvList { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+body[data-view="settings"] #ownerProvList:empty { display: none; }
+body[data-view="settings"] #folderList { display: flex; flex-direction: column; gap: 0; }
+body[data-view="settings"] #ownerProvForm { flex-wrap: wrap; gap: 8px; }
+body[data-view="settings"] #ownerProvForm .input { flex: 1 1 150px; max-width: 260px; }
+body[data-view="settings"] .mono { font-family: var(--nox-mono); }
+
+/* ── 8. Состояния: загрузка, ошибка, пусто ────────────────────── */
+.nox-set-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--nox-err) 42%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--nox-err) 10%, transparent);
+  color: var(--nox-err);
+  font: 400 12px/17px var(--nox-font);
+}
+.nox-set-error[hidden] { display: none; }
+.nox-set-error [data-icon] { flex: none; width: 16px; height: 16px; margin-top: 1px; }
+.nox-set-empty {
+  margin: 24px auto;
+  padding: 24px;
+  text-align: center;
+  color: var(--nox-text-2);
+  font: 400 14px/20px var(--nox-font);
+}
+.nox-set-empty.is-hidden { display: none; }
+#setMain[data-loading="true"] .set-section { opacity: 0.55; }
+#setMain[data-loading="true"] { pointer-events: none; }
+
+/* ── 9. Узкое окно ≤1000 px ───────────────────────────────────── */
+@media (max-width: 1000px) {
+  .nox-set-head { height: 64px; padding: 0 14px; }
+  .nox-set-title { font-size: 21px; line-height: 28px; }
+  #setBody { flex-direction: column; gap: 10px; padding: 10px 14px 14px; }
+  .set-nav.nox-set-nav {
+    width: auto;
+    flex: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .nox-set-searchwrap { flex: 1 1 180px; min-width: 150px; }
+  .nox-set-chips { flex: none; }
+  .set-nav.nox-set-nav .set-nav-head { display: none; }
+  #setNavList {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 2px;
+    overflow-x: auto;
+    padding: 0;
+  }
+  #setNavList > li { flex: none; }
+  .set-nav-item.nox-set-item { height: 34px; padding: 0 10px; font-size: 13px; width: auto; }
+  .set-nav-item.nox-set-item .nox-set-item-icon { display: none; }
+  .nox-set-navnote { display: none; }
+  .set-row { flex-wrap: wrap; gap: 8px 16px; min-height: 0; padding: 10px 0; }
+  .set-row > .set-text { flex: 1 1 100%; }
+  body[data-view="settings"] .range { width: 100%; max-width: none; }
+  body[data-view="settings"] select.input { max-width: none; flex: 1 1 160px; min-width: 0; }
+  body[data-view="settings"] .theme-pick { max-width: none; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+  .set-sphere-grid { grid-template-columns: minmax(0, 1fr) 180px; }
+  .set-sphere-preview canvas { width: 150px; height: 150px; }
+  body[data-view="settings"] .accent-pick { justify-content: flex-start; }
+}
+
+@media (max-width: 720px) {
+  .set-sphere-grid { grid-template-columns: minmax(0, 1fr); }
+  .set-sphere-preview { min-height: 150px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-view="settings"] *,
+  body[data-view="settings"] *::before,
+  body[data-view="settings"] *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

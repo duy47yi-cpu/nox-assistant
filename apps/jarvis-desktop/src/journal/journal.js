@@ -95,6 +95,14 @@ function maskSecrets(value, depth = 0) {
   return value;
 }
 
+// Событие ядра для окна: аргументы действия и запроса разрешения — без секретов (ZM-008).
+// Путь, адресат и обычный текст остаются: владелец должен видеть, что именно разрешает.
+// Ядро, журнал и запись команд получают исходное событие, копия нужна только окну.
+function maskEventForWindow(event) {
+  if (!event || typeof event !== 'object' || !('args' in event)) return event;
+  return { ...event, args: maskSecrets(event.args) };
+}
+
 // Журнал действий: одна JSON-строка на запись, только дописывание.
 class Journal {
   // maxBytes/backups — для проверок; в приложении берутся значения по умолчанию.
@@ -317,6 +325,7 @@ module.exports = {
   maskHistory,
   maskSecrets,
   maskSecretText,
+  maskEventForWindow,
   historyStatus,
   readJournal,
   searchJournal,

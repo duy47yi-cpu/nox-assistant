@@ -54,6 +54,16 @@ test('закрытие: активным становится сосед, пос
   assert.equal(book.active().history.length, 0);
 });
 
+test('время последней работы с чатом сохраняется и отдаётся экрану Nox', () => {
+  const book = new ChatBook({ history: [said('а')] });
+  assert.equal(book.list().chats[0].updatedAt, 0);
+  book.touch();
+  const stamp = book.list().chats[0].updatedAt;
+  assert.ok(stamp > 0);
+  const again = new ChatBook(JSON.parse(JSON.stringify(book.toJSON())));
+  assert.equal(again.list().chats[0].updatedAt, stamp);
+});
+
 test('сохранение и загрузка возвращают чаты и активную вкладку', () => {
   const book = new ChatBook({ history: [said('а')] });
   book.create().history.push(said('длинное сообщение, которое не помещается на вкладке целиком\nвторая строка'));
@@ -69,4 +79,15 @@ test('планировщик задач: stop() остаётся методом 
   const { MissionScheduler } = require('../src/missions/scheduler');
   const s = new MissionScheduler({ store: { due: () => [] }, run: async () => ({}), stop: { isStopped: () => false } });
   assert.doesNotThrow(() => s.stop());
+});
+
+test('прерванный ход: реплика без ответа получает пометку, законченная история не меняется', () => {
+  const { markCutTurn, INTERRUPTED_TEXT } = require('../src/chats/book');
+  const cut = markCutTurn([{ role: 'user', content: 'запиши файл' }]);
+  assert.deepEqual(cut.at(-1), { role: 'assistant', content: INTERRUPTED_TEXT });
+  const tool = markCutTurn([{ role: 'user', content: 'x' }, { role: 'assistant', content: '', tool_calls: [{ id: 'a' }] }, { role: 'tool', tool_call_id: 'a', content: '{}' }]);
+  assert.equal(tool.at(-1).content, INTERRUPTED_TEXT);
+  const done = [{ role: 'user', content: 'привет' }, { role: 'assistant', content: 'здравствуйте' }];
+  assert.equal(markCutTurn(done).length, 2);
+  assert.equal(markCutTurn([]).length, 0);
 });

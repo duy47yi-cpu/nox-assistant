@@ -16,3 +16,13 @@ test('подсказка не велит верить ok:true без подтв�
   assert.doesNotMatch(rule, /это успех/);
   assert.doesNotMatch(rule, /Независимые вызовы делай одним шагом/);
 });
+
+test('базовый промпт личности содержит все ключевые блоки правил', () => {
+  for (const tag of ['role', 'language', 'style', 'honesty', 'actions', 'safety', 'examples']) {
+    assert.match(source, new RegExp(`<${tag}>[\\s\\S]+</${tag}>`), `блок <${tag}> должен быть в промпте`);
+  }
+  assert.match(source, /Джарвис — имя помощника, продукт называется Nox/);
+  assert.match(source, /только «Быстрая» или «Умная»/);
+  assert.match(source, /Говори «сделано» только тогда, когда результат подтвердил инструмент проверки/);
+  assert.match(source, /Оплата запрещена всегда/);
+});

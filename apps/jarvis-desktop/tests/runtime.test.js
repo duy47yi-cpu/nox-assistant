@@ -635,7 +635,7 @@ test('8. после стопа задача сама не запускается
   const pending = h.runtime.resumeTask(id);
   await waitFor(() => h.asks('resume:').length === 1, 'запрос возобновления');
   const [ask] = h.asks('resume:');
-  assert.match(ask.id, new RegExp(`^resume:${id}:\\d+$`));
+  assert.match(ask.id, new RegExp(`^resume:${id}:[0-9a-f-]{36}$`));
   assert.deepEqual(ask.args, { задача: h.task(id).title, 'причина паузы': 'аварийный стоп' });
   assert.deepEqual([ask.name, ask.risk, ask.allowSession, ask.reason], ['возобновление задачи', 'T1', false, 'продолжить задачу по её мандату']);
   assert.equal(h.task(id).status, 'paused', 'пока владелец думает — на паузе');
@@ -728,9 +728,12 @@ test('10. обёртка подтверждений: запрос исполни
   const [pending] = h.runtime.approvals.list();
   const ev = h.events.find((e) => e.type === 'approval_request' && e.id === pending.id);
   assert.ok(ev, 'окно получило approval_request');
+  assert.equal(ev.taskId, id);
+  assert.equal(ev.callId, 'c2_0');
+  assert.notEqual(ev.id, `${id}:c2_0`);
   assert.deepEqual(
-    { id: ev.id, name: ev.name, risk: ev.risk, reason: ev.reason, allowSession: ev.allowSession, query: ev.args.query },
-    { id: `${id}:c2_0`, name: 'web_search', risk: 'T1', reason: 'инструмент требует подтверждения владельца', allowSession: false, query: 'чай улун' },
+    { name: ev.name, risk: ev.risk, reason: ev.reason, allowSession: ev.allowSession, query: ev.args.query },
+    { name: 'web_search', risk: 'T1', reason: 'инструмент требует подтверждения владельца', allowSession: false, query: 'чай улун' },
   );
   assert.equal(h.task(id).status, 'waiting_approval');
   assert.equal(h.registry.calls.length, 0, 'до ответа инструмент не запущен');

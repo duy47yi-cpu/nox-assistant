@@ -3,6 +3,24 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { ApprovalBroker, DEFAULT_AUTO_CANCEL_MS, parseApprovalAnswer } = require('../src/policy/approvals');
+const { Agent } = require('../src/agent/loop');
+
+test('повторный id не заменяет ожидающее или уже закрытое подтверждение', async () => {
+  const broker = new ApprovalBroker({ autoCancelMs: 0 });
+  const first = broker.request({ id: 'collision', name: 'first' });
+  assert.throws(() => broker.request({ id: 'collision', name: 'second' }));
+  assert.equal(broker.list()[0].name, 'first');
+  assert.equal(broker.respond('collision', 'reject'), true);
+  assert.equal(await first, 'reject');
+  assert.throws(() => broker.request({ id: 'collision', name: 'third' }));
+});
+
+test('голосовое подтверждение не выбирает запрос из неоднозначной очереди', () => {
+  const { voiceApprovalTarget } = require('../src/policy/approvals');
+  assert.equal(voiceApprovalTarget([{ id: 'a' }, { id: 'b' }]), null);
+  assert.equal(voiceApprovalTarget([{ id: 'a' }]), null, 'голос без привязки к запросу не подтверждает даже единственный запрос');
+  assert.equal(voiceApprovalTarget([]), null);
+});
 
 test('respond резолвит ожидание решением once, session и reject', async () => {
   const broker = new ApprovalBroker({ timeoutMs: 1000 });
@@ -12,6 +30,39 @@ test('respond резолвит ожидание решением once, session �
     assert.equal(broker.respond(payload.id, decision), true);
     assert.equal(await waiting, decision);
   }
+});
+
+test('одинаковый id вызова у двух агентов не связывает разрешения между собой', async () => {
+  const broker = new ApprovalBroker({ timeoutMs: null });
+  const events = [];
+  const makeAgent = (runId) => {
+    const agent = new Agent({ brain: {}, tools: { get: () => null }, approvals: broker, emit: (event) => events.push(event) });
+    agent._runId = runId;
+    return agent;
+  };
+  const first = makeAgent('run-a');
+  const second = makeAgent('run-b');
+  const controllerA = new AbortController();
+  const controllerB = new AbortController();
+  const waitingA = first._askApproval({ name: 'fixture_write', risk: 'T1' }, {
+    id: 'same-model-id', name: 'fixture_write', args: { path: 'a.tmp' },
+  }, controllerA.signal, { step: 1 });
+  const waitingB = second._askApproval({ name: 'fixture_delete', risk: 'T1' }, {
+    id: 'same-model-id', name: 'fixture_delete', args: { path: 'b.tmp' },
+  }, controllerB.signal, { step: 1 });
+  const [requestA, requestB] = events.filter((event) => event.type === 'approval_request');
+
+  assert.equal(broker.list().length, 2);
+  assert.notEqual(requestA.id, requestB.id);
+  assert.notEqual(requestA.agentId, requestB.agentId);
+  assert.deepEqual([requestA.runId, requestA.callId, requestA.name], ['run-a', 'same-model-id', 'fixture_write']);
+  assert.deepEqual([requestB.runId, requestB.callId, requestB.name], ['run-b', 'same-model-id', 'fixture_delete']);
+  assert.equal(broker.respond(requestA.id, 'once'), true);
+  assert.equal(await waitingA, 'once');
+  assert.equal(broker.respond(requestA.id, 'once'), false, 'устаревшее разрешение нельзя повторно применить');
+  assert.deepEqual(broker.list().map((entry) => entry.id), [requestB.id]);
+  assert.equal(broker.respond(requestB.id, 'reject'), true);
+  assert.equal(await waitingB, 'reject');
 });
 
 test('respond на неизвестный id возвращает false; неверное решение бросает TypeError', () => {
@@ -56,14 +107,12 @@ test('cancel по id и cancelPrefix по id задачи: ожидание — 
   assert.equal(broker.closedReason('x'), 'задача отменена');
   assert.equal(broker.closedReason('t10:c1'), null);
   assert.deepEqual(broker.cancelPrefix(''), [], 'пустой префикс ничего не отменяет');
-  // cancelAll — причина «аварийный стоп»; новый запрос с тем же id — новое ожидание.
+  // cancelAll — причина «аварийный стоп»; старый id нельзя использовать повторно.
   assert.equal(broker.cancelAll(), 1);
   assert.equal(await other, 'reject');
   assert.equal(broker.closedReason('t10:c1'), 'аварийный стоп');
-  const again = broker.request({ id: 't10:c1' });
-  assert.equal(broker.closedReason('t10:c1'), null);
-  assert.equal(broker.respond('t10:c1', 'once'), true);
-  assert.equal(await again, 'once');
+  assert.throws(() => broker.request({ id: 't10:c1' }));
+  assert.equal(broker.closedReason('t10:c1'), 'аварийный стоп');
 });
 
 test('автоотмена: по умолчанию 30 секунд, запрос отменяется сам и причина известна', async () => {

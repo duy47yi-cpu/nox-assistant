@@ -1,0 +1,746 @@
+/* Nox — первый экран, реконструкция по docs/reconstruction.
+ * Подключается последним и ограничен body[data-view="nox"] / .view-nox,
+ * поэтому прежние разделы приложения (настройки, команды, журнал) не меняются.
+ * Токены — из design-tokens.md: плоский тёмный фон, панели #18181B, бордер #2A2A2E,
+ * радиус панелей 16, рейка 52, история 244, сфера 360, зазор 8. */
+
+/* ── Токены окна Nox ───────────────────────────────────────────── */
+body[data-view="nox"] {
+  /* Типографика экрана Nox не наследует «Вид → Шрифты» классических разделов.
+     theme-boot.js пишет выбранные пользователем гарнитуры инлайном в html (--font, --font-head,
+     --font-reply), поэтому переопределяем их на body: вниз наследуется Inter, а классические
+     разделы при смене body[data-view] продолжают следовать настройкам владельца. */
+  --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-head: var(--font);
+  --font-display: var(--font);
+  --font-reply: var(--font);
+  --nox-bg: #0F0F10;
+  --nox-surface-1: #141415;
+  --nox-surface-2: #18181B;
+  --nox-surface-3: #1C1C1F;
+  --nox-surface-4: #232326;
+  --nox-border: #2A2A2E;
+  --nox-border-strong: #34343A;
+  --nox-text-1: #F1F1F3;
+  --nox-text-2: #9A9AA0;
+  --nox-text-3: #6B6B70;
+  --nox-text-ghost: #3A3A3E;
+  --nox-accent: #2E9AC1;
+  --nox-accent-hover: #3AAAD6;
+  --nox-accent-soft: color-mix(in srgb, #2E9AC1 14%, transparent);
+  --nox-ok: #3DD68C;
+  --nox-warn: #F5A524;
+  --nox-err: #FF5C5C;
+  --nox-gap: 8px;
+  --rail-w: 52px;
+  --nox-history-w: 244px;
+  --nox-sphere-w: 360px;
+  --nox-orb-size: 332px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-default: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur-normal: 200ms;
+  --dur-slow: 280ms;
+  background: transparent;
+  color: var(--nox-text-1);
+}
+/* Прозрачное окно: углы и фон показывает рабочий стол, панели рисует .app. */
+html:has(body[data-view="nox"]) { background: transparent; }
+
+/* Узкое окно: пропорции сохраняются, абсолютные ширины уменьшаются (design-tokens.md §5). */
+@media (max-width: 1000px) {
+  body[data-view="nox"] {
+    --rail-w: 46px;
+    --nox-history-w: 176px;
+    --nox-sphere-w: 278px;
+    --nox-orb-size: 240px;
+  }
+
+}
+
+/* ── Окно и сетка ─────────────────────────────────────────────── */
+body[data-view="nox"] .app {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  /* Рейка и история в референсе читаются как одна панель: зазор только справа от группы. */
+  gap: 0;
+  padding: var(--nox-gap);
+  height: 100vh;
+  background: var(--nox-bg);
+  border: 1px solid rgba(42, 42, 46, 0.8);
+  border-radius: 12px;
+  overflow: clip;
+  isolation: isolate;
+}
+body[data-view="nox"] .app::before,
+body[data-view="nox"] .app::after,
+body[data-view="nox"] .theme-fx,
+body[data-view="nox"] .contour { display: none !important; }
+body[data-view="nox"] .main { min-width: 0; min-height: 0; background: transparent; }
+body[data-view="nox"] .topbar { display: none; }
+body[data-view="nox"] .views { flex: 1; min-height: 0; }
+body[data-view="nox"] :focus-visible { outline: 2px solid var(--nox-accent); outline-offset: 2px; }
+
+/* ── Рейка: 52 px, только иконки ───────────────────────────────── */
+body[data-view="nox"] .rail {
+  width: var(--rail-w);
+  padding: 8px 6px;
+  align-items: center;
+  background: var(--nox-surface-2);
+  border: 1px solid var(--nox-border);
+  border-right: 0;
+  border-radius: 16px 0 0 16px;
+  overflow: visible;
+  -webkit-app-region: drag;
+}
+body[data-view="nox"] .rail-brand {
+  width: 36px; height: 36px; margin: 0 0 14px;
+  justify-content: center;
+  -webkit-app-region: drag;
+}
+body[data-view="nox"] .rail-brand-text { display: none; }
+body[data-view="nox"] .rail-mark {
+  position: relative;
+  width: 18px; height: 18px;
+  border: 1.6px solid var(--nox-text-1);
+  border-radius: 50%;
+  background: none;
+  box-shadow: none;
+  transform: rotate(-28deg);
+}
+body[data-view="nox"] .rail-mark::after {
+  content: "";
+  position: absolute;
+  top: -4px; right: -4px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--nox-bg);
+}
+body[data-view="nox"] .rail-list { gap: 4px; align-items: center; width: auto; }
+body[data-view="nox"] .rail-item,
+body[data-view="nox"] .rail-toggle {
+  width: 36px; height: 36px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  border-radius: 10px;
+  color: var(--nox-text-3);
+  -webkit-app-region: no-drag;
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+body[data-view="nox"] .rail-item:hover,
+body[data-view="nox"] .rail-toggle:hover {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, transparent);
+  color: var(--nox-text-1);
+  transform: none;
+}
+body[data-view="nox"] .rail-item[aria-current="page"] {
+  background: var(--nox-accent-soft);
+  color: var(--nox-accent);
+}
+body[data-view="nox"] .rail-item[aria-current="page"] .rail-icon { color: var(--nox-accent); }
+body[data-view="nox"] .rail-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -9px; top: 7px;
+  width: 4px; height: 22px;
+  border-radius: 0 3px 3px 0;
+  background: var(--nox-accent);
+}
+body[data-view="nox"] .rail-icon svg { width: 18px; height: 18px; }
+body[data-view="nox"] .rail-label { display: none; }
+body[data-view="nox"] .rail-count {
+  top: 2px; right: 2px;
+  min-width: 15px; height: 15px;
+  padding: 0 3px;
+  font-size: 10px; line-height: 13px;
+  background: var(--nox-accent); border: 0; color: #061217;
+  font-family: var(--mono); font-weight: 600;
+}
+body[data-view="nox"] .rail-dot { top: 7px; right: 7px; width: 6px; height: 6px; }
+body[data-view="nox"] .rail-foot { margin-top: auto; width: 36px; align-items: center; gap: 6px; }
+body[data-view="nox"] .rail-account {
+  width: 32px; height: 32px;
+  border: 1px solid var(--nox-border);
+  border-radius: 50%;
+  color: var(--nox-text-2);
+}
+body[data-view="nox"] .rail-account:hover { border-color: var(--nox-border-strong); }
+body[data-view="nox"] #railToggle { display: none; }
+
+/* ── Вид и три панели ─────────────────────────────────────────── */
+.view-nox { overflow: hidden; padding: 0; }
+.nox-grid { display: flex; gap: var(--nox-gap); height: 100%; min-height: 0; }
+.nox-panel {
+  background: var(--nox-surface-2);
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  min-height: 0;
+}
+
+/* ── B. История ───────────────────────────────────────────────── */
+.nox-history {
+  width: var(--nox-history-w);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px 12px;
+  gap: 10px;
+  border-left: 0;
+  border-radius: 0 16px 16px 0;
+}
+/* Пустой чат: история скрыта, и та же левая панель продолжается центральной. */
+body[data-view="nox"]:has(.nox-grid.is-empty) .nox-chat {
+  border-left: 0;
+  border-radius: 0 16px 16px 0;
+}
+.nox-grid.is-empty .nox-history { display: none; }
+.nox-hist-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px 4px 6px;
+  -webkit-app-region: drag;
+}
+.nox-hist-title {
+  font-size: 16px; line-height: 20px;
+  font-weight: 600; letter-spacing: -0.01em;
+  color: var(--nox-text-1);
+}
+.nox-new-chat {
+  display: inline-flex; align-self: flex-start;
+  align-items: center; gap: 6px;
+  height: 32px; padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nox-border);
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font-size: 12.5px; font-weight: 500; line-height: 16px;
+  -webkit-app-region: no-drag;
+  transition: color var(--dur-fast), border-color var(--dur-fast), background var(--dur-fast);
+}
+.nox-new-chat:hover { color: var(--nox-text-1); border-color: var(--nox-border-strong); }
+.nox-new-chat:active { transform: scale(0.98); }
+.nox-new-chat svg { width: 12px; height: 12px; }
+.nox-hist-scroll {
+  flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 0 0 4px;
+  scrollbar-width: none;
+  -webkit-app-region: no-drag;
+}
+.nox-hist-scroll::-webkit-scrollbar { width: 0; height: 0; }
+.nox-hist-sections { display: flex; flex-direction: column; gap: 2px; }
+.nox-hist-label {
+  padding: 10px 8px 4px;
+  font-size: 11px; line-height: 14px;
+  font-weight: 500; letter-spacing: 0.02em; text-transform: uppercase;
+  color: var(--nox-text-3);
+}
+.nox-hist-item {
+  position: relative;
+  display: flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 6px 0 8px;
+  border: 0; border-radius: 10px;
+  background: transparent;
+  color: var(--nox-text-2);
+  font-size: 13px; line-height: 16px;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+.nox-hist-item:hover { background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); color: var(--nox-text-1); }
+.nox-hist-item[data-active="true"] {
+  background: color-mix(in srgb, var(--nox-text-1) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nox-text-1) 7%, transparent);
+  color: var(--nox-text-1);
+}
+.nox-hist-open {
+  flex: 1; min-width: 0;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nox-hist-open:focus-visible { outline: 2px solid var(--nox-accent); outline-offset: 1px; border-radius: 6px; }
+.nox-hist-more {
+  flex: none;
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 6px;
+  background: transparent;
+  color: var(--nox-text-3);
+  font-size: 14px; line-height: 1;
+  opacity: 0.85;
+}
+.nox-hist-more:hover { background: color-mix(in srgb, var(--nox-text-1) 8%, transparent); color: var(--nox-text-1); }
+.nox-hist-empty {
+  padding: 16px 8px;
+  font-size: 13px; line-height: 18px;
+  color: var(--nox-text-2);
+}
+.nox-hist-ws {
+  flex: none;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--nox-border) 70%, transparent);
+  -webkit-app-region: no-drag;
+}
+.nox-hist-ws:empty { display: none; }
+.nox-history .workspace-switch {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0;
+  border: 0; background: transparent;
+}
+.nox-history .workspace-switch > label {
+  flex: none;
+  font-size: 11px; line-height: 14px; color: var(--nox-text-3);
+}
+.nox-history .workspace-switch select {
+  flex: 1; min-width: 0;
+  height: 26px; padding: 0 6px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font-size: 11.5px;
+}
+.nox-history .workspace-switch .btn { display: none; }
+.nox-history .workspace-note { display: none; }
+
+/* ── C. Чат ───────────────────────────────────────────────────── */
+.nox-chat {
+  flex: 1 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+.nox-chat-head {
+  flex: none;
+  height: 44px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 16px;
+  -webkit-app-region: drag;
+}
+.nox-chat-mark {
+  display: none;
+  font-size: 19px; line-height: 24px;
+  font-weight: 500; letter-spacing: 0.14em;
+  color: var(--nox-text-1);
+}
+.nox-grid.is-empty .nox-chat-mark { display: inline; }
+.nox-chat-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* Лента: .convo переносится сюда из классического экрана и сохраняет всю логику.
+   !important — потому что у старого вида беседы есть более тяжёлые составные
+   селекторы для пустого и полного состояния; на экране Nox панелью является сам чат. */
+.view-nox .convo {
+  flex: 1;
+  align-self: stretch;
+  width: 100%;
+  min-height: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.view-nox .convo > .chat-tabs,
+.view-nox .convo > .workspace-switch,
+.view-nox .convo > .workspace-note { display: none; }
+.view-nox .feed {
+  flex: 1;
+  min-height: 0;
+  padding: 12px 20px 12px;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+.view-nox .feed::-webkit-scrollbar { width: 0; height: 0; }
+.view-nox .feed-col {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.view-nox .feed-list { gap: 20px; }
+.view-nox .feed-list > * { animation: nox-rise var(--dur-normal) var(--ease-out) both; }
+@keyframes nox-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.view-nox .feed-more { margin: 0 auto 12px; }
+.view-nox .to-bottom { bottom: 8px; right: 16px; }
+
+/* Сообщения. Пузырь пользователя — серый справа, ответ — без пузыря с меткой NOX. */
+.view-nox .msg-user {
+  align-self: flex-end;
+  max-width: 72%;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid var(--nox-border);
+  border-radius: 16px 16px 4px 16px;
+  background: var(--nox-surface-4);
+  color: var(--nox-text-1);
+}
+.view-nox .msg-user-text {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13.5px; line-height: 18px; font-weight: 400;
+  white-space: pre-wrap;
+}
+.view-nox .msg-time { display: none; }
+.view-nox .msg-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.view-nox .turn {
+  align-self: flex-start;
+  width: auto;
+  max-width: 92%;
+  display: flex; flex-direction: column; gap: 6px;
+  position: relative;
+  font-size: 13.5px; line-height: 20px;
+}
+.view-nox .turn::before {
+  display: block;
+  content: "NOX";
+  font-size: 11px; line-height: 14px;
+  font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--nox-text-3);
+}
+.view-nox .turn > .md {
+  align-self: stretch;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13.5px; line-height: 20px;
+  color: var(--nox-text-1);
+  overflow-wrap: anywhere;
+}
+.view-nox .md { font-size: 13.5px; line-height: 20px; color: var(--nox-text-1); overflow-wrap: anywhere; }
+.view-nox .md p, .view-nox .md ul, .view-nox .md ol, .view-nox .md pre, .view-nox .md blockquote { margin: 0 0 8px; }
+.view-nox .md > *:last-child { margin-bottom: 0; }
+.view-nox .md strong, .view-nox .md b { font-weight: 600; }
+.view-nox .md a { color: var(--nox-accent); }
+.view-nox .md code { background: color-mix(in srgb, var(--nox-text-1) 7%, transparent); border-radius: 5px; padding: 1px 5px; font-size: 12px; }
+.view-nox .md pre { background: var(--nox-surface-3); border: 1px solid var(--nox-border); border-radius: 10px; padding: 10px 12px; overflow: auto; }
+.view-nox .md pre code { background: transparent; padding: 0; }
+/* В референсе нет каретки печати — оборванный поток просто останавливается. */
+.view-nox .md.is-streaming > *:last-child::after { content: none !important; display: none !important; animation: none !important; }
+.view-nox .thinking { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: var(--nox-text-2); }
+.view-nox .notice, .view-nox .err-block { font-size: 12px; line-height: 16px; color: var(--nox-text-2); }
+.view-nox .turn-acts {
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--nox-text-2);
+}
+.view-nox .turn-acts > summary { padding: 0; }
+.view-nox .acts-list { margin: 6px 0 0; }
+.view-nox .file-chip { background: var(--nox-surface-3); border-color: var(--nox-border); }
+
+/* Строка «Ход работы»: живой счётчик реального хода, вставляется в ленту. */
+.view-nox .nox-working {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; line-height: 20px;
+  color: var(--nox-text-2);
+  font-variant-numeric: tabular-nums;
+  animation: nox-rise var(--dur-normal) var(--ease-out) both;
+}
+.view-nox .nox-working .nox-tri { font-size: 10px; line-height: 1; color: var(--nox-text-3); }
+.view-nox .nox-working[data-tone="error"] { color: var(--nox-err); }
+
+/* Пустое состояние: только «С чего начнём?» по центру панели. */
+.view-nox .chat-empty {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 40px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: center;
+}
+.view-nox .chat-empty .empty-kicker,
+.view-nox .chat-empty > p,
+.view-nox .chat-empty .empty-legend { display: none !important; }
+.view-nox .chat-empty h2 {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 22px; line-height: 28px;
+  font-weight: 600; letter-spacing: -0.02em;
+  color: var(--nox-text-1);
+}
+.view-nox .chat-empty h2::after { content: none !important; display: none !important; }
+
+/* ── F. Поле ввода (капсула) ──────────────────────────────────── */
+.view-nox .nox-composer { flex: none; padding: 2px 12px 10px; -webkit-app-region: no-drag; }
+.view-nox .stage-dock { width: 100%; padding: 0; margin: 0; }
+.view-nox .composer-hint,
+.view-nox .composer-busy { display: none !important; }
+.view-nox #composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 7px 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  background: var(--nox-surface-3);
+  box-shadow: none;
+  transition: border-color var(--dur-normal) var(--ease-out), box-shadow var(--dur-normal) var(--ease-out);
+}
+.view-nox #composer:focus-within {
+  border-color: var(--nox-accent);
+  box-shadow: 0 0 0 2px var(--nox-bg), 0 0 0 4px color-mix(in srgb, var(--nox-accent) 30%, transparent);
+}
+.view-nox #composer .composer-row {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 8px; min-width: 0;
+}
+.view-nox #composer .composer-input {
+  order: -1;
+  flex: 1 0 100%;
+  width: 100%;
+  min-height: 24px;
+  max-height: 120px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--nox-text-1);
+  font-size: 13.5px; line-height: 18px;
+  resize: none;
+}
+.view-nox #composer .composer-input::placeholder { color: var(--nox-text-3); }
+.view-nox #composer .composer-input:focus-visible { outline: none; }
+.view-nox #composer .composer-attach { order: 0; }
+.view-nox #composer #regionBtn { order: 0; }
+/* В референсе выбор режима — в правой группе, перед микрофоном и отправкой. */
+.view-nox #composer .composer-picks {
+  order: 2;
+  margin: 0 0 0 auto;
+  display: flex; align-items: center; gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.view-nox #composer .composer-mic { order: 3; }
+.view-nox #composer #chatSend, .view-nox #composer #chatStop { order: 4; }
+.view-nox #composer .composer-attach,
+.view-nox #composer #regionBtn {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  color: var(--nox-text-3);
+}
+.view-nox #composer .composer-attach:hover,
+.view-nox #composer #regionBtn:hover { color: var(--nox-text-1); background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); }
+.view-nox #composer .composer-attach svg,
+.view-nox #composer #regionBtn svg { width: 18px; height: 18px; }
+.view-nox #composer .composer-mic {
+  width: 28px; height: 28px;
+  border: 1px solid var(--nox-border);
+  border-radius: 50%;
+  background: var(--nox-surface-4);
+  color: var(--nox-text-2);
+}
+.view-nox #composer .composer-mic:hover { color: var(--nox-text-1); background: color-mix(in srgb, var(--nox-text-1) 8%, var(--nox-surface-4)); }
+.view-nox #composer .composer-mic[data-recording="true"] { color: var(--nox-err); border-color: color-mix(in srgb, var(--nox-err) 52%, transparent); background: color-mix(in srgb, var(--nox-err) 14%, var(--nox-surface-4)); }
+.view-nox #composer .composer-btn {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid transparent;
+}
+.view-nox #composer #chatSend { background: var(--nox-accent); color: #fff; }
+.view-nox #composer #chatSend:hover { background: var(--nox-accent-hover); }
+.view-nox #composer #chatSend:active { transform: scale(0.96); }
+/* В референсе кнопка отправки синяя и в пустом поле; недоступность показывает курсор, не цвет. */
+.view-nox #composer #chatSend:disabled { background: var(--nox-accent); color: #fff; opacity: 0.8; }
+.view-nox #composer #chatStop { background: var(--nox-surface-4); border-color: var(--nox-border); color: var(--nox-text-1); }
+.view-nox #composer .composer-btn svg { width: 16px; height: 16px; }
+.view-nox #composer .composer-btn-label { display: none; }
+.view-nox #composer .pick-trigger {
+  height: 28px;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--nox-border);
+  border-radius: 999px;
+  background: var(--nox-surface-4);
+  color: var(--nox-text-2);
+  font-size: 12px; font-weight: 500; line-height: 16px;
+  max-width: 100%;
+  transition: color var(--dur-fast), border-color var(--dur-fast), background var(--dur-fast);
+}
+.view-nox #composer .pick-trigger:hover,
+.view-nox #composer .pick-trigger[aria-expanded="true"] {
+  color: var(--nox-text-1);
+  border-color: var(--nox-border-strong);
+  background: var(--nox-surface-4);
+}
+.view-nox #composer .pick-trigger-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.view-nox #composer .pick-chev svg { width: 12px; height: 12px; }
+.view-nox #composer .pick-cost { display: none; }
+.view-nox #composer .pick-panel { z-index: 30; }
+.view-nox #composer .pick-trigger[aria-expanded="true"] { border-radius: 999px; }
+
+/* Осциллограмма: только во время настоящей диктовки (не украшение). */
+.view-nox .nox-wave {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 24px;
+}
+.view-nox .nox-wave[data-recording="true"] { display: flex; }
+.view-nox .nox-wave i {
+  width: 2px; height: 4px;
+  border-radius: 1px;
+  background: var(--nox-text-3);
+  animation: nox-wave 900ms ease-in-out infinite alternate;
+}
+.view-nox .nox-wave i:nth-child(3n) { animation-delay: -120ms; }
+.view-nox .nox-wave i:nth-child(4n) { animation-delay: -260ms; }
+.view-nox .nox-wave i:nth-child(5n) { animation-delay: -400ms; }
+@keyframes nox-wave {
+  from { height: 4px; background: var(--nox-text-3); }
+  to { height: 16px; background: var(--nox-accent); }
+}
+
+/* ── Кнопка «Скопировать ответ» под ответом ассистента ───────── */
+.nox-copy { display: none; }
+.view-nox .turn > .nox-copy {
+  display: inline-grid;
+  place-items: center;
+  align-self: flex-start;
+  width: 26px; height: 22px;
+  margin-top: 2px;
+  padding: 0;
+  border: 1px solid var(--nox-border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--nox-text-3);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-default),
+    border-color var(--dur-fast) var(--ease-default),
+    background var(--dur-fast) var(--ease-default);
+}
+.view-nox .nox-copy svg { width: 14px; height: 14px; }
+.view-nox .nox-copy:hover {
+  color: var(--nox-text-1);
+  border-color: var(--nox-border-strong);
+  background: color-mix(in srgb, var(--nox-text-1) 6%, transparent);
+}
+.view-nox .nox-copy:active { transform: scale(0.96); }
+.view-nox .nox-copy:focus-visible { outline: 2px solid var(--nox-accent); outline-offset: 2px; }
+.view-nox .nox-copy[data-copied="true"] {
+  color: var(--nox-ok);
+  border-color: color-mix(in srgb, var(--nox-ok) 45%, transparent);
+}
+.view-nox .nox-copy[data-copied="false"] {
+  color: var(--nox-err);
+  border-color: color-mix(in srgb, var(--nox-err) 45%, transparent);
+}
+/* Пока ответ печатается, копировать нечего: кнопка появляется после потока. */
+.view-nox .turn:has(.md.is-streaming) .nox-copy { display: none; }
+
+/* ── D. Сфера ─────────────────────────────────────────────────── */
+.nox-sphere { width: var(--nox-sphere-w); flex: none; display: flex; flex-direction: column; padding: 12px; }
+.nox-sphere-head {
+  flex: none;
+  height: 44px;
+  display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  padding: 0 2px;
+  -webkit-app-region: drag;
+}
+.nox-sphere-btn {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-2);
+  -webkit-app-region: no-drag;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+.nox-sphere-btn:hover { background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); color: var(--nox-text-1); }
+.nox-sphere-btn svg { width: 16px; height: 16px; }
+.nox-sphere-btn[data-act="close"]:hover { background: color-mix(in srgb, var(--nox-err) 14%, transparent); color: var(--nox-err); }
+.nox-orb-stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  position: relative;
+  /* Центр сферы в референсе — 50.8 % высоты окна, чуть выше центра панели. */
+  padding-bottom: 32px;
+}
+#noxOrb {
+  display: block;
+  width: var(--nox-orb-size);
+  height: var(--nox-orb-size);
+  touch-action: none;
+}
+
+/* ── Окно без системной рамки: кнопки для прежних разделов ────── */
+.win-controls { display: flex; align-items: center; gap: 2px; margin-left: 6px; }
+.win-controls button {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 8px;
+  background: transparent;
+  color: var(--text-3);
+  -webkit-app-region: no-drag;
+}
+.win-controls button:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+.win-controls button[data-act="close"]:hover { background: rgba(255, 92, 92, 0.16); color: #FF5C5C; }
+.win-controls svg { width: 13px; height: 13px; }
+body[data-view="nox"] .win-controls { display: none; }
+.topbar { -webkit-app-region: drag; }
+.topbar button, .topbar input, .topbar select, .topbar a { -webkit-app-region: no-drag; }
+
+/* ── Движение: уважаем системную настройку и «Анимацию» вида ───── */
+@media (prefers-reduced-motion: reduce) {
+  body[data-view="nox"] *,
+  body[data-view="nox"] *::before,
+  body[data-view="nox"] *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+html[data-motion="off"] body[data-view="nox"] *,
+html[data-motion="off"] body[data-view="nox"] *::before,
+html[data-motion="off"] body[data-view="nox"] *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+}
+
+
+
+
+/* ── Узкое окно (после основных правил, иначе те же селекторы ниже перекрывают) ──
+   Панель чата в референсе уже; поле ввода сжимаем по краям и по высоте до ~76 px. */
+@media (max-width: 1000px) {
+  .view-nox .nox-composer { padding: 2px 22px 10px; }
+  .view-nox #composer { padding: 8px 10px; }
+  .view-nox #composer .composer-row { gap: 6px; }
+  .view-nox #composer .composer-picks { gap: 6px; }
+  .view-nox #composer .pick-trigger { padding: 0 8px; max-width: 88px; }
+  .view-nox #composer .pick-trigger-text { max-width: 56px; }
+}
+
+

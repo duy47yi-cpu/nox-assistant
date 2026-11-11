@@ -43,15 +43,6 @@
     tracker.handle(ev);
   }
 
-  async function answer(decision) {
-    const id = approvals[0];
-    if (!id) return;
-    if (decision === 'reject') tracker.markRejected(id);
-    approvals.shift();
-    try { await U.call('respondApproval', id, decision); } catch { /* уже неактуально */ }
-    render();
-  }
-
   async function boot() {
     U.fillIcons(document);
     await U.ensureBridge();
@@ -61,15 +52,17 @@
       try { anim = JSON.parse(localStorage.getItem('jarvis.orbAnim') ?? 'true') !== false; } catch { /* нет хранилища */ }
       orb.setAnimated(anim);
     }
-    $('miniExpand').addEventListener('click', async () => {
+    const expand = async () => {
       if (U.has('showMain')) {
         try { await U.call('showMain'); return; } catch { /* ниже запасной путь */ }
       }
       location.href = 'index.html' + location.search;
-    });
+    };
+    $('miniExpand').addEventListener('click', expand);
+    // Решение принимается только в главном окне: там видно, что именно разрешается (R3-04).
+    $('miniOpenApproval').addEventListener('click', expand);
     $('miniStop').addEventListener('click', () => U.call('stop').catch(() => {}));
     $('miniHide').addEventListener('click', () => U.call('closeMini').catch(() => {}));
-    for (const b of document.querySelectorAll('[data-decision]')) b.addEventListener('click', () => answer(b.dataset.decision));
     if (U.has('onEvent')) window.jarvis.onEvent(onEvent);
 
     // Последнее действие из журнала, чтобы строка не пустовала после запуска.

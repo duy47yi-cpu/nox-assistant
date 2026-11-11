@@ -16,14 +16,14 @@
   // replaceChildren без пустых значений: null иначе превращается в текст «null».
   const fill = (node, ...kids) => node.replaceChildren(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false && k !== ''));
 
-  const VIEWS = { dialog: 'Чат', deals: 'Дела', journal: 'История', commands: 'Команды', mcp: 'Подключения', account: 'Аккаунт', settings: 'Настройки' };
-  const VIEW_KEYS = ['dialog', 'commands', 'journal', 'mcp', 'settings'];
+  const VIEWS = { nox: 'Чат', dialog: 'Классический экран', deals: 'Дела', journal: 'Журнал', commands: 'Команды', mcp: 'Подключения', account: 'Аккаунт', settings: 'Настройки' };
+  const VIEW_KEYS = ['nox', 'commands', 'journal', 'mcp', 'settings'];
   const MODE_NAMES = { full: 'Полный доступ', ask: 'Спрашивать', auto: 'Авто-умный' };
   const MODE_SHORT = { full: 'Полный', ask: 'Спрашивать', auto: 'Авто' };
   const THEMES = window.JarvisTheme.IDS;
   const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
   const TIER_NAMES = { fast: 'Быстрая', smart: 'Умная' };
-  const SETTING_KEYS = ['voice', 'quiet', 'alwaysOnTop', 'desktopOverlay', 'alwaysListen', 'autoStart', 'screenAuto', 'memoryAuto', 'motion', 'dictation'];
+  const SETTING_KEYS = ['voice', 'quiet', 'alwaysOnTop', 'desktopOverlay', 'alwaysListen', 'autoStart', 'screenAuto', 'memoryAuto', 'motion', 'dictation', 'terseReplies'];
   const JOURNAL_LIMIT = 200;
   const MAX_FILES = 5;
   const MAX_PHRASES = 5;
@@ -44,12 +44,12 @@
   };
 
   const S = {
-    view: 'dialog',
+    view: 'nox',
     link: 'none',
     mode: null,
     hasKey: null,
     stateOk: null,
-    settings: { voice: false, quiet: false, alwaysOnTop: false, desktopOverlay: false, alwaysListen: false, autoStart: false, screenAuto: false, memoryAuto: true, motion: true, dictation: false },
+    settings: { voice: false, quiet: false, alwaysOnTop: false, desktopOverlay: false, alwaysListen: false, autoStart: false, screenAuto: false, memoryAuto: true, motion: true, dictation: false, terseReplies: true },
     tier: 'fast',
     workspace: '',
     folders: [],
@@ -218,7 +218,7 @@
   }
 
   function show(view) {
-    if (!VIEWS[view]) view = 'dialog';
+    if (!VIEWS[view]) view = 'nox';
     S.view = view;
     document.body.dataset.view = view;
     for (const v of $$('.view')) v.hidden = v.dataset.view !== view;
@@ -236,11 +236,17 @@
       safe('расширения', () => { if (window.JarvisExtensions) window.JarvisExtensions.load(); });
     }
     if (view === 'journal') reloadJournal();
+    // Экран Nox получает беседу и поле ввода; классический — возвращает их на место.
+    if (window.NoxScreen && typeof window.NoxScreen.onView === 'function') {
+      try { window.NoxScreen.onView(view); } catch (err) { console.error('[nox] перенос беседы:', err); }
+    }
     document.dispatchEvent(new CustomEvent('jarvis:view', { detail: view }));
     if (view === 'deals' || view === 'dialog') reloadDeals();
     placeOrb();
     if (view === 'commands') { loadCatalog().then(loadCommands); loadLibrary(); }
-    if (view === 'dialog') requestAnimationFrame(() => { if (!$('#chatInput').disabled) $('#chatInput').focus(); scrollFeed(true); });
+    if (view === 'nox' || view === 'dialog') {
+      requestAnimationFrame(() => { if (!$('#chatInput').disabled) $('#chatInput').focus(); scrollFeed(true); });
+    }
   }
 
   // ── Виджеты ───────────────────────────────────────────────────
@@ -502,7 +508,7 @@
       show(VIEW_KEYS[Number(e.key) - 1]);
     } else if ((k === 'l' || k === 'д') && !e.shiftKey) {
       e.preventDefault();
-      if (S.view !== 'dialog') show('dialog');
+      if (S.view !== 'nox') show('nox');
       requestAnimationFrame(() => $('#chatInput').focus());
     } else if ((k === 'n' || k === 'т') && !e.shiftKey && S.view === 'commands') {
       e.preventDefault();
@@ -1499,7 +1505,12 @@
   }
 
   // ── Подтверждения ─────────────────────────────────────────────
-  const A = { queue: [], busy: false, countdownTimer: null };
+  // Ответ привязан к показу (R3-01): у каждого показа свой номер (view.seq) и токен ядра (approval:shown).
+  // Кнопка отвечает только на id показа, при котором началось нажатие; смена показа гасит начатое нажатие.
+  // Ушедший запрос не подменяется следующим в том же диалоге: нужен явный «Показать следующий».
+  // sending — запросы, ответ на которые сейчас передаётся (R3-02: блокировка своя у каждого запроса).
+  const APPROVAL_ARM_MS = 700; // «Разрешить» включается не раньше токена ядра и этой паузы — вторая линия защиты
+  const A = { queue: [], sending: new Set(), view: null, viewSeq: 0, press: null, gate: false, countdownTimer: null, syncing: false, closedDuringSync: new Set() };
 
   // Обратный отсчёт до автоотмены: время приходит из ядра (autoCancelAt), окно только показывает.
   // Элемент строится из JS: разметку диалога в index.html не трогаем.
@@ -1565,7 +1576,9 @@
     if (!ev.id || A.queue.some((q) => q.id === ev.id)) return;
     A.queue.push(ev);
     updatePending();
-    showApproval();
+    // Диалог сам открывается только из закрытого состояния; открытый показ новым запросом не подменяется.
+    if (!$('#approvalDialog').open) showApprovalView(A.queue[0].id);
+    else refreshApproval();
   }
 
   function approvalDrop(id) {
@@ -1573,30 +1586,32 @@
     if (i < 0) return;
     A.queue.splice(i, 1);
     updatePending();
-    showApproval();
+    refreshApproval();
   }
 
   function approvalClear() {
     A.queue.length = 0;
     updatePending();
-    showApproval();
+    refreshApproval();
   }
 
   // Конец хода чата: его подтверждения уже решены или отменены. Запросы исполнителя задач (T.approvals)
   // с ходом чата не связаны и ждут владельца дальше — их не убираем.
-  function approvalClearChat() {
-    const keep = A.queue.filter((q) => T.approvals.has(q.id));
+  function approvalClearChat(runId) {
+    if (!runId) return;
+    const keep = A.queue.filter((q) => q.runId !== runId || T.approvals.has(q.id));
     if (keep.length === A.queue.length) return;
     A.queue.splice(0, A.queue.length, ...keep);
     updatePending();
-    showApproval();
+    refreshApproval();
   }
 
+  // Явное открытие запроса владельцем («Решить», «Показать следующий»).
   function openApproval(id) {
     const i = A.queue.findIndex((q) => q.id === id);
     if (i < 0) { toast('Запрос уже неактуален.'); return; }
     A.queue.unshift(A.queue.splice(i, 1)[0]);
-    showApproval();
+    showApprovalView(id);
   }
 
   function updatePending() {
@@ -1604,24 +1619,30 @@
     const badge = $('#pendingCount');
     badge.hidden = n === 0;
     badge.textContent = String(n);
-    const nav = $('[data-nav="dialog"]');
-    nav.setAttribute('aria-label', n ? 'Диалог, ждут вас: ' + n : 'Диалог');
+    const nav = $('[data-nav="nox"]');
+    if (nav) nav.setAttribute('aria-label', n ? 'Чат, ждут вас: ' + n : 'Чат');
     renderWaitTray();
   }
 
   // Ответ на конкретный запрос из списка (не только на первый в очереди).
   async function answerById(id, decision) {
-    if (!A.queue.some((q) => q.id === id)) return;
-    if (decision === 'reject') {
-      tracker.markRejected(id);
-      C.rejected.add(id);
-    }
+    const cur = A.queue.find((q) => q.id === id);
+    if (!cur) return;
     let ok = false;
+    let why = '';
     try {
-      const r = await call('respondApproval', id, decision);
+      const r = await Promise.race([
+        call('respondApproval', id, decision),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('ответ ядра не получен за 5 секунд')), 5000)),
+      ]);
       ok = !(r && r.ok === false);
-    } catch { ok = false; }
-    if (!ok) toast('Запрос уже неактуален.', 'error');
+      why = r && typeof r.reason === 'string' ? r.reason : '';
+    } catch (err) { why = errText(err); ok = false; }
+    if (!ok) { toast(why ? 'Не удалось передать ответ: ' + why : 'Не удалось передать ответ.', 'error'); return; }
+    if (decision === 'reject') {
+      tracker.markRejected(cur.callId || cur.id);
+      C.rejected.add(cur.callId || cur.id);
+    }
     approvalDrop(id);
   }
 
@@ -1631,20 +1652,91 @@
     return U.toolTitle(cur.name) + (brief ? ': ' + brief : '') + '?';
   }
 
-  function showApproval() {
+  // Кнопка «Показать следующий» строится из JS: разметку диалога не трогаем.
+  function ensureApprovalNext() {
+    let b = $('#apNext');
+    if (b) return b;
+    const actions = $('#approvalDialog .dialog-actions');
+    b = document.createElement('button');
+    b.id = 'apNext';
+    b.type = 'button';
+    b.className = 'btn btn-primary';
+    b.hidden = true;
+    b.textContent = 'Показать следующий';
+    b.addEventListener('click', () => { if (A.gate && A.queue.length) openApproval(A.queue[0].id); });
+    actions.appendChild(b);
+    return b;
+  }
+
+  function setApprovalGateMode(on) {
     const dlg = $('#approvalDialog');
-    const cur = A.queue[0];
-    if (!cur) {
-      stopApprovalCountdown();
-      if (dlg.open) dlg.close();
-      return;
-    }
-    const fresh = dlg.dataset.current !== String(cur.id);
-    dlg.dataset.current = String(cur.id);
+    for (const b of $$('[data-decision]', dlg)) b.hidden = on;
+    $('#apMeta').hidden = on;
+    $('#apDetails').hidden = on;
+    if (on) $('#apPreview').hidden = true;
+    ensureApprovalNext().hidden = !on;
+  }
+
+  function renderApprovalCount() {
     const n = A.queue.length;
     const count = $('#apQueue');
-    count.hidden = n < 2;
+    count.hidden = A.gate || n < 2;
     count.textContent = '1 из ' + n;
+  }
+
+  // Кнопки показа: отказ доступен сразу, «Разрешить» и «На сессию» — только после токена ядра и паузы.
+  function renderApprovalButtons() {
+    const v = A.view;
+    const sending = !v || A.sending.has(v.id);
+    for (const b of $$('#approvalDialog [data-decision]')) {
+      b.disabled = sending || (b.dataset.decision !== 'reject' && !v.armed);
+    }
+  }
+
+  function gateText() {
+    return 'Этот запрос больше не ждёт решения. Ждут ещё: ' + A.queue.length + '.';
+  }
+
+  // Показанный запрос ушёл (ответ, автоотмена, отмена ядром). Начатое нажатие гаснет, кнопок решения нет:
+  // следующий запрос владелец открывает сам, иначе клик, нацеленный на ушедший, попал бы в чужой (R3-01).
+  function showApprovalGate() {
+    const dlg = $('#approvalDialog');
+    A.viewSeq++;
+    A.view = null;
+    A.press = null;
+    A.gate = true;
+    stopApprovalCountdown();
+    const elc = $('#apCountdown');
+    if (elc) elc.hidden = true;
+    delete dlg.dataset.current;
+    setApprovalGateMode(true);
+    $('#apQuestion').textContent = gateText();
+    renderApprovalCount();
+    ensureApprovalNext().focus();
+  }
+
+  // Обновление без смены показа: счётчик и кнопки. Ушедший показ — в «закрыт», пустая очередь — закрыть.
+  function refreshApproval() {
+    const dlg = $('#approvalDialog');
+    if (!dlg.open) return;
+    if (!A.queue.length) { dlg.close(); return; }
+    if (A.view && !A.queue.some((q) => q.id === A.view.id)) { showApprovalGate(); return; }
+    if (A.gate) $('#apQuestion').textContent = gateText();
+    renderApprovalCount();
+    renderApprovalButtons();
+  }
+
+  // Новый показ запроса id: новый номер показа, прежнее нажатие и токен недействительны.
+  function showApprovalView(id) {
+    const dlg = $('#approvalDialog');
+    const cur = A.queue.find((q) => q.id === id);
+    if (!cur) { refreshApproval(); return; }
+    const seq = ++A.viewSeq;
+    A.view = { id: cur.id, seq, token: null, armed: false };
+    A.press = null;
+    A.gate = false;
+    dlg.dataset.current = String(cur.id);
+    setApprovalGateMode(false);
     $('#apQuestion').textContent = approvalQuestion(cur);
     $('#apTool').textContent = U.toolTitle(cur.name);
     const risk = $('#apRisk');
@@ -1680,52 +1772,118 @@
     }
     // Автоотмена: честно показываем, сколько осталось до отказа (30 с задаёт ядро).
     startApprovalCountdown(cur);
-    if (fresh) $('#apDetails').open = false;
-    for (const b of $$('[data-decision]', dlg)) b.disabled = false;
+    $('#apDetails').open = false;
     // Отправка, публикация и удаление: «На сессию» не предлагаем (см. loop.js, allowSession).
     $('#apSession').hidden = cur.allowSession === false;
+    renderApprovalCount();
+    renderApprovalButtons();
     if (!dlg.open) {
       const back = document.activeElement;
       A.returnFocus = back && back !== document.body ? back : null;
       try { dlg.showModal(); } catch { dlg.setAttribute('open', ''); }
     }
-    if (fresh) $('[data-decision="reject"]', dlg).focus();
+    $('[data-decision="reject"]', dlg).focus();
+    armApproval(seq);
   }
 
-  async function answerApproval(decision) {
-    const cur = A.queue[0];
-    if (!cur || A.busy) return;
-    A.busy = true;
-    for (const b of $$('#approvalDialog [data-decision]')) b.disabled = true;
-    if (decision === 'reject') {
-      tracker.markRejected(cur.id);
-      C.rejected.add(cur.id);
-    }
+  // Ядро запоминает показ и выдаёт токен; без токена «Разрешить» остаётся выключенным.
+  async function armApproval(seq) {
+    const id = A.view && A.view.id;
+    if (!id) return;
+    const pause = new Promise((resolve) => setTimeout(resolve, APPROVAL_ARM_MS));
+    let token = null;
+    try {
+      const r = await call('markApprovalShown', id);
+      token = r && r.ok === true && typeof r.token === 'string' ? r.token : null;
+    } catch { token = null; }
+    await pause;
+    if (!A.view || A.view.seq !== seq || !token) return;
+    A.view.token = token;
+    A.view.armed = true;
+    renderApprovalButtons();
+  }
+
+  async function answerApproval(decision, seq) {
+    const v = A.view;
+    if (!v || v.seq !== seq || A.sending.has(v.id)) return;
+    if (decision !== 'reject' && !v.armed) return;
+    const id = v.id;
+    const cur = A.queue.find((q) => q.id === id);
+    if (!cur) return;
+    A.sending.add(id);
+    renderApprovalButtons();
     let ok = false;
     let why = '';
     try {
-      const r = await call('respondApproval', cur.id, decision);
+      const r = await Promise.race([
+        call('respondApproval', id, decision, v.token),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('ответ ядра не получен за 5 секунд')), 5000)),
+      ]);
       ok = !(r && r.ok === false);
       why = r && typeof r.reason === 'string' ? r.reason : '';
-    } catch { ok = false; }
-    A.busy = false;
-    if (!ok) toast(why ? 'Запрос уже неактуален: ' + why : 'Запрос уже неактуален.', 'error');
-    approvalDrop(cur.id);
+    } catch (err) { why = errText(err); ok = false; }
+    A.sending.delete(id);
+    if (!ok) {
+      toast(why ? 'Не удалось передать решение: ' + why : 'Не удалось передать решение. Запрос остался в ожидании.', 'error');
+      refreshApproval();
+      // Событие о закрытии могло потеряться: сверяем с ядром и убираем снятый запрос (R3-03).
+      try {
+        const live = await call('listApprovals');
+        if (Array.isArray(live) && !live.some((e) => e.id === id)) approvalDrop(id);
+      } catch { /* ядро не ответило: карточка остаётся */ }
+      return;
+    }
+    if (decision === 'reject') {
+      tracker.markRejected(cur.callId || cur.id);
+      C.rejected.add(cur.callId || cur.id);
+    }
+    approvalDrop(id);
   }
 
   function initApproval() {
     const dlg = $('#approvalDialog');
-    for (const b of $$('[data-decision]', dlg)) b.addEventListener('click', () => answerApproval(b.dataset.decision));
-    // Esc в окне подтверждения = отказ.
-    dlg.addEventListener('cancel', (e) => { e.preventDefault(); answerApproval('reject'); });
+    ensureApprovalNext();
+    // Нажатие засчитывается показу, при котором оно началось (мышь — pointerdown, клавиатура — первый keydown).
+    // Клик без начала (экранный диктор) принимается, только если он доверенный и без мыши (detail 0).
+    for (const b of $$('[data-decision]', dlg)) {
+      const decision = b.dataset.decision;
+      b.addEventListener('pointerdown', () => { A.press = A.view && !b.disabled ? { seq: A.view.seq, decision } : null; });
+      b.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) A.press = A.view && !b.disabled ? { seq: A.view.seq, decision } : null;
+      });
+      b.addEventListener('click', (e) => {
+        const p = A.press;
+        A.press = null;
+        if (!A.view) return;
+        if (p) {
+          if (p.seq !== A.view.seq || p.decision !== decision) return;
+        } else if (!e.isTrusted || e.detail !== 0) return;
+        answerApproval(decision, A.view.seq);
+      });
+    }
+    // Esc в окне подтверждения = отказ показанному запросу; в «закрыт» — просто закрыть диалог.
+    dlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      if (A.view) answerApproval('reject', A.view.seq);
+      else dlg.close();
+    });
     // После закрытия фокус возвращается туда, где был.
     dlg.addEventListener('close', () => {
+      // Сам код закрывает диалог только без показанного запроса. Если показ ещё жив, диалог закрыл браузер:
+      // Esc без недавнего действия пользователя приходит без события cancel. Это тоже «Отклонить».
+      const dismissed = A.view && !A.sending.has(A.view.id) && A.queue.some((q) => q.id === A.view.id) ? A.view.id : null;
       stopApprovalCountdown();
       delete dlg.dataset.current;
+      A.viewSeq++;
+      A.view = null;
+      A.press = null;
+      A.gate = false;
+      setApprovalGateMode(false);
+      if (dismissed) answerById(dismissed, 'reject');
       const back = A.returnFocus;
       A.returnFocus = null;
       if (back && back.isConnected && !back.disabled) back.focus();
-      else if (S.view === 'dialog' && !$('#chatInput').disabled) $('#chatInput').focus();
+      else if ((S.view === 'nox' || S.view === 'dialog') && !$('#chatInput').disabled) $('#chatInput').focus();
     });
   }
 
@@ -1991,6 +2149,13 @@
     hideThinking();
     endText();
     if (C.act) renderActs();
+    // Действие могло не успеть остановиться: его поздний итог (afterStop) допишется в эту же строку.
+    // Строки помним по id «ход:шаг»: поздний итог может прийти уже после следующих ходов.
+    if (C.act) {
+      if (!C.lateRows) C.lateRows = new Map();
+      for (const [id, rec] of C.act.items) C.lateRows.set(id, { rec, acts: C.act });
+      while (C.lateRows.size > 50) C.lateRows.delete(C.lateRows.keys().next().value);
+    }
     C.act = null;
     C.turn = null;
     C.turnText = false;
@@ -2017,8 +2182,7 @@
     return U.toolTitle(e.tool) + (brief ? ': ' + brief : '');
   }
 
-  function renderActs() {
-    const act = C.act;
+  function renderActs(act = C.act) {
     if (!act) return;
     const items = [...act.items.values()].map((x) => x.entry);
     const pending = items.find((e) => e.status === 'pending');
@@ -2077,7 +2241,7 @@
       el('span', { class: 'act-name', text: U.toolTitle(e.tool) }),
       brief ? el('span', { class: 'act-args', title: U.argsBrief(e.args, 1000), text: brief }) : null,
       showSum ? el('span', { class: 'act-sum', title: sum, text: U.clip(sum, 160) }) : null,
-      e.status === 'pending' ? el('button', { class: 'btn btn-secondary btn-sm', type: 'button', text: 'Решить', onclick: () => openApproval(e.id) }) : null);
+      e.status === 'pending' ? el('button', { class: 'btn btn-secondary btn-sm', type: 'button', text: 'Решить', onclick: () => openApproval(e.approvalId || e.id) }) : null);
   }
 
   // Цепочка шагов текущего поручения под шаром: шаг за шагом, у каждого значок проверки.
@@ -2099,25 +2263,42 @@
 
   function chatTool(ev) {
     hideThinking();
-    let rec = C.act && C.act.items.get(ev.id);
-    if (ev.type === tool_result && ev.quiet) {
-      if (rec) dropActRow(ev.id, rec);
+    // У запроса разрешения свой одноразовый id; строка действия связана через callId.
+    const actionId = ev.runId && Number.isInteger(ev.step)
+      ? `${ev.runId}:${ev.step}`
+      : (ev.type === 'approval_request' && ev.callId ? ev.callId : ev.id);
+    // Итог действия, завершившегося после остановки хода, относится к строкам уже закрытого хода.
+    const late = ev.type === 'tool_result' && ev.afterStop === true && !(C.act && C.act.items.has(actionId));
+    const kept = late && C.lateRows ? C.lateRows.get(actionId) : null;
+    const acts = late ? (kept && kept.acts) : C.act;
+    let rec = late ? (kept && kept.rec) : (acts && acts.items.get(actionId));
+    if (late) {
+      if (!rec) return;
+      rec.entry.summary = ev.summary;
+      rec.entry.evidence = ev.evidence;
+      rec.entry.status = ev.hung === true ? 'unverified' : U.statusOfResult(ev.ok, ev.summary, false, ev.verified); // не ответило: исход неизвестен, а не «ошибка»
+      fillActRow(rec.li, rec.entry);
+      renderActs(acts);
+      return;
+    }
+    if (ev.type === 'tool_result' && ev.quiet) {
+      if (rec) dropActRow(actionId, rec);
       return;
     }
     if (!rec) {
       if (ev.type === 'tool_result') return;
       const act = ensureActs();
-      rec = { li: el('li', { class: 'act-row' }), entry: { id: ev.id, tool: ev.name, args: ev.args, status: 'running', summary: '' } };
-      act.items.set(ev.id, rec);
+      rec = { li: el('li', { class: 'act-row' }), entry: { id: actionId, tool: ev.name, args: ev.args, status: 'running', summary: '' } };
+      act.items.set(actionId, rec);
       act.list.append(rec.li);
     }
     const e = rec.entry;
-    if (ev.type === 'approval_request') e.status = 'pending';
+    if (ev.type === 'approval_request') { e.status = 'pending'; e.approvalId = ev.id; }
     else if (ev.type === 'tool_start') e.status = 'running';
     else if (ev.type === 'tool_result') {
       e.summary = ev.summary;
       e.evidence = ev.evidence;
-      e.status = U.statusOfResult(ev.ok, ev.summary, C.rejected.has(ev.id), ev.verified);
+      e.status = U.statusOfResult(ev.ok, ev.summary, C.rejected.has(actionId), ev.verified);
     }
     fillActRow(rec.li, e);
     renderActs();
@@ -2142,6 +2323,11 @@
     } else {
       text = (opts.prefix || 'Не получилось: ') + (raw || 'причина неизвестна');
       if (!/[.!?…]$/.test(text)) text += '.';
+      // В ходе уже были действия: «Повторить» запустило бы их заново (ZM-005).
+      if (retry && C.act && C.act.items.size > 0) {
+        retry = false;
+        text += ' Часть действий уже выполнялась, поэтому повтора кнопкой нет: проверьте результат и напишите, что продолжить.';
+      }
     }
     const again = C.lastSent;
     addToTurn(el('div', { class: 'err-block', role: 'alert' },
@@ -2669,7 +2855,7 @@
     if (!ta) return;
     const off = linkDown();
     ta.disabled = off;
-    ta.placeholder = off ? 'Нет связи с ядром' : S.stopped ? 'Аварийный стоп. Возобновите в трее.' : 'Напишите Джарвису…';
+    ta.placeholder = off ? 'Нет связи с ядром' : S.stopped ? 'Аварийный стоп. Возобновите в трее.' : 'введите текст…';
     $('#chatSend').disabled = off || !ta.value.trim();
     $('#composerBusy').hidden = !tracker.busy;
     $('#composerHint').hidden = tracker.busy || !feedEmpty();
@@ -2691,7 +2877,7 @@
       return true;
     }
     if (linkDown()) return false;
-    if (S.view !== 'dialog') show('dialog');
+    if (S.view !== 'nox') show('nox');
     C.doneSinceSend = false;
     C.lastSent = text;
     const files = C.files.slice();
@@ -3024,15 +3210,17 @@
     try {
       // Запрос подтверждения от исполнителя задачи: окно подтверждения — да, но ход чата он не занимает
       // (иначе поле ввода считалось бы занятым до конца следующего хода).
-      if (ev.type === 'approval_request' && T.approvals.has(ev.id)) {
+      if (ev.type === 'approval_request' && (T.approvals.has(ev.id) || ev.taskId)) {
+        if (ev.taskId) T.approvals.set(ev.id, ev.taskId);
         approvalPush(ev);
         return;
       }
       // Запрос решён или отменён (задача заблокирована, на паузе, отменена, завершена; стоп): карточку убираем.
       if (ev.type === 'approval_closed') {
+        if (A.syncing) A.closedDuringSync.add(ev.approvalId || ev.id);
         const own = T.approvals.has(ev.id);
         T.approvals.delete(ev.id);
-        approvalDrop(ev.id);
+        approvalDrop(ev.approvalId || ev.id);
         if (!own) tracker.handle(ev);
         return;
       }
@@ -3105,14 +3293,14 @@
               setTimeout(() => { live.textContent = 'Ход остановлен'; }, 50);
             }
             endTurn();
-            approvalClearChat();
+            approvalClearChat(ev.runId);
             if (S.view === 'journal') reloadJournal();
             reloadDeals();
             break;
           }
           endTurn();
           if (said) announceDone();
-          approvalClearChat();
+          approvalClearChat(ev.runId);
           if (S.view === 'journal') reloadJournal();
           reloadDeals();
           break;
@@ -3129,6 +3317,8 @@
   }
 
   // ── Команды: вкладки «Мои» и «Библиотека» ─────────────────────
+  // Разметка раздела пересобрана под дизайн-систему Nox (renderer/nox-commands.css):
+  // данные, IPC и правила остались прежними, изменились только строки отрисовки.
   const CMD_TABS = ['mine', 'lib'];
   let cmdTab = CMD_TABS.includes(store.get('cmdTab', 'mine')) ? store.get('cmdTab', 'mine') : 'mine';
 
@@ -3144,9 +3334,10 @@
     }
     $('#panelMine').hidden = tab !== 'mine';
     $('#panelLib').hidden = tab !== 'lib';
-    // «+ Новая» — только на «Моих», поиск — только в «Библиотеке».
+    // «Новая» и поиск «Моих» — только на «Моих», поиск библиотеки — только в «Библиотеке».
     $('#cmdNew').hidden = tab !== 'mine';
-    $('#libSearch').hidden = tab !== 'lib';
+    $('#cmdSearchWrap').hidden = tab !== 'mine';
+    $('#libSearchWrap').hidden = tab !== 'lib';
   }
 
   function initCmdTabs() {
@@ -3256,11 +3447,11 @@
           el('span', { class: 'lib-title', text: c.title }),
           riskNode(c.risk)),
         c.description ? el('p', { class: 'lib-desc', text: c.description }) : null,
-        c.phrases.length ? el('p', { class: 'lib-phrases', title: c.phrases.join(', ') }, c.phrases.slice(0, 3).map((p) => el('span', { class: 'phrase', text: `«${p}»` }))) : null,
+        c.phrases.length ? el('div', { class: 'lib-phrases', title: c.phrases.join(', ') }, c.phrases.slice(0, 3).map((p) => el('span', { class: 'phrase', text: `«${p}»` }))) : null,
         argsBox,
         res ? resultNode(res, 'run-line lib-result') : null),
       el('button', {
-        class: 'btn btn-secondary btn-sm lib-run' + (busy ? ' is-busy' : ''), type: 'button', disabled: busy || !has('libraryRun'),
+        class: 'lib-run' + (busy ? ' is-busy' : ''), type: 'button', disabled: busy || !has('libraryRun'),
         title: has('libraryRun') ? 'Запустить «' + c.title + '»' : 'Запуск недоступен в этой версии ядра',
         'aria-label': 'Запустить «' + c.title + '»',
         onclick: () => runLibrary(c),
@@ -3389,66 +3580,67 @@
 
   // Паки: карточки из ядра (describePacks). «Установить» ставит команды пака по клику и не запускает их.
   async function renderPacks() {
-    if (!has('installPack')) return;
-    let box = $('#cmdPacks');
-    if (!box) {
-      box = document.createElement('div');
-      box.id = 'cmdPacks';
-      box.className = 'set-section';
-      $('#panelMine').appendChild(box);
+    const listBox = $('#cmdPacksList');
+    const sub = $('#cmdPacksSub');
+    if (!listBox) return;
+    if (!has('installPack')) {
+      listBox.replaceChildren(el('p', { class: 'nox-packs-empty', text: 'Готовые паки недоступны в этой версии ядра.' }));
+      if (sub) sub.textContent = 'Установка по клику';
+      return;
     }
     let packs = [];
+    let err = '';
     try {
       const r = await call('installPack');
-      packs = r && r.ok && Array.isArray(r.packs) ? r.packs : [];
-    } catch (_) { /* список паков не обязателен */ }
-    box.hidden = !packs.length;
-    box.replaceChildren();
-    const h = document.createElement('h2');
-    h.className = 'field-label';
-    h.textContent = 'Готовые паки';
-    const intro = document.createElement('p');
-    intro.className = 'note';
-    intro.textContent = 'Наборы команд для программ. Ставятся только по кнопке и сами ничего не запускают: сначала откройте нужную программу.';
-    const grid = document.createElement('div');
-    grid.className = 'pack-grid';
-    for (const p of packs) grid.appendChild(packCard(p));
-    box.append(h, intro, grid);
+      if (r && r.ok && Array.isArray(r.packs)) packs = r.packs;
+      else if (r && r.ok === false) err = String(r.error || '');
+    } catch (e) { err = errText(e); }
+    if (sub) {
+      sub.textContent = packs.length
+        ? `${packs.length} ${U.plural(packs.length, ['пак', 'пака', 'паков'])} · установка по клику`
+        : 'Установка по клику';
+    }
+    if (err) {
+      listBox.replaceChildren(el('p', { class: 'nox-packs-empty', text: 'Паки не загрузились: ' + U.scrub(err) }));
+      return;
+    }
+    if (!packs.length) {
+      listBox.replaceChildren(el('p', { class: 'nox-packs-empty', text: 'Паков пока нет.' }));
+      return;
+    }
+    listBox.replaceChildren(...packs.map(packCard));
+    U.fillIcons(listBox);
   }
 
   function packCard(p) {
     const total = Number(p.total) || 0;
     const installed = Number(p.installed) || 0;
     const all = total > 0 && installed >= total;
-    const card = document.createElement('article');
-    card.className = 'pack-card';
-    card.dataset.pack = String(p.id || '');
+    const card = el('article', { class: 'pack-card', dataset: { pack: String(p.id || '') } });
     if (all) card.dataset.state = 'installed';
 
-    const head = document.createElement('div');
-    head.className = 'pack-head';
-    const title = document.createElement('h3');
-    title.textContent = p.title;
-    const count = document.createElement('span');
-    count.className = 'pack-count';
-    count.textContent = `${total} ${U.plural(total, ['команда', 'команды', 'команд'])}`;
-    head.append(title, count);
+    const head = el('div', { class: 'pack-head' }, el('h3', { text: p.title || String(p.id || '') }));
 
-    const desc = document.createElement('p');
-    desc.className = 'pack-desc';
-    desc.textContent = p.description;
-    const hint = document.createElement('p');
-    hint.className = 'pack-hint';
-    hint.textContent = p.hint;
-    const state = document.createElement('p');
-    state.className = 'pack-state';
-    state.textContent = all ? 'Все команды установлены' : installed ? `Установлено ${installed} из ${total}` : 'Не установлено';
+    const stateText = all ? 'Все установлено' : installed ? `Установлено ${installed} из ${total}` : 'Не установлено';
+    const meta = el('p', { class: 'pack-meta' },
+      el('span', { class: 'pack-count', text: `${total} ${U.plural(total, ['команда', 'команды', 'команд'])}` }),
+      el('span', { class: 'pack-meta-sep', 'aria-hidden': 'true', text: '·' }),
+      el('span', { class: 'pack-state', text: stateText }));
+    const hint = p.hint ? el('p', { class: 'pack-hint', text: p.hint }) : null;
 
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-secondary btn-sm pack-install';
-    btn.type = 'button';
-    btn.textContent = all ? 'Установлено' : installed ? 'Дополнить' : 'Установить';
-    btn.disabled = all;
+    const btn = el('button', { class: 'pack-install', type: 'button' });
+    if (all) {
+      btn.textContent = '✓ Установлено';
+      btn.disabled = true;
+      btn.title = 'Все команды пака уже установлены';
+    } else if (installed) {
+      btn.textContent = 'Дополнить';
+      btn.dataset.variant = 'secondary';
+      btn.title = `Установить недостающие команды пака «${p.title}»`;
+    } else {
+      btn.textContent = 'Установить';
+      btn.title = `Установить команды пака «${p.title}» — без запуска`;
+    }
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       try {
@@ -3462,30 +3654,21 @@
       }
     });
 
-    const details = document.createElement('details');
-    details.className = 'pack-list';
-    const summary = document.createElement('summary');
-    summary.textContent = 'Что внутри';
-    const list = document.createElement('ul');
-    for (const c of p.commands || []) {
-      const li = document.createElement('li');
-      const name = document.createElement('span');
-      name.textContent = c.name;
-      const phrase = document.createElement('span');
-      phrase.className = 'pack-phrase';
-      phrase.textContent = `«${c.phrase}»`;
-      li.append(name, phrase);
-      list.appendChild(li);
-    }
-    details.append(summary, list);
+    const details = el('details', { class: 'pack-list' },
+      el('summary', { text: 'Что внутри' }),
+      el('ul', {}, (p.commands || []).map((c) => el('li', {},
+        el('span', { text: c.name }),
+        el('span', { class: 'pack-phrase', text: `«${c.phrase}»` })))));
 
-    card.append(head, desc, hint, state, btn, details);
+    card.append(head, meta, hint, el('div', { class: 'pack-foot' }, details, btn));
     return card;
   }
 
   async function loadCommands() {
     const note = $('#cmdApiNote');
+    const loading = $('#cmdLoading');
     note.hidden = true;
+    if (loading) loading.hidden = false;
     if (!has('listCommands')) {
       K.list = [];
       note.textContent = 'Эта версия ядра ещё не хранит команды.';
@@ -3501,6 +3684,7 @@
         note.hidden = false;
       }
     }
+    if (loading) loading.hidden = true;
     $('#cmdNew').disabled = !has('saveCommand');
     renderCmdList();
     renderPacks();
@@ -3510,86 +3694,106 @@
   const stepsLabel = (n) => `${n} ${U.plural(n, ['шаг', 'шага', 'шагов'])}`;
   const phrasesLabel = (n) => `${n} ${U.plural(n, ['фраза', 'фразы', 'фраз'])}`;
 
-  // Раскрытые в дереве команды; живёт, пока открыто окно.
+  // Раскрытые в списке команды; живёт, пока открыто окно.
   const cmdOpen = new Set();
 
-  function cmdSteps(c, listId) {
-    return el('ol', { class: 'cmd-steps', id: listId },
-      c.steps.map((s) => {
-        const brief = U.argsBrief(s.args, 60);
-        return el('li', { class: 'cmd-step' },
-          el('span', { class: 'cmd-step-name', text: U.toolTitle(s.tool) }),
-          brief ? el('span', { class: 'cmd-step-args', text: brief }) : null);
-      }));
+  // Превью шагов в раскрытой строке: одна строка моноширинным, как в макете.
+  function cmdStepsPreview(c, listId) {
+    const box = el('div', { class: 'cmd-steps cmd-steps-preview', id: listId });
+    for (let i = 0; i < c.steps.length; i += 1) {
+      const s = c.steps[i];
+      const brief = U.argsBrief(s.args, 46);
+      box.append(el('span', { class: 'cmd-step' },
+        el('b', { text: `${i + 1}. ${s.tool || '—'}` }),
+        brief ? el('span', { text: brief }) : null));
+    }
+    if (!c.steps.length) box.append(el('span', { text: 'шагов нет' }));
+    return box;
   }
 
   function renderCmdList() {
     const list = $('#cmdList');
+    if (!list) return;
     const canSave = has('saveCommand');
     const canRun = has('runCommand');
-    const q = String(K.q || '').toLowerCase();
+    const q = String(K.q || '').trim().toLowerCase();
     const shown = q
       ? K.list.filter((c) => c.name.toLowerCase().includes(q)
         || (c.folder || '').toLowerCase().includes(q)
         || c.phrases.some((p) => p.toLowerCase().includes(q)))
       : K.list;
-    list.replaceChildren(...shown.map((c) => {
-      const name = c.name || 'Без имени';
-      const sw = el('input', { type: 'checkbox', role: 'switch', class: 'switch', 'aria-label': `Команда «${name}» включена` });
-      sw.checked = c.enabled;
-      sw.disabled = !canSave;
-      sw.title = c.enabled ? 'Включена' : 'Выключена';
-      sw.addEventListener('change', () => toggleCommand(c, sw));
-      const meta = stepsLabel(c.steps.length) + (c.lastRunAt ? ' · запускалась ' + U.relTime(c.lastRunAt) : '');
-      const open = cmdOpen.has(c.id);
-      const stepsId = `cmdSteps-${c.id}`;
-      const item = el('li', { class: 'cmd-item' + (c.enabled ? '' : ' is-off') + (open ? ' is-open' : '') + (K.selectedId !== null && c.id === K.selectedId ? ' is-selected' : '') },
-        el('button', {
-          class: 'icon-btn icon-btn-sm cmd-toggle', type: 'button', 'aria-expanded': String(open), 'aria-controls': stepsId,
-          'aria-label': `${open ? 'Свернуть' : 'Показать'} шаги «${name}»`, title: open ? 'Свернуть шаги' : 'Показать шаги',
-          onclick: () => {
-            if (open) cmdOpen.delete(c.id); else cmdOpen.add(c.id);
-            renderCmdList();
-            const again = document.querySelector(`[aria-controls="${stepsId}"]`);
-            if (again) again.focus();
-          },
-        }, icon('chevron')),
-        el('div', { class: 'cmd-main' },
-          el('span', { class: 'cmd-name-row' },
-            el('button', { class: 'cmd-name', type: 'button', text: name, title: 'Открыть в редакторе', onclick: () => selectCommand(c.id) }),
-            c.folder ? el('span', { class: 'tag tag-folder', text: c.folder }) : null,
-            c.hotkey ? el('span', { class: 'tag tag-key mono', text: c.hotkey }) : null,
-            c.origin === 'recorded' ? el('span', { class: 'tag', text: 'запись' }) : null,
-            c.origin === 'ai' ? el('span', { class: 'tag', text: 'из описания' }) : null,
-            c.enabled ? null : el('span', { class: 'tag', text: 'выключена' })),
-          el('span', { class: 'cmd-phrases', title: c.phrases.join(', ') },
-            c.phrases.length ? c.phrases.slice(0, 3).map((p) => el('span', { class: 'phrase', text: `«${p}»` })) : el('span', { class: 'muted', text: 'без фраз' })),
-          el('span', { class: 'cmd-meta', title: c.lastRunAt ? 'Запускалась ' + U.absTime(c.lastRunAt) : '', text: meta })),
-        el('div', { class: 'cmd-controls' },
-          el('button', {
-            class: 'btn btn-secondary btn-sm cmd-run', type: 'button', disabled: !canRun || !c.enabled,
-            title: !c.enabled ? 'Команда выключена' : !canRun ? 'Запуск недоступен в этой версии ядра' : 'Запустить сейчас',
-            'aria-label': `Запустить «${name}»`,
-            onclick: (e) => { e.stopPropagation(); runCommand(c, e.currentTarget); },
-          }, icon('play'), el('span', { class: 'btn-label', text: 'Запустить' })),
-          sw),
-        open ? cmdSteps(c, stepsId) : null);
-      item.addEventListener('click', (e) => {
-        if (e.target.closest('button, input, label')) return;
-        selectCommand(c.id);
-      });
-      return item;
-    }));
+    list.replaceChildren(...shown.map((c) => cmdRow(c, canSave, canRun)));
     U.fillIcons(list);
-    $('#cmdEmpty').hidden = shown.length > 0 || !$('#cmdApiNote').hidden;
+
+    const noteShown = !$('#cmdApiNote').hidden;
     $('#cmdCount').textContent = String(K.list.length);
-    const folders = [...new Set(K.list.map((c) => c.folder).filter(Boolean))];
+    const noResults = $('#cmdNoResults');
+    if (noResults) noResults.hidden = !(q && !shown.length && !noteShown);
+    const empty = $('#cmdEmpty');
+    if (empty) empty.hidden = noteShown || Boolean(q) || shown.length > 0;
     const tree = $('#cmdTreeNote');
-    if (tree) {
-      tree.textContent = folders.length ? `Папки: ${folders.join(', ')}` : '';
-      tree.hidden = !tree.textContent;
-    }
-    if (q && !shown.length) $('#cmdEmpty').hidden = false;
+    if (tree) { tree.textContent = ''; tree.hidden = true; }
+  }
+
+  function cmdRow(c, canSave, canRun) {
+    const name = c.name || 'Без имени';
+    const open = cmdOpen.has(c.id);
+    const stepsId = `cmdSteps-${c.id}`;
+    const sw = el('input', { type: 'checkbox', role: 'switch', class: 'switch', 'aria-label': `Команда «${name}» включена` });
+    sw.checked = c.enabled;
+    sw.disabled = !canSave;
+    sw.title = c.enabled ? 'Включена: срабатывает на фразу' : 'Выключена: не срабатывает на фразу';
+    sw.addEventListener('change', () => toggleCommand(c, sw));
+    const ORIGIN_WORD = { recorded: 'запись', ai: 'из описания', imported: 'импорт', sample: 'пример' };
+    const meta = [
+      c.folder || '',
+      c.hotkey || '',
+      stepsLabel(c.steps.length),
+      ORIGIN_WORD[c.origin] || '',
+      c.enabled ? '' : 'выключена',
+    ].filter(Boolean).join(' · ');
+    const item = el('li', {
+      class: 'cmd-item'
+        + (c.enabled ? '' : ' is-off')
+        + (open ? ' is-open' : '')
+        + (K.selectedId !== null && c.id === K.selectedId ? ' is-selected' : ''),
+    },
+    el('button', {
+      class: 'cmd-toggle', type: 'button', 'aria-expanded': String(open), 'aria-controls': stepsId,
+      'aria-label': `${open ? 'Свернуть' : 'Показать'} шаги «${name}»`, title: open ? 'Свернуть шаги' : 'Показать шаги',
+      onclick: () => {
+        if (open) cmdOpen.delete(c.id); else cmdOpen.add(c.id);
+        renderCmdList();
+        const again = document.querySelector(`[aria-controls="${stepsId}"]`);
+        if (again) again.focus();
+      },
+    }, icon('chevron')),
+    el('div', { class: 'cmd-main' },
+      el('div', { class: 'cmd-name-row' },
+        el('button', { class: 'cmd-name', type: 'button', text: name, title: 'Открыть в редакторе', onclick: () => selectCommand(c.id) })),
+      el('div', { class: 'cmd-phrases cmd-row-chips', title: c.phrases.join(', ') },
+        c.phrases.length
+          ? c.phrases.slice(0, 3).map((p) => el('span', { class: 'phrase', text: p }))
+          : el('span', { class: 'muted', text: 'без фраз' })),
+      el('div', {
+        class: 'cmd-meta',
+        title: c.lastRunAt ? 'Запускалась ' + U.absTime(c.lastRunAt) : '',
+        text: meta,
+      }),
+      open ? cmdStepsPreview(c, stepsId) : null),
+    el('div', { class: 'cmd-controls' },
+      el('button', {
+        class: 'cmd-run', type: 'button', disabled: !canRun || !c.enabled,
+        title: !c.enabled ? 'Команда выключена' : !canRun ? 'Запуск недоступен в этой версии ядра' : 'Запустить сейчас',
+        'aria-label': `Запустить «${name}»`,
+        onclick: (e) => { e.stopPropagation(); runCommand(c, e.currentTarget); },
+      }, el('span', { class: 'btn-label', text: 'Запустить' })),
+      sw));
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('button, input, label')) return;
+      selectCommand(c.id);
+    });
+    return item;
   }
 
   async function confirmLeave() {
@@ -3644,7 +3848,10 @@
   function markDirty() {
     K.dirty = true;
     $('#cmdDirty').hidden = false;
+    const res = $('#cmdRunResult');
+    if (res) { res.hidden = true; res.replaceChildren(); }
     renderEditorButtons();
+    renderEditorSide();
   }
 
   function showCmdError(text, focusEl) {
@@ -3664,6 +3871,16 @@
     if (S.view === 'commands') setCrumbSub(K.draft ? t : '');
   }
 
+  // Подписи полей аргументов: технический ключ остаётся в hint, человеку — слово.
+  const ARG_LABELS = {
+    name: 'Приложение',
+    ms: 'Задержка, мс',
+    keys: 'Клавиши',
+    window: 'Окно',
+    text: 'Текст',
+    percent: 'Громкость, %',
+  };
+
   function renderEditor() {
     const d = K.draft;
     $('#cmdEditor').hidden = !d;
@@ -3677,15 +3894,17 @@
     const hotkey = $('#cmdHotkey');
     if (hotkey) hotkey.value = d.hotkey || '';
     const origin = $('#cmdOrigin');
-    if (origin) {
-      const words = { manual: 'Создана вручную', recorded: 'Записана с ваших действий', ai: 'Собрана из описания', sample: 'Готовый пример' };
-      origin.textContent = words[d.origin] || '';
-      origin.hidden = !origin.textContent;
+    const originText = $('#cmdOriginText');
+    if (origin && originText) {
+      const words = { manual: 'Создана вручную', recorded: 'Записана с ваших действий', ai: 'Собрана из описания', sample: 'Готовый пример', imported: 'Импортирована из файла' };
+      originText.textContent = words[d.origin] || '';
+      origin.hidden = !originText.textContent;
     }
     const warn = $('#cmdWarnings');
-    if (warn) {
+    const warnText = $('#cmdWarningsText');
+    if (warn && warnText) {
       const list = Array.isArray(d.warnings) ? d.warnings.filter(Boolean) : [];
-      warn.textContent = list.length ? 'Проверьте перед сохранением: ' + list.join('; ') : '';
+      warnText.textContent = list.length ? 'Проверьте перед сохранением: ' + list.join('; ') : '';
       warn.hidden = !list.length;
     }
     showCmdError('');
@@ -3693,18 +3912,24 @@
     renderPhrases();
     renderSteps();
     renderEditorButtons();
+    renderEditorSide();
   }
 
   function renderEditorButtons() {
     const d = K.draft;
     if (!d) return;
-    $('#cmdSave').disabled = !has('saveCommand');
+    const save = $('#cmdSave');
+    if (save) save.disabled = !has('saveCommand');
     const run = $('#cmdRun');
-    run.disabled = d.id === null || K.dirty || !has('runCommand');
-    run.title = d.id === null || K.dirty ? 'Сначала сохраните команду' : 'Запустить сейчас';
+    if (run) {
+      run.disabled = d.id === null || K.dirty || !has('runCommand');
+      run.title = d.id === null || K.dirty ? 'Сначала сохраните команду' : 'Запустить сейчас';
+    }
     const del = $('#cmdDelete');
-    del.hidden = d.id === null;
-    del.disabled = !has('deleteCommand');
+    if (del) {
+      del.hidden = d.id === null;
+      del.disabled = !has('deleteCommand');
+    }
   }
 
   function renderPhrases() {
@@ -3719,7 +3944,7 @@
     const full = d.phrases.length >= MAX_PHRASES;
     $('#cmdPhraseInput').disabled = full;
     $('#cmdPhraseAdd').disabled = full;
-    $('#cmdPhraseInput').placeholder = full ? 'Не больше 5 фраз' : 'Новая фраза';
+    $('#cmdPhraseInput').placeholder = full ? 'Не больше 5 фраз' : 'Добавить фразу';
   }
 
   function addPhrase() {
@@ -3755,23 +3980,34 @@
     note.hidden = !K.catalogNote;
     $('#cmdSteps').replaceChildren(...d.steps.map((s, i) => stepNode(s, i, d.steps.length)));
     $('#cmdStepCount').textContent = `${d.steps.length} / ${MAX_STEPS}`;
-    $('#cmdStepAdd').disabled = d.steps.length >= MAX_STEPS;
+    const add = $('#cmdStepAdd');
+    add.disabled = d.steps.length >= MAX_STEPS;
+    add.title = d.steps.length >= MAX_STEPS ? `Достигнут лимит ${MAX_STEPS} шагов` : 'Выбрать действие для нового шага';
+    renderEditorSide();
   }
 
   function stepNode(step, i, total) {
     const { tool, props, required } = schemaOf(step.tool);
     const sel = el('select', { class: 'input', 'aria-label': `Шаг ${i + 1}: инструмент` });
-    sel.append(el('option', { value: '', text: 'Выберите инструмент…' }));
+    sel.append(el('option', { value: '', text: 'Действие…' }));
     for (const t of K.catalog) {
-      sel.append(el('option', { value: t.name, text: U.toolTitle(t.name) }));
+      sel.append(el('option', { value: t.name, text: t.name }));
     }
-    if (step.tool && !tool) sel.append(el('option', { value: step.tool, text: 'Инструмент недоступен' }));
+    if (step.tool && !tool) sel.append(el('option', { value: step.tool, text: step.tool }));
     sel.value = step.tool;
-    sel.addEventListener('change', () => {
-      const next = schemaOf(sel.value);
+    sel.addEventListener('change', async () => {
+      const nextName = sel.value;
+      const next = schemaOf(nextName);
       const kept = {};
       for (const k of Object.keys(next.props)) if (k in step.args) kept[k] = step.args[k];
-      step.tool = sel.value;
+      const lost = Object.keys(step.args).filter((k) => !(k in next.props)
+        && step.args[k] !== undefined && step.args[k] !== null && step.args[k] !== '');
+      if (lost.length) {
+        sel.value = step.tool;
+        const ok = await ask('Сменить действие?', `Смена действия удалит заполненные поля: ${lost.join(', ')}.`, 'Сменить', 'Оставить');
+        if (!ok) { renderSteps(); return; }
+      }
+      step.tool = nextName;
       step.args = kept;
       renderSteps();
       markDirty();
@@ -3793,16 +4029,22 @@
     if (!tool) keys = Object.keys(step.args);
     for (const key of keys) args.append(argField(step, key, tool ? props[key] || {} : { type: 'string' }, required.includes(key), i));
 
+    const title = step.tool
+      ? (tool ? U.toolTitle(step.tool) : 'Инструмент недоступен')
+      : 'Действие не выбрано';
+
     return el('li', { class: 'step' },
       el('div', { class: 'step-head' },
         el('span', { class: 'step-num', text: String(i + 1) }),
         sel,
+        el('span', { class: 'step-title', title, text: title }),
         tool && /^T[23]$/.test(tool.risk || '') ? riskNode(tool.risk) : null,
+        !tool && step.tool ? el('span', { class: 'step-unavailable', text: 'инструмент недоступен' }) : null,
         el('div', { class: 'step-tools' },
-          el('button', { class: 'icon-btn icon-btn-sm', type: 'button', 'data-move': 'up', title: 'Выше', 'aria-label': `Шаг ${i + 1} выше`, disabled: i === 0, onclick: () => move(-1) }, icon('up')),
-          el('button', { class: 'icon-btn icon-btn-sm', type: 'button', 'data-move': 'down', title: 'Ниже', 'aria-label': `Шаг ${i + 1} ниже`, disabled: i === total - 1, onclick: () => move(1) }, icon('down')),
+          el('button', { class: 'icon-btn', type: 'button', 'data-move': 'up', title: 'Выше', 'aria-label': `Шаг ${i + 1} выше`, disabled: i === 0, onclick: () => move(-1) }, icon('up')),
+          el('button', { class: 'icon-btn', type: 'button', 'data-move': 'down', title: 'Ниже', 'aria-label': `Шаг ${i + 1} ниже`, disabled: i === total - 1, onclick: () => move(1) }, icon('down')),
           el('button', {
-            class: 'icon-btn icon-btn-sm', type: 'button', title: 'Удалить шаг', 'aria-label': `Удалить шаг ${i + 1}`,
+            class: 'icon-btn', type: 'button', title: 'Удалить шаг', 'aria-label': `Удалить шаг ${i + 1}`,
             onclick: () => { d.steps.splice(i, 1); renderSteps(); markDirty(); },
           }, icon('x')))),
       tool && tool.description ? el('p', { class: 'step-desc', text: tool.description }) : null,
@@ -3813,11 +4055,13 @@
     const id = `arg-${stepIndex}-${key}`.replace(/[^\w-]/g, '_');
     const type = Array.isArray(spec.type) ? spec.type[0] : spec.type;
     const label = el('label', { class: 'arg-label', for: id },
-      el('span', { class: 'mono', text: key }),
+      el('span', { text: ARG_LABELS[key] || key }),
       req ? el('span', { class: 'req', 'aria-hidden': 'true', text: '*' }) : null);
     const hints = [];
+    if (type === 'integer' || type === 'number') {
+      if (spec.minimum !== undefined && spec.maximum !== undefined) hints.push(`от ${spec.minimum} до ${spec.maximum}`);
+    }
     if (spec.description) hints.push(spec.description);
-    if (spec.minimum !== undefined && spec.maximum !== undefined) hints.push(`от ${spec.minimum} до ${spec.maximum}`);
     const hint = hints.length ? el('span', { class: 'arg-hint', text: hints.join(' · ') }) : null;
     const cur = step.args[key];
     const set = (v) => {
@@ -3861,6 +4105,43 @@
     return el('div', { class: 'arg' + (long ? ' arg-wide' : '') }, label, inp, hint);
   }
 
+  // Готовность одного шага: та же проверка, что при сохранении, но по шагу.
+  function stepReadiness(step, i) {
+    if (!step.tool) return { state: 'warn', text: 'выберите действие' };
+    const { tool, required } = schemaOf(step.tool);
+    if (!tool) return { state: 'err', text: 'инструмент недоступен' };
+    const missing = required.filter((k) => {
+      const v = step.args[k];
+      return v === undefined || v === null || v === '';
+    });
+    if (missing.length) return { state: 'warn', text: 'заполните: ' + missing.join(', ') };
+    return { state: 'ok', text: 'готов к сохранению' };
+  }
+
+  // Правая колонка редактора: что уже готово к сохранению. Это подсказка, не запуск.
+  function renderEditorSide() {
+    const d = K.draft;
+    const box = $('#cmdSideReady');
+    if (!d || !box) return;
+    const rows = d.steps.map((s, i) => {
+      const r = stepReadiness(s, i);
+      const brief = U.argsBrief(s.args, 34);
+      const titleText = `${i + 1}. ${s.tool || '—'}${brief ? ' ' + brief : ''}`;
+      return el('li', { class: 'nox-ready-item' },
+        el('span', { class: 'nox-ready-step' },
+          el('span', { class: 'nox-dot', dataset: { state: r.state }, 'aria-hidden': 'true' }),
+          el('span', { class: 'cmd-title', title: titleText, text: titleText })),
+        el('span', { class: 'nox-ready-state', dataset: { state: r.state }, text: r.text }));
+    });
+    box.replaceChildren(...(rows.length
+      ? rows
+      : [el('li', { class: 'nox-ready-item' }, el('p', { class: 'nox-result-empty', text: 'Шагов пока нет. Добавьте действие.' }))]));
+    const result = $('#cmdRunResult');
+    box.hidden = Boolean(result && !result.hidden);
+    const sub = $('#cmdSideSub');
+    if (sub) sub.textContent = result && !result.hidden ? 'Текст шагов, без запуска' : 'Без запуска — только текст шагов';
+  }
+
   // Ошибки проверки: тексты раздела 9; первое ошибочное поле получает фокус.
   function validateDraft(d) {
     const errs = [];
@@ -3872,18 +4153,18 @@
       const n = i + 1;
       const stepEl = () => $$('#cmdSteps .step')[i];
       if (!s.tool) { add(`Заполните: шаг ${n} — инструмент.`, () => stepEl() && $('select', stepEl())); return; }
-      const { tool, props, required } = schemaOf(s.tool);
+      const { tool, required } = schemaOf(s.tool);
       if (!tool) return;
       const fieldEl = (k) => () => $('#' + CSS.escape(`arg-${i}-${k}`.replace(/[^\w-]/g, '_')));
       const missing = required.filter((k) => { const v = s.args[k]; return v === undefined || v === null || v === ''; });
-      if (missing.length) add(`Заполните: шаг ${n} — ${missing.map((k) => '«' + k + '»').join(', ')}.`, fieldEl(missing[0]));
-      for (const [k, spec] of Object.entries(props)) {
+      if (missing.length) add(`Заполните: шаг ${n} — ${missing.map((k) => '«' + (ARG_LABELS[k] || k) + '»').join(', ')}.`, fieldEl(missing[0]));
+      for (const [k, spec] of Object.entries(schemaOf(s.tool).props)) {
         const v = s.args[k];
         if (typeof v !== 'number') continue;
-        if (!Number.isFinite(v)) add(`Шаг ${n}: «${k}» — нужно число.`, fieldEl(k));
-        else if (spec.type === 'integer' && !Number.isInteger(v)) add(`Шаг ${n}: «${k}» — нужно целое число.`, fieldEl(k));
-        else if (spec.minimum !== undefined && v < spec.minimum) add(`Шаг ${n}: «${k}» — не меньше ${spec.minimum}.`, fieldEl(k));
-        else if (spec.maximum !== undefined && v > spec.maximum) add(`Шаг ${n}: «${k}» — не больше ${spec.maximum}.`, fieldEl(k));
+        if (!Number.isFinite(v)) add(`Шаг ${n}: «${ARG_LABELS[k] || k}» — нужно число.`, fieldEl(k));
+        else if (spec.type === 'integer' && !Number.isInteger(v)) add(`Шаг ${n}: «${ARG_LABELS[k] || k}» — нужно целое число.`, fieldEl(k));
+        else if (spec.minimum !== undefined && v < spec.minimum) add(`Шаг ${n}: «${ARG_LABELS[k] || k}» — не меньше ${spec.minimum}.`, fieldEl(k));
+        else if (spec.maximum !== undefined && v > spec.maximum) add(`Шаг ${n}: «${ARG_LABELS[k] || k}» — не больше ${spec.maximum}.`, fieldEl(k));
       }
     });
     return errs;
@@ -3905,6 +4186,7 @@
     box.replaceChildren(
       el('p', { class: 'run-line', text: `Без запуска. Шагов: ${lines.length}` }),
       el('ol', { class: 'cmd-steps' }, lines.map((l) => el('li', { class: 'cmd-step', text: l.replace(/^\d+\.\s/, '') }))));
+    renderEditorSide();
   }
 
   async function saveDraft() {
@@ -3960,8 +4242,10 @@
 
   function disarmDelete() {
     clearTimeout(K.armTimer);
-    $('#cmdDelete').classList.remove('is-armed');
-    $('#cmdDeleteText').textContent = 'Удалить';
+    const del = $('#cmdDelete');
+    if (del) del.classList.remove('is-armed');
+    const text = $('#cmdDeleteText');
+    if (text) text.textContent = 'Удалить';
   }
 
   async function deleteDraft() {
@@ -4031,6 +4315,7 @@
       const box = $('#cmdRunResult');
       fill(box, resultNode(head, 'run-line run-head'), results.length ? el('ul', {}, resultLines(results)) : null);
       box.hidden = false;
+      renderEditorSide();
     }
     toast(`«${cmd.name}»: ${head.text.charAt(0).toLowerCase() + head.text.slice(1)}`, head.ok ? 'ok' : 'error');
     if (has('listCommands')) {
@@ -4063,9 +4348,178 @@
     renderCmdList();
   }
 
+  // ── Выбор действия для шага ───────────────────────────────────
+  // Список — из tools:catalog (сервер отдаёт только разрешённые EDITOR_STEP_TOOLS),
+  // категории — локальные подписи к этим инструментам. Ничего не запускается.
+  const PICK = { open: false, selected: null, cat: 'all', q: '' };
+  const PICK_CATS = [
+    { id: 'all', title: 'Все' },
+    { id: 'apps', title: 'Программы', tools: ['app_open'] },
+    { id: 'keys', title: 'Клавиши', tools: ['ui_keys'] },
+    { id: 'time', title: 'Время', tools: ['wait'] },
+    { id: 'voice', title: 'Голос', tools: ['speak'] },
+    { id: 'sound', title: 'Звук', tools: ['volume_set'] },
+    { id: 'other', title: 'Другое', tools: [] },
+  ];
+  const PICK_ICON = { app_open: 'window', ui_keys: 'key', wait: 'hourglass', speak: 'mic', volume_set: 'volume' };
+
+  function pickerCatOf(name) {
+    const found = PICK_CATS.find((c) => c.tools && c.tools.includes(name));
+    return found ? found.id : 'other';
+  }
+
+  function pickerCategories() {
+    const counts = new Map();
+    for (const t of K.catalog) {
+      const cat = pickerCatOf(t.name);
+      counts.set(cat, (counts.get(cat) || 0) + 1);
+    }
+    return PICK_CATS
+      .filter((c) => c.id === 'all' || (counts.get(c.id) || 0) > 0)
+      .map((c) => ({ ...c, count: c.id === 'all' ? K.catalog.length : (counts.get(c.id) || 0) }));
+  }
+
+  function pickerTools() {
+    const q = PICK.q.toLowerCase();
+    return K.catalog.filter((t) => {
+      if (PICK.cat !== 'all' && pickerCatOf(t.name) !== PICK.cat) return false;
+      if (!q) return true;
+      return (t.name + ' ' + U.toolTitle(t.name) + ' ' + (t.description || '')).toLowerCase().includes(q);
+    });
+  }
+
+  function pickerMarkup() {
+    const cats = pickerCategories();
+    const list = pickerTools();
+    const catsBox = $('#npCats');
+    const listBox = $('#npList');
+    if (!catsBox || !listBox) return;
+    catsBox.replaceChildren(...cats.map((c) => el('button', {
+      class: 'nox-picker-cat', type: 'button', role: 'tab', 'aria-current': String(PICK.cat === c.id),
+      onclick: () => { PICK.cat = c.id; pickerMarkup(); },
+    }, el('span', { text: c.title }), el('span', { class: 'nox-picker-count', text: String(c.count) }))));
+
+    if (!list.length) {
+      listBox.replaceChildren(el('p', { class: 'nox-picker-empty', text: PICK.q ? 'Ничего не нашлось.' : 'В каталоге нет действий.' }));
+      PICK.selected = null;
+    } else {
+      listBox.replaceChildren(...list.map((t) => {
+        const item = el('button', {
+          class: 'nox-picker-item', type: 'button', role: 'option',
+          'aria-selected': String(PICK.selected === t.name),
+          'data-tool': t.name,
+          onclick: () => { PICK.selected = t.name; pickerMarkup(); },
+          ondblclick: () => addPickedTool(t.name),
+        },
+        icon(PICK_ICON[t.name] || 'bolt'),
+        el('span', { class: 'nox-picker-item-body' },
+          el('span', { class: 'nox-picker-item-name', text: U.toolTitle(t.name) }),
+          el('span', { class: 'nox-picker-item-desc', title: t.description || '', text: t.name + (t.description ? ' · ' + U.clip(t.description, 130) : '') })));
+        return item;
+      }));
+    }
+    U.fillIcons(listBox);
+    const add = $('#npAdd');
+    add.disabled = !PICK.selected;
+    add.textContent = PICK.selected ? `Добавить «${U.toolTitle(PICK.selected)}»` : 'Добавить';
+  }
+
+  function openActionPicker() {
+    const d = K.draft;
+    if (!d) return;
+    if (d.steps.length >= MAX_STEPS) { showCmdError(`Достигнут предел ${MAX_STEPS} шагов.`, $('#cmdStepAdd')); return; }
+    PICK.open = true;
+    PICK.selected = null;
+    PICK.cat = 'all';
+    PICK.q = '';
+    const search = $('#npSearch');
+    if (search) search.value = '';
+    pickerMarkup();
+    const dlg = $('#cmdActionDialog');
+    if (dlg && !dlg.open) {
+      try { dlg.showModal(); } catch { dlg.setAttribute('open', ''); }
+    }
+    if (search) search.focus();
+  }
+
+  function closeActionPicker(back) {
+    PICK.open = false;
+    const dlg = $('#cmdActionDialog');
+    if (dlg && dlg.open) dlg.close();
+    if (back) $('#cmdStepAdd')?.focus();
+  }
+
+  function addPickedTool(name) {
+    const d = K.draft;
+    const tool = name || PICK.selected;
+    if (!d || !tool) return;
+    if (d.steps.length >= MAX_STEPS) { closeActionPicker(true); showCmdError(`Достигнут предел ${MAX_STEPS} шагов.`, $('#cmdStepAdd')); return; }
+    d.steps.push({ tool, args: {} });
+    closeActionPicker(false);
+    renderSteps();
+    markDirty();
+    const idx = d.steps.length - 1;
+    const { required } = schemaOf(tool);
+    const key = required[0];
+    let focusEl = null;
+    if (key) focusEl = $('#' + CSS.escape(`arg-${idx}-${key}`.replace(/[^\w-]/g, '_')));
+    if (!focusEl) {
+      const steps = $$('#cmdSteps .step');
+      focusEl = steps[idx] ? $('select', steps[idx]) : null;
+    }
+    if (focusEl) {
+      focusEl.focus();
+      if (typeof focusEl.scrollIntoView === 'function') focusEl.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function pickerKey(e) {
+    if (!PICK.open) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeActionPicker(true); return; }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (PICK.selected) addPickedTool(PICK.selected);
+      return;
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const items = $$('#npList .nox-picker-item', document);
+    if (!items.length) return;
+    e.preventDefault();
+    const at = items.findIndex((x) => x.dataset.tool === PICK.selected);
+    let next = e.key === 'ArrowDown' ? at + 1 : at - 1;
+    if (at < 0) next = 0;
+    if (next < 0) next = items.length - 1;
+    if (next >= items.length) next = 0;
+    PICK.selected = items[next].dataset.tool;
+    pickerMarkup();
+    const again = $(`#npList .nox-picker-item[data-tool="${CSS.escape(PICK.selected)}"]`);
+    if (again) again.scrollIntoView({ block: 'nearest' });
+  }
+
+  function initActionPicker() {
+    const dlg = $('#cmdActionDialog');
+    if (!dlg) return;
+    $('#npCancel').addEventListener('click', () => closeActionPicker(true));
+    $('#npClose').addEventListener('click', () => closeActionPicker(true));
+    $('#npAdd').addEventListener('click', () => addPickedTool(PICK.selected));
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeActionPicker(true); });
+    dlg.addEventListener('keydown', pickerKey);
+    $('#npSearch').addEventListener('input', (e) => {
+      PICK.q = e.target.value.trim();
+      PICK.cat = 'all';
+      pickerMarkup();
+    });
+  }
+
   function initCommands() {
     $('#cmdNew').addEventListener('click', newCommand);
     $('#cmdEmptyNew').addEventListener('click', newCommand);
+    $('#cmdResetSearch')?.addEventListener('click', () => {
+      K.q = '';
+      const search = $('#cmdSearch');
+      if (search) { search.value = ''; search.focus(); }
+      renderCmdList();
+    });
     initCmdTabs();
     $('#cmdBack').addEventListener('click', closeEditor);
     $('#cmdCancel').addEventListener('click', closeEditor);
@@ -4084,15 +4538,7 @@
         markDirty();
       }
     });
-    $('#cmdStepAdd').addEventListener('click', () => {
-      const d = K.draft;
-      if (!d || d.steps.length >= MAX_STEPS) return;
-      d.steps.push({ tool: '', args: {} });
-      renderSteps();
-      markDirty();
-      const sels = $$('#cmdSteps select');
-      if (sels.length) sels[sels.length - 1].focus();
-    });
+    $('#cmdStepAdd').addEventListener('click', openActionPicker);
     $('#cmdCheck').addEventListener('click', showPreview);
     $('#cmdEditor').addEventListener('submit', (e) => { e.preventDefault(); saveDraft(); });
     $('#cmdRun').addEventListener('click', (e) => {
@@ -4100,6 +4546,7 @@
       runCommand(c, e.currentTarget, true);
     });
     $('#cmdDelete').addEventListener('click', deleteDraft);
+    initActionPicker();
   }
 
   // ── Импорт и экспорт команд, запись действий ──────────────────
@@ -4160,26 +4607,44 @@
     if (has('listCommands')) await loadCommands();
   }
 
+  // ── Запись действий ───────────────────────────────────────────
   const REC = { steps: [] };
 
   function renderRecordSteps() {
     const list = $('#cmdRecordSteps');
     if (!list) return;
+    if (!REC.steps.length) {
+      list.replaceChildren(el('li', { class: 'nox-recording-empty' },
+        icon('hourglass'),
+        el('span', { text: 'Пока ничего не записано. Выполните действия в программах — шаги появятся здесь.' })));
+      return;
+    }
     list.replaceChildren(...REC.steps.map((s, i) => el('li', { class: 'cmd-step' },
       el('span', { class: 'step-num', text: String(i + 1) }),
       el('span', { class: 'cmd-step-name', text: U.toolTitle(s.tool) }),
       s.warnings && s.warnings.length ? el('span', { class: 'muted', text: s.warnings.join('; ') }) : null)));
   }
 
+  // Кнопка «Записать» на время записи выключена: повторный старт ничего не делает.
+  function setRecordButton(active) {
+    const btn = $('#cmdRecord');
+    if (!btn) return;
+    btn.disabled = active;
+    btn.title = active ? 'Запись идёт: остановите её кнопкой в панели записи' : 'Записать действия и превратить их в команду';
+  }
+
   async function startRecording() {
+    if (K.recording) return;
     if (!has('recordStart')) { toast('Эта версия ядра не умеет записывать действия.', 'error'); return; }
     let r;
     try { r = await call('recordStart'); } catch (e) { toast('Запись не началась: ' + errText(e), 'error'); return; }
     if (!r || r.ok === false) { toast('Запись не началась: ' + U.scrub((r && r.error) || 'причина неизвестна'), 'error'); return; }
     K.recording = true;
     REC.steps = [];
+    $('#commands').classList.add('is-recording');
     $('#cmdRecordPanel').hidden = false;
     $('#cmdRecordError').hidden = true;
+    setRecordButton(true);
     renderRecordSteps();
     toast('Запись идёт: выполните действия, затем «Остановить и открыть черновик».', 'ok');
   }
@@ -4188,7 +4653,9 @@
     let r;
     try { r = await call('recordStop'); } catch (e) { toast('Запись не остановилась: ' + errText(e), 'error'); return; }
     K.recording = false;
+    $('#commands').classList.remove('is-recording');
     $('#cmdRecordPanel').hidden = true;
+    setRecordButton(false);
     if (!r || r.ok === false) { toast('Запись не остановилась: ' + U.scrub((r && r.error) || 'причина неизвестна'), 'error'); return; }
     const d = r.draft || {};
     K.draft = {
@@ -4215,7 +4682,9 @@
     try { await call('recordCancel'); } catch { /* запись и так не идёт */ }
     K.recording = false;
     REC.steps = [];
+    $('#commands').classList.remove('is-recording');
     $('#cmdRecordPanel').hidden = true;
+    setRecordButton(false);
     toast('Запись отменена, ничего не сохранено');
   }
 
@@ -4569,7 +5038,7 @@
     safe('тема', initTheme);
     safe('команды', initCommands);
     safe('библиотека', initLibrary);
-    safe('раздел', () => show('dialog'));
+    safe('раздел', () => show('nox'));
     safe('виджеты', initWidgets);
     safe('виджеты', reloadWidgets);
     safe('переключатели', syncToggles);
@@ -4580,6 +5049,19 @@
     if (has('onEvent')) {
       safe('подписка на события', () => window.jarvis.onEvent(onEvent));
     }
+    if (has('listApprovals')) {
+      A.syncing = true;
+      try {
+        const pending = await call('listApprovals');
+        if (Array.isArray(pending)) for (const entry of pending) {
+          if (!A.closedDuringSync.has(entry.id)) {
+            if (entry.taskId) T.approvals.set(entry.id, entry.taskId);
+            approvalPush(entry);
+          }
+        }
+      } catch { /* Очередь остаётся в ядре и отклоняется по таймеру. */ }
+      finally { A.syncing = false; A.closedDuringSync.clear(); }
+    }
     await Promise.all([
       safe('состояние', loadState),
       safe('настройки ядра', loadSettings),
@@ -4588,6 +5070,10 @@
       safe('библиотека', loadLibrary),
     ]);
   }
+
+  // Мост для экрана Nox: переключение раздела и чатов теми же проверенными функциями,
+  // что и у прежней панели, без второй копии логики беседы.
+  window.JarvisNox = { show, changeChat, closeChat, clearChat, refreshChatTabs };
 
   boot().catch((e) => {
     console.error('[jarvis] запуск интерфейса не удался', e);

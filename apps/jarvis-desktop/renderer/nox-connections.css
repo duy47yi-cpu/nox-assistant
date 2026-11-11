@@ -1,0 +1,945 @@
+/* Nox — раздел «Подключения» (MCP), визуальный слой Phase 3.2.
+ *
+ * Подключается последним и ограничен body[data-view="mcp"] / .view-mcp: готовый чат,
+ * «Команды», «Настройки» и «Журнал» не меняются. Токены и каркас — те же, что у раздела
+ * «Команды» (design-system.md, navigation-layout.md), экран — connections-ui.md,
+ * макет — previews/03-connections.png. Данные, IPC и правила — в renderer/connections.js
+ * и src/mcp/*; здесь только внешний вид. */
+
+/* ── 1. Токены раздела ──────────────────────────────────────────── */
+body[data-view="mcp"] {
+  --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-head: var(--font);
+  --font-display: var(--font);
+  --font-reply: var(--font);
+  --nox-bg: #0F0F10;
+  --nox-surface-1: #141415;
+  --nox-surface-2: #18181B;
+  --nox-surface-3: #1C1C1F;
+  --nox-surface-4: #232326;
+  --nox-border: #2A2A2E;
+  --nox-border-strong: #34343A;
+  --nox-text-1: #F1F1F3;
+  --nox-text-2: #9A9AA0;
+  --nox-text-3: #6B6B70;
+  --nox-text-ghost: #3A3A3E;
+  --nox-accent: #2E9AC1;
+  --nox-accent-hover: #3AAAD6;
+  --nox-accent-active: #2280A8;
+  --nox-accent-ink: #061217;
+  --nox-accent-soft: color-mix(in srgb, #2E9AC1 14%, transparent);
+  --nox-accent-line: color-mix(in srgb, #2E9AC1 42%, transparent);
+  --nox-ok: #3DD68C;
+  --nox-warn: #F5A524;
+  --nox-err: #FF5C5C;
+  --nox-gap: 8px;
+  --rail-w: 52px;
+  --nox-font: var(--font);
+  --nox-mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-default: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur-normal: 200ms;
+  background: transparent;
+  color: var(--nox-text-1);
+}
+html:has(body[data-view="mcp"]) { background: transparent; }
+
+@media (max-width: 1000px) {
+  body[data-view="mcp"] { --rail-w: 46px; }
+}
+
+/* ── 2. Каркас окна ───────────────────────────────────────────── */
+body[data-view="mcp"] .app {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+  height: 100vh;
+  background: var(--nox-bg);
+  border: 1px solid color-mix(in srgb, var(--nox-border) 80%, transparent);
+  border-radius: 12px;
+  overflow: clip;
+  isolation: isolate;
+}
+body[data-view="mcp"] .app::before,
+body[data-view="mcp"] .app::after,
+body[data-view="mcp"] .theme-fx,
+body[data-view="mcp"] .contour,
+body[data-view="mcp"] .banner-wrap { display: none !important; }
+body[data-view="mcp"] .main { min-width: 0; min-height: 0; background: transparent; }
+body[data-view="mcp"] .topbar { display: none; }
+body[data-view="mcp"] .views { flex: 1; min-height: 0; }
+body[data-view="mcp"] :focus-visible { outline: 2px solid var(--nox-accent); outline-offset: 2px; }
+body[data-view="mcp"] ::-webkit-scrollbar { width: 6px; height: 6px; }
+body[data-view="mcp"] ::-webkit-scrollbar-thumb { background: var(--nox-text-ghost); border: 0; border-radius: 3px; }
+body[data-view="mcp"] ::-webkit-scrollbar-thumb:hover { background: var(--nox-text-3); }
+
+body[data-view="mcp"] .rail {
+  width: var(--rail-w);
+  padding: 8px 6px;
+  align-items: center;
+  background: var(--nox-surface-2);
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  overflow: visible;
+  -webkit-app-region: drag;
+}
+body[data-view="mcp"] .rail-brand {
+  width: 36px; height: 36px; margin: 0 0 14px;
+  justify-content: center;
+  -webkit-app-region: drag;
+}
+body[data-view="mcp"] .rail-brand-text { display: none; }
+body[data-view="mcp"] .rail-mark {
+  position: relative;
+  width: 18px; height: 18px;
+  border: 1.6px solid var(--nox-text-1);
+  border-radius: 50%;
+  background: none;
+  box-shadow: none;
+  transform: rotate(-28deg);
+}
+body[data-view="mcp"] .rail-mark::after {
+  content: "";
+  position: absolute;
+  top: -4px; right: -4px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: transparent;
+}
+body[data-view="mcp"] .rail-list { gap: 4px; align-items: center; width: auto; }
+body[data-view="mcp"] .rail-item,
+body[data-view="mcp"] .rail-toggle {
+  width: 36px; height: 36px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  border-radius: 10px;
+  color: var(--nox-text-3);
+  -webkit-app-region: no-drag;
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+body[data-view="mcp"] .rail-item:hover,
+body[data-view="mcp"] .rail-toggle:hover {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, transparent);
+  color: var(--nox-text-1);
+  transform: none;
+}
+body[data-view="mcp"] .rail-item[aria-current="page"] { background: var(--nox-accent-soft); color: var(--nox-accent); }
+body[data-view="mcp"] .rail-item[aria-current="page"] .rail-icon { color: var(--nox-accent); }
+body[data-view="mcp"] .rail-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -9px; top: 7px;
+  width: 4px; height: 22px;
+  border-radius: 0 3px 3px 0;
+  background: var(--nox-accent);
+}
+body[data-view="mcp"] .rail-icon svg { width: 18px; height: 18px; }
+body[data-view="mcp"] .rail-label { display: none; }
+body[data-view="mcp"] .rail-count {
+  top: 2px; right: 2px;
+  min-width: 15px; height: 15px;
+  padding: 0 3px;
+  font-size: 10px; line-height: 13px;
+  background: var(--nox-accent); border: 0; color: var(--nox-accent-ink);
+  font-family: var(--nox-mono); font-weight: 600;
+}
+body[data-view="mcp"] .rail-dot { top: 7px; right: 7px; width: 6px; height: 6px; }
+body[data-view="mcp"] .rail-foot { margin-top: auto; width: 36px; align-items: center; gap: 6px; }
+body[data-view="mcp"] .rail-account {
+  width: 32px; height: 32px;
+  border: 1px solid var(--nox-border);
+  border-radius: 50%;
+  color: var(--nox-text-2);
+}
+body[data-view="mcp"] .rail-account:hover { border-color: var(--nox-border-strong); }
+body[data-view="mcp"] #railToggle { display: none; }
+
+/* ── 3. Раздел ────────────────────────────────────────────────── */
+.view-mcp { padding: 0; overflow: hidden; }
+.view-mcp[hidden] { display: none; }
+#mcpPage { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.nox-conn-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--nox-surface-2);
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Шапка: общая с разделом «Команды» по виду. */
+.nox-cmd-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 72px;
+  padding: 0 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--nox-border) 62%, transparent);
+  -webkit-app-region: drag;
+}
+.nox-cmd-head button,
+.nox-cmd-head input { -webkit-app-region: no-drag; }
+.nox-cmd-title {
+  margin: 0 auto 0 0;
+  font: 600 24px/30px var(--nox-font);
+  letter-spacing: -0.01em;
+  color: var(--nox-text-1);
+  min-width: 0;
+}
+.nox-cmd-head-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+
+.nox-win-controls { display: flex; align-items: center; gap: 2px; margin-left: 2px; }
+.nox-win-btn {
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-3);
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+.nox-win-btn:hover { background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); color: var(--nox-text-1); }
+.nox-win-btn[data-act="close"]:hover { background: color-mix(in srgb, var(--nox-err) 14%, transparent); color: var(--nox-err); }
+.nox-win-btn svg { width: 14px; height: 14px; }
+
+/* ── 4. Кнопки, поиск, чипы, поля ─────────────────────────────── */
+body[data-view="mcp"] .nox-btn {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font: 500 13px/1 var(--nox-font);
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default),
+    color var(--dur-fast) var(--ease-default), transform var(--dur-fast) var(--ease-default);
+}
+body[data-view="mcp"] .nox-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, var(--nox-surface-2));
+  border-color: var(--nox-border-strong);
+  color: var(--nox-text-1);
+}
+body[data-view="mcp"] .nox-btn:active:not(:disabled) { transform: scale(0.98); }
+body[data-view="mcp"] .nox-btn:disabled {
+  background: var(--nox-text-ghost);
+  border-color: var(--nox-text-ghost);
+  color: var(--nox-text-2);
+  cursor: not-allowed;
+}
+body[data-view="mcp"] .nox-btn-primary {
+  height: 40px;
+  padding: 0 18px;
+  background: var(--nox-accent);
+  border-color: var(--nox-accent);
+  color: var(--nox-accent-ink);
+  font: 600 14px/1 var(--nox-font);
+}
+body[data-view="mcp"] .nox-btn-primary:hover:not(:disabled) {
+  background: var(--nox-accent-hover);
+  border-color: var(--nox-accent-hover);
+  color: var(--nox-accent-ink);
+  transform: translateY(-1px);
+}
+body[data-view="mcp"] .nox-btn-primary:active:not(:disabled) { background: var(--nox-accent-active); transform: translateY(0) scale(0.98); }
+body[data-view="mcp"] .nox-btn-primary:disabled { background: var(--nox-text-ghost); border-color: var(--nox-text-ghost); color: var(--nox-text-2); }
+body[data-view="mcp"] .nox-btn-ghost { background: transparent; }
+body[data-view="mcp"] .nox-btn-danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--nox-err) 42%, transparent);
+  color: var(--nox-err);
+}
+body[data-view="mcp"] .nox-btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-err) 14%, transparent);
+  border-color: color-mix(in srgb, var(--nox-err) 60%, transparent);
+  color: var(--nox-err);
+}
+body[data-view="mcp"] .nox-btn-danger:disabled {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--nox-err) 20%, transparent);
+  color: var(--nox-text-ghost);
+}
+body[data-view="mcp"] .nox-icon-btn {
+  width: 32px; height: 32px;
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0; border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-3);
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+body[data-view="mcp"] .nox-icon-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); color: var(--nox-text-1); }
+body[data-view="mcp"] .nox-icon-btn svg { width: 14px; height: 14px; }
+
+.nox-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  min-width: 0;
+  flex: 0 0 360px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-3);
+  transition: border-color var(--dur-fast) var(--ease-default), box-shadow var(--dur-fast) var(--ease-default);
+}
+.nox-search:focus-within { border-color: var(--nox-accent); box-shadow: 0 0 0 3px var(--nox-accent-soft); }
+.nox-search [data-icon] { flex: none; }
+.nox-search [data-icon] svg { width: 15px; height: 15px; }
+.nox-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--nox-text-1);
+  font: 400 13px/20px var(--nox-font);
+  outline: none;
+}
+.nox-search input::placeholder { color: var(--nox-text-3); }
+.nox-search input::-webkit-search-cancel-button { display: none; }
+
+.nox-chip-filter {
+  height: 32px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--nox-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nox-text-2);
+  font: 500 12px/1 var(--nox-font);
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default),
+    color var(--dur-fast) var(--ease-default);
+}
+.nox-chip-filter:hover { color: var(--nox-text-1); border-color: var(--nox-border-strong); }
+.nox-chip-filter[aria-pressed="true"] {
+  background: var(--nox-accent-soft);
+  border-color: var(--nox-accent-line);
+  color: var(--nox-accent);
+}
+.nox-chip-filter .mcp-filter-count { color: inherit; opacity: 0.75; font-variant-numeric: tabular-nums; }
+
+/* ── 5. Тулбар ────────────────────────────────────────────────── */
+.nox-conn-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px 10px;
+  min-width: 0;
+}
+.nox-conn-filters { display: flex; align-items: center; gap: 8px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nox-conn-filters::-webkit-scrollbar { display: none; }
+.nox-conn-toolbar .nox-icon-btn { margin-left: auto; }
+
+/* ── 6. Тело: список и популярные ─────────────────────────────── */
+.nox-conn-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 14px;
+  padding: 4px 20px 18px;
+  overflow: hidden;
+}
+.nox-conn-listcol { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.nox-conn-listwrap { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 4px 2px 0; }
+.nox-conn-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+
+body[data-view="mcp"] .nox-note {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-1);
+  color: var(--nox-text-2);
+  font: 400 12px/16px var(--nox-font);
+}
+body[data-view="mcp"] .nox-note.note-warn {
+  color: var(--nox-warn);
+  background: color-mix(in srgb, var(--nox-warn) 10%, var(--nox-surface-1));
+  border-color: color-mix(in srgb, var(--nox-warn) 42%, transparent);
+}
+body[data-view="mcp"] .nox-note.note-err {
+  color: var(--nox-err);
+  background: color-mix(in srgb, var(--nox-err) 10%, var(--nox-surface-1));
+  border-color: color-mix(in srgb, var(--nox-err) 42%, transparent);
+}
+body[data-view="mcp"] .nox-note [data-icon] { flex: none; margin-top: 1px; }
+body[data-view="mcp"] .nox-note [data-icon] svg { width: 14px; height: 14px; }
+body[data-view="mcp"] .nox-note .nox-note-grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+/* Карточка подключения */
+body[data-view="mcp"] .mcp-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 100px;
+  padding: 14px;
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: var(--nox-surface-2);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default);
+}
+body[data-view="mcp"] .mcp-card:hover {
+  background: color-mix(in srgb, var(--nox-text-1) 5%, var(--nox-surface-2));
+  border-color: var(--nox-border-strong);
+}
+body[data-view="mcp"] .mcp-card:focus-visible { outline: 2px solid var(--nox-accent); outline-offset: 2px; }
+body[data-view="mcp"] .mcp-card[data-status="error"] { border-color: color-mix(in srgb, var(--nox-err) 34%, var(--nox-border)); }
+body[data-view="mcp"] .mcp-card[data-status="drift"] { border-color: color-mix(in srgb, var(--nox-warn) 34%, var(--nox-border)); }
+body[data-view="mcp"] .mcp-card[data-status="connected"] { border-color: color-mix(in srgb, var(--nox-ok) 26%, var(--nox-border)); }
+
+body[data-view="mcp"] .mcp-icon {
+  width: 32px; height: 32px;
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-3);
+}
+body[data-view="mcp"] .mcp-icon svg { width: 16px; height: 16px; }
+body[data-view="mcp"] .mcp-card[data-status="connected"] .mcp-icon { color: var(--nox-ok); border-color: color-mix(in srgb, var(--nox-ok) 34%, var(--nox-border)); }
+body[data-view="mcp"] .mcp-card[data-status="error"] .mcp-icon { color: var(--nox-err); border-color: color-mix(in srgb, var(--nox-err) 42%, var(--nox-border)); }
+body[data-view="mcp"] .mcp-card[data-status="drift"] .mcp-icon { color: var(--nox-warn); border-color: color-mix(in srgb, var(--nox-warn) 42%, var(--nox-border)); }
+
+body[data-view="mcp"] .mcp-card-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+body[data-view="mcp"] .mcp-card-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+body[data-view="mcp"] .mcp-name {
+  font: 600 14px/20px var(--nox-font);
+  color: var(--nox-text-1);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+body[data-view="mcp"] .mcp-target {
+  font: 400 12px/16px var(--nox-mono);
+  color: var(--nox-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+body[data-view="mcp"] .mcp-line { font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); overflow-wrap: anywhere; }
+body[data-view="mcp"] .mcp-line-error { color: var(--nox-err); }
+body[data-view="mcp"] .mcp-line-warn { color: var(--nox-warn); }
+body[data-view="mcp"] .mcp-caps {
+  font: 400 11px/15px var(--nox-font);
+  color: var(--nox-text-3);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+body[data-view="mcp"] .mcp-diff { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+body[data-view="mcp"] .mcp-diff .mcp-diff-chip {
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--nox-border);
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font: 500 11px/1 var(--nox-mono);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body[data-view="mcp"] .mcp-diff-chip[data-kind="added"] { color: var(--nox-ok); border-color: color-mix(in srgb, var(--nox-ok) 34%, transparent); }
+body[data-view="mcp"] .mcp-diff-chip[data-kind="removed"] { color: var(--nox-err); border-color: color-mix(in srgb, var(--nox-err) 34%, transparent); }
+body[data-view="mcp"] .mcp-diff-chip[data-kind="changed"] { color: var(--nox-warn); border-color: color-mix(in srgb, var(--nox-warn) 34%, transparent); }
+
+body[data-view="mcp"] .mcp-card-actions {
+  flex: none;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+body[data-view="mcp"] .mcp-card-action {
+  height: 32px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-2);
+  font: 500 13px/1 var(--nox-font);
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default),
+    color var(--dur-fast) var(--ease-default);
+}
+body[data-view="mcp"] .mcp-card-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, transparent);
+  border-color: var(--nox-border-strong);
+  color: var(--nox-text-1);
+}
+body[data-view="mcp"] .mcp-card-action:disabled { color: var(--nox-text-ghost); border-color: var(--nox-border); cursor: default; }
+body[data-view="mcp"] .mcp-card-action.mcp-card-action-accent {
+  background: var(--nox-accent);
+  border-color: var(--nox-accent);
+  color: var(--nox-accent-ink);
+}
+body[data-view="mcp"] .mcp-card-action.mcp-card-action-accent:hover:not(:disabled) {
+  background: var(--nox-accent-hover);
+  border-color: var(--nox-accent-hover);
+  color: var(--nox-accent-ink);
+}
+body[data-view="mcp"] .mcp-card-action.mcp-card-action-warn {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--nox-warn) 52%, transparent);
+  color: var(--nox-warn);
+}
+body[data-view="mcp"] .mcp-card-action.mcp-card-action-warn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-warn) 14%, transparent);
+  border-color: color-mix(in srgb, var(--nox-warn) 70%, transparent);
+  color: var(--nox-warn);
+}
+body[data-view="mcp"] .mcp-card-action.mcp-card-action-err {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--nox-err) 52%, transparent);
+  color: var(--nox-err);
+}
+body[data-view="mcp"] .mcp-card-action.mcp-card-action-err:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-err) 14%, transparent);
+  border-color: color-mix(in srgb, var(--nox-err) 70%, transparent);
+  color: var(--nox-err);
+}
+
+/* Пилюля состояния */
+body[data-view="mcp"] .mcp-pill {
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid var(--nox-border);
+  border-radius: 999px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font: 500 11px/1 var(--nox-font);
+  white-space: nowrap;
+}
+body[data-view="mcp"] .mcp-pill-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: currentColor; }
+body[data-view="mcp"] .mcp-pill[data-tone="ok"] {
+  color: var(--nox-ok);
+  background: color-mix(in srgb, var(--nox-ok) 12%, transparent);
+  border-color: color-mix(in srgb, var(--nox-ok) 42%, transparent);
+}
+body[data-view="mcp"] .mcp-pill[data-tone="accent"] {
+  color: var(--nox-accent);
+  background: var(--nox-accent-soft);
+  border-color: var(--nox-accent-line);
+}
+body[data-view="mcp"] .mcp-pill[data-tone="warn"] {
+  color: var(--nox-warn);
+  background: color-mix(in srgb, var(--nox-warn) 14%, transparent);
+  border-color: color-mix(in srgb, var(--nox-warn) 42%, transparent);
+}
+body[data-view="mcp"] .mcp-pill[data-tone="err"] {
+  color: var(--nox-err);
+  background: color-mix(in srgb, var(--nox-err) 14%, transparent);
+  border-color: color-mix(in srgb, var(--nox-err) 42%, transparent);
+}
+body[data-view="mcp"] .mcp-pill[data-tone="ghost"] { color: var(--nox-text-ghost); }
+body[data-view="mcp"] .mcp-pill[data-tone="muted"] { color: var(--nox-text-2); }
+body[data-view="mcp"] .mcp-pill[data-tone="accent"] .mcp-pill-dot { animation: mcp-pulse 1200ms ease-in-out infinite alternate; }
+@keyframes mcp-pulse { from { opacity: 1; } to { opacity: 0.35; } }
+
+body[data-view="mcp"] .mcp-spinner {
+  width: 12px; height: 12px;
+  flex: none;
+  border: 2px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: mcp-spin 600ms linear infinite;
+}
+@keyframes mcp-spin { to { transform: rotate(360deg); } }
+
+/* Пустые состояния и загрузка */
+.nox-empty {
+  margin: auto;
+  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.nox-empty-icon {
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--nox-text-ghost);
+  margin-bottom: 4px;
+}
+.nox-empty-icon svg { width: 24px; height: 24px; }
+.nox-empty-title { font: 600 16px/22px var(--nox-font); color: var(--nox-text-1); }
+.nox-empty-text { font: 400 14px/20px var(--nox-font); color: var(--nox-text-2); max-width: 460px; overflow-wrap: anywhere; }
+.nox-empty .nox-btn { margin-top: 8px; }
+.nox-link { padding: 0; border: 0; background: none; color: var(--nox-accent); font: 500 13px/18px var(--nox-font); }
+.nox-link:hover { color: var(--nox-accent-hover); text-decoration: underline; }
+.nox-loading {
+  margin: auto;
+  padding: 32px;
+  display: flex; align-items: center; gap: 10px;
+  font: 400 14px/20px var(--nox-font);
+  color: var(--nox-text-2);
+}
+.nox-loading .mcp-spinner { width: 16px; height: 16px; color: var(--nox-accent); }
+
+/* ── 7. Панель популярных ─────────────────────────────────────── */
+.nox-popular {
+  flex: none;
+  width: 348px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: var(--nox-surface-1);
+  overflow-y: auto;
+}
+.nox-popular-head { flex: none; }
+.nox-popular-title { margin: 0; font: 600 16px/22px var(--nox-font); color: var(--nox-text-1); }
+.nox-popular-cats { display: flex; flex-wrap: wrap; gap: 6px; flex: none; }
+.nox-popular-cats .nox-chip-filter { height: 28px; padding: 0 10px; font-size: 11px; }
+.nox-popular-list { display: flex; flex-direction: column; gap: 8px; }
+.nox-popular-note { margin: auto 0 0; padding-top: 4px; font: 400 11px/15px var(--nox-font); color: var(--nox-text-3); }
+
+body[data-view="mcp"] .mcp-popular-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-2);
+  min-width: 0;
+}
+body[data-view="mcp"] .mcp-popular-row:hover { border-color: var(--nox-border-strong); }
+body[data-view="mcp"] .mcp-popular-icon {
+  width: 28px; height: 28px;
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-3);
+}
+body[data-view="mcp"] .mcp-popular-icon svg { width: 14px; height: 14px; }
+body[data-view="mcp"] .mcp-popular-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+body[data-view="mcp"] .mcp-popular-name {
+  font: 600 13px/17px var(--nox-font);
+  color: var(--nox-text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body[data-view="mcp"] .mcp-popular-desc {
+  font: 400 12px/16px var(--nox-font);
+  color: var(--nox-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body[data-view="mcp"] .mcp-popular-add {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-2);
+  font: 500 12px/1 var(--nox-font);
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default),
+    color var(--dur-fast) var(--ease-default);
+}
+body[data-view="mcp"] .mcp-popular-add:hover:not(:disabled) {
+  background: var(--nox-accent-soft);
+  border-color: var(--nox-accent-line);
+  color: var(--nox-accent);
+}
+body[data-view="mcp"] .mcp-popular-add:disabled { color: var(--nox-text-ghost); cursor: default; border-color: var(--nox-border); border-style: dashed; }
+body[data-view="mcp"] .mcp-popular-add.is-busy { color: var(--nox-accent); border-color: var(--nox-accent-line); }
+
+/* ── 8. Диалоги ───────────────────────────────────────────────── */
+body[data-view="mcp"] .dialog {
+  position: fixed;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  background: var(--nox-surface-2);
+  color: var(--nox-text-1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
+  width: min(640px, calc(100vw - 32px));
+  height: fit-content;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+}
+body[data-view="mcp"] .dialog.dialog-sm { width: min(480px, calc(100vw - 32px)); }
+body[data-view="mcp"] .dialog.mcp-dialog-add { width: min(560px, calc(100vw - 32px)); height: min(480px, calc(100vh - 32px)); }
+body[data-view="mcp"] .dialog.mcp-dialog-details { width: min(480px, calc(100vw - 32px)); height: min(520px, calc(100vh - 32px)); }
+body[data-view="mcp"] .dialog.mcp-dialog-add .dialog-body,
+body[data-view="mcp"] .dialog.mcp-dialog-details .dialog-body { height: 100%; max-height: none; }
+body[data-view="mcp"] .dialog::backdrop { background: rgba(0, 0, 0, 0.48); }
+body[data-view="mcp"] .dialog-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100vh - 34px);
+  padding: 0;
+}
+body[data-view="mcp"] .dialog-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--nox-border) 62%, transparent);
+}
+body[data-view="mcp"] .dialog-title { margin: 0 auto 0 0; font: 600 16px/22px var(--nox-font); color: var(--nox-text-1); overflow-wrap: anywhere; }
+body[data-view="mcp"] .dialog-count { font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); flex: none; }
+body[data-view="mcp"] .dialog-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+body[data-view="mcp"] .dialog-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  height: 64px;
+  padding: 0 16px;
+  border-top: 1px solid color-mix(in srgb, var(--nox-border) 62%, transparent);
+}
+body[data-view="mcp"] .dialog .btn {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font: 500 13px/1 var(--nox-font);
+}
+body[data-view="mcp"] .dialog .btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, var(--nox-surface-2));
+  border-color: var(--nox-border-strong);
+  color: var(--nox-text-1);
+}
+body[data-view="mcp"] .dialog .btn:disabled { background: var(--nox-text-ghost); border-color: var(--nox-text-ghost); color: var(--nox-text-2); cursor: not-allowed; }
+body[data-view="mcp"] .dialog .btn-ghost { background: transparent; }
+body[data-view="mcp"] .dialog .btn-primary {
+  height: 40px;
+  padding: 0 18px;
+  background: var(--nox-accent);
+  border-color: var(--nox-accent);
+  color: var(--nox-accent-ink);
+  font: 600 14px/1 var(--nox-font);
+}
+body[data-view="mcp"] .dialog .btn-primary:hover:not(:disabled) { background: var(--nox-accent-hover); border-color: var(--nox-accent-hover); color: var(--nox-accent-ink); }
+body[data-view="mcp"] .dialog .btn-primary:disabled { background: var(--nox-text-ghost); border-color: var(--nox-text-ghost); color: var(--nox-text-2); }
+body[data-view="mcp"] .dialog .btn-danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--nox-err) 42%, transparent);
+  color: var(--nox-err);
+}
+body[data-view="mcp"] .dialog .btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--nox-err) 14%, transparent); border-color: color-mix(in srgb, var(--nox-err) 60%, transparent); color: var(--nox-err); }
+body[data-view="mcp"] .dialog .btn-danger:disabled { background: transparent; border-color: color-mix(in srgb, var(--nox-err) 22%, transparent); color: var(--nox-text-ghost); }
+
+body[data-view="mcp"] .mcp-dialog-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+body[data-view="mcp"] .mcp-dialog-label { font: 500 12px/16px var(--nox-font); color: var(--nox-text-2); }
+body[data-view="mcp"] .mcp-dialog-label .req { color: var(--nox-err); }
+body[data-view="mcp"] .dialog .input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-1);
+  font: 400 13px/20px var(--nox-font);
+  transition: border-color var(--dur-fast) var(--ease-default), box-shadow var(--dur-fast) var(--ease-default);
+}
+body[data-view="mcp"] .dialog .input::placeholder { color: var(--nox-text-3); }
+body[data-view="mcp"] .dialog .input:focus { border-color: var(--nox-accent); box-shadow: 0 0 0 3px var(--nox-accent-soft); outline: none; }
+body[data-view="mcp"] .dialog .input[aria-invalid="true"] { border-color: var(--nox-err); background: color-mix(in srgb, var(--nox-err) 6%, var(--nox-surface-3)); }
+body[data-view="mcp"] .mcp-dialog-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-1);
+  color: var(--nox-text-2);
+  font: 400 12px/17px var(--nox-font);
+}
+body[data-view="mcp"] .mcp-dialog-hint [data-icon] { flex: none; margin-top: 1px; color: var(--nox-text-3); }
+body[data-view="mcp"] .mcp-dialog-hint [data-icon] svg { width: 13px; height: 13px; }
+body[data-view="mcp"] .mcp-dialog-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--nox-err) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--nox-err) 12%, transparent);
+  color: var(--nox-err);
+  font: 500 12px/17px var(--nox-font);
+  overflow-wrap: anywhere;
+}
+body[data-view="mcp"] .mcp-dialog-error [data-icon] { flex: none; margin-top: 1px; }
+body[data-view="mcp"] .mcp-dialog-error [data-icon] svg { width: 14px; height: 14px; }
+
+/* Детали: цель, возможности, разрешения, переключатель */
+body[data-view="mcp"] .mcp-detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+body[data-view="mcp"] .mcp-detail-name { font: 600 16px/22px var(--nox-font); color: var(--nox-text-1); overflow-wrap: anywhere; min-width: 0; }
+body[data-view="mcp"] .mcp-detail-meta { font: 400 11px/15px var(--nox-font); color: var(--nox-text-3); overflow-wrap: anywhere; }
+body[data-view="mcp"] .mcp-target-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+}
+body[data-view="mcp"] .mcp-target-box code {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: 400 12px/18px var(--nox-mono);
+  color: var(--nox-text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body[data-view="mcp"] .mcp-detail-cats { display: flex; flex-wrap: wrap; gap: 6px; }
+body[data-view="mcp"] .mcp-cap-chip {
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--nox-border);
+  border-radius: 999px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font: 500 11px/1 var(--nox-font);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body[data-view="mcp"] .mcp-detail-text { margin: 0; font: 400 13px/19px var(--nox-font); color: var(--nox-text-2); overflow-wrap: anywhere; }
+body[data-view="mcp"] .mcp-detail-text b { color: var(--nox-text-1); font-weight: 600; }
+body[data-view="mcp"] .mcp-detail-section { display: flex; flex-direction: column; gap: 6px; }
+body[data-view="mcp"] .mcp-detail-section-title { font: 600 12px/16px var(--nox-font); color: var(--nox-text-1); }
+body[data-view="mcp"] .mcp-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-1);
+}
+body[data-view="mcp"] .mcp-toggle-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+body[data-view="mcp"] .mcp-toggle-name { font: 500 13px/18px var(--nox-font); color: var(--nox-text-1); }
+body[data-view="mcp"] .mcp-toggle-hint { font: 400 11px/15px var(--nox-font); color: var(--nox-text-3); }
+body[data-view="mcp"] .mcp-detail .switch,
+body[data-view="mcp"] .mcp-toggle-row .switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 32px; height: 20px;
+  flex: none;
+  margin: 0;
+  border: 1px solid var(--nox-border);
+  border-radius: 999px;
+  background: var(--nox-surface-3);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default);
+}
+body[data-view="mcp"] .mcp-toggle-row .switch::after {
+  content: "";
+  position: absolute;
+  top: 1px; left: 1px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--nox-text-2);
+  transition: transform var(--dur-normal) var(--ease-out), background var(--dur-fast) var(--ease-default);
+}
+body[data-view="mcp"] .mcp-toggle-row .switch:checked { background: var(--nox-accent); border-color: var(--nox-accent); }
+body[data-view="mcp"] .mcp-toggle-row .switch:checked::after { background: #fff; transform: translateX(12px); }
+body[data-view="mcp"] .mcp-toggle-row .switch:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── 9. Адаптивность ──────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .nox-cmd-head { height: 64px; padding: 0 14px; }
+  .nox-cmd-title { font-size: 21px; line-height: 28px; }
+  .nox-conn-toolbar { padding: 8px 14px; flex-wrap: wrap; }
+  .nox-search { flex: 1 1 180px; max-width: none; }
+  .nox-conn-filters { flex: 1 1 auto; width: auto; }
+  .nox-conn-toolbar .nox-icon-btn { margin-left: auto; }
+  .nox-conn-body { flex-direction: column; padding: 4px 14px 14px; overflow-y: auto; }
+  .nox-conn-listcol { flex: none; min-height: 0; }
+  .nox-conn-listwrap { overflow: visible; }
+  .nox-popular { width: 100%; flex: none; overflow: visible; }
+}
+@media (max-width: 860px) {
+  body[data-view="mcp"] .mcp-card { flex-wrap: wrap; gap: 10px; padding: 14px; }
+  body[data-view="mcp"] .mcp-card-actions { width: 100%; align-self: auto; flex-direction: row; justify-content: flex-end; }
+  body[data-view="mcp"] .mcp-target { white-space: normal; overflow-wrap: anywhere; }
+}
+
+/* Уважение к настройке движения. */
+@media (prefers-reduced-motion: reduce) {
+  body[data-view="mcp"] *,
+  body[data-view="mcp"] *::before,
+  body[data-view="mcp"] *::after {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+  }
+}
+html[data-motion="off"] body[data-view="mcp"] *,
+html[data-motion="off"] body[data-view="mcp"] *::before,
+html[data-motion="off"] body[data-view="mcp"] *::after {
+  animation: none !important;
+  transition: none !important;
+}

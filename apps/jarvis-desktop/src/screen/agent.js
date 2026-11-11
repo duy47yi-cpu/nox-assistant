@@ -1,5 +1,7 @@
 'use strict';
 
+const { randomUUID } = require('crypto');
+
 // Агент экрана: снимок → модель выбирает один шаг → шаг → проверка (verify) → свежий снимок → следующий шаг.
 // Цикл, политика (decide), журнал и стоп — общие из Agent. Своё здесь: до 40 шагов на ход и обязательное
 // подтверждение опасного шага (отправка, оплата, удаление, установка, Enter после ввода текста) — через общий
@@ -146,11 +148,17 @@ class ScreenAgent extends Agent {
   async _askDanger(tool, call, signal, info = {}) {
     if (!this.approvals) return 'reject';
     const label = dangerLabel(call.name, call.args);
+    const approvalId = randomUUID();
+    const callId = call.id;
     const payload = {
-      // id совпадает с id вызова: интерфейс сводит запрос и шаг в одну запись истории.
-      id: call.id,
+      // Разрешение имеет одноразовый ключ, отдельно связанный с действием, ходом и экземпляром агента.
+      id: approvalId,
+      approvalId,
+      agentId: this._agentId,
+      callId,
+      ...(this._runId ? { runId: this._runId } : {}),
       name: tool.name,
-      args: call.args,
+      args: structuredClone(call.args),
       risk: tool.risk,
       reason: `опасный шаг на экране: ${label} — отправка, оплата, удаление или установка; такое действие подтверждается каждый раз`,
       allowSession: false,
@@ -161,7 +169,7 @@ class ScreenAgent extends Agent {
     });
     // Сначала регистрируем запрос, потом сообщаем окну: быстрый ответ не потеряется.
     const waiting = this.approvals.request(payload);
-    const onAbort = () => this.approvals.respond(payload.id, 'reject');
+    const onAbort = () => this.approvals.respond(approvalId, 'reject');
     if (signal.aborted) onAbort();
     else signal.addEventListener('abort', onAbort, { once: true });
     this._emit({

@@ -13,6 +13,10 @@ const { uniqueSearchMatch } = require('../tools/install');
 const MAX_TOOL_STEPS = 12;
 // Сколько раз за ход можно выполнить один и тот же вызов с теми же аргументами.
 const MAX_REPEATS = 2;
+// Сколько ждём действие после остановки хода. Дольше — ход закрывается с честным «исход неизвестен»,
+// иначе зависший инструмент навсегда занял бы агента: следующий ход не начался бы.
+const STOP_GRACE_MS = 5000;
+const HUNG = Symbol('hung');
 // Чтение живого состояния рабочего стола: тот же вызов через шаг даёт другой ответ, это не зацикливание (предел — maxSteps).
 const LIVE_STATE_READS = new Set(['ui_windows', 'ui_elements', 'windows_list', 'workspace_list', 'ui_wait', 'wait_for']);
 // Прошлые ходы уходят в модель в сжатом виде: длинные ответы инструментов и размышления
@@ -218,7 +222,9 @@ class Agent {
     // Потолок времени одного хода в чате: длинная цепочка шагов не должна держать владельца молча.
     // 0 — без потолка (фон, миссии и исполнитель считают время сами).
     turnDeadlineMs = 0,
+    stopGraceMs = STOP_GRACE_MS,
   } = {}) {
+    this.stopGraceMs = Number.isFinite(stopGraceMs) && stopGraceMs >= 0 ? stopGraceMs : STOP_GRACE_MS;
     this.brain = brain;
     // После перезапуска неизвестно, что стало с окнами: действия запрещены, пока не сделан снимок экрана.
     this.lookFirst = Boolean(lookFirst);
@@ -262,6 +268,7 @@ class Agent {
     this._unknownCalls = new Map(); // ключ вызова → имя: действия с неизвестным исходом в этом ходу, вслепую не повторяем
     this._turn = null; // замеры текущего хода
     this._emitFn = typeof emit === 'function' ? emit : () => {};
+    this._agentId = randomUUID();
     this._controller = null; // AbortController идущего хода; null, если хода нет
     this._pendingImages = []; // снимки от инструментов, которые ещё не попали в историю
     // Прогресс запуска: runId = id хода (связывает turns.jsonl, журнал и события окна).
@@ -588,6 +595,7 @@ class Agent {
   }
 
   async _runCall(call, signal, round) {
+    call = structuredClone(call);
     // Ход уже остановлен: поздний вызов не начинается и поздний ответ не оживляет запуск.
     if (signal.aborted || this._runClosed) {
       return { ok: false, summary: 'остановлено: ход прерван', cancelled: true };
@@ -603,7 +611,7 @@ class Agent {
     const target = safeTarget(call.args);
     const stepStartedAt = new Date(started).toISOString();
     this._emit({
-      type: 'tool_start', id: call.id, name: call.name, args: call.args, risk,
+      type: 'tool_start', id: call.id, name: call.name, args: structuredClone(call.args), risk,
       ...(this._runId ? { runId: this._runId } : {}), step, status: 'running',
       label: STEP_WORDS.running, ...(target ? { target } : {}), startedAt: stepStartedAt,
     });
@@ -619,6 +627,8 @@ class Agent {
     let resolution;
     let result;
     let repeat = false;
+    let afterStop = false; // инструмент ответил уже после остановки хода
+    let hung = false; // инструмент не ответил и после срока ожидания
     if (!tool) {
       resolution = 'deny';
       result = { ok: false, summary: `неизвестный инструмент: ${call.name}` };
@@ -650,9 +660,11 @@ class Agent {
     } else {
       resolution = this._verdict(tool, call.args);
       if (resolution === 'ask') {
+        const approvedAction = `${call.name}:${stableKey(call.args || {})}`;
         const askStarted = Date.now();
         resolution = await this._askApproval(tool, call, signal, { step, target, startedAt: stepStartedAt });
         waitMs = Date.now() - askStarted;
+        if (`${call.name}:${stableKey(call.args || {})}` !== approvedAction) resolution = 'reject';
         // Отправка, публикация и удаление: «на сессию» не выдаём, каждое действие — отдельное согласие.
         if (resolution === 'session' && isOneShot(tool.name)) resolution = 'once';
         // Стоп пришёл, пока ждали ответ: одобрение «на сессию» не сохраняем, стоп его уже отозвал.
@@ -669,12 +681,23 @@ class Agent {
       } else {
         this._status('acting', { status: 'running', step, label: STEP_WORDS.running, ...(target ? { target } : {}), startedAt: stepStartedAt });
         const execStarted = Date.now();
-        result = await this._execute(tool, call.args, signal, { step, target, startedAt: stepStartedAt });
+        const exec = this._execute(tool, call.args, signal, { step, target, startedAt: stepStartedAt });
+        result = await this._settleOrGiveUp(exec, signal);
         execMs = Date.now() - execStarted;
+        if (result === HUNG) {
+          hung = true;
+          result = { ok: false, summary: 'не удалось остановить: действие не отвечает, его исход неизвестен', verified: 'unknown', evidence: `действие не ответило за ${Math.round(this.stopGraceMs / 1000)} с после остановки` };
+          // Если действие всё же завершится, его настоящий итог допишется отдельной записью.
+          const base = { call, risk, step, target, startedAt: stepStartedAt, runId: this._runId, mode: this.mode, decision: resolution };
+          exec.then((real) => this._reportLate(base, real));
+        }
         // Инструмент ответил уже после остановки хода: это не успех и не повод продолжать запуск.
         if (signal.aborted || this._runClosed) {
-          resolution = 'stop';
-          result = { ok: false, summary: 'остановлено: ответ инструмента пришёл после остановки хода' };
+          // Ход не продолжается, но правду о действии не прячем: если оно всё же завершилось,
+          // владелец и журнал видят его настоящий итог, а не «остановлено».
+          afterStop = true;
+          if (result.ok) result = { ...result, summary: `завершилось после запроса остановки: ${result.summary}` };
+          else resolution = 'stop';
         } else {
           if (tool.name === 'app_search' && result.ok) {
             const query = String((call.args && call.args.query) || '').trim();
@@ -697,7 +720,8 @@ class Agent {
     // считается выполненным, а действие без подтверждения — «не проверено», а не успехом.
     const stopped = resolution === 'deny' || resolution === 'reject' || resolution === 'stop';
     let callStatus = 'succeeded';
-    if (stopped || !result.ok || result.verified === 'failed') callStatus = 'failed';
+    if (hung) callStatus = 'unverified';
+    else if (stopped || !result.ok || result.verified === 'failed') callStatus = 'failed';
     else if (result.verified === 'unknown' || (risk !== 'T0' && result.verified !== 'confirmed')) callStatus = 'unverified';
     // Нормализованный итог проверки: unverified — не «подтверждено». null — проверка не предусмотрена (чтение).
     const verifiedStatus = result.verified === 'confirmed' ? 'confirmed'
@@ -736,6 +760,8 @@ class Agent {
         verified: result.verified || null,
         verifiedStatus,
         evidence: result.evidence || null,
+        ...(afterStop ? { afterStop: true } : {}),
+        ...(hung ? { hung: true } : {}),
       });
     } catch (err) {
       console.warn(`Не удалось записать в журнал: ${errText(err)}`);
@@ -758,7 +784,10 @@ class Agent {
         ...(repeat ? { repeat: true } : {}),
       });
     }
-    this._emit({
+    // Итог позднего действия идёт в обход защиты от поздних событий: done уже отправлен, второго не будет.
+    (afterStop ? this._emitRaw : this._emit).call(this, {
+      ...(afterStop ? { afterStop: true } : {}),
+      ...(hung ? { hung: true } : {}),
       type: 'tool_result', id: call.id, ok: result.ok, summary: result.summary,
       ...(this._runId ? { runId: this._runId } : {}), step, status: callStatus,
       verifiedStatus, decision: resolution, ...(target ? { target } : {}), startedAt: stepStartedAt,
@@ -768,6 +797,48 @@ class Agent {
     });
     // repeat — служебная пометка для цикла, в историю не попадает.
     return repeat ? Object.defineProperty(result, 'repeat', { value: true, enumerable: false }) : result;
+  }
+
+  // Ждём действие; после остановки хода — не дольше stopGraceMs. HUNG значит «не ответило».
+  _settleOrGiveUp(exec, signal) {
+    return new Promise((resolve) => {
+      let timer = null;
+      const arm = () => {
+        timer = setTimeout(() => resolve(HUNG), this.stopGraceMs);
+        if (typeof timer.unref === 'function') timer.unref();
+      };
+      if (signal.aborted) arm();
+      else signal.addEventListener('abort', arm, { once: true });
+      exec.then((result) => {
+        signal.removeEventListener('abort', arm);
+        if (timer) clearTimeout(timer);
+        resolve(result);
+      });
+    });
+  }
+
+  // Действие, которое сочли зависшим, всё же завершилось: журнал и окно получают настоящий итог.
+  _reportLate({ call, risk, step, target, startedAt, runId, mode, decision }, real) {
+    const ok = Boolean(real && real.ok);
+    const summary = ok ? `завершилось после запроса остановки: ${real.summary}` : String((real && real.summary) || 'действие не выполнено');
+    const status = !ok || real.verified === 'failed' ? 'failed'
+      : real.verified === 'unknown' || (risk !== 'T0' && real.verified !== 'confirmed') ? 'unverified' : 'succeeded';
+    const verifiedStatus = real && real.verified === 'confirmed' ? 'confirmed' : real && real.verified === 'failed' ? 'failed' : status === 'unverified' ? 'unverified' : null;
+    try {
+      this.journal.append({
+        tool: call.name, args: call.args, risk, mode, decision, ok, summary, callId: call.id,
+        ...(runId ? { runId } : {}), step, status, verified: (real && real.verified) || null, verifiedStatus,
+        evidence: (real && real.evidence) || null, afterStop: true, late: true,
+      });
+    } catch (err) {
+      console.warn(`Не удалось записать в журнал: ${errText(err)}`);
+    }
+    this._emitRaw({
+      afterStop: true, late: true, type: 'tool_result', id: call.id, ok, summary,
+      ...(runId ? { runId } : {}), step, status, verifiedStatus, decision, ...(target ? { target } : {}), startedAt,
+      label: STEP_WORDS[status] || STEP_WORDS.failed,
+      ...(real && real.verified ? { verified: real.verified, evidence: real.evidence || '' } : {}),
+    });
   }
 
   // true, если вызов можно выполнить сразу: инструмент есть, аргументы верные и политика разрешает без вопроса.
@@ -836,7 +907,10 @@ class Agent {
 
   async _askApproval(tool, call, signal, info = {}) {
     if (!this.approvals) return 'reject';
-    // id совпадает с id вызова: интерфейс сводит approval_request и tool_start в одну запись истории.
+    // ID модели не является ключом разрешения: модель может повторить его в другом вызове.
+    // Отдельный одноразовый ключ связывает ответ только с этим агентом, ходом и действием.
+    const callId = call.id;
+    const approvalId = randomUUID();
     const note = this._policyNote(call);
     // Причина без «undefined»: пустые части отбрасываются, а не склеиваются в текст с дырами.
     const safeWords = (value) => (typeof value === 'string' && value.trim() && !/\bundefined\b/i.test(value) ? value.trim() : '');
@@ -850,9 +924,13 @@ class Agent {
     // Предпросмотр изменения (если инструмент умеет): окно покажет, что именно изменится, до кнопок.
     const preview = this._preview(tool, call.args);
     const payload = {
-      id: call.id,
+      id: approvalId,
+      approvalId,
+      agentId: this._agentId,
+      callId,
+      ...(this._runId ? { runId: this._runId } : {}),
       name: tool.name,
-      args: call.args,
+      args: structuredClone(call.args),
       risk: tool.risk,
       reason: reasonParts.join('; ') || 'действие требует вашего разрешения',
       // Для отправки, публикации и удаления «до перезапуска» не предлагаем: каждое действие — отдельное согласие.
@@ -866,7 +944,7 @@ class Agent {
     // Сначала регистрируем запрос, потом сообщаем UI: быстрый ответ не потеряется.
     const waiting = this.approvals.request(payload);
     // Отказ, тайм-аут и закрытие диалога приходят сюда как reject: действие не выполняется.
-    const onAbort = () => this.approvals.respond(payload.id, 'reject');
+    const onAbort = () => this.approvals.respond(approvalId, 'reject');
     if (signal.aborted) onAbort();
     else signal.addEventListener('abort', onAbort, { once: true });
     this._emit({

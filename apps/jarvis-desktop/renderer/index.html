@@ -13,6 +13,14 @@
   <link rel="stylesheet" href="hands.css">
   <link rel="stylesheet" href="presence.css">
   <link rel="stylesheet" href="tools-extra.css">
+  <link rel="stylesheet" href="nox-screen.css">
+  <!-- Раздел «Команды» в системе Nox: последний слой, только body[data-view="commands"] -->
+  <link rel="stylesheet" href="nox-commands.css">
+  <!-- Раздел «Подключения»: тот же каркас Nox, только body[data-view="mcp"] -->
+  <link rel="stylesheet" href="nox-connections.css">
+  <link rel="stylesheet" href="nox-settings.css">
+  <!-- Общая оболочка Nox для всех разделов: шапка, рейка, Журнал, Аккаунт. Последний слой. -->
+  <link rel="stylesheet" href="nox-shell.css">
   <!-- Без defer: тема ставится до первой отрисовки -->
   <script src="theme-boot.js"></script>
   <!-- dev-stub.js здесь не подключается: shared.js догружает его сам и только в обычном браузере без window.jarvis. -->
@@ -31,21 +39,39 @@
   <script src="look.js" defer></script>
   <script src="connections.js" defer></script>
   <script src="settings-nav.js" defer></script>
+  <!-- Экран Nox: свой модуль сферы (проволока и точки) и слой оболочки -->
+  <script src="orb-nox.js" defer></script>
+  <script src="nox-screen.js" defer></script>
+  <script src="nox-settings.js" defer></script>
+  <script src="nox-shell.js" defer></script>
 </head>
-<body>
+<body data-view="nox">
   <!-- Пока Джарвис управляет ПК (событие hands из main.js): надпись и подсказка Esc. -->
   <div class="hands-banner" id="handsBanner" hidden><div class="hands-pill" role="status"><span class="hands-dot" aria-hidden="true"></span><span class="hands-text">Nox работает на вашем ПК</span><span class="hands-sep" aria-hidden="true">·</span><kbd>Esc</kbd><span class="hands-hint">— остановить</span></div></div>
   <div class="app" id="app">
     <!-- Эффект фона темы (звёзды, волны, лунный свет, рассвет): только рисунок, под панелями, правила в themes.css. -->
     <div class="theme-fx" aria-hidden="true"></div>
 
+    <!-- ── Общая шапка Nox: одна на все разделы (классический экран её не показывает) ── -->
+    <header class="nox-topbar" id="noxTopbar">
+      <span class="nox-top-brand" aria-label="Nox"><i class="nox-top-mark" aria-hidden="true"></i><span class="nox-top-word" aria-hidden="true">NOX</span></span>
+      <div class="nox-top-actions">
+        <button class="nox-top-btn" type="button" data-nav="settings" title="Настройки (Ctrl+5)" aria-label="Настройки"><span data-icon="sliders" aria-hidden="true"></span><span class="nox-top-dot" id="noxTopDot" hidden></span></button>
+        <button class="nox-top-btn nox-top-account" type="button" data-nav="account" title="Аккаунт" aria-label="Аккаунт"><span data-icon="user" aria-hidden="true"></span></button>
+        <span class="nox-top-div" aria-hidden="true"></span>
+        <button class="nox-top-btn" type="button" data-act="minimize" title="Свернуть" aria-label="Свернуть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+        <button class="nox-top-btn" type="button" data-act="maximize" title="Развернуть" aria-label="Развернуть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
+        <button class="nox-top-btn nox-top-close" type="button" data-act="close" title="Закрыть" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+      </div>
+    </header>
+
     <!-- ── Левая панель: три раздела ──────────────────────────── -->
     <nav class="rail" aria-label="Разделы">
       <span class="rail-brand" aria-label="Nox"><i class="rail-mark" aria-hidden="true"></i><span class="rail-brand-text" aria-hidden="true">Nox</span></span>
       <ul class="rail-list">
-        <li><button class="rail-item" type="button" data-nav="dialog" title="Чат (Ctrl+1)" aria-label="Чат"><span class="rail-icon" data-icon="chat" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Чат</span><span class="rail-count" id="pendingCount" hidden>0</span></button></li>
+        <li><button class="rail-item" type="button" data-nav="nox" title="Чат (Ctrl+1)" aria-label="Чат"><span class="rail-icon" data-icon="chat" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Чат</span><span class="rail-count" id="pendingCount" hidden>0</span></button></li>
         <li><button class="rail-item" type="button" data-nav="commands" title="Команды (Ctrl+2)" aria-label="Команды"><span class="rail-icon" data-icon="bolt" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Команды</span></button></li>
-        <li><button class="rail-item" type="button" data-nav="journal" title="История (Ctrl+3)" aria-label="История"><span class="rail-icon" data-icon="check" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">История</span></button></li>
+        <li><button class="rail-item" type="button" data-nav="journal" title="Журнал (Ctrl+3)" aria-label="Журнал"><span class="rail-icon" data-icon="check" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Журнал</span></button></li>
         <li><button class="rail-item" type="button" data-nav="mcp" title="Подключения (Ctrl+4)" aria-label="Подключения"><span class="rail-icon" data-icon="plug" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Подключения</span></button></li>
         <li><button class="rail-item" type="button" data-nav="settings" title="Настройки (Ctrl+5)" aria-label="Настройки"><span class="rail-icon" data-icon="sliders" aria-hidden="true"></span><span class="rail-label" aria-hidden="true">Настройки</span><span class="rail-dot" id="settingsDot" hidden></span></button></li>
       </ul>
@@ -72,12 +98,6 @@
           <span class="orb-wrap" id="orbWrap" data-state="idle"><canvas class="orb-canvas" id="orb" aria-hidden="true"></canvas></span>
           <p class="status-text"><span class="status-main" id="statusText" aria-live="polite">Готов</span><span class="status-sub" id="statusSub"></span></p>
           <h1 class="view-title" id="viewTitle">Главная</h1>
-          <div class="crumb" id="editorCrumb" hidden>
-            <button class="crumb-back" type="button" id="cmdBack" title="К списку команд" aria-label="Назад к списку команд"><span data-icon="back" aria-hidden="true"></span><span class="crumb-back-label">Команды</span></button>
-            <span class="crumb-sep" aria-hidden="true">/</span>
-            <span class="crumb-name" id="cmdEditorTitle"></span>
-            <span class="tag tag-warn" id="cmdDirty" hidden>не сохранено</span>
-          </div>
         </div>
         <div class="topbar-right">
           <button class="you-half" type="button" id="youHalf" data-on="false"><span class="you-glyph" data-icon="stwait" aria-hidden="true"></span><span class="you-word">Ждёт вас</span><span class="you-num" id="youNum">0</span></button>
@@ -104,13 +124,57 @@
             </div>
           </div>
           <button class="btn btn-stop btn-sm" type="button" id="headerStop" data-action="stop" title="Остановить (Esc)" aria-label="Остановить (Esc)" hidden><span data-icon="stop" aria-hidden="true"></span><span class="btn-label">Стоп</span></button>
+          <!-- Окно без системной рамки: те же кнопки для прежних разделов (на экране Nox они в панели сферы) -->
+          <div class="win-controls" aria-label="Окно">
+            <button type="button" data-act="minimize" title="Свернуть" aria-label="Свернуть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+            <button type="button" data-act="maximize" title="Развернуть" aria-label="Развернуть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
+            <button type="button" data-act="close" title="Закрыть" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+          </div>
         </div>
       </header>
 
       <main class="views" id="views">
 
-        <!-- 1. Джарвис: диалог и шар -->
-        <section class="view view-dialog" data-view="dialog" aria-labelledby="viewTitle">
+        <!-- 1. Nox — первый экран: рейка, история, чат, сфера -->
+        <section class="view view-nox" data-view="nox" aria-label="Nox">
+          <div class="nox-grid" id="noxGrid">
+            <!-- B. История чатов -->
+            <aside class="nox-panel nox-history" id="noxHistory" aria-labelledby="noxHistTitle">
+              <header class="nox-hist-head">
+                <div class="nox-hist-titlerow">
+                  <h2 class="nox-hist-title" id="noxHistTitle">История</h2>
+                  <button class="nox-hist-toggle" type="button" id="noxHistToggle" aria-controls="noxHistory" title="Свернуть историю" aria-label="Свернуть историю"><span data-icon="panel" aria-hidden="true"></span></button>
+                </div>
+                <button class="nox-new-chat" type="button" id="noxNewChat"><span data-icon="plus" aria-hidden="true"></span><span>Новый чат</span></button>
+              </header>
+              <div class="nox-hist-scroll" id="noxHistScroll">
+                <div class="nox-hist-sections" id="noxHistSections"></div>
+                <p class="nox-hist-empty" id="noxHistEmpty" hidden>Пока нет чатов</p>
+              </div>
+              <div class="nox-hist-ws" id="noxWsSlot"></div>
+            </aside>
+
+            <!-- C. Чат: лента и поле ввода переезжают сюда из классического экрана -->
+            <section class="nox-panel nox-chat" id="noxChat" aria-label="Чат">
+              <header class="nox-chat-head">
+                <button class="nox-hist-toggle nox-hist-show" type="button" id="noxHistOpen" aria-controls="noxHistory" aria-expanded="false" title="Показать историю" aria-label="Показать историю" hidden><span data-icon="panel" aria-hidden="true"></span></button>
+                <span class="nox-chat-mark">NOX</span>
+              </header>
+              <div class="nox-chat-body" id="noxChatMount"></div>
+              <div class="nox-composer" id="noxComposerSlot"></div>
+            </section>
+
+            <!-- D. Сфера состояния -->
+            <section class="nox-panel nox-sphere" id="noxSphere" aria-label="Сфера состояния">
+              <div class="nox-orb-stage" id="noxOrbStage">
+                <canvas id="noxOrb" role="img" aria-label="Шар состояния Nox" tabindex="-1"></canvas>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <!-- 2. Классический экран (прежняя Главная): сцена, подсказки, столы и миссии -->
+        <section class="view view-dialog" data-view="dialog" aria-labelledby="viewTitle" hidden>
           <section class="stage" id="stage" data-state="idle" aria-label="Состояние Джарвиса">
             <p class="stage-clock"><time id="clock">--:--</time><span class="stage-date" id="clockDate"></span></p>
             <div class="orbit">
@@ -240,12 +304,17 @@
         </section>
 
         <!-- Дела: что начато, ждёт, обещано, провалилось -->
-        <section class="view view-deals" data-view="deals" aria-labelledby="viewTitle" hidden>
-          <div class="page" id="dealsPage"></div>
+        <section class="view view-deals" data-view="deals" aria-labelledby="dealsTitle" hidden>
+          <div class="nox-page" id="dealsPanel">
+            <header class="nox-page-head"><h1 class="nox-page-title" id="dealsTitle">Дела</h1><p class="nox-page-sub">Что начато, ждёт вас или не получилось</p></header>
+            <div class="page" id="dealsPage"></div>
+          </div>
         </section>
 
         <!-- Журнал проверок -->
-        <section class="view view-journal" data-view="journal" aria-labelledby="viewTitle" hidden>
+        <section class="view view-journal" data-view="journal" aria-labelledby="journalTitle" hidden>
+          <div class="nox-page" id="journalPanel">
+          <header class="nox-page-head"><h1 class="nox-page-title" id="journalTitle">Журнал</h1><p class="nox-page-sub">Действия Джарвиса и их проверка</p></header>
           <div class="page">
             <section class="set-section" id="journalCard" aria-labelledby="setJournalTitle">
               <div class="set-title-row">
@@ -279,150 +348,293 @@
               </div>
             </section>
           </div>
+          </div>
         </section>
 
-        <!-- 2. Команды -->
+        <!-- 2. Команды — каталог, библиотека, паки, редактор, запись -->
         <section class="view view-commands" data-view="commands" aria-labelledby="viewTitle" hidden>
-          <div class="page commands" id="commands">
-            <div class="cmd-lists" id="cmdLists">
-              <div class="cmd-toolbar">
-                <div class="seg tabs" role="tablist" aria-label="Команды">
-                  <button class="seg-btn" type="button" role="tab" id="tabMine" data-tab="mine" aria-controls="panelMine" aria-selected="true" tabindex="0">Мои · <span id="cmdCount">0</span></button>
-                  <button class="seg-btn" type="button" role="tab" id="tabLib" data-tab="lib" aria-controls="panelLib" aria-selected="false" tabindex="-1">Библиотека · <span id="libCount">0</span></button>
+          <div class="commands" id="commands">
+            <!-- ── Каталог: шапка, вкладки, список, паки ───────────── -->
+            <section class="nox-cmd-panel nox-cmd-catalog" id="cmdCatalog" aria-label="Команды">
+              <header class="nox-cmd-head">
+                <h2 class="nox-cmd-title">Команды</h2>
+                <div class="nox-cmd-head-actions">
+                  <button class="nox-btn nox-btn-primary" type="button" id="cmdNew" title="Новая команда (Ctrl+N)"><span data-icon="plus" aria-hidden="true"></span>Новая</button>
                 </div>
-                <button class="btn btn-primary btn-sm" type="button" id="cmdNew" title="Новая команда (Ctrl+N)"><span data-icon="plus" aria-hidden="true"></span>Новая</button>
-                <input class="input input-sm lib-search" id="libSearch" type="search" placeholder="Найти команду" aria-label="Найти команду" hidden>
-                <input class="input input-sm lib-search" id="cmdSearch" type="search" placeholder="Найти мою команду" aria-label="Найти мою команду" hidden>
-                <button class="btn btn-secondary btn-sm" type="button" id="cmdImport" title="Импортировать команды из файла">Импорт</button>
-                <button class="btn btn-secondary btn-sm" type="button" id="cmdExport" title="Сохранить команды в файл">Экспорт</button>
-                <button class="btn btn-secondary btn-sm" type="button" id="cmdRecord" title="Записать действия и превратить их в команду">Записать</button>
-              </div>
+              </header>
 
-              <div class="tab-panel" role="tabpanel" id="panelMine" aria-labelledby="tabMine">
-                <p class="note note-warn" id="cmdApiNote" hidden></p>
-                <p class="note" id="cmdTreeNote" hidden></p>
-                <ul class="cmd-list" id="cmdList"></ul>
-                <div class="empty" id="cmdEmpty" hidden>
-                  <p>Своих команд пока нет. Создайте первую или скажите в диалоге: «когда скажу „кино“, приглуши звук».</p>
-                  <button class="btn btn-secondary" type="button" id="cmdEmptyNew"><span data-icon="plus" aria-hidden="true"></span>Создать команду</button>
+              <div class="nox-cmd-toolbar" id="cmdLists">
+                <div class="nox-tabs" role="tablist" aria-label="Команды">
+                  <button class="nox-tab" type="button" role="tab" id="tabMine" data-tab="mine" aria-controls="panelMine" aria-selected="true" tabindex="0">Мои <span class="nox-tab-count" aria-hidden="true">·</span> <span class="nox-tab-count" id="cmdCount">0</span></button>
+                  <button class="nox-tab" type="button" role="tab" id="tabLib" data-tab="lib" aria-controls="panelLib" aria-selected="false" tabindex="-1">Библиотека <span class="nox-tab-count" aria-hidden="true">·</span> <span class="nox-tab-count" id="libCount">0</span></button>
+                </div>
+                <div class="nox-search" id="cmdSearchWrap">
+                  <span data-icon="search" aria-hidden="true"></span>
+                  <input id="cmdSearch" type="search" placeholder="Поиск по имени и фразам…" aria-label="Поиск по имени и фразам">
+                </div>
+                <div class="nox-search" id="libSearchWrap" hidden>
+                  <span data-icon="search" aria-hidden="true"></span>
+                  <input id="libSearch" type="search" placeholder="Поиск по библиотеке…" aria-label="Поиск по библиотеке">
+                </div>
+                <div class="nox-cmd-tools">
+                  <button class="nox-btn" type="button" id="cmdRecord" title="Записать действия и превратить их в команду"><span class="nox-rec-dot" aria-hidden="true"></span>Записать</button>
+                  <button class="nox-btn" type="button" id="cmdImport" title="Импортировать команды из файла">Импорт</button>
+                  <button class="nox-btn" type="button" id="cmdExport" title="Сохранить команды в файл">Экспорт</button>
                 </div>
               </div>
 
-              <div class="tab-panel" role="tabpanel" id="panelLib" aria-labelledby="tabLib" hidden>
-                <p class="note note-warn" id="libNote" hidden></p>
-                <div class="lib-groups" id="libGroups"></div>
-              </div>
-            </div>
+              <div class="nox-cmd-body">
+                <div class="nox-cmd-col">
+                  <div class="nox-loading" id="cmdLoading"><span class="nox-spinner" aria-hidden="true"></span>Загрузка команд…</div>
+                  <p class="nox-note note-warn" id="cmdApiNote" hidden></p>
+                  <p class="nox-note" id="cmdTreeNote" hidden></p>
 
-            <div class="set-section" id="cmdRecordPanel" hidden aria-live="polite">
-              <h2 class="set-title">Запись действий</h2>
-              <p class="set-hint">Записываются только реально выполненные шаги, пока идёт запись. Пароли, одноразовые коды и набранный текст не записываются.</p>
-              <p class="note note-warn" id="cmdRecordWarn">Шаги по координатам окна могут не совпасть при другом размере окна — проверьте их перед сохранением.</p>
-              <ol class="steps" id="cmdRecordSteps"></ol>
-              <p class="form-error" id="cmdRecordError" role="alert" hidden></p>
-              <div class="editor-foot">
-                <button class="btn btn-danger" type="button" id="cmdRecordCancel">Отменить запись</button>
-                <span class="editor-foot-gap"></span>
-                <button class="btn btn-primary" type="button" id="cmdRecordStop">Остановить и открыть черновик</button>
-              </div>
-            </div>
-
-            <form class="editor" id="cmdEditor" hidden autocomplete="off" novalidate aria-label="Редактор команды">
-              <div class="editor-main">
-                <div class="field">
-                  <label class="field-label" for="cmdName">Имя</label>
-                  <input class="input" id="cmdName" type="text" maxlength="60" placeholder="Например, «Рабочее утро»">
-                </div>
-
-                <div class="field">
-                  <div class="field-label-row">
-                    <span class="field-label" id="cmdPhrasesLabel">Фразы</span>
-                    <span class="counter" id="cmdPhraseCount">0 / 5</span>
+                  <div class="nox-cmd-listwrap" role="tabpanel" id="panelMine" aria-labelledby="tabMine">
+                    <ul class="nox-cmd-list" id="cmdList"></ul>
+                    <div class="nox-empty" id="cmdEmpty" hidden>
+                      <span class="nox-empty-icon" data-icon="bolt" aria-hidden="true"></span>
+                      <p class="nox-empty-title">Пока нет команд</p>
+                      <p class="nox-empty-text">Создайте первую или скажите в диалоге: «когда скажу „кино“, приглуши звук».</p>
+                      <button class="nox-btn nox-btn-primary" type="button" id="cmdEmptyNew"><span data-icon="plus" aria-hidden="true"></span>Создать команду</button>
+                    </div>
+                    <div class="nox-empty" id="cmdNoResults" hidden>
+                      <p class="nox-empty-title">Ничего не нашлось</p>
+                      <p class="nox-empty-text">Попробуйте другое слово: имя, папка или фраза.</p>
+                      <button class="nox-link" type="button" id="cmdResetSearch">Сбросить поиск</button>
+                    </div>
                   </div>
-                  <div class="chips" id="cmdPhrases" role="list" aria-labelledby="cmdPhrasesLabel"></div>
-                  <div class="inline-add">
-                    <input class="input" id="cmdPhraseInput" type="text" maxlength="80" placeholder="Новая фраза" aria-label="Новая фраза">
-                    <button class="btn btn-secondary" type="button" id="cmdPhraseAdd"><span data-icon="plus" aria-hidden="true"></span>Добавить</button>
+
+                  <div class="nox-lib-scroll" role="tabpanel" id="panelLib" aria-labelledby="tabLib" hidden>
+                    <p class="nox-note note-warn" id="libNote" hidden></p>
+                    <div class="lib-groups" id="libGroups"></div>
+                  </div>
+
+                  <div class="nox-recording" id="cmdRecordPanel" hidden aria-live="polite">
+                    <div class="nox-recording-head">
+                      <h3>Запись действий</h3>
+                      <span class="nox-chip"><span class="nox-rec-dot" aria-hidden="true"></span>Запись идёт</span>
+                    </div>
+                    <p class="nox-recording-hint">Записываются только реально выполненные шаги, пока идёт запись. Пароли, одноразовые коды и набранный текст не записываются.</p>
+                    <p class="nox-recording-warn" id="cmdRecordWarn">Шаги по координатам окна могут не совпасть при другом размере окна — проверьте их перед сохранением.</p>
+                    <ol class="nox-recording-steps steps" id="cmdRecordSteps"></ol>
+                    <p class="form-error" id="cmdRecordError" role="alert" hidden></p>
+                    <div class="nox-recording-foot">
+                      <button class="nox-btn nox-btn-danger" type="button" id="cmdRecordCancel">Отменить запись</button>
+                      <span class="editor-foot-gap"></span>
+                      <button class="nox-btn nox-btn-primary" type="button" id="cmdRecordStop">Остановить и открыть черновик</button>
+                    </div>
                   </div>
                 </div>
 
-                <div class="field-row">
+                <aside class="nox-packs" id="cmdPacks" aria-labelledby="cmdPacksTitle">
+                  <div class="nox-packs-head">
+                    <h3 class="nox-packs-title" id="cmdPacksTitle">Готовые паки</h3>
+                    <p class="nox-packs-sub" id="cmdPacksSub">Наборы команд для программ</p>
+                  </div>
+                  <div class="nox-packs-list" id="cmdPacksList"></div>
+                  <p class="nox-packs-foot">Все паки хранятся локально</p>
+                </aside>
+              </div>
+            </section>
+
+            <!-- ── Редактор команды: заменяет каталог ──────────────── -->
+            <form class="nox-cmd-panel nox-editor" id="cmdEditor" hidden autocomplete="off" novalidate aria-label="Редактор команды">
+              <header class="nox-cmd-head nox-editor-head">
+                <button class="nox-icon-btn" type="button" id="cmdBack" title="К списку команд" aria-label="Назад к списку команд"><span data-icon="back" aria-hidden="true"></span></button>
+                <div class="nox-editor-crumbs">
+                  <div class="nox-crumb" id="editorCrumb">
+                    <span class="nox-crumb-root">Команды</span>
+                    <span class="nox-crumb-sep" aria-hidden="true">/</span>
+                    <span id="cmdEditorTitle"></span>
+                    <span class="nox-tag" id="cmdDirty" hidden>не сохранено</span>
+                  </div>
+                  <span class="nox-editor-sub">Редактирование команды</span>
+                </div>
+              </header>
+
+              <div class="nox-editor-body">
+                <div class="nox-editor-main">
                   <div class="field">
-                    <label class="field-label" for="cmdFolder">Папка</label>
-                    <input class="input" id="cmdFolder" type="text" maxlength="60" placeholder="Необязательно, до 60 знаков">
+                    <label class="field-label" for="cmdName">Имя команды</label>
+                    <input class="input" id="cmdName" type="text" maxlength="60" placeholder="Например, «Рабочее утро»">
                   </div>
+
+                  <div class="field field-phrases">
+                    <div class="field-label-row">
+                      <span class="field-label" id="cmdPhrasesLabel">Фразы для запуска</span>
+                      <span class="counter" id="cmdPhraseCount">0 / 5</span>
+                    </div>
+                    <div class="phrase-row">
+                      <div class="chips" id="cmdPhrases" role="list" aria-labelledby="cmdPhrasesLabel"></div>
+                      <div class="inline-add">
+                        <input class="input" id="cmdPhraseInput" type="text" maxlength="80" placeholder="Добавить фразу" aria-label="Добавить фразу">
+                        <button class="nox-btn" type="button" id="cmdPhraseAdd" title="Добавить фразу" aria-label="Добавить фразу"><span data-icon="plus" aria-hidden="true"></span><span class="btn-label">Добавить</span></button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="field-row">
+                    <div class="field">
+                      <label class="field-label" for="cmdFolder">Папка</label>
+                      <input class="input" id="cmdFolder" type="text" maxlength="60" placeholder="Необязательно, до 60 знаков">
+                    </div>
+                    <div class="field">
+                      <label class="field-label" for="cmdHotkey">Горячая клавиша</label>
+                      <input class="input mono" id="cmdHotkey" type="text" maxlength="40" placeholder="Например, Ctrl+Alt+1">
+                    </div>
+                  </div>
+
+                  <p class="origin-line" id="cmdOrigin" hidden><span data-icon="help" aria-hidden="true"></span><span id="cmdOriginText"></span></p>
+                  <p class="warn-line" id="cmdWarnings" hidden><span data-icon="alert" aria-hidden="true"></span><span id="cmdWarningsText"></span></p>
+
                   <div class="field">
-                    <label class="field-label" for="cmdHotkey">Горячая клавиша</label>
-                    <input class="input" id="cmdHotkey" type="text" maxlength="40" placeholder="Например, Ctrl+Alt+1">
+                    <div class="steps-head">
+                      <h2 class="steps-title" id="cmdStepsLabel">Шаги <span class="counter" id="cmdStepCount">0 / 20</span></h2>
+                      <button class="nox-btn" type="button" id="cmdStepAdd"><span data-icon="plus" aria-hidden="true"></span>Добавить действие</button>
+                    </div>
+                    <p class="nox-note" id="cmdCatalogNote" hidden></p>
+                    <ol class="steps" id="cmdSteps" aria-labelledby="cmdStepsLabel"></ol>
                   </div>
                 </div>
 
-                <p class="note" id="cmdOrigin" hidden></p>
-                <p class="note note-warn" id="cmdWarnings" hidden></p>
-
-                <div class="field">
-                  <div class="field-label-row">
-                    <h2 class="field-label" id="cmdStepsLabel">Шаги</h2>
-                    <span class="field-tools">
-                      <span class="counter" id="cmdStepCount">0 / 10</span>
-                      <button class="btn btn-secondary btn-sm" type="button" id="cmdStepAdd"><span data-icon="plus" aria-hidden="true"></span>Шаг</button>
-                    </span>
+                <aside class="nox-editor-side" aria-label="Результат проверки">
+                  <div class="nox-result">
+                    <h3>Результат проверки</h3>
+                    <p class="nox-result-sub" id="cmdSideSub">Без запуска — только текст шагов</p>
+                    <div class="run-result" id="cmdRunResult" role="status" hidden></div>
+                    <ul class="nox-ready-list" id="cmdSideReady"></ul>
+                    <div class="nox-result-hint"><span data-icon="help" aria-hidden="true"></span><span>Сохранение не запускает команду. Нажмите «Запустить сейчас» после.</span></div>
                   </div>
-                  <p class="note" id="cmdCatalogNote" hidden></p>
-                  <ol class="steps" id="cmdSteps" aria-labelledby="cmdStepsLabel"></ol>
-                </div>
+                </aside>
+              </div>
 
+              <div class="nox-editor-error-wrap">
                 <p class="form-error" id="cmdError" role="alert" hidden></p>
               </div>
 
-              <aside class="editor-side" aria-label="Результат запуска">
-                <div class="run-result" id="cmdRunResult" role="status" hidden></div>
-              </aside>
-
-              <div class="editor-foot">
-                <button class="btn btn-danger" type="button" id="cmdDelete"><span data-icon="trash" aria-hidden="true"></span><span id="cmdDeleteText">Удалить</span></button>
+              <footer class="nox-editor-foot editor-foot">
+                <button class="nox-btn nox-btn-danger" type="button" id="cmdDelete"><span data-icon="trash" aria-hidden="true"></span><span id="cmdDeleteText">Удалить</span></button>
                 <span class="editor-foot-gap"></span>
                 <button class="btn btn-secondary" type="button" id="cmdCheck" title="Показать, что будет делать команда, без запуска"><span data-icon="search" aria-hidden="true"></span>Проверить</button>
                 <button class="btn btn-secondary" type="button" id="cmdRun"><span data-icon="play" aria-hidden="true"></span>Запустить сейчас</button>
                 <button class="btn btn-ghost" type="button" id="cmdCancel">Отмена</button>
                 <button class="btn btn-primary" type="submit" id="cmdSave" title="Сохранить (Ctrl+S)">Сохранить</button>
-              </div>
+              </footer>
             </form>
           </div>
         </section>
 
         <!-- Подключения: внешние сервисы по протоколу MCP -->
         <section class="view view-mcp" data-view="mcp" aria-labelledby="viewTitle" hidden>
-          <div class="page" id="mcpPage">
-            <section class="set-section" aria-labelledby="mcpTitle">
-              <h2 class="set-title" id="mcpTitle">Подключённые сервисы</h2>
-              <p class="set-hint" id="mcpLead">Внешние программы, которым Джарвис может поручать работу: почта, календарь, таблицы, свои скрипты.</p>
-              <ul class="mcp-list" id="mcpList"></ul>
-              <div class="empty" id="mcpEmpty" hidden><p>Сервисов пока нет. Добавьте первый ниже.</p></div>
-            </section>
-            <section class="set-section" aria-labelledby="mcpAddTitle">
-              <h2 class="set-title" id="mcpAddTitle">Добавить сервис</h2>
-              <form class="mcp-form" id="mcpForm" autocomplete="off">
-                <label class="field"><span class="field-label">Название</span><input class="input" name="name" type="text" maxlength="40" placeholder="Например, calendar" required></label>
-                <label class="field"><span class="field-label">Адрес или команда</span><input class="input" name="target" type="text" maxlength="400" placeholder="https://… или npx.cmd" required></label>
-                <label class="field"><span class="field-label">Аргументы команды</span><input class="input" name="args" type="text" maxlength="400" placeholder="через пробел, если запуск командой"></label>
-                <div class="mcp-form-foot"><p class="set-hint" id="mcpFormNote">Изменения применятся после перезапуска Джарвиса. Действия сервиса всегда спрашиваются, пока вы не разрешите их в настройках.</p><button class="btn btn-primary" type="submit">Добавить</button></div>
-              </form>
+          <div class="nox-conn" id="mcpPage">
+            <section class="nox-conn-panel" id="mcpPanel" aria-label="Подключения">
+              <header class="nox-cmd-head nox-conn-head" id="mcpHead">
+                <h2 class="nox-cmd-title" id="mcpTitle">Подключения</h2>
+                <div class="nox-cmd-head-actions">
+                  <button class="nox-btn nox-btn-primary" type="button" id="mcpAddBtn"><span data-icon="plus" aria-hidden="true"></span>Добавить сервис</button>
+                </div>
+              </header>
+
+              <div class="nox-conn-toolbar" id="mcpToolbar">
+                <div class="nox-search" id="mcpSearchWrap">
+                  <span data-icon="search" aria-hidden="true"></span>
+                  <input id="mcpSearch" type="search" placeholder="Поиск сервисов…" aria-label="Поиск сервисов">
+                </div>
+                <div class="nox-conn-filters" id="mcpFilters" role="group" aria-label="Фильтр по состоянию">
+                  <button class="nox-chip-filter" type="button" data-filter="all" aria-pressed="true">Все <span class="mcp-filter-count" id="mcpFilterAllCount"></span></button>
+                  <button class="nox-chip-filter" type="button" data-filter="connected" aria-pressed="false">Подключённые <span class="mcp-filter-count" id="mcpFilterConnectedCount"></span></button>
+                  <button class="nox-chip-filter" type="button" data-filter="disabled" aria-pressed="false">Выключенные <span class="mcp-filter-count" id="mcpFilterDisabledCount"></span></button>
+                  <button class="nox-chip-filter" type="button" data-filter="error" aria-pressed="false">Ошибка <span class="mcp-filter-count" id="mcpFilterErrorCount"></span></button>
+                </div>
+                <button class="nox-icon-btn" type="button" id="mcpReload" title="Обновить состояние" aria-label="Обновить состояние"><span data-icon="refresh" aria-hidden="true"></span></button>
+              </div>
+
+              <div class="nox-conn-body">
+                <div class="nox-conn-listcol">
+                  <div class="nox-loading" id="mcpLoading"><span class="mcp-spinner" aria-hidden="true"></span>Загрузка подключений…</div>
+                  <p class="nox-note note-err" id="mcpErrorNote" role="status" hidden><span data-icon="alert" aria-hidden="true"></span><span class="nox-note-grow" id="mcpErrorText"></span><button class="nox-btn nox-btn-ghost" type="button" id="mcpErrorRetry">Повторить</button></p>
+                  <div class="nox-conn-listwrap" id="mcpListWrap">
+                    <ul class="nox-conn-list" id="mcpList" aria-label="Подключённые сервисы"></ul>
+                    <div class="nox-empty" id="mcpEmpty" hidden>
+                      <span class="nox-empty-icon" data-icon="plug" aria-hidden="true"></span>
+                      <p class="nox-empty-title">Нет подключений</p>
+                      <p class="nox-empty-text">Внешние сервисы по протоколу MCP: файлы, браузер, базы данных, свои скрипты. Добавьте первый — он сразу подключится.</p>
+                      <button class="nox-btn nox-btn-primary" type="button" id="mcpEmptyAdd"><span data-icon="plus" aria-hidden="true"></span>Добавить сервис</button>
+                    </div>
+                    <div class="nox-empty" id="mcpNoResults" hidden>
+                      <p class="nox-empty-title">Ничего не найдено</p>
+                      <p class="nox-empty-text">Измените запрос или сбросьте фильтр.</p>
+                      <button class="nox-link" type="button" id="mcpResetFilters">Сбросить</button>
+                    </div>
+                  </div>
+                </div>
+
+                <aside class="nox-popular" id="mcpPopular" aria-labelledby="mcpPopularTitle">
+                  <div class="nox-popular-head"><h3 class="nox-popular-title" id="mcpPopularTitle">Популярные</h3></div>
+                  <div class="nox-popular-cats" id="mcpPopularCats" role="group" aria-label="Категории популярных сервисов"></div>
+                  <div class="nox-popular-list" id="mcpPopularList"></div>
+                  <p class="nox-popular-note" id="mcpPopularNote">Ключи доступа сюда не подставляются: сервисы с ключами добавляются вручную. Пакеты ставятся только после вашего подтверждения.</p>
+                </aside>
+              </div>
             </section>
           </div>
         </section>
 
         <!-- Аккаунт -->
-        <section class="view view-account" data-view="account" aria-labelledby="viewTitle" hidden>
-          <div class="page" id="accountPage"></div>
+        <section class="view view-account" data-view="account" aria-labelledby="accountTitle" hidden>
+          <div class="nox-page" id="accountPanel">
+            <header class="nox-page-head"><h1 class="nox-page-title" id="accountTitle">Аккаунт</h1></header>
+            <div class="page" id="accountPage"></div>
+          </div>
         </section>
 
         <!-- 3. Настройки -->
         <section class="view view-settings" data-view="settings" aria-labelledby="viewTitle" hidden>
-          <nav class="set-nav" id="setNav" aria-label="Разделы настроек"><p class="set-nav-head">Разделы</p><ul id="setNavList"></ul></nav>
-          <div class="page settings">
+          <div class="nox-set" id="setPanel">
+            <header class="nox-set-head" id="setHead">
+              <h1 class="nox-set-title">Настройки</h1>
+              <div class="nox-set-status" id="setStatus" role="status" aria-live="polite"></div>
+            </header>
+            <div class="nox-set-body" id="setBody">
+              <aside class="set-nav nox-set-nav" id="setNav" aria-label="Разделы настроек">
+                <div class="nox-set-searchwrap">
+                  <span data-icon="search" aria-hidden="true"></span>
+                  <input class="nox-set-search" id="setSearch" type="search" placeholder="Поиск настроек…" aria-label="Поиск настроек" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="nox-set-chips" id="setChips" role="group" aria-label="Быстрые категории">
+                  <button class="nox-chip-filter" type="button" data-set-chip="all" aria-pressed="true">Все</button>
+                  <button class="nox-chip-filter" type="button" data-set-chip="ai" aria-pressed="false">ИИ</button>
+                  <button class="nox-chip-filter" type="button" data-set-chip="look" aria-pressed="false">Вид</button>
+                  <button class="nox-chip-filter" type="button" data-set-chip="voice" aria-pressed="false">Голос</button>
+                </div>
+                <p class="set-nav-head" id="setNavHead">Разделы</p>
+                <ul id="setNavList"></ul>
+              </aside>
+              <div class="nox-set-main" id="setMain">
+                <p class="nox-set-error" id="setError" role="alert" hidden><span data-icon="alert" aria-hidden="true"></span><span id="setErrorText"></span></p>
+                <div class="page settings" id="settingsPage">
 
-            <section class="set-section" id="settings-mode" aria-labelledby="setModeTitle">
+            <section class="set-section" id="settings-ai" data-cat="ai" aria-labelledby="setAiTitle">
+              <h2 class="set-title" id="setAiTitle">ИИ и провайдеры</h2>
+              <p class="set-sub">Модель и глубина обдумывания для чата. Пользователю видны только «Быстрая» и «Умная»; названия моделей и провайдеров остаются в настройке.</p>
+              <div class="set-row">
+                <span class="set-text"><span class="set-name" id="setModelLabel">Модель</span><span class="set-hint" id="setModelHint">Отвечает сразу. Подходит для команд и коротких вопросов.</span></span>
+                <select class="input input-sm" id="setModelTier" aria-labelledby="setModelLabel" aria-describedby="setModelHint">
+                  <option value="fast">Быстрая</option>
+                  <option value="smart">Умная</option>
+                </select>
+              </div>
+              <div class="set-row">
+                <span class="set-text"><span class="set-name" id="setThinkingLabel">Мышление</span><span class="set-hint" id="setThinkingHint">Обычный расход лимита.</span></span>
+                <select class="input input-sm" id="setThinking" aria-labelledby="setThinkingLabel" aria-describedby="setThinkingHint">
+                  <option value="low">Кратко</option>
+                  <option value="medium">Обычно</option>
+                  <option value="high">Глубоко</option>
+                </select>
+              </div>
+            </section>
+
+            <section class="set-section" id="settings-mode" data-cat="security" aria-labelledby="setModeTitle">
               <h2 class="set-title" id="setModeTitle">Режим доступа</h2>
               <div class="set-radios" id="modeOptions" role="radiogroup" aria-labelledby="setModeTitle">
                 <label class="set-row set-radio">
@@ -440,7 +652,7 @@
               </div>
             </section>
 
-            <section class="set-section" aria-labelledby="mailTitle" id="mailSettings" hidden>
+            <section class="set-section" aria-labelledby="mailTitle" id="mailSettings" data-cat="security" hidden>
               <h2 class="set-title" id="mailTitle">Почта Gmail</h2>
               <div class="set-row">
                 <span class="set-text"><span class="set-name">Подключение</span><span class="set-hint" id="mailStatus" role="status">Проверяю…</span></span>
@@ -456,7 +668,7 @@
               </div>
             </section>
 
-            <section class="set-section" aria-labelledby="setAnswersTitle">
+            <section class="set-section" data-cat="voice" aria-labelledby="setAnswersTitle">
               <h2 class="set-title" id="setAnswersTitle">Ответы</h2>
               <label class="set-row">
                 <span class="set-text"><span class="set-name">Говорить ответы</span><span class="set-hint">Озвучивать ответ голосом</span></span>
@@ -505,7 +717,7 @@
               </label>
             </section>
 
-            <section class="set-section" aria-labelledby="setWindowTitle">
+            <section class="set-section" data-cat="general" aria-labelledby="setWindowTitle">
               <h2 class="set-title" id="setWindowTitle">Окно и уведомления</h2>
               <label class="set-row">
                 <span class="set-text"><span class="set-name">Тихий режим</span><span class="set-hint">Без уведомлений и звуков</span></span>
@@ -545,7 +757,7 @@
               </label>
             </section>
 
-            <section class="set-section" aria-labelledby="setMemoryTitle" id="memorySettings">
+            <section class="set-section" aria-labelledby="setMemoryTitle" id="memorySettings" data-cat="voice">
               <div class="set-title-row">
                 <h2 class="set-title" id="setMemoryTitle">Память</h2>
                 <span class="counter" id="memoryCount"></span>
@@ -561,7 +773,7 @@
               </div>
             </section>
 
-            <section class="set-section" aria-labelledby="setRemindersTitle" id="remindersSettings">
+            <section class="set-section" aria-labelledby="setRemindersTitle" id="remindersSettings" data-cat="voice">
               <div class="set-title-row">
                 <h2 class="set-title" id="setRemindersTitle">Напоминания</h2>
                 <span class="counter" id="remindersCount"></span>
@@ -575,7 +787,7 @@
               </div>
             </section>
 
-            <section class="set-section" aria-labelledby="setExtensionsTitle" id="extensionsSettings">
+            <section class="set-section" aria-labelledby="setExtensionsTitle" id="extensionsSettings" data-cat="security">
               <h2 class="set-title" id="setExtensionsTitle">Расширения</h2>
               <p class="set-hint">Дополнительные возможности. Опасные действия — только по вашему подтверждению; пароли и коды не сохраняются.</p>
 
@@ -631,8 +843,9 @@
               </div>
             </section>
 
-            <section class="set-section" aria-labelledby="setLookTitle">
+            <section class="set-section" data-cat="look" aria-labelledby="setLookTitle">
               <h2 class="set-title" id="setLookTitle">Вид</h2>
+              <p class="set-sub">Тема, акцент, шрифты и плотность интерфейса. Всё это хранится только на этом компьютере.</p>
               <div class="set-row orb-pick-row">
                 <span class="set-text"><span class="set-name" id="themeLabel">Тема</span><span class="set-hint">Только на этом компьютере. Точка в образце — цвет «вашей очереди»</span></span>
                 <div class="theme-pick" id="themeSeg" role="radiogroup" aria-labelledby="themeLabel">
@@ -673,9 +886,50 @@
                 <span class="set-text"><span class="set-name">Анимация шара</span><span class="set-hint" id="orbAnimHint">Только на этом компьютере. Выключено — шар не движется</span></span>
                 <input type="checkbox" role="switch" class="switch" data-local="orbAnim">
               </label>
+              <div class="set-row">
+                <span class="set-text"><span class="set-name">Классический экран</span><span class="set-hint">Прежняя главная: сцена с шаром, подсказки, столы и миссии. Экран Nox открыт по умолчанию и чат общий</span></span>
+                <button class="btn btn-secondary btn-sm" type="button" id="openClassic">Открыть</button>
+              </div>
             </section>
 
-            <section class="set-section" aria-labelledby="setFolderTitle">
+            <section class="set-section" id="settings-sphere" data-cat="sphere" aria-labelledby="setSphereTitle">
+              <div class="set-title-row">
+                <h2 class="set-title" id="setSphereTitle">Сфера Nox — предпросмотр</h2>
+                <span class="nox-badge" id="sphereBadge" title="Тонкая настройка появится вместе с движком сферы">Скоро</span>
+              </div>
+              <p class="set-sub">Вариант сферы применяется к экрану чата сразу и запоминается. Размер и свечение ниже меняют только превью: у живой сферы пока нет механизма их сохранения.</p>
+              <div class="set-sphere-grid">
+                <div class="set-sphere-controls">
+                  <div class="set-row">
+                    <span class="set-text"><span class="set-name" id="sphereVariantLabel">Вид сферы</span><span class="set-hint">Wire — сетка, Nox Points — точки с ядром. Это тот же вид, что на главном экране</span></span>
+                    <div class="seg" id="sphereVariant" role="radiogroup" aria-labelledby="sphereVariantLabel">
+                      <button class="seg-btn" type="button" role="radio" data-sphere-variant="wire" aria-checked="false">Wire</button>
+                      <button class="seg-btn" type="button" role="radio" data-sphere-variant="nox" aria-checked="true">Nox Points</button>
+                    </div>
+                  </div>
+                  <div class="set-row">
+                    <span class="set-text"><span class="set-name" id="sphereSizeLabel">Размер</span><span class="set-hint" id="sphereSizeValue">100 %</span></span>
+                    <input class="range" id="sphereSize" type="range" min="70" max="120" step="5" value="100" aria-labelledby="sphereSizeLabel" aria-describedby="sphereSizeValue" data-preview-only="true">
+                  </div>
+                  <div class="set-row">
+                    <span class="set-text"><span class="set-name" id="sphereGlowLabel">Свечение</span><span class="set-hint" id="sphereGlowValue">100 %</span></span>
+                    <input class="range" id="sphereGlow" type="range" min="40" max="160" step="5" value="100" aria-labelledby="sphereGlowLabel" aria-describedby="sphereGlowValue" data-preview-only="true">
+                  </div>
+                  <p class="set-preview-note" id="spherePreviewNote" data-preview-only="true">Только <b>превью</b>. Эти два ползунка не меняют сферу в чате и не сохраняются как настройка сферы — сохраняется лишь положение ползунков для показа.</p>
+                </div>
+                <div class="set-sphere-preview" aria-hidden="true">
+                  <canvas id="spherePreview" width="380" height="380"></canvas>
+                  <span class="set-sphere-cap">idle</span>
+                </div>
+              </div>
+              <div class="set-sphere-foot">
+                <button class="btn btn-secondary btn-sm" type="button" id="sphereReset">Сбросить</button>
+                <span class="set-sphere-gap"></span>
+                <button class="btn btn-primary btn-sm" type="button" id="sphereApply" disabled title="Применение к живой сфере появится вместе с движком сферы">Применить</button>
+              </div>
+            </section>
+
+            <section class="set-section" data-cat="general" aria-labelledby="setFolderTitle">
               <h2 class="set-title" id="setFolderTitle">Рабочая папка</h2>
               <div class="set-row">
                 <span class="set-text"><span class="set-name path-box mono" id="workspacePath">—</span><span class="set-hint">Здесь Джарвис читает и пишет файлы</span></span>
@@ -688,7 +942,7 @@
               <div id="folderList"></div>
             </section>
 
-            <section class="set-section" id="settings-model" aria-labelledby="setModelTitle" tabindex="-1">
+            <section class="set-section" id="settings-model" data-cat="ai" aria-labelledby="setModelTitle" tabindex="-1">
               <h2 class="set-title" id="setModelTitle">Модель и связь</h2>
               <div class="set-row">
                 <span class="set-text">
@@ -705,7 +959,7 @@
               </div>
             </section>
 
-            <section class="set-section" id="ownerProviders" aria-labelledby="setOwnerTitle" hidden>
+            <section class="set-section" id="ownerProviders" data-cat="ai" aria-labelledby="setOwnerTitle" hidden>
               <h2 class="set-title" id="setOwnerTitle">Провайдеры владельца</h2>
               <div class="set-row">
                 <span class="set-text"><span class="set-name">Свои модели</span><span class="set-hint">Выбранный провайдер заменяет «Быструю» и «Умную». Ключ хранится зашифрованным. Правила режимов те же</span></span>
@@ -721,13 +975,17 @@
               </form>
             </section>
 
-            <section class="set-section" aria-labelledby="setChatTitle">
+            <section class="set-section" data-cat="general" aria-labelledby="setChatTitle">
               <h2 class="set-title" id="setChatTitle">Разговор</h2>
               <div class="set-row">
                 <span class="set-text"><span class="set-name">Очистить переписку</span><span class="set-hint">Очистка стирает переписку. Журнал остаётся.</span></span>
                 <button class="btn btn-danger btn-sm" type="button" id="chatClear"><span data-icon="trash" aria-hidden="true"></span><span id="chatClearText">Очистить разговор</span></button>
               </div>
             </section>
+                </div>
+                <p class="nox-set-empty is-hidden" id="setNoMatches">Ничего не найдено. Измените запрос.</p>
+              </div>
+            </div>
           </div>
         </section>
       </main>
@@ -770,6 +1028,135 @@
         <button class="btn btn-primary" type="submit">Создать</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Выбор действия для шага команды: категории и поиск по каталогу редактора -->
+  <dialog class="dialog nox-picker" id="cmdActionDialog" aria-labelledby="npTitle">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2 class="dialog-title" id="npTitle">Выбор действия</h2>
+        <button class="nox-icon-btn" type="button" id="npClose" title="Закрыть" aria-label="Закрыть"><span data-icon="x" aria-hidden="true"></span></button>
+      </div>
+      <div class="nox-picker-search">
+        <div class="nox-search"><span data-icon="search" aria-hidden="true"></span><input id="npSearch" type="search" placeholder="Поиск действий…" aria-label="Поиск действий"></div>
+      </div>
+      <div class="nox-picker-body">
+        <div class="nox-picker-cats" role="tablist" aria-label="Категории действий" id="npCats"></div>
+        <div class="nox-picker-list" role="listbox" aria-label="Действия" id="npList"></div>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" type="button" id="npCancel">Отмена</button>
+        <button class="btn btn-primary" type="button" id="npAdd" disabled>Добавить</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Подключения MCP: добавление сервиса -->
+  <dialog class="dialog mcp-dialog-add" id="mcpAddDialog" aria-labelledby="mcpAddTitle">
+    <form class="dialog-body" id="mcpForm" autocomplete="off" novalidate>
+      <div class="dialog-head">
+        <h2 class="dialog-title" id="mcpAddTitle">Добавить сервис</h2>
+        <button class="nox-icon-btn" type="button" id="mcpAddClose" title="Закрыть" aria-label="Закрыть"><span data-icon="x" aria-hidden="true"></span></button>
+      </div>
+      <div class="dialog-scroll">
+        <label class="mcp-dialog-field" for="mcpName">
+          <span class="mcp-dialog-label">Название <span class="req" aria-hidden="true">*</span></span>
+          <input class="input" id="mcpName" name="name" type="text" maxlength="40" placeholder="Например, my-files" required aria-describedby="mcpNameHint">
+          <span class="mcp-dialog-label" id="mcpNameHint">Латиница, цифры, «-» и «_», до 40 знаков</span>
+        </label>
+        <label class="mcp-dialog-field" for="mcpTarget">
+          <span class="mcp-dialog-label">Адрес или команда <span class="req" aria-hidden="true">*</span></span>
+          <input class="input" id="mcpTarget" name="target" type="text" maxlength="400" placeholder="https://… или npx.cmd" required>
+        </label>
+        <label class="mcp-dialog-field" for="mcpArgs">
+          <span class="mcp-dialog-label">Аргументы команды</span>
+          <input class="input" id="mcpArgs" name="args" type="text" maxlength="400" placeholder="через пробел, если запуск командой">
+        </label>
+        <p class="mcp-dialog-hint" id="mcpFormNote">Сервис подключается сразу, перезапуск не нужен. Если это команда npx или uvx, пакет сервера может скачаться при первом запуске — сервис ставится только по вашему действию. Действия сервиса всегда спрашиваются, пока вы не разрешите их в настройках.</p>
+        <p class="mcp-dialog-error" id="mcpAddError" role="alert" hidden><span data-icon="alert" aria-hidden="true"></span><span id="mcpAddErrorText"></span></p>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" type="button" id="mcpAddCancel">Отмена</button>
+        <button class="btn btn-primary" type="submit" id="mcpAddSubmit">Добавить</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Подключения MCP: детали сервиса -->
+  <dialog class="dialog mcp-dialog-details" id="mcpDetailsDialog" aria-labelledby="mcpDetailsTitle">
+    <div class="dialog-body mcp-detail">
+      <div class="dialog-head">
+        <h2 class="dialog-title" id="mcpDetailsTitle">Сервис</h2>
+        <button class="nox-icon-btn" type="button" id="mcpDetailsX" title="Закрыть" aria-label="Закрыть"><span data-icon="x" aria-hidden="true"></span></button>
+      </div>
+      <div class="dialog-scroll" id="mcpDetailsBody"></div>
+      <p class="mcp-dialog-error" id="mcpDetailsError" role="alert" hidden><span data-icon="alert" aria-hidden="true"></span><span id="mcpDetailsErrorText"></span></p>
+      <div class="dialog-actions">
+        <button class="btn btn-danger" type="button" id="mcpDetailsDelete">Удалить</button>
+        <button class="btn btn-ghost" type="button" id="mcpDetailsClose">Закрыть</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Подключения MCP: подтверждение удаления -->
+  <dialog class="dialog dialog-sm" id="mcpDeleteDialog" aria-labelledby="mcpDeleteTitle">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2 class="dialog-title" id="mcpDeleteTitle">Удалить сервис?</h2>
+        <button class="nox-icon-btn" type="button" id="mcpDeleteClose" title="Закрыть" aria-label="Закрыть"><span data-icon="x" aria-hidden="true"></span></button>
+      </div>
+      <div class="dialog-scroll">
+        <p class="mcp-detail-text" id="mcpDeleteText"></p>
+        <label class="mcp-dialog-field" for="mcpDeleteInput">
+          <span class="mcp-dialog-label">Введите название сервиса, чтобы подтвердить</span>
+          <input class="input" id="mcpDeleteInput" type="text" maxlength="40" autocomplete="off" placeholder="название сервиса">
+        </label>
+        <p class="mcp-dialog-error" id="mcpDeleteError" role="alert" hidden><span data-icon="alert" aria-hidden="true"></span><span id="mcpDeleteErrorText"></span></p>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" type="button" id="mcpDeleteCancel">Отмена</button>
+        <button class="btn btn-danger" type="button" id="mcpDeleteConfirm" disabled>Удалить</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Подключения MCP: набор действий изменился (drift) -->
+  <dialog class="dialog" id="mcpDriftDialog" aria-labelledby="mcpDriftTitle">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2 class="dialog-title" id="mcpDriftTitle">Набор действий изменился</h2>
+        <button class="nox-icon-btn" type="button" id="mcpDriftClose" title="Закрыть" aria-label="Закрыть"><span data-icon="x" aria-hidden="true"></span></button>
+      </div>
+      <div class="dialog-scroll">
+        <p class="mcp-detail-text" id="mcpDriftText"></p>
+        <div class="mcp-diff" id="mcpDriftBody"></div>
+        <p class="mcp-detail-text">Пока изменения не подтверждены, действия этого сервиса недоступны Джарвису. Это подтверждение набора действий сервиса, а не разрешение на системные действия — они по-прежнему проходят общую политику.</p>
+        <p class="mcp-dialog-error" id="mcpDriftError" role="alert" hidden><span data-icon="alert" aria-hidden="true"></span><span id="mcpDriftErrorText"></span></p>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" type="button" id="mcpDriftCancel">Отмена</button>
+        <button class="btn btn-primary" type="button" id="mcpDriftConfirm">Подтвердить изменения</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Подключения MCP: ошибка подключения -->
+  <dialog class="dialog dialog-sm" id="mcpErrorDialog" aria-labelledby="mcpErrorTitle">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2 class="dialog-title" id="mcpErrorTitle">Не удалось подключиться</h2>
+        <button class="nox-icon-btn" type="button" id="mcpConnErrX" title="Закрыть" aria-label="Закрыть"><span data-icon="x" aria-hidden="true"></span></button>
+      </div>
+      <div class="dialog-scroll">
+        <p class="mcp-detail-text" id="mcpConnErrName"></p>
+        <p class="mcp-dialog-error" id="mcpConnErrText" role="alert"><span data-icon="alert" aria-hidden="true"></span><span id="mcpConnErrReason"></span></p>
+        <p class="mcp-dialog-hint">Сервис сохранён в списке. Проверьте команду, адрес и установленные программы — затем повторите подключение.</p>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" type="button" id="mcpConnErrClose">Закрыть</button>
+        <button class="btn btn-primary" type="button" id="mcpConnErrRetry">Повторить</button>
+      </div>
+    </div>
   </dialog>
 
   <!-- Импорт команд: предпросмотр и подтверждение -->

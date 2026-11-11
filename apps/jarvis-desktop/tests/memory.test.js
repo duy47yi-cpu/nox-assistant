@@ -210,7 +210,8 @@ test('инструменты: remember -> recall -> forget', async (t) => {
   const found = await recall.run({ query: 'чай' });
   assert.equal(found.ok, true);
   assert.equal(found.summary, 'найдено записей: 1');
-  assert.deepEqual(Object.keys(found.data[0]).sort(), ['createdAt', 'kind', 'text']);
+  assert.deepEqual(Object.keys(found.data[0]).sort(), ['createdAt', 'id', 'kind', 'text']);
+  assert.equal(found.data[0].id, saved.data.id, 'recall отдаёт id: без него forget не может убрать найденную запись');
   assert.equal(found.data[0].text, 'Любимый чай — зелёный');
   assert.equal(found.data[0].kind, 'preference');
 

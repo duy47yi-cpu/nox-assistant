@@ -1,0 +1,1586 @@
+/* Nox — раздел «Команды», визуальный слой реконструкции Phase 3.1.
+ *
+ * Подключается последним и ограничен body[data-view="commands"] / .view-commands,
+ * поэтому готовый чат Nox (nox-screen.css), прежние разделы и темы не меняются.
+ * Токены — docs/reconstruction/phase2/design/design-system.md, сетка —
+ * navigation-layout.md, экран — commands-ui.md, макеты — previews/01-commands.png,
+ * 02-editor.png. Поведение, разметку строк и данные по-прежнему задаёт app.js:
+ * здесь только внешний вид и раскладка. */
+
+/* ── 1. Токены раздела ──────────────────────────────────────────── */
+body[data-view="commands"] {
+  /* Гарнитуры Nox фиксированы: «Вид → Шрифты» классических разделов сюда не течёт. */
+  --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-head: var(--font);
+  --font-display: var(--font);
+  --font-reply: var(--font);
+  --nox-bg: #0F0F10;
+  --nox-surface-1: #141415;
+  --nox-surface-2: #18181B;
+  --nox-surface-3: #1C1C1F;
+  --nox-surface-4: #232326;
+  --nox-border: #2A2A2E;
+  --nox-border-strong: #34343A;
+  --nox-text-1: #F1F1F3;
+  --nox-text-2: #9A9AA0;
+  --nox-text-3: #6B6B70;
+  --nox-text-ghost: #3A3A3E;
+  --nox-accent: #2E9AC1;
+  --nox-accent-hover: #3AAAD6;
+  --nox-accent-active: #2280A8;
+  --nox-accent-ink: #061217;
+  --nox-accent-soft: color-mix(in srgb, #2E9AC1 14%, transparent);
+  --nox-accent-line: color-mix(in srgb, #2E9AC1 42%, transparent);
+  --nox-ok: #3DD68C;
+  --nox-warn: #F5A524;
+  --nox-err: #FF5C5C;
+  --nox-gap: 8px;
+  --rail-w: 52px;
+  --nox-font: var(--font);
+  --nox-mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-default: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur-normal: 200ms;
+  background: transparent;
+  color: var(--nox-text-1);
+}
+html:has(body[data-view="commands"]) { background: transparent; }
+
+@media (max-width: 1000px) {
+  body[data-view="commands"] { --rail-w: 46px; }
+}
+
+/* ── 2. Каркас окна: та же геометрия, что у экрана Nox ─────────── */
+body[data-view="commands"] .app {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+  height: 100vh;
+  background: var(--nox-bg);
+  border: 1px solid color-mix(in srgb, var(--nox-border) 80%, transparent);
+  border-radius: 12px;
+  overflow: clip;
+  isolation: isolate;
+}
+body[data-view="commands"] .app::before,
+body[data-view="commands"] .app::after,
+body[data-view="commands"] .theme-fx,
+body[data-view="commands"] .contour,
+body[data-view="commands"] .banner-wrap { display: none !important; }
+body[data-view="commands"] .main { min-width: 0; min-height: 0; background: transparent; }
+body[data-view="commands"] .topbar { display: none; }
+body[data-view="commands"] .views { flex: 1; min-height: 0; }
+body[data-view="commands"] :focus-visible { outline: 2px solid var(--nox-accent); outline-offset: 2px; }
+body[data-view="commands"] ::-webkit-scrollbar { width: 6px; height: 6px; }
+body[data-view="commands"] ::-webkit-scrollbar-thumb {
+  background: var(--nox-text-ghost); border: 0; border-radius: 3px;
+}
+body[data-view="commands"] ::-webkit-scrollbar-thumb:hover { background: var(--nox-text-3); }
+
+/* Рейка: здесь она самостоятельная панель с четырьмя скруглениями. */
+body[data-view="commands"] .rail {
+  width: var(--rail-w);
+  padding: 8px 6px;
+  align-items: center;
+  background: var(--nox-surface-2);
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  overflow: visible;
+  -webkit-app-region: drag;
+}
+body[data-view="commands"] .rail-brand {
+  width: 36px; height: 36px; margin: 0 0 14px;
+  justify-content: center;
+  -webkit-app-region: drag;
+}
+body[data-view="commands"] .rail-brand-text { display: none; }
+body[data-view="commands"] .rail-mark {
+  position: relative;
+  width: 18px; height: 18px;
+  border: 1.6px solid var(--nox-text-1);
+  border-radius: 50%;
+  background: none;
+  box-shadow: none;
+  transform: rotate(-28deg);
+}
+body[data-view="commands"] .rail-mark::after {
+  content: "";
+  position: absolute;
+  top: -4px; right: -4px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: transparent;
+}
+body[data-view="commands"] .rail-list { gap: 4px; align-items: center; width: auto; }
+body[data-view="commands"] .rail-item,
+body[data-view="commands"] .rail-toggle {
+  width: 36px; height: 36px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  border-radius: 10px;
+  color: var(--nox-text-3);
+  -webkit-app-region: no-drag;
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .rail-item:hover,
+body[data-view="commands"] .rail-toggle:hover {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, transparent);
+  color: var(--nox-text-1);
+  transform: none;
+}
+body[data-view="commands"] .rail-item[aria-current="page"] {
+  background: var(--nox-accent-soft);
+  color: var(--nox-accent);
+}
+body[data-view="commands"] .rail-item[aria-current="page"] .rail-icon { color: var(--nox-accent); }
+body[data-view="commands"] .rail-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -9px; top: 7px;
+  width: 4px; height: 22px;
+  border-radius: 0 3px 3px 0;
+  background: var(--nox-accent);
+}
+body[data-view="commands"] .rail-icon svg { width: 18px; height: 18px; }
+body[data-view="commands"] .rail-label { display: none; }
+body[data-view="commands"] .rail-count {
+  top: 2px; right: 2px;
+  min-width: 15px; height: 15px;
+  padding: 0 3px;
+  font-size: 10px; line-height: 13px;
+  background: var(--nox-accent); border: 0; color: var(--nox-accent-ink);
+  font-family: var(--nox-mono); font-weight: 600;
+}
+body[data-view="commands"] .rail-dot { top: 7px; right: 7px; width: 6px; height: 6px; }
+body[data-view="commands"] .rail-foot { margin-top: auto; width: 36px; align-items: center; gap: 6px; }
+body[data-view="commands"] .rail-account {
+  width: 32px; height: 32px;
+  border: 1px solid var(--nox-border);
+  border-radius: 50%;
+  color: var(--nox-text-2);
+}
+body[data-view="commands"] .rail-account:hover { border-color: var(--nox-border-strong); }
+body[data-view="commands"] #railToggle { display: none; }
+
+/* ── 3. Раздел ─────────────────────────────────────────────────── */
+.view-commands { padding: 0; overflow: hidden; }
+.view-commands[hidden] { display: none; }
+#commands {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#commands.is-editing #cmdCatalog { display: none; }
+
+.nox-cmd-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--nox-surface-2);
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Шапка раздела: 72 px, тянется за пустые места. */
+.nox-cmd-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 72px;
+  padding: 0 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--nox-border) 62%, transparent);
+  -webkit-app-region: drag;
+}
+.nox-cmd-head button,
+.nox-cmd-head input,
+.nox-cmd-head .nox-win-controls { -webkit-app-region: no-drag; }
+.nox-cmd-title {
+  margin: 0 auto 0 0;
+  font: 600 24px/30px var(--nox-font);
+  letter-spacing: -0.01em;
+  color: var(--nox-text-1);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.nox-cmd-head-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+
+/* Кнопки окна в шапке: единственное место, где они есть на этом экране. */
+.nox-win-controls { display: flex; align-items: center; gap: 2px; margin-left: 2px; }
+.nox-win-btn {
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-3);
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+.nox-win-btn:hover { background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); color: var(--nox-text-1); }
+.nox-win-btn[data-act="close"]:hover { background: color-mix(in srgb, var(--nox-err) 14%, transparent); color: var(--nox-err); }
+.nox-win-btn svg { width: 14px; height: 14px; }
+
+/* ── 4. Кнопки и поля раздела ─────────────────────────────────── */
+body[data-view="commands"] .nox-btn {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font: 500 13px/1 var(--nox-font);
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default),
+    color var(--dur-fast) var(--ease-default), transform var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .nox-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, var(--nox-surface-2));
+  border-color: var(--nox-border-strong);
+  color: var(--nox-text-1);
+}
+body[data-view="commands"] .nox-btn:active:not(:disabled) { transform: scale(0.98); }
+body[data-view="commands"] .nox-btn:disabled {
+  background: var(--nox-text-ghost);
+  border-color: var(--nox-text-ghost);
+  color: var(--nox-text-2);
+  cursor: not-allowed;
+}
+body[data-view="commands"] .nox-btn-primary {
+  height: 40px;
+  padding: 0 18px;
+  background: var(--nox-accent);
+  border-color: var(--nox-accent);
+  color: var(--nox-accent-ink);
+  font: 600 14px/1 var(--nox-font);
+}
+body[data-view="commands"] .nox-btn-primary:hover:not(:disabled) {
+  background: var(--nox-accent-hover);
+  border-color: var(--nox-accent-hover);
+  color: var(--nox-accent-ink);
+  transform: translateY(-1px);
+}
+body[data-view="commands"] .nox-btn-primary:active:not(:disabled) { background: var(--nox-accent-active); transform: translateY(0) scale(0.98); }
+body[data-view="commands"] .nox-btn-primary:disabled {
+  background: var(--nox-text-ghost);
+  border-color: var(--nox-text-ghost);
+  color: var(--nox-text-2);
+}
+body[data-view="commands"] .nox-btn-ghost { background: transparent; }
+body[data-view="commands"] .nox-btn-danger {
+  background: transparent;
+  border-color: var(--nox-accent-line);
+  color: var(--nox-err);
+  border-color: color-mix(in srgb, var(--nox-err) 42%, transparent);
+}
+body[data-view="commands"] .nox-btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-err) 14%, transparent);
+  border-color: color-mix(in srgb, var(--nox-err) 60%, transparent);
+  color: var(--nox-err);
+}
+body[data-view="commands"] .nox-btn-danger.is-armed {
+  background: color-mix(in srgb, var(--nox-warn) 16%, transparent);
+  border-color: color-mix(in srgb, var(--nox-warn) 55%, transparent);
+  color: var(--nox-warn);
+}
+body[data-view="commands"] .nox-icon-btn {
+  width: 32px; height: 32px;
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0; border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-3);
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .nox-icon-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, transparent);
+  color: var(--nox-text-1);
+}
+body[data-view="commands"] .nox-icon-btn:disabled { color: var(--nox-text-ghost); cursor: not-allowed; }
+body[data-view="commands"] .nox-icon-btn svg { width: 14px; height: 14px; }
+
+.nox-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  min-width: 0;
+  flex: 0 1 260px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-3);
+  transition: border-color var(--dur-fast) var(--ease-default), box-shadow var(--dur-fast) var(--ease-default);
+}
+.nox-search:focus-within { border-color: var(--nox-accent); box-shadow: 0 0 0 3px var(--nox-accent-soft); }
+.nox-search [data-icon] { flex: none; }
+.nox-search [data-icon] svg { width: 15px; height: 15px; }
+.nox-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--nox-text-1);
+  font: 400 13px/20px var(--nox-font);
+  outline: none;
+}
+.nox-search input::placeholder { color: var(--nox-text-3); }
+.nox-search input::-webkit-search-cancel-button { display: none; }
+
+/* ── 5. Панель вкладок и действий ─────────────────────────────── */
+.nox-cmd-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  min-width: 0;
+}
+.nox-tabs { display: flex; align-items: center; gap: 8px; flex: none; }
+.nox-tab {
+  height: 40px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font: 500 13px/1 var(--nox-font);
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default),
+    color var(--dur-fast) var(--ease-default);
+}
+.nox-tab:hover { background: color-mix(in srgb, var(--nox-text-1) 6%, var(--nox-surface-2)); color: var(--nox-text-1); }
+.nox-tab[aria-selected="true"] {
+  background: var(--nox-accent-soft);
+  border-color: var(--nox-accent-line);
+  color: var(--nox-accent);
+}
+.nox-tab-count { color: inherit; opacity: 0.8; font-variant-numeric: tabular-nums; }
+.nox-cmd-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
+.nox-rec-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--nox-err);
+  flex: none;
+}
+.nox-rec-dot[data-idle="true"] { background: var(--nox-text-3); }
+
+/* ── 6. Тело каталога: список и паки ──────────────────────────── */
+.nox-cmd-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  padding: 6px 20px 18px;
+  overflow: hidden;
+}
+.nox-cmd-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.nox-cmd-listwrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 4px 2px 2px;
+}
+.nox-cmd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+body[data-view="commands"] .nox-note {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-1);
+  color: var(--nox-text-2);
+  font: 400 12px/16px var(--nox-font);
+}
+body[data-view="commands"] .nox-note.note-warn {
+  color: var(--nox-warn);
+  background: color-mix(in srgb, var(--nox-warn) 10%, var(--nox-surface-1));
+  border-color: color-mix(in srgb, var(--nox-warn) 42%, transparent);
+}
+
+/* Строка команды */
+body[data-view="commands"] .cmd-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: var(--nox-surface-3);
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .cmd-item:hover {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, var(--nox-surface-2));
+  border-color: var(--nox-border-strong);
+}
+body[data-view="commands"] .cmd-item.is-selected {
+  border-color: var(--nox-accent);
+  box-shadow: 0 0 0 3px var(--nox-accent-soft);
+}
+body[data-view="commands"] .cmd-item.is-off { background: color-mix(in srgb, var(--nox-surface-2) 72%, var(--nox-surface-3)); }
+body[data-view="commands"] .cmd-item.is-off .cmd-name { color: var(--nox-text-3); }
+body[data-view="commands"] .cmd-item.is-off .cmd-meta,
+body[data-view="commands"] .cmd-item.is-off .cmd-row-chips .phrase { color: var(--nox-text-3); }
+
+body[data-view="commands"] .cmd-toggle {
+  width: 20px; height: 20px;
+  margin-top: 1px;
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0; border-radius: 6px;
+  background: transparent;
+  color: var(--nox-text-3);
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .cmd-toggle:hover { background: color-mix(in srgb, var(--nox-text-1) 8%, transparent); color: var(--nox-text-1); }
+body[data-view="commands"] .cmd-toggle svg { width: 14px; height: 14px; transform: rotate(-90deg); transition: transform var(--dur-normal) var(--ease-default); }
+body[data-view="commands"] .cmd-item.is-open .cmd-toggle svg { transform: rotate(0deg); }
+
+body[data-view="commands"] .cmd-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+body[data-view="commands"] .cmd-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+body[data-view="commands"] .cmd-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nox-text-1);
+  font: 600 14px/20px var(--nox-font);
+  text-align: left;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-overflow: clip;
+  transition: color var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .cmd-name:hover { color: var(--nox-accent); }
+body[data-view="commands"] .cmd-name-row .tag {
+  height: 18px; padding: 0 7px;
+  display: inline-flex; align-items: center;
+  border: 1px solid var(--nox-border);
+  border-radius: 999px;
+  background: var(--nox-surface-2);
+  color: var(--nox-text-3);
+  font: 500 10px/1 var(--nox-font);
+}
+body[data-view="commands"] .cmd-row-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+body[data-view="commands"] .cmd-row-chips .phrase {
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--nox-surface-2);
+  border: 0;
+  color: var(--nox-text-2);
+  font: 500 11px/1 var(--nox-font);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body[data-view="commands"] .cmd-row-chips .muted { font: 400 11px/20px var(--nox-font); color: var(--nox-text-3); }
+body[data-view="commands"] .cmd-meta { font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); min-width: 0; overflow-wrap: anywhere; }
+body[data-view="commands"] .cmd-steps-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 2px;
+  font: 400 12px/18px var(--nox-mono);
+  color: var(--nox-text-3);
+}
+body[data-view="commands"] .cmd-steps-preview .cmd-step { display: inline-flex; gap: 6px; align-items: baseline; }
+body[data-view="commands"] .cmd-steps-preview .cmd-step b { font-weight: 600; color: var(--nox-text-2); }
+
+body[data-view="commands"] .cmd-controls {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+body[data-view="commands"] .cmd-run {
+  height: 32px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-2);
+  font: 500 13px/1 var(--nox-font);
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default),
+    color var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .cmd-run:hover:not(:disabled) {
+  background: var(--nox-accent-soft);
+  border-color: var(--nox-accent-line);
+  color: var(--nox-accent);
+}
+body[data-view="commands"] .cmd-run:disabled {
+  border-color: var(--nox-border);
+  color: var(--nox-text-ghost);
+  cursor: not-allowed;
+}
+body[data-view="commands"] .cmd-run.is-busy { color: var(--nox-accent); border-color: var(--nox-accent-line); }
+body[data-view="commands"] .cmd-run .btn-label { display: inline; }
+
+/* Переключатель включённости: 32×20, бегунок 16. */
+body[data-view="commands"] .cmd-controls .switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 32px; height: 20px;
+  flex: none;
+  margin: 0;
+  border: 1px solid var(--nox-border);
+  border-radius: 999px;
+  background: var(--nox-surface-1);
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .cmd-controls .switch::after {
+  content: "";
+  position: absolute;
+  top: 1px; left: 1px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--nox-text-2);
+  transition: transform var(--dur-normal) var(--ease-out), background var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .cmd-controls .switch:checked {
+  background: var(--nox-accent);
+  border-color: var(--nox-accent);
+}
+body[data-view="commands"] .cmd-controls .switch:checked::after {
+  background: #fff;
+  transform: translateX(12px);
+}
+body[data-view="commands"] .cmd-controls .switch:hover:not(:disabled)::after { background: var(--nox-text-1); }
+body[data-view="commands"] .cmd-controls .switch:checked:hover:not(:disabled)::after { background: #fff; }
+body[data-view="commands"] .cmd-controls .switch:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Пустое состояние, «ничего не нашлось», загрузка */
+.nox-empty {
+  margin: auto;
+  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.nox-empty-icon {
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--nox-text-ghost);
+  margin-bottom: 4px;
+}
+.nox-empty-icon svg { width: 24px; height: 24px; }
+.nox-empty-title { font: 600 16px/22px var(--nox-font); color: var(--nox-text-1); }
+.nox-empty-text { font: 400 14px/20px var(--nox-font); color: var(--nox-text-2); max-width: 420px; overflow-wrap: anywhere; }
+.nox-empty .nox-btn { margin-top: 8px; }
+.nox-link { padding: 0; border: 0; background: none; color: var(--nox-accent); font: 500 13px/18px var(--nox-font); }
+.nox-link:hover { color: var(--nox-accent-hover); text-decoration: underline; }
+.nox-loading {
+  margin: auto;
+  padding: 32px;
+  display: flex; align-items: center; gap: 10px;
+  font: 400 14px/20px var(--nox-font);
+  color: var(--nox-text-2);
+}
+.nox-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid color-mix(in srgb, var(--nox-accent) 24%, transparent);
+  border-top-color: var(--nox-accent);
+  border-radius: 50%;
+  animation: nox-spin 600ms linear infinite;
+}
+@keyframes nox-spin { to { transform: rotate(360deg); } }
+
+/* ── 7. Библиотека ────────────────────────────────────────────── */
+body[data-view="commands"] .nox-lib-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 4px 2px 2px; }
+body[data-view="commands"] .lib-groups { display: flex; flex-direction: column; gap: 14px; }
+body[data-view="commands"] .lib-group {
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: var(--nox-surface-1);
+  overflow: hidden;
+}
+body[data-view="commands"] .lib-group-head {
+  height: 44px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--nox-text-1);
+  font: 600 14px/1 var(--nox-font);
+}
+body[data-view="commands"] .lib-group-head::-webkit-details-marker { display: none; }
+body[data-view="commands"] .lib-group-head:hover { background: color-mix(in srgb, var(--nox-text-1) 4%, transparent); }
+body[data-view="commands"] .lib-chev { color: var(--nox-text-3); transition: transform var(--dur-normal) var(--ease-default); }
+body[data-view="commands"] .lib-chev svg { width: 14px; height: 14px; }
+body[data-view="commands"] .lib-group[open] .lib-chev { transform: rotate(180deg); }
+body[data-view="commands"] .lib-group-count { margin-left: auto; color: var(--nox-text-3); font: 400 12px/16px var(--nox-font); }
+body[data-view="commands"] .lib-list { list-style: none; margin: 0; padding: 0 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+body[data-view="commands"] .lib-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 10px;
+  background: var(--nox-surface-2);
+}
+body[data-view="commands"] .lib-item:hover { border-color: var(--nox-border-strong); }
+body[data-view="commands"] .lib-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+body[data-view="commands"] .lib-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+body[data-view="commands"] .lib-title { font: 600 14px/20px var(--nox-font); color: var(--nox-text-1); overflow-wrap: anywhere; }
+body[data-view="commands"] .lib-desc { font: 400 13px/18px var(--nox-font); color: var(--nox-text-2); overflow-wrap: anywhere; }
+body[data-view="commands"] .lib-phrases { display: flex; flex-wrap: wrap; gap: 6px; }
+body[data-view="commands"] .lib-phrases .phrase {
+  height: 20px; display: inline-flex; align-items: center; padding: 0 9px;
+  border-radius: 999px; background: var(--nox-surface-3); color: var(--nox-text-2);
+  font: 500 11px/1 var(--nox-font);
+}
+body[data-view="commands"] .lib-args { display: flex; flex-wrap: wrap; gap: 8px; }
+body[data-view="commands"] .lib-arg { display: flex; align-items: center; gap: 6px; min-width: 0; }
+body[data-view="commands"] .lib-arg-name { font: 500 11px/16px var(--nox-mono); color: var(--nox-text-3); }
+body[data-view="commands"] .lib-arg .input {
+  height: 28px; width: 130px;
+  padding: 0 8px;
+  border: 1px solid var(--nox-border);
+  border-radius: 6px;
+  background: var(--nox-surface-1);
+  color: var(--nox-text-1);
+  font: 400 12px/1 var(--nox-font);
+}
+body[data-view="commands"] .lib-run {
+  height: 32px;
+  flex: none;
+  padding: 0 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-2);
+  font: 500 13px/1 var(--nox-font);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+body[data-view="commands"] .lib-run:hover:not(:disabled) {
+  background: var(--nox-accent-soft); border-color: var(--nox-accent-line); color: var(--nox-accent);
+}
+body[data-view="commands"] .lib-run:disabled { color: var(--nox-text-ghost); cursor: not-allowed; }
+body[data-view="commands"] .lib-result { margin-top: 2px; }
+body[data-view="commands"] .lib-none { font: 400 14px/20px var(--nox-font); color: var(--nox-text-2); padding: 16px; }
+
+/* ── 8. Панель паков ──────────────────────────────────────────── */
+.nox-packs {
+  flex: none;
+  width: 288px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: var(--nox-surface-1);
+  overflow-y: auto;
+}
+.nox-packs-head { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.nox-packs-title { margin: 0; font: 600 16px/22px var(--nox-font); color: var(--nox-text-1); }
+.nox-packs-sub { margin: 0; font: 400 12px/16px var(--nox-font); color: var(--nox-text-3); }
+.nox-packs-list { display: flex; flex-direction: column; gap: 10px; }
+.nox-packs-foot { margin-top: auto; padding-top: 4px; font: 400 12px/16px var(--nox-font); color: var(--nox-text-3); }
+
+body[data-view="commands"] .pack-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px;
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: var(--nox-surface-3);
+}
+body[data-view="commands"] .pack-card[data-state="installed"] { background: color-mix(in srgb, var(--nox-surface-2) 70%, var(--nox-surface-3)); }
+body[data-view="commands"] .pack-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+body[data-view="commands"] .pack-head h3 { margin: 0; font: 600 14px/20px var(--nox-font); color: var(--nox-text-1); }
+body[data-view="commands"] .pack-count { font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); }
+body[data-view="commands"] .pack-meta {
+  margin: 0;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font: 400 12px/16px var(--nox-font);
+  color: var(--nox-text-2);
+}
+body[data-view="commands"] .pack-meta-sep { color: var(--nox-text-ghost); }
+body[data-view="commands"] .pack-state { color: var(--nox-text-2); }
+body[data-view="commands"] .pack-card[data-state="installed"] .pack-state { color: var(--nox-text-3); }
+body[data-view="commands"] .pack-hint { margin: 0; font: 400 12px/16px var(--nox-font); color: var(--nox-text-3); overflow-wrap: anywhere; }
+body[data-view="commands"] .pack-foot { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+body[data-view="commands"] .pack-list { flex: 1; min-width: 0; }
+body[data-view="commands"] .pack-list summary {
+  display: inline-flex; align-items: center; gap: 4px;
+  width: max-content;
+  list-style: none;
+  color: var(--nox-accent);
+  font: 500 12px/18px var(--nox-font);
+  cursor: pointer;
+}
+body[data-view="commands"] .pack-list summary::-webkit-details-marker { display: none; }
+body[data-view="commands"] .pack-list summary::after { content: "›"; font-size: 13px; transform: translateY(-1px); }
+body[data-view="commands"] .pack-list[open] summary::after { content: "⌄"; }
+body[data-view="commands"] .pack-list ul { list-style: none; margin: 8px 0 0; padding: 8px; display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--nox-border); border-radius: 8px; background: var(--nox-surface-2); }
+body[data-view="commands"] .pack-list li { display: flex; flex-direction: column; gap: 1px; font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); }
+body[data-view="commands"] .pack-list li .pack-phrase { font: 400 11px/15px var(--nox-mono); color: var(--nox-text-3); }
+body[data-view="commands"] .pack-install {
+  height: 32px;
+  flex: none;
+  padding: 0 14px;
+  border: 1px solid var(--nox-accent);
+  border-radius: 999px;
+  background: var(--nox-accent);
+  color: var(--nox-accent-ink);
+  font: 600 12px/1 var(--nox-font);
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .pack-install:hover:not(:disabled) { background: var(--nox-accent-hover); border-color: var(--nox-accent-hover); }
+body[data-view="commands"] .pack-install[data-variant="secondary"] {
+  background: transparent;
+  border-color: var(--nox-border);
+  color: var(--nox-text-2);
+}
+body[data-view="commands"] .pack-install[data-variant="secondary"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, transparent);
+  border-color: var(--nox-border-strong);
+  color: var(--nox-text-1);
+}
+body[data-view="commands"] .pack-install:disabled {
+  background: transparent;
+  border-color: var(--nox-border);
+  color: var(--nox-text-ghost);
+  cursor: default;
+}
+body[data-view="commands"] .nox-packs-empty {
+  margin: 8px 0 0;
+  font: 400 12px/16px var(--nox-font);
+  color: var(--nox-text-3);
+}
+
+/* ── 9. Запись действий ───────────────────────────────────────── */
+.nox-recording {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: var(--nox-surface-1);
+  overflow-y: auto;
+}
+.nox-recording-head { display: flex; align-items: center; gap: 10px; }
+.nox-recording-head h3 { margin: 0; font: 600 16px/22px var(--nox-font); color: var(--nox-text-1); }
+.nox-recording-head .nox-chip {
+  height: 22px; padding: 0 9px;
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--nox-err) 42%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nox-err) 12%, transparent);
+  color: var(--nox-err);
+  font: 500 11px/1 var(--nox-font);
+}
+.nox-recording-head .nox-rec-dot { animation: nox-pulse 900ms ease-in-out infinite alternate; }
+@keyframes nox-pulse { from { opacity: 1; } to { opacity: 0.45; } }
+.nox-recording-hint { margin: 0; font: 400 13px/20px var(--nox-font); color: var(--nox-text-2); }
+.nox-recording-warn {
+  margin: 0;
+  padding: 9px 12px;
+  display: flex; align-items: flex-start; gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--nox-warn) 42%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--nox-warn) 10%, transparent);
+  color: var(--nox-warn);
+  font: 500 12px/17px var(--nox-font);
+}
+.nox-recording-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.nox-recording-steps .cmd-step {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-2);
+  font: 400 12px/18px var(--nox-mono);
+  color: var(--nox-text-2);
+  animation: nox-rise var(--dur-normal) var(--ease-out) both;
+}
+.nox-recording-steps .step-num { color: var(--nox-text-3); font-weight: 600; }
+.nox-recording-steps .cmd-step-name { color: var(--nox-text-1); }
+.nox-recording-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; }
+
+/* Пока идёт запись, каталог уступает место панели записи; паки остаются справа. */
+#commands.is-recording #panelMine,
+#commands.is-recording #panelLib,
+#commands.is-recording #cmdTreeNote,
+#commands.is-recording #cmdApiNote,
+#commands.is-recording #cmdLoading { display: none !important; }
+#commands.is-recording #cmdRecordPanel { display: flex; }
+.nox-recording-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px;
+  border: 1px dashed var(--nox-border);
+  border-radius: 8px;
+  color: var(--nox-text-3);
+  font: 400 12px/17px var(--nox-font);
+}
+
+/* ── 10. Редактор команды ─────────────────────────────────────── */
+.nox-editor-head {
+  height: 76px;
+  gap: 10px;
+  padding: 0 14px 0 12px;
+}
+.nox-editor-head .nox-icon-btn#cmdBack { margin-left: 0; }
+#cmdBack svg { width: 16px; height: 16px; }
+.nox-editor-crumbs { display: flex; flex-direction: column; gap: 2px; min-width: 0; margin: 0 auto 0 0; }
+.nox-crumb {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font: 500 14px/20px var(--nox-font);
+  color: var(--nox-text-2);
+}
+.nox-crumb-root { color: var(--nox-text-2); white-space: nowrap; }
+.nox-crumb-sep { color: var(--nox-text-3); }
+.nox-crumb #cmdEditorTitle {
+  color: var(--nox-text-1);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 46vw;
+}
+.nox-crumb .nox-tag {
+  height: 18px; padding: 0 7px;
+  display: inline-flex; align-items: center;
+  flex: none;
+  border: 1px solid color-mix(in srgb, var(--nox-warn) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nox-warn) 12%, transparent);
+  color: var(--nox-warn);
+  font: 500 10px/1 var(--nox-font);
+}
+.nox-editor-sub { font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); }
+
+.nox-editor-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px 12px 20px;
+  overflow: hidden;
+}
+.nox-editor-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  background: var(--nox-surface-1);
+}
+.nox-editor-side {
+  flex: none;
+  width: 340px;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Поля редактора */
+body[data-view="commands"] .nox-editor .field { display: flex; flex-direction: column; gap: 7px; }
+body[data-view="commands"] .nox-editor .field-row { display: flex; gap: 12px; }
+body[data-view="commands"] .nox-editor .field-row .field { flex: 1 1 0; min-width: 0; }
+body[data-view="commands"] .nox-editor .field-row .field:first-child { flex: 1.25 1 0; }
+body[data-view="commands"] .nox-editor .field-row .field:last-child { flex: 1 1 0; }
+body[data-view="commands"] .nox-editor .field-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+body[data-view="commands"] .nox-editor .field-label { font: 500 12px/16px var(--nox-font); color: var(--nox-text-2); }
+body[data-view="commands"] .nox-editor .counter { font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); font-variant-numeric: tabular-nums; }
+body[data-view="commands"] .nox-editor .input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-1);
+  font: 400 13px/20px var(--nox-font);
+  transition: border-color var(--dur-fast) var(--ease-default), box-shadow var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .nox-editor .input::placeholder { color: var(--nox-text-3); }
+body[data-view="commands"] .nox-editor .input:hover { border-color: var(--nox-border-strong); }
+body[data-view="commands"] .nox-editor .input:focus {
+  border-color: var(--nox-accent);
+  box-shadow: 0 0 0 3px var(--nox-accent-soft);
+  outline: none;
+}
+body[data-view="commands"] .nox-editor textarea.input { height: auto; min-height: 72px; padding: 9px 12px; resize: none; }
+body[data-view="commands"] .nox-editor select.input { appearance: none; -webkit-appearance: none; padding-right: 30px; cursor: pointer; }
+body[data-view="commands"] .nox-editor select.input {
+  background-image: linear-gradient(45deg, transparent 50%, var(--nox-text-3) 50%),
+    linear-gradient(135deg, var(--nox-text-3) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 17px, calc(100% - 10px) 17px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+body[data-view="commands"] .nox-editor .input[aria-invalid="true"] {
+  border-color: var(--nox-err);
+  background: color-mix(in srgb, var(--nox-err) 6%, var(--nox-surface-3));
+}
+
+/* Фразы: чипы и добавление в одну строку */
+body[data-view="commands"] .nox-editor .field-phrases { gap: 8px; }
+body[data-view="commands"] .nox-editor .phrase-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+body[data-view="commands"] .nox-editor .phrase-row .chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+body[data-view="commands"] .nox-editor .phrase-row .inline-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+body[data-view="commands"] .nox-editor .chip {
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--nox-border);
+  border-radius: 999px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-1);
+  font: 500 12px/1 var(--nox-font);
+  max-width: 100%;
+}
+body[data-view="commands"] .nox-editor .chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body[data-view="commands"] .nox-editor .chip button {
+  width: 16px; height: 16px;
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0; border-radius: 50%;
+  background: transparent;
+  color: var(--nox-text-2);
+}
+body[data-view="commands"] .nox-editor .chip button:hover { background: color-mix(in srgb, var(--nox-text-1) 14%, transparent); color: var(--nox-text-1); }
+body[data-view="commands"] .nox-editor .chip button svg { width: 10px; height: 10px; }
+body[data-view="commands"] .nox-editor #cmdPhraseInput {
+  width: 190px;
+  height: 32px;
+  border-radius: 999px;
+  padding: 0 12px;
+  font: 400 12px/1 var(--nox-font);
+}
+body[data-view="commands"] .nox-editor #cmdPhraseAdd {
+  height: 32px;
+  width: 32px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--nox-surface-3);
+  border-color: var(--nox-border);
+  color: var(--nox-text-2);
+}
+body[data-view="commands"] .nox-editor #cmdPhraseAdd svg { width: 13px; height: 13px; }
+body[data-view="commands"] .nox-editor #cmdPhraseAdd .btn-label { display: none; }
+
+/* Происхождение и предупреждения записи */
+body[data-view="commands"] .nox-editor .origin-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 400 12px/16px var(--nox-font);
+  color: var(--nox-text-2);
+}
+body[data-view="commands"] .nox-editor .origin-line [data-icon] { color: var(--nox-text-3); }
+body[data-view="commands"] .nox-editor .origin-line [data-icon] svg { width: 12px; height: 12px; }
+body[data-view="commands"] .nox-editor .warn-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--nox-warn) 48%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--nox-warn) 10%, transparent);
+  color: var(--nox-warn);
+  font: 500 12px/17px var(--nox-font);
+}
+body[data-view="commands"] .nox-editor .warn-line [data-icon] { flex: none; margin-top: 1px; }
+body[data-view="commands"] .nox-editor .warn-line [data-icon] svg { width: 14px; height: 14px; }
+
+/* Шаги */
+body[data-view="commands"] .nox-editor .steps-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+body[data-view="commands"] .nox-editor .steps-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font: 600 16px/22px var(--nox-font);
+  color: var(--nox-text-1);
+}
+body[data-view="commands"] .nox-editor .steps-title .counter { font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); }
+body[data-view="commands"] .nox-editor .steps-head .nox-btn { margin-left: auto; height: 32px; border-radius: 999px; }
+body[data-view="commands"] .nox-editor .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+body[data-view="commands"] .nox-editor .step {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: var(--nox-surface-3);
+  animation: nox-rise var(--dur-normal) var(--ease-out) both;
+}
+body[data-view="commands"] .nox-editor .step:focus-within { border-color: color-mix(in srgb, var(--nox-accent) 52%, transparent); }
+body[data-view="commands"] .nox-editor .step-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+body[data-view="commands"] .nox-editor .step-num {
+  width: 18px;
+  height: auto;
+  flex: none;
+  text-align: center;
+  font: 600 12px/16px var(--nox-mono);
+  color: var(--nox-text-3);
+  background: none;
+  border-radius: 0;
+  display: inline-block;
+}
+body[data-view="commands"] .nox-editor .step-head select.input {
+  flex: none;
+  width: auto;
+  min-width: 108px;
+  max-width: 180px;
+  height: 30px;
+  padding: 0 26px 0 9px;
+  border-radius: 7px;
+  background-color: var(--nox-surface-1);
+  font: 500 12px/1 var(--nox-mono);
+  background-position: calc(100% - 14px) 12px, calc(100% - 9px) 12px;
+}
+body[data-view="commands"] .nox-editor .step-title {
+  font: 500 13px/18px var(--nox-font);
+  color: var(--nox-text-1);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body[data-view="commands"] .nox-editor .step-tools { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+body[data-view="commands"] .nox-editor .step-tools .icon-btn {
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0; border-radius: 6px;
+  background: transparent;
+  color: var(--nox-text-3);
+}
+body[data-view="commands"] .nox-editor .step-tools .icon-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-text-1) 8%, transparent);
+  color: var(--nox-text-1);
+}
+body[data-view="commands"] .nox-editor .step-tools .icon-btn:last-child:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-err) 14%, transparent);
+  color: var(--nox-err);
+}
+body[data-view="commands"] .nox-editor .step-tools .icon-btn:disabled { color: var(--nox-text-ghost); cursor: not-allowed; }
+body[data-view="commands"] .nox-editor .step-tools .icon-btn svg { width: 12px; height: 12px; }
+body[data-view="commands"] .nox-editor .step-desc { margin: 0; font: 400 13px/18px var(--nox-font); color: var(--nox-text-2); overflow-wrap: anywhere; }
+body[data-view="commands"] .nox-editor .step-args { display: flex; flex-direction: column; gap: 9px; }
+body[data-view="commands"] .nox-editor .arg { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+body[data-view="commands"] .nox-editor .arg-wide { grid-column: 1 / -1; }
+body[data-view="commands"] .nox-editor .arg-label { display: flex; align-items: baseline; gap: 5px; font: 500 12px/16px var(--nox-font); color: var(--nox-text-2); }
+body[data-view="commands"] .nox-editor .arg-label .mono { font: 500 12px/16px var(--nox-mono); color: var(--nox-text-2); }
+body[data-view="commands"] .nox-editor .arg-label .req { color: var(--nox-err); }
+body[data-view="commands"] .nox-editor .arg-hint { font: 400 11px/15px var(--nox-font); color: var(--nox-text-3); overflow-wrap: anywhere; }
+body[data-view="commands"] .nox-editor .arg .switch { appearance: none; -webkit-appearance: none; position: relative; width: 32px; height: 20px; border: 1px solid var(--nox-border); border-radius: 999px; background: var(--nox-surface-1); }
+body[data-view="commands"] .nox-editor .arg .switch::after { content: ""; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: var(--nox-text-2); transition: transform var(--dur-normal) var(--ease-out), background var(--dur-fast) var(--ease-default); }
+body[data-view="commands"] .nox-editor .arg .switch:checked { background: var(--nox-accent); border-color: var(--nox-accent); }
+body[data-view="commands"] .nox-editor .arg .switch:checked::after { background: #fff; transform: translateX(12px); }
+body[data-view="commands"] .nox-editor .arg-bool { flex-direction: row; align-items: center; justify-content: space-between; }
+body[data-view="commands"] .nox-editor .step-unavailable {
+  height: 18px; padding: 0 7px;
+  display: inline-flex; align-items: center;
+  border: 1px solid color-mix(in srgb, var(--nox-err) 42%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nox-err) 12%, transparent);
+  color: var(--nox-err);
+  font: 500 10px/1 var(--nox-font);
+}
+
+/* Правая колонка: результат проверки */
+.nox-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  background: var(--nox-surface-1);
+}
+.nox-result h3 { margin: 0; font: 600 16px/22px var(--nox-font); color: var(--nox-text-1); }
+.nox-result-sub { margin: -6px 0 0; font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); }
+.nox-ready-list { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.nox-ready-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.nox-ready-step { display: flex; align-items: center; gap: 8px; min-width: 0; font: 400 12px/16px var(--nox-mono); color: var(--nox-text-1); }
+.nox-ready-step .cmd-title { font-family: var(--nox-font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nox-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--nox-ok); }
+.nox-dot[data-state="warn"] { background: var(--nox-warn); }
+.nox-dot[data-state="err"] { background: var(--nox-err); }
+.nox-ready-state {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--nox-text-1) 5%, transparent);
+  color: var(--nox-text-3);
+  font: 400 11px/16px var(--nox-font);
+}
+.nox-ready-state[data-state="warn"] { color: var(--nox-warn); }
+.nox-ready-state[data-state="err"] { color: var(--nox-err); }
+.nox-result-empty { margin: 0; font: 400 12px/17px var(--nox-font); color: var(--nox-text-2); }
+.nox-result-hint {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 10px;
+  background: var(--nox-surface-2);
+  font: 400 12px/17px var(--nox-font);
+  color: var(--nox-text-2);
+}
+.nox-result-hint [data-icon] { flex: none; margin-top: 2px; color: var(--nox-text-3); }
+.nox-result-hint [data-icon] svg { width: 12px; height: 12px; }
+body[data-view="commands"] .nox-editor .run-line span { color: inherit; }
+body[data-view="commands"] .nox-editor #cmdRunResult.run-result {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  gap: 4px;
+}
+body[data-view="commands"] .nox-editor .run-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font: 500 12px/17px var(--nox-font);
+  color: var(--nox-text-2);
+  overflow-wrap: anywhere;
+}
+body[data-view="commands"] .nox-editor .run-line[data-ok="yes"] { color: var(--nox-ok); }
+body[data-view="commands"] .nox-editor .run-line[data-ok="no"] { color: var(--nox-err); }
+body[data-view="commands"] .nox-editor .run-line [data-icon] { flex: none; margin-top: 2px; }
+body[data-view="commands"] .nox-editor .run-line [data-icon] svg { width: 12px; height: 12px; }
+body[data-view="commands"] .nox-editor #cmdRunResult ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+body[data-view="commands"] .nox-editor #cmdRunResult li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font: 400 12px/17px var(--nox-font); color: var(--nox-text-2); }
+body[data-view="commands"] .nox-editor #cmdRunResult .status { flex: none; }
+body[data-view="commands"] .nox-editor #cmdRunResult .mono { color: var(--nox-text-1); font: 500 12px/17px var(--nox-mono); }
+body[data-view="commands"] .nox-editor .cmd-steps { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+body[data-view="commands"] .nox-editor .cmd-steps .cmd-step { font: 400 12px/17px var(--nox-mono); color: var(--nox-text-2); }
+
+/* Ошибки и нижняя панель */
+body[data-view="commands"] .nox-editor .nox-editor-error-wrap { flex: none; padding: 0 16px; }
+body[data-view="commands"] .nox-editor .form-error {
+  margin: 0 0 8px;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--nox-err) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--nox-err) 12%, transparent);
+  color: var(--nox-err);
+  font: 500 12px/17px var(--nox-font);
+  white-space: pre-line;
+}
+.nox-editor-foot {
+  flex: none;
+  position: static;
+  margin: 0;
+  height: 64px;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  border-top: 1px solid color-mix(in srgb, var(--nox-border) 62%, transparent);
+  background: var(--nox-surface-2);
+  border-radius: 0;
+}
+.nox-editor-foot .editor-foot-gap { flex: 1 1 auto; }
+body[data-view="commands"] .nox-editor-foot .btn {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font: 500 13px/1 var(--nox-font);
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default),
+    color var(--dur-fast) var(--ease-default), transform var(--dur-fast) var(--ease-default);
+}
+body[data-view="commands"] .nox-editor-foot .btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, var(--nox-surface-2));
+  border-color: var(--nox-border-strong);
+  color: var(--nox-text-1);
+}
+body[data-view="commands"] .nox-editor-foot .btn:active:not(:disabled) { transform: scale(0.98); }
+body[data-view="commands"] .nox-editor-foot .btn:disabled {
+  background: var(--nox-text-ghost);
+  border-color: var(--nox-text-ghost);
+  color: var(--nox-text-2);
+  cursor: not-allowed;
+}
+body[data-view="commands"] .nox-editor-foot .btn-ghost { background: transparent; }
+body[data-view="commands"] .nox-editor-foot .btn-danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--nox-err) 42%, transparent);
+  color: var(--nox-err);
+}
+body[data-view="commands"] .nox-editor-foot .btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-err) 14%, transparent);
+  border-color: color-mix(in srgb, var(--nox-err) 60%, transparent);
+  color: var(--nox-err);
+}
+body[data-view="commands"] .nox-editor-foot .btn-danger.is-armed {
+  background: color-mix(in srgb, var(--nox-warn) 16%, transparent);
+  border-color: color-mix(in srgb, var(--nox-warn) 55%, transparent);
+  color: var(--nox-warn);
+}
+body[data-view="commands"] .nox-editor-foot .btn-primary {
+  height: 40px;
+  padding: 0 18px;
+  background: var(--nox-accent);
+  border-color: var(--nox-accent);
+  color: var(--nox-accent-ink);
+  font: 600 14px/1 var(--nox-font);
+}
+body[data-view="commands"] .nox-editor-foot .btn-primary:hover:not(:disabled) {
+  background: var(--nox-accent-hover);
+  border-color: var(--nox-accent-hover);
+  color: var(--nox-accent-ink);
+}
+body[data-view="commands"] .nox-editor-foot .btn svg { width: 13px; height: 13px; }
+
+/* ── 11. Диалоги раздела (выбор действия, импорт, вопрос) ─────── */
+body[data-view="commands"] .dialog {
+  position: fixed;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  background: var(--nox-surface-2);
+  color: var(--nox-text-1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
+  width: min(640px, calc(100vw - 32px));
+  height: fit-content;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+}
+body[data-view="commands"] .dialog.dialog-sm { width: min(480px, calc(100vw - 32px)); }
+body[data-view="commands"] .dialog::backdrop { background: rgba(0, 0, 0, 0.48); }
+body[data-view="commands"] .dialog-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100vh - 34px);
+  padding: 0;
+}
+body[data-view="commands"] .dialog-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--nox-border) 62%, transparent);
+}
+body[data-view="commands"] .dialog-title { margin: 0 auto 0 0; font: 600 16px/22px var(--nox-font); color: var(--nox-text-1); }
+body[data-view="commands"] .dialog-count { font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); }
+body[data-view="commands"] .dialog-sub {
+  margin: 0;
+  padding: 14px 16px 0;
+  font: 400 12px/16px var(--nox-font);
+  color: var(--nox-text-2);
+  overflow-wrap: anywhere;
+}
+body[data-view="commands"] .dialog-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  height: 64px;
+  padding: 0 16px;
+  border-top: 1px solid color-mix(in srgb, var(--nox-border) 62%, transparent);
+}
+body[data-view="commands"] .dialog .btn {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-2);
+  font: 500 13px/1 var(--nox-font);
+}
+body[data-view="commands"] .dialog .btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nox-text-1) 6%, var(--nox-surface-2));
+  border-color: var(--nox-border-strong);
+  color: var(--nox-text-1);
+}
+body[data-view="commands"] .dialog .btn:disabled { background: var(--nox-text-ghost); border-color: var(--nox-text-ghost); color: var(--nox-text-2); cursor: not-allowed; }
+body[data-view="commands"] .dialog .btn-ghost { background: transparent; }
+body[data-view="commands"] .dialog .btn-primary {
+  height: 40px;
+  padding: 0 18px;
+  background: var(--nox-accent);
+  border-color: var(--nox-accent);
+  color: var(--nox-accent-ink);
+  font: 600 14px/1 var(--nox-font);
+}
+body[data-view="commands"] .dialog .btn-primary:hover:not(:disabled) { background: var(--nox-accent-hover); border-color: var(--nox-accent-hover); color: var(--nox-accent-ink); }
+body[data-view="commands"] .dialog .btn-primary:disabled { background: var(--nox-text-ghost); border-color: var(--nox-text-ghost); color: var(--nox-text-2); }
+
+/* Выбор действия: категории слева, список справа. Размер диалога — по макету 640×520. */
+body[data-view="commands"] .dialog.nox-picker {
+  width: min(640px, calc(100vw - 32px));
+  height: min(520px, calc(100vh - 32px));
+}
+body[data-view="commands"] .nox-picker .dialog-body {
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+}
+.nox-picker-search { flex: none; padding: 14px 16px 10px; }
+.nox-picker-search .nox-search { flex: 1 1 auto; width: 100%; }
+.nox-picker-body { flex: 1 1 auto; min-height: 0; display: flex; gap: 0; overflow: hidden; }
+.nox-picker-cats {
+  flex: none;
+  width: 158px;
+  padding: 6px 8px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.nox-picker-cat {
+  height: 34px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-2);
+  font: 400 13px/1 var(--nox-font);
+  text-align: left;
+}
+.nox-picker-cat:hover { background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); color: var(--nox-text-1); }
+.nox-picker-cat[aria-current="true"] { background: var(--nox-accent-soft); color: var(--nox-accent); }
+.nox-picker-cat .nox-picker-count { margin-left: auto; font: 400 11px/1 var(--nox-font); color: var(--nox-text-3); }
+.nox-picker-list {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 6px 16px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nox-picker-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-1);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-default), border-color var(--dur-fast) var(--ease-default);
+}
+.nox-picker-item:hover { background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); }
+.nox-picker-item[aria-selected="true"] {
+  background: var(--nox-accent-soft);
+  border-color: var(--nox-accent-line);
+}
+.nox-picker-item [data-icon] { flex: none; margin-top: 1px; color: var(--nox-text-3); }
+.nox-picker-item [data-icon] svg { width: 16px; height: 16px; }
+.nox-picker-item[aria-selected="true"] [data-icon] { color: var(--nox-accent); }
+.nox-picker-item-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nox-picker-item-name { font: 500 13px/18px var(--nox-font); color: var(--nox-text-1); }
+.nox-picker-item-desc {
+  font: 400 12px/16px var(--nox-font);
+  color: var(--nox-text-2);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.nox-picker-empty { margin: auto; padding: 24px; text-align: center; font: 400 14px/20px var(--nox-font); color: var(--nox-text-2); }
+
+/* Импорт: сводка и diff */
+body[data-view="commands"] .imp-summary { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 0; font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); }
+body[data-view="commands"] .imp-list {
+  list-style: none;
+  margin: 0;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+}
+body[data-view="commands"] .imp-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-1);
+  font: 400 12px/17px var(--nox-font);
+  color: var(--nox-text-2);
+}
+body[data-view="commands"] .imp-item[data-action="conflict"] { border-color: color-mix(in srgb, var(--nox-err) 42%, transparent); background: color-mix(in srgb, var(--nox-err) 8%, var(--nox-surface-1)); }
+body[data-view="commands"] .imp-name { font: 600 13px/18px var(--nox-font); color: var(--nox-text-1); }
+body[data-view="commands"] .imp-action { font: 500 11px/16px var(--nox-font); color: var(--nox-text-3); }
+body[data-view="commands"] .imp-changes, body[data-view="commands"] .imp-conflicts { width: 100%; font: 400 11px/16px var(--nox-mono); color: var(--nox-text-3); overflow-wrap: anywhere; }
+body[data-view="commands"] .imp-conflicts { color: var(--nox-err); font-family: var(--nox-font); }
+body[data-view="commands"] .dialog .note.note-warn {
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--nox-warn) 42%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--nox-warn) 10%, transparent);
+  color: var(--nox-warn);
+  font: 500 12px/17px var(--nox-font);
+}
+body[data-view="commands"] .dialog .field-label { display: block; margin: 12px 16px 6px; font: 500 12px/16px var(--nox-font); color: var(--nox-text-2); }
+body[data-view="commands"] .dialog .input {
+  width: calc(100% - 32px);
+  margin: 0 16px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 8px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-1);
+  font: 400 13px/20px var(--nox-font);
+}
+
+/* ── 12. Адаптивность: узкое окно ─────────────────────────────── */
+@media (max-width: 1000px) {
+  .nox-cmd-head { height: 64px; padding: 0 14px; }
+  .nox-cmd-title { font-size: 21px; line-height: 28px; }
+  .nox-cmd-toolbar { padding: 8px 14px; flex-wrap: wrap; }
+  .nox-search { flex: 1 1 180px; max-width: none; }
+  .nox-cmd-body { flex-direction: column; padding: 4px 14px 14px; overflow-y: auto; }
+  .nox-cmd-col { flex: none; min-height: 0; }
+  .nox-cmd-listwrap { overflow: visible; }
+  .nox-packs { width: 100%; flex: none; overflow: visible; }
+  .nox-editor-body { flex-direction: column; padding: 10px 14px 12px; overflow-y: auto; }
+  .nox-editor-main { flex: none; overflow: visible; }
+  .nox-editor-side { width: 100%; flex: none; overflow: visible; }
+  .nox-editor-foot { height: auto; min-height: 64px; flex-wrap: wrap; padding: 10px 14px; }
+  .nox-editor-foot .btn { flex: 0 0 auto; justify-content: center; }
+  .nox-editor-head { height: 68px; }
+  .nox-crumb #cmdEditorTitle { max-width: 40vw; }
+  .nox-picker-cats { width: 130px; padding: 6px 6px 12px 12px; }
+}
+@media (max-width: 860px) {
+  .nox-tabs .nox-tab { padding: 0 10px; font-size: 12px; }
+  .nox-cmd-tools { margin-left: 0; }
+  .nox-recording-foot { flex-wrap: wrap; }
+  .nox-editor .field-row { flex-direction: column; }
+  .nox-editor .field-phrases #cmdPhraseInput { width: 150px; }
+  .nox-picker-body { flex-direction: column; }
+  .nox-picker-cats { width: 100%; flex-direction: row; overflow-x: auto; padding: 8px 12px 0; }
+  .nox-picker-cat { flex: none; }
+  .nox-picker-list { padding: 8px 12px 12px; }
+}
+
+/* Уважение к настройке движения: остаются только мгновенные состояния. */
+@media (prefers-reduced-motion: reduce) {
+  body[data-view="commands"] *,
+  body[data-view="commands"] *::before,
+  body[data-view="commands"] *::after {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+  }
+}
+html[data-motion="off"] body[data-view="commands"] *,
+html[data-motion="off"] body[data-view="commands"] *::before,
+html[data-motion="off"] body[data-view="commands"] *::after {
+  animation: none !important;
+  transition: none !important;
+}

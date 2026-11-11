@@ -147,7 +147,7 @@ test('отказ по approval: инструмент не запускается
   assert.equal(events.at(-1).state, 'idle');
 });
 
-test('approval_request использует id вызова: UI не заводит вторую запись истории', async (t) => {
+test('approval_request имеет отдельный ключ согласия и сохраняет связь с вызовом', async (t) => {
   const dir = setup(t);
   const events = [];
   const approvals = new ApprovalBroker({ timeoutMs: 1000 });
@@ -173,7 +173,11 @@ test('approval_request использует id вызова: UI не завод�
   const start = events.find((e) => e.type === 'tool_start');
   const request = events.find((e) => e.type === 'approval_request');
   assert.equal(start.id, 'call-42');
-  assert.equal(request.id, 'call-42');
+  assert.notEqual(request.id, 'call-42');
+  assert.equal(request.approvalId, request.id);
+  assert.equal(request.callId, start.id);
+  assert.equal(typeof request.agentId, 'string');
+  assert.equal(request.runId, start.runId);
 });
 
 test('session: второй вызов того же инструмента не спрашивает снова', async (t) => {
@@ -409,4 +413,111 @@ test('coerceToolArgs: приводит типы по схеме инструме
     overwrite: true,
     content: '  сохранить пробелы  ',
   });
+});
+
+// ZM-004: стоп не должен прятать действие, которое всё же завершилось.
+test('stop(): действие, не слушающее отмену, завершилось после стопа — итог виден окну и журналу', async (t) => {
+  const dir = setup(t);
+  const events = [];
+  let release;
+  const deaf = tool('deaf', 'T0', () => new Promise((resolve) => { release = () => resolve({ ok: true, summary: 'письмо ушло' }); }));
+  const agent = new Agent({
+    brain: scriptedBrain([{ toolCalls: [{ id: 'd1', name: 'deaf', args: {} }] }, { content: 'не должно прозвучать' }]),
+    tools: registry(deaf),
+    journal: new Journal(path.join(dir, 'journal.jsonl')),
+    emit: (e) => events.push(e),
+    mode: 'auto',
+    workspace: dir,
+  });
+
+  const pending = agent.run('действуй');
+  while (!release) await new Promise((r) => setImmediate(r));
+  agent.stop();
+  assert.equal(events.filter((e) => e.type === 'done').length, 1, 'done приходит сразу, окно не ждёт');
+  release();
+  const out = await pending;
+
+  assert.deepEqual(out, { ok: false, outcome: 'stopped' });
+  const late = events.filter((e) => e.type === 'tool_result');
+  assert.equal(late.length, 1);
+  assert.equal(late[0].afterStop, true);
+  assert.equal(late[0].ok, true);
+  assert.match(late[0].summary, /после запроса остановки.*письмо ушло/);
+  assert.ok(events.indexOf(late[0]) > events.findIndex((e) => e.type === 'done'));
+  assert.equal(events.filter((e) => e.type === 'done').length, 1, 'поздний итог не даёт второй done');
+  assert.equal(events.some((e) => e.type === 'text'), false, 'модель после стопа не вызывается');
+  const [entry] = readJournal(dir);
+  assert.equal(entry.ok, true);
+  assert.equal(entry.afterStop, true);
+  assert.equal(entry.status, 'succeeded');
+});
+
+test('stop(): действие, прерванное по сигналу, остаётся отказом с пометкой afterStop', async (t) => {
+  const dir = setup(t);
+  const events = [];
+  let started = false;
+  const polite = tool('polite', 'T0', (args, ctx) => new Promise((resolve) => {
+    started = true;
+    ctx.signal.addEventListener('abort', () => resolve({ ok: false, summary: 'прервано' }));
+  }));
+  const agent = new Agent({
+    brain: scriptedBrain([{ toolCalls: [{ id: 'p1', name: 'polite', args: {} }] }]),
+    tools: registry(polite),
+    journal: new Journal(path.join(dir, 'journal.jsonl')),
+    emit: (e) => events.push(e),
+    mode: 'auto',
+    workspace: dir,
+  });
+
+  const pending = agent.run('действуй');
+  while (!started) await new Promise((r) => setImmediate(r));
+  agent.stop();
+  await pending;
+
+  const [late] = events.filter((e) => e.type === 'tool_result');
+  assert.equal(late.ok, false);
+  assert.equal(late.afterStop, true);
+  assert.equal(late.status, 'failed');
+  assert.equal(readJournal(dir)[0].ok, false);
+});
+
+test('stop(): зависшее действие не держит агента — ход закрывается с «исход неизвестен», поздний итог дописывается', async (t) => {
+  const dir = setup(t);
+  const events = [];
+  let release;
+  const hang = tool('hang', 'T1', () => new Promise((resolve) => { release = () => resolve({ ok: true, summary: 'файл записан', verified: 'confirmed' }); }));
+  const agent = new Agent({
+    brain: scriptedBrain([{ toolCalls: [{ id: 'h1', name: 'hang', args: {} }] }, { content: 'второй ход' }]),
+    tools: registry(hang),
+    journal: new Journal(path.join(dir, 'journal.jsonl')),
+    emit: (e) => events.push(e),
+    mode: 'full',
+    workspace: dir,
+    stopGraceMs: 20,
+  });
+
+  const pending = agent.run('действуй');
+  while (!release) await new Promise((r) => setImmediate(r));
+  agent.stop();
+  assert.deepEqual(await pending, { ok: false, outcome: 'stopped' });
+
+  const [hung] = events.filter((e) => e.type === 'tool_result');
+  assert.equal(hung.hung, true);
+  assert.equal(hung.afterStop, true);
+  assert.equal(hung.status, 'unverified');
+  assert.match(hung.summary, /не удалось остановить/);
+  // Агент свободен: следующий ход начинается, хотя действие так и не ответило.
+  assert.deepEqual(await agent.run('ещё раз'), { ok: true, outcome: 'answer' });
+
+  release();
+  await new Promise((r) => setImmediate(r));
+  const results = events.filter((e) => e.type === 'tool_result');
+  assert.equal(results.length, 2);
+  assert.equal(results[1].late, true);
+  assert.equal(results[1].ok, true);
+  assert.equal(results[1].status, 'succeeded');
+  assert.equal(results[1].runId, hung.runId, 'поздний итог относится к остановленному ходу, а не к новому');
+  assert.equal(events.filter((e) => e.type === 'done').length, 2);
+  const journal = readJournal(dir);
+  assert.deepEqual(journal.map((j) => [j.ok, Boolean(j.hung), Boolean(j.late)]), [[false, true, false], [true, false, true]]);
 });

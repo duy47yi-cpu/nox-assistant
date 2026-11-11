@@ -1,0 +1,363 @@
+/* Nox — общая оболочка всех разделов: одна шапка, одна рейка, свой экран у каждого раздела.
+ *
+ * Подключается последним. Действует на разделы системы Nox (чат, команды, журнал, подключения,
+ * настройки, аккаунт, дела); классический экран (data-view="dialog") не трогает.
+ * Шапка: бренд NOX слева; настройки, профиль и кнопки окна справа. Рейка — только разделы.
+ * Раскладку внутри разделов задают nox-screen.css, nox-commands.css, nox-connections.css,
+ * nox-settings.css; здесь — общий каркас, Журнал/Аккаунт/Дела и сворачивание истории чата. */
+
+/* ── 1. Токены для разделов, у которых не было своего слоя ─────── */
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) {
+  --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-head: var(--font);
+  --font-display: var(--font);
+  --font-reply: var(--font);
+  --nox-bg: #0F0F10;
+  --nox-surface-1: #141415;
+  --nox-surface-2: #18181B;
+  --nox-surface-3: #1C1C1F;
+  --nox-surface-4: #232326;
+  --nox-border: #2A2A2E;
+  --nox-border-strong: #34343A;
+  --nox-text-1: #F1F1F3;
+  --nox-text-2: #9A9AA0;
+  --nox-text-3: #6B6B70;
+  --nox-text-ghost: #3A3A3E;
+  --nox-accent: #2E9AC1;
+  --nox-accent-hover: #3AAAD6;
+  --nox-accent-ink: #061217;
+  --nox-accent-soft: color-mix(in srgb, #2E9AC1 14%, transparent);
+  --nox-ok: #3DD68C;
+  --nox-warn: #F5A524;
+  --nox-err: #FF5C5C;
+  --nox-font: var(--font);
+  --nox-mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+  --rail-w: 52px;
+  --dur-fast: 120ms;
+  --ease-default: cubic-bezier(0.2, 0, 0, 1);
+  /* Старые стили журнала и аккаунта читают эти имена — даём им палитру Nox. */
+  --bg: var(--nox-bg);
+  --surface: var(--nox-surface-1);
+  --surface-2: var(--nox-surface-3);
+  --surface-3: var(--nox-surface-4);
+  --border: var(--nox-border);
+  --border-input: var(--nox-border-strong);
+  --text: var(--nox-text-1);
+  --text-2: var(--nox-text-2);
+  --text-3: #8A8A90;
+  --accent: var(--nox-accent);
+  --accent-ink: var(--nox-accent-ink);
+  --accent-bg: var(--nox-accent-soft);
+  --accent-line: color-mix(in srgb, #2E9AC1 42%, transparent);
+  --focus: var(--nox-accent);
+  background: transparent;
+  color: var(--nox-text-1);
+}
+html:has(body:is([data-view="journal"], [data-view="account"], [data-view="deals"])) { background: transparent; }
+@media (max-width: 1000px) {
+  body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) { --rail-w: 46px; }
+}
+
+/* ── 2. Каркас окна: шапка во всю ширину, под ней рейка и раздел ── */
+.nox-topbar { display: none; }
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .app {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  grid-template-rows: 40px minmax(0, 1fr);
+  row-gap: 6px;
+  column-gap: 8px;
+  padding: 4px 8px 8px;
+  height: 100vh;
+  background: var(--nox-bg);
+  border: 1px solid color-mix(in srgb, var(--nox-border) 80%, transparent);
+  border-radius: 12px;
+  overflow: clip;
+  isolation: isolate;
+}
+/* Рейка — отдельная панель во всех разделах, и в чате тоже (раньше в чате она сливалась с историей). */
+body[data-view="nox"] .rail { border-right: 1px solid var(--nox-border); border-radius: 16px; }
+body[data-view="nox"] .nox-history,
+body[data-view="nox"]:has(.nox-grid.is-empty) .nox-chat { border-left: 1px solid var(--nox-border); border-radius: 16px; }
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .app::before,
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .app::after,
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .theme-fx,
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .contour { display: none !important; }
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .main { min-width: 0; min-height: 0; background: transparent; }
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .topbar { display: none; }
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .views { flex: 1; min-height: 0; }
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) :focus-visible { outline: 2px solid var(--nox-accent); outline-offset: 2px; }
+
+/* ── 3. Общая шапка ───────────────────────────────────────────── */
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .nox-topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 0 0 9px;
+  -webkit-app-region: drag;
+  font-family: var(--nox-font, var(--font));
+}
+.nox-top-brand { display: inline-flex; align-items: center; gap: 12px; color: var(--nox-text-1); }
+.nox-top-mark {
+  position: relative;
+  width: 17px; height: 17px;
+  border: 1.6px solid currentColor;
+  border-radius: 50%;
+  transform: rotate(-28deg);
+}
+.nox-top-mark::after {
+  content: "";
+  position: absolute;
+  top: -4px; right: -4px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--nox-bg);
+}
+.nox-top-word { font: 600 13px/1 var(--nox-font, var(--font)); letter-spacing: 0.22em; }
+.nox-top-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+.nox-top-btn {
+  position: relative;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-2);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-default), color var(--dur-fast) var(--ease-default);
+}
+.nox-top-btn:hover { background: color-mix(in srgb, var(--nox-text-1) 7%, transparent); color: var(--nox-text-1); }
+.nox-top-btn[aria-current="page"] { background: var(--nox-accent-soft); color: var(--nox-accent); }
+.nox-top-btn svg { width: 16px; height: 16px; }
+.nox-top-btn [data-icon] svg { width: 17px; height: 17px; }
+.nox-top-btn:focus-visible { outline: 2px solid var(--nox-accent); outline-offset: 1px; }
+.nox-top-close:hover { background: color-mix(in srgb, var(--nox-err) 14%, transparent); color: var(--nox-err); }
+.nox-top-account [data-icon] {
+  width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--nox-border-strong);
+  border-radius: 50%;
+}
+.nox-top-account [data-icon] svg { width: 15px; height: 15px; }
+.nox-top-dot {
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--nox-warn);
+}
+.nox-top-dot[hidden] { display: none; }
+.nox-top-div { width: 1px; height: 18px; margin: 0 6px; background: var(--nox-border); }
+
+/* ── 4. Рейка: только разделы; бренд, настройки и профиль — в шапке ── */
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) :is(.rail-brand, .rail-foot) { display: none; }
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail-list > li:has(> [data-nav="settings"]) { display: none; }
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail { padding-top: 10px; }
+
+/* Журнал, Аккаунт и Дела не имели своего слоя — та же рейка, что у остальных разделов. */
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail {
+  width: var(--rail-w);
+  padding: 10px 6px 8px;
+  align-items: center;
+  background: var(--nox-surface-2);
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  overflow: visible;
+  -webkit-app-region: drag;
+}
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail-list { gap: 4px; align-items: center; width: auto; }
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail-item {
+  width: 36px; height: 36px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  border-radius: 10px;
+  color: var(--nox-text-3);
+  -webkit-app-region: no-drag;
+}
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail-item:hover { background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); color: var(--nox-text-1); transform: none; }
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail-item[aria-current="page"] { background: var(--nox-accent-soft); color: var(--nox-accent); }
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail-item[aria-current="page"] .rail-icon { color: var(--nox-accent); }
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -9px; top: 7px;
+  width: 4px; height: 22px;
+  border-radius: 0 3px 3px 0;
+  background: var(--nox-accent);
+}
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail-icon svg { width: 18px; height: 18px; }
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail-label { display: none; }
+body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail-count {
+  top: 2px; right: 2px;
+  min-width: 15px; height: 15px;
+  padding: 0 3px;
+  font-size: 10px; line-height: 13px;
+  background: var(--nox-accent); border: 0; color: var(--nox-accent-ink);
+  font-family: var(--nox-mono); font-weight: 600;
+}
+
+/* ── 5. Страница раздела: Журнал, Аккаунт, Дела ───────────────── */
+.view-journal, .view-account, .view-deals { padding: 0; overflow: hidden; }
+.nox-page {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--nox-surface-2);
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  overflow: hidden;
+  font-family: var(--nox-font);
+}
+.nox-page-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--nox-border) 62%, transparent);
+  -webkit-app-region: drag;
+}
+.nox-page-title { margin: 0; font: 600 22px/28px var(--nox-font); letter-spacing: -0.01em; color: var(--nox-text-1); }
+.nox-page-sub { margin: 0; font: 400 13px/18px var(--nox-font); color: var(--nox-text-2); min-width: 0; }
+.nox-page > .page {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 16px 24px 20px;
+  overflow: auto;
+}
+.nox-page ::-webkit-scrollbar { width: 6px; height: 6px; }
+.nox-page ::-webkit-scrollbar-thumb { background: var(--nox-text-ghost); border: 0; border-radius: 3px; }
+
+/* Журнал: фильтры сверху, таблица на всю ширину, без лишней рамки вокруг. */
+.view-journal #journalCard { padding: 0; margin: 0; border: 0; background: none; box-shadow: none; }
+.view-journal .set-title-row { margin: 0 0 10px; min-height: 0; }
+.view-journal .counter { font: 400 12px/16px var(--nox-font); color: var(--nox-text-3); }
+.view-journal .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; border: 0; padding: 0; }
+.view-journal .seg {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0; border: 0; background: none; box-shadow: none; /* themes.css рисует рамку тенью */
+}
+.view-journal .seg-btn {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nox-text-2);
+  font: 500 13px/1 var(--nox-font);
+}
+.view-journal .seg-btn:hover { color: var(--nox-text-1); border-color: var(--nox-border-strong); }
+.view-journal .seg-btn[aria-pressed="true"] { background: var(--nox-accent-soft); border-color: color-mix(in srgb, var(--nox-accent) 42%, transparent); color: var(--nox-accent); }
+.view-journal .filter-search { display: flex; gap: 8px; margin-left: auto; flex: 0 1 340px; min-width: 220px; }
+.view-journal .filter-search .input { flex: 1; min-width: 0; max-width: none; }
+.nox-page .input {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 10px;
+  background: var(--nox-surface-1);
+  color: var(--nox-text-1);
+  font: 400 13px/1 var(--nox-font);
+}
+.nox-page .input:hover { border-color: var(--nox-border-strong); }
+.nox-page .input:focus { border-color: var(--nox-accent); outline: none; box-shadow: 0 0 0 3px var(--nox-accent-soft); }
+.nox-page .input::placeholder { color: var(--nox-text-3); }
+.nox-page .btn { border-radius: 10px; font-family: var(--nox-font); }
+.nox-page .btn-secondary { background: var(--nox-surface-3); border: 1px solid var(--nox-border); color: var(--nox-text-1); }
+.nox-page .btn-secondary:hover { border-color: var(--nox-border-strong); background: var(--nox-surface-4); }
+.nox-page .btn-primary { background: var(--nox-accent); border-color: var(--nox-accent); color: var(--nox-accent-ink); }
+.nox-page .btn-primary:hover { background: var(--nox-accent-hover); }
+.view-journal .table-wrap {
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: var(--nox-surface-1);
+  overflow: auto;
+}
+.view-journal .jtable { width: 100%; border-collapse: collapse; font: 400 13px/18px var(--nox-font); }
+.view-journal .jtable thead th {
+  position: sticky; top: 0;
+  background: var(--nox-surface-1);
+  color: var(--nox-text-3);
+  font-weight: 500;
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--nox-border);
+}
+.view-journal .jtable td { padding: 10px 14px; border-bottom: 1px solid color-mix(in srgb, var(--nox-border) 60%, transparent); vertical-align: top; color: var(--nox-text-1); }
+.view-journal .jtable tr:last-child td { border-bottom: 0; }
+.view-journal .jtable tbody tr:hover td { background: color-mix(in srgb, var(--nox-text-1) 3%, transparent); }
+.view-journal .jt-args, .view-journal .jt-evidence { color: var(--nox-text-2); }
+.view-journal .empty { align-items: center; padding: 40px 16px; text-align: center; color: var(--nox-text-2); border: 1px dashed var(--nox-border); border-radius: 12px; }
+.view-journal .empty p { margin: 0; max-width: none; text-align: center; }
+
+/* Аккаунт и Дела: карточки в ширину чтения. */
+:is(.view-account, .view-deals) .page > * { max-width: 760px; }
+:is(.view-account, .view-deals) .set-section {
+  margin: 0 0 12px;
+  padding: 18px 20px;
+  border: 1px solid var(--nox-border);
+  border-radius: 14px;
+  background: var(--nox-surface-1);
+  box-shadow: none;
+}
+:is(.view-account, .view-deals) :is(.set-title, .deals-head) { font: 600 15px/20px var(--nox-font); color: var(--nox-text-1); }
+:is(.view-account, .view-deals) :is(.set-hint, .set-text, .page-lead, .account-hint) { color: var(--nox-text-2); }
+
+/* ── 6. Чат: историю можно свернуть, в узком окне она выезжает поверх ── */
+.nox-hist-titlerow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.nox-hist-toggle {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nox-text-3);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.nox-hist-toggle:hover { background: color-mix(in srgb, var(--nox-text-1) 6%, transparent); color: var(--nox-text-1); }
+.nox-hist-toggle svg { width: 17px; height: 17px; }
+.nox-hist-show[hidden], .nox-grid.is-empty .nox-hist-show { display: none; }
+.nox-grid { position: relative; }
+.nox-grid.hist-off .nox-history { display: none; }
+.nox-grid.hist-drawer .nox-history {
+  position: absolute;
+  z-index: 30;
+  top: 0; bottom: 0; left: 0;
+  width: 244px;
+  box-shadow: 16px 0 40px rgba(0, 0, 0, 0.45);
+}
+
+/* ── 7. Низкое окно: шапки разделов компактнее, работе больше места ── */
+@media (max-height: 600px) {
+  .nox-set-head, .nox-cmd-head, .nox-editor-head { height: 56px; }
+  :is(.nox-set-title, .nox-cmd-title) { font-size: 20px; line-height: 26px; }
+  .nox-page-head { padding: 14px 20px 10px; }
+  .nox-page-title { font-size: 20px; line-height: 26px; }
+}
+@media (max-width: 1000px) {
+  .nox-page > .page { padding: 14px 16px 16px; }
+  .nox-page-head { padding-left: 16px; padding-right: 16px; }
+  .view-journal .filter-search { margin-left: 0; flex: 1 1 100%; }
+  /* Категории настроек лентой: стрелка только у текущей, иначе «Безопасность» не помещается. */
+  .set-nav-item.nox-set-item:not([aria-current="true"]) .nox-set-item-chev { display: none; }
+  .set-nav-item.nox-set-item { gap: 6px; }
+}
+
+/* Широкое окно: сфера чуть крупнее, лента не растягивается без меры (спецификация v2: 400 px на 1600). */
+@media (min-width: 1400px) {
+  body[data-view="nox"] { --nox-sphere-w: 400px; --nox-orb-size: 368px; }
+}

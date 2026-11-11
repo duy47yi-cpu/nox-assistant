@@ -1,0 +1,20 @@
+
+Фоновые задачи с моделью выключены: включает владелец настройкой backgroundModelRuns
+[
+ {
+  "id": "S1",
+  "pass": true
+ },
+ {
+  "id": "S2",
+  "pass": true
+ },
+ {
+  "id": "S4",
+  "pass": false
+ },
+ {
+  "id": "S3",
+  "pass": true
+ }
+]

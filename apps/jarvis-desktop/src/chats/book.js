@@ -6,7 +6,7 @@ const { randomUUID } = require('crypto');
 const TITLE_MAX = 32;
 const NEW_TITLE = 'Новый чат';
 
-const makeChat = (history = []) => ({ id: randomUUID(), history });
+const makeChat = (history = [], updatedAt = Date.now()) => ({ id: randomUUID(), history, updatedAt });
 
 function titleOf(chat) {
   const first = chat.history.find((m) => m.role === 'user' && !m.fromTool && typeof m.content === 'string' && m.content.trim());
@@ -21,8 +21,8 @@ class ChatBook {
     const stored = data && Array.isArray(data.chats) ? data.chats : [];
     this.chats = stored
       .filter((c) => c && typeof c.id === 'string' && Array.isArray(c.history))
-      .map((c) => ({ id: c.id, history: c.history }));
-    if (!this.chats.length) this.chats.push(makeChat(data && Array.isArray(data.history) ? data.history : []));
+      .map((c) => ({ id: c.id, history: c.history, updatedAt: Number.isFinite(c.updatedAt) ? c.updatedAt : 0 }));
+    if (!this.chats.length) this.chats.push(makeChat(data && Array.isArray(data.history) ? data.history : [], 0));
     this.activeId = this.chats.some((c) => c.id === data?.activeId) ? data.activeId : this.chats[0].id;
   }
 
@@ -31,7 +31,15 @@ class ChatBook {
   }
 
   list() {
-    return { activeId: this.activeId, chats: this.chats.map((c) => ({ id: c.id, title: titleOf(c) })) };
+    return { activeId: this.activeId, chats: this.chats.map((c) => ({ id: c.id, title: titleOf(c), updatedAt: c.updatedAt || 0 })) };
+  }
+
+  // Отметка времени последней работы с чатом: по ней экран Nox делит список на «Сегодня» и «Ранее».
+  touch(id = this.activeId) {
+    const chat = this.chats.find((c) => c.id === id);
+    if (!chat) return false;
+    chat.updatedAt = Date.now();
+    return true;
   }
 
   // Пустой чат уже есть — переходим в него, а не копим одинаковые вкладки.
@@ -40,12 +48,14 @@ class ChatBook {
     const chat = empty || makeChat();
     if (!empty) this.chats.push(chat);
     this.activeId = chat.id;
+    this.touch(chat.id);
     return chat;
   }
 
   select(id) {
     if (!this.chats.some((c) => c.id === id)) return false;
     this.activeId = id;
+    this.touch(id);
     return true;
   }
 
@@ -60,8 +70,17 @@ class ChatBook {
   }
 
   toJSON(mapHistory = (h) => h) {
-    return { activeId: this.activeId, chats: this.chats.map((c) => ({ id: c.id, history: mapHistory(c.history) })) };
+    return { activeId: this.activeId, chats: this.chats.map((c) => ({ id: c.id, history: mapHistory(c.history), updatedAt: c.updatedAt || 0 })) };
   }
 }
 
-module.exports = { ChatBook, NEW_TITLE };
+// Ход оборвался (приложение закрылось до ответа): в истории остаётся реплика владельца без ответа.
+// Дописываем честную пометку; действия при старте не повторяются.
+const INTERRUPTED_TEXT = 'Ход прерван: приложение закрылось до ответа. Незаконченные действия я не повторял — проверьте результат и напишите, что продолжить.';
+function markCutTurn(history) {
+  const last = history[history.length - 1];
+  if (last && !(last.role === 'assistant' && last.content)) history.push({ role: 'assistant', content: INTERRUPTED_TEXT });
+  return history;
+}
+
+module.exports = { ChatBook, NEW_TITLE, markCutTurn, INTERRUPTED_TEXT };

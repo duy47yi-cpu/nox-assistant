@@ -521,7 +521,7 @@ function createRuntime(opts = {}) {
       const blocked = meterBlocked();
       if (blocked) return notOk(`задача осталась на паузе: ${blocked}`);
       const decision = await askOwner({
-        id: `resume:${id}:${clock()}`,
+        id: `resume:${id}:${crypto.randomUUID()}`,
         name: RESUME_APPROVAL,
         args: { задача: task.title, 'причина паузы': task.reason || 'не указана' },
         risk: 'T1',

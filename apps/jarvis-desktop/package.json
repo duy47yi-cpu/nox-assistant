@@ -12,6 +12,7 @@
     "check-brain": "node scripts/check-brain.js",
     "check-tools": "node scripts/check-tools.js",
     "turns": "node scripts/turns-report.js",
+    "eval": "node scripts/eval/run.js",
     "check-manifest": "node scripts/check-manifest.js"
   },
   "engines": {

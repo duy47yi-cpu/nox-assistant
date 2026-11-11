@@ -327,9 +327,12 @@ test('подтверждение (requiresApproval: true): пока ждём, м
 
   await waitFor(() => h.approvals.list().length === 1, 'первый запрос подтверждения');
   const [ask] = h.approvals.list();
+  assert.notEqual(ask.id, 'm1:call2_0');
+  assert.equal(ask.callId, 'call2_0');
+  assert.equal(ask.taskId, 'm1');
   assert.deepEqual(
-    { id: ask.id, name: ask.name, risk: ask.risk, reason: ask.reason, allowSession: ask.allowSession, url: ask.args.url },
-    { id: 'm1:call2_0', name: 'web_fetch', risk: 'T1', reason: 'инструмент требует подтверждения владельца', allowSession: false, url: 'https://example.com/tea' },
+    { name: ask.name, risk: ask.risk, reason: ask.reason, allowSession: ask.allowSession, url: ask.args.url },
+    { name: 'web_fetch', risk: 'T1', reason: 'инструмент требует подтверждения владельца', allowSession: false, url: 'https://example.com/tea' },
   );
   assert.equal(h.queue.get('m1').status, 'waiting_approval');
   assert.equal(h.brain.calls.length, 2);
@@ -356,6 +359,22 @@ test('подтверждение (requiresApproval: true): пока ждём, м
   assert.deepEqual(h.journal.filter((e) => e.tool === 'web_fetch').map((e) => e.decision), ['ask', 'reject', 'ask', 'once']);
   assert.deepEqual(h.journal.filter((e) => e.tool === 'workspace_write').map((e) => e.decision), ['allow']);
   assert.ok(task.log.some((l) => l.event === 'статус: waiting_approval'));
+});
+
+test('исполнитель отклоняет действие, если его аргументы изменились во время подтверждения', async (t) => {
+  const args = { url: 'https://example.com/original' };
+  const h = setup(t, { extraSpecs: [ASKING], script: [
+    planReply([{ title: 'Проверить страницу' }]),
+    { toolCalls: [{ id: 'same', name: 'web_fetch', args }] },
+    doneReply(),
+  ] });
+  h.addTask('integrity', { mandate: WITH_ASKING });
+  const running = h.executor.submit('integrity');
+  await waitFor(() => h.approvals.list().length === 1, 'подтверждение');
+  args.url = 'https://example.com/changed';
+  h.approvals.respond(h.approvals.list()[0].id, 'once');
+  await running;
+  assert.equal(h.runs.filter((r) => r.name === 'web_fetch').length, 0);
 });
 
 test('workspace_write поверх существующего файла вне reports: отказ самого инструмента, подтверждения не спрашивают', async (t) => {
@@ -1433,6 +1452,33 @@ test('стоп прерывает зависший инструмент чере
   assert.equal(out.status, 'paused');
   assert.equal(h.queue.get('m1').status, 'paused');
   assert.equal(h.runs.length, 1);
+});
+
+test('стоп и глухой инструмент: исполнитель освобождается через stopGraceMs, поздний итог в журнале', async (t) => {
+  let started = false;
+  let release = null;
+  const h = setup(t, {
+    wireStop: false,
+    executorOpts: { stopGraceMs: 20 },
+    runTool: () => { started = true; return new Promise((resolve) => { release = () => resolve({ ok: true, summary: 'записано' }); }); },
+    script: [
+      planReply([{ title: 'Записать', check: { kind: 'file_exists', path: 'notes/tea.md' } }]),
+      toolReply(['workspace_write', { path: 'notes/tea.md', content: 'x' }]),
+    ],
+  });
+  h.addTask('m1');
+  const running = h.executor.submit('m1');
+  await waitFor(() => started, 'инструмент запущен');
+  h.stop.trigger('аварийный стоп');
+  const out = await running; // инструмент так и не ответил
+  assert.equal(out.status, 'paused');
+  assert.match(h.queue.get('m1').reason, /не остановился за .* после стопа: результат неизвестен/);
+  assert.equal(h.executor.isBusy(), false);
+  assert.equal(h.queue.get('m1').stepsUsed, 0);
+  release();
+  await ticks(30);
+  const late = h.journal.find((e) => e.decision === 'late');
+  assert.ok(late && late.ok === true && /завершилось после стопа: записано/.test(late.summary), 'настоящий поздний итог записан');
 });
 
 // ---- Отчёт маскирует секреты перед записью (пункт 3 аудита).

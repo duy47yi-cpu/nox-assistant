@@ -59,7 +59,7 @@ async function askApproval(approvals, emit, payload, signal) {
     if (signal.aborted) onAbort();
     else signal.addEventListener('abort', onAbort, { once: true });
   }
-  emit({ type: 'approval_request', ...payload });
+  emit(structuredClone({ type: 'approval_request', ...payload }));
   try {
     return await waiting;
   } catch {
@@ -129,7 +129,8 @@ async function runStep(cmd, step, deps) {
     decision = answer;
   }
 
-  emit({ type: 'tool_start', id, name: tool.name, args, risk: tool.risk });
+  if (signal && signal.aborted) return finish('reject', false, 'отменено');
+  emit({ type: 'tool_start', id, name: tool.name, args: structuredClone(args), risk: tool.risk });
   let ok = false;
   let summary;
   try {

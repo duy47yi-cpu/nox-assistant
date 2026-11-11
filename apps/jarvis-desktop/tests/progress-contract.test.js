@@ -217,7 +217,7 @@ test('тайм-аут подтверждения: действие не выпо
   assert.equal(events.find((e) => e.type === 'tool_result').status, 'failed');
 });
 
-test('stop во время шага: итог cancelled, поздний ответ инструмента не воскрешает запуск', async (t) => {
+test('stop во время шага: итог cancelled, поздний ответ инструмента не воскрешает запуск, но виден с пометкой', async (t) => {
   const dir = setup(t);
   const events = [];
   const stop = new StopSwitch();
@@ -249,14 +249,16 @@ test('stop во время шага: итог cancelled, поздний отве
   assert.equal(dones[0].status, 'cancelled');
   assert.equal(dones[0].outcome, 'stopped');
   assert.equal(dones[0].cancelled, true, 'явный признак отмены для окна');
-  // После done допустим только idle: поздний tool_result в окно не идёт.
+  // После done — idle и честный итог позднего действия с пометкой afterStop (ZM-004): запуск он не воскрешает.
   const doneIndex = events.indexOf(dones[0]);
-  assert.deepEqual(events.slice(doneIndex + 1).map((e) => e.type + ':' + (e.state || '')), ['status:idle']);
-  assert.equal(events.filter((e) => e.type === 'tool_result').length, 0, 'поздний успех не показан как шаг');
-  // В истории вызов записан как остановленный, а не как успех.
+  assert.deepEqual(events.slice(doneIndex + 1).map((e) => e.type + ':' + (e.state || '')), ['status:idle', 'tool_result:']);
+  const [late] = events.filter((e) => e.type === 'tool_result');
+  assert.equal(late.afterStop, true, 'поздний итог помечен и не выглядит обычным шагом');
+  assert.match(late.summary, /после запроса остановки/);
+  // В журнале правда: действие выполнилось, но уже после остановки.
   const [entry] = readJsonl(path.join(dir, 'journal.jsonl'));
-  assert.equal(entry.decision, 'stop');
-  assert.equal(entry.ok, false);
+  assert.equal(entry.afterStop, true);
+  assert.equal(entry.ok, true);
   assert.equal(entry.runId, dones[0].runId);
 });
 
