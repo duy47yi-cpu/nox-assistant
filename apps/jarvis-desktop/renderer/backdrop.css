@@ -1,0 +1,35 @@
+/* Фон окна: своя картинка (.theme-bg) и эффекты (.theme-fx) под панелями во всех разделах.
+ * Подключается последним. Картинку хранит backdrop.js, выбор фона и эффекта — theme-boot.js (jarvis.look).
+ * Пока нет ни картинки, ни эффекта, ни одно правило отсюда не срабатывает: окно выглядит как раньше. */
+
+.theme-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; display: none; }
+html[data-bg="image"][data-own-bg] .theme-bg { display: block; }
+/* Картинка шире слоя на двойное размытие: размытые края уходят за обрез окна. */
+.theme-bg::before {
+  content: ""; position: absolute; inset: calc(var(--own-bg-blur, 6px) * -2);
+  background: var(--own-bg) center / cover no-repeat;
+  filter: blur(var(--own-bg-blur, 6px));
+}
+/* Затемнение цветом темы: текст остаётся читаемым на любой картинке. */
+.theme-bg::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--bg) var(--own-bg-dim, 40%), transparent); }
+
+/* Разделы Nox раньше прятали эффект темы. Теперь он виден, а слои лежат над фоном окна и под всем
+ * остальным: .app в этих разделах — свой слой (isolation), поэтому z-index: -1 не уходит под фон. */
+html[data-fx] body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .theme-fx { display: block !important; }
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) :is(.theme-bg, .theme-fx) { z-index: -1; }
+
+/* Панели Nox непрозрачные, фон за ними был бы виден только в зазорах. С картинкой, эффектом или
+ * темой с градиентом (список сверяет tests/look.test.js с themes.css) панели полупрозрачные;
+ * вложенные поверхности плотнее, чтобы текст не терялся. Сплошной фон возвращает плотные панели. */
+html:is([data-fx], [data-bg="image"][data-own-bg], :is([data-theme="aurora"], [data-theme="ember"], [data-theme="dawn"], [data-theme="liquid"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradient"], [data-theme="gradientday"], [data-theme="midnight"], [data-theme="neon"], [data-theme="starry"], [data-theme="moonlight"], [data-theme="sunrise"], [data-theme="glass"]):not([data-bg])) body[data-view] {
+  --nox-surface-1: color-mix(in srgb, var(--surface) 60%, transparent);
+  --nox-surface-2: color-mix(in srgb, var(--surface) 60%, transparent);
+  --nox-surface-3: color-mix(in srgb, var(--surface-2) 72%, transparent);
+  --nox-surface-4: color-mix(in srgb, var(--surface-3) 84%, transparent);
+}
+
+/* Настройки → Вид: строка «Своя картинка». */
+.look-own { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+.look-own-note { flex-basis: 100%; text-align: right; color: var(--text-3); font-size: var(--fs-xs); }
+.look-own-note[data-err] { color: var(--err); }
+.look-own-note:empty { display: none; }

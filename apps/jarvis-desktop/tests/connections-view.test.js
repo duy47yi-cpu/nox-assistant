@@ -644,57 +644,30 @@ test('изменения набора действий: ошибка подтв�
 
 // ── Популярные сервисы ────────────────────────────────────────
 
-test('популярные: «Добавить» вызывает mcpAdd, сервисы с ключами не добавляются', async () => {
-  const calls = [];
-  const added = { name: 'filesystem', transport: 'stdio', target: 'npx.cmd', status: 'connected', disabled: false, tools: [{ name: 'read_file', title: 'Чтение' }], toolCount: 1 };
-  const bridge = {
-    mcpState: async () => ({ servers: [] }),
-    mcpAdd: async (...args) => { calls.push(args); return { ok: true, servers: [added] }; },
-  };
-  const { ids, toasts } = makeSandbox(bridge);
+test('популярные: показываются только проверенные записи каталога', async () => {
+  const catalog = [
+    { id: 'filesystem', title: 'Файлы', verified: true, envKeys: [], category: 'files', docs: 'https://example.org/docs' },
+    { id: 'github', title: 'GitHub', verified: false, envKeys: [], category: 'git' },
+  ];
+  const { ids } = makeSandbox({ mcpState: async () => ({ servers: [], catalog }) });
   await wait();
-  assert.deepEqual(byTag(ids.mcpPopularCats, 'BUTTON').map((button) => button.textContent), ['Все', 'Файлы', 'Разработка', 'Прочее']);
-  // Непроверенный/с ключом сервис честно подписан и не добавляется.
-  const slackRow = findAll(ids.mcpPopularList, (node) => node.getAttribute('data-popular') === 'slack')[0];
-  assert.ok(slackRow, 'строка Slack есть');
-  assert.match(textOf(slackRow), /Нужен ключ SLACK_BOT_TOKEN/);
-  const slackButton = byTag(slackRow, 'BUTTON')[0];
-  assert.equal(slackButton.disabled, true);
-  assert.equal(slackButton.textContent, 'Не настроено');
-  slackButton.fire('click');
-  assert.equal(calls.length, 0, 'недоступный сервис не ставится');
-  // Доступный сервис ставится через mcp:add с точными аргументами.
-  const row = findAll(ids.mcpPopularList, (node) => node.getAttribute('data-popular') === 'filesystem')[0];
-  const addButton = byTag(row, 'BUTTON')[0];
-  assert.equal(addButton.textContent, '+ Добавить');
-  addButton.fire('click', clickEvent(addButton));
-  assert.equal(addButton.disabled, true, 'кнопка занята, пока идёт добавление');
-  assert.equal(addButton.classList.contains('is-busy'), true);
-  await wait();
-  assert.deepEqual(calls, [['filesystem', 'npx.cmd', '-y @modelcontextprotocol/server-filesystem .']]);
-  assert.equal(addButton.disabled, false);
-  assert.equal(addButton.classList.contains('is-busy'), false);
-  assert.ok(toasts.some((toast) => toast.text === 'Сервис «Файлы» подключён. Его действия спрашиваются, пока вы не разрешите их' && toast.kind === 'ok'));
-  assert.ok(cardOf(ids, 'filesystem'), 'карточка добавленного сервиса появилась');
-  const rowAfter = findAll(ids.mcpPopularList, (node) => node.getAttribute('data-popular') === 'filesystem')[0];
-  assert.equal(byTag(rowAfter, 'BUTTON')[0].textContent, 'Добавлен');
+  assert.ok(findAll(ids.mcpPopularList, (n) => n.getAttribute('data-popular') === 'filesystem')[0]);
+  assert.equal(findAll(ids.mcpPopularList, (n) => n.getAttribute('data-popular') === 'github').length, 0);
 });
 
-test('популярные: ошибка добавления — тост и кнопка снова доступна', async () => {
-  const bridge = {
-    mcpState: async () => ({ servers: [] }),
-    mcpAdd: async () => ({ ok: false, error: 'нет сети' }),
-  };
-  const { ids, toasts } = makeSandbox(bridge);
+test('популярные: инструкция открывается по нажатию, ошибка отображается', async () => {
+  const opened = [];
+  const catalog = [{ id: 'filesystem', title: 'Файлы', verified: true, envKeys: [], category: 'files', docs: 'https://example.org/docs' }];
+  const { ids, toasts } = makeSandbox({
+    mcpState: async () => ({ servers: [], catalog }),
+    openSource: async (url) => { opened.push(url); return { ok: false }; },
+  });
   await wait();
-  const row = findAll(ids.mcpPopularList, (node) => node.getAttribute('data-popular') === 'filesystem')[0];
-  const addButton = byTag(row, 'BUTTON')[0];
-  addButton.fire('click', clickEvent(addButton));
+  const row = findAll(ids.mcpPopularList, (n) => n.getAttribute('data-popular') === 'filesystem')[0];
+  byTag(row, 'BUTTON')[0].fire('click');
   await wait();
-  assert.ok(toasts.some((toast) => toast.text === 'нет сети' && toast.kind === 'error'));
-  assert.equal(addButton.disabled, false);
-  assert.equal(addButton.classList.contains('is-busy'), false);
-  assert.equal(cardOf(ids, 'filesystem'), undefined);
+  assert.deepEqual(opened, ['https://example.org/docs']);
+  assert.ok(toasts.some((toast) => toast.kind === 'error'));
 });
 
 // ── Поиск и фильтры ───────────────────────────────────────────

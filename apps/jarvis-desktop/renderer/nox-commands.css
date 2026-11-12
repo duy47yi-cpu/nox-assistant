@@ -9,31 +9,26 @@
 
 /* ── 1. Токены раздела ──────────────────────────────────────────── */
 body[data-view="commands"] {
-  /* Гарнитуры Nox фиксированы: «Вид → Шрифты» классических разделов сюда не течёт. */
-  --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-head: var(--font);
-  --font-display: var(--font);
-  --font-reply: var(--font);
-  --nox-bg: #0F0F10;
-  --nox-surface-1: #141415;
-  --nox-surface-2: #18181B;
-  --nox-surface-3: #1C1C1F;
-  --nox-surface-4: #232326;
-  --nox-border: #2A2A2E;
-  --nox-border-strong: #34343A;
-  --nox-text-1: #F1F1F3;
-  --nox-text-2: #9A9AA0;
-  --nox-text-3: #6B6B70;
-  --nox-text-ghost: #3A3A3E;
-  --nox-accent: #2E9AC1;
-  --nox-accent-hover: #3AAAD6;
-  --nox-accent-active: #2280A8;
-  --nox-accent-ink: #061217;
-  --nox-accent-soft: color-mix(in srgb, #2E9AC1 14%, transparent);
-  --nox-accent-line: color-mix(in srgb, #2E9AC1 42%, transparent);
-  --nox-ok: #3DD68C;
-  --nox-warn: #F5A524;
-  --nox-err: #FF5C5C;
+  --nox-bg: var(--bg);
+  --nox-surface-1: var(--surface);
+  --nox-surface-2: var(--surface);
+  --nox-surface-3: var(--surface-2);
+  --nox-surface-4: var(--surface-3);
+  --nox-border: var(--border);
+  --nox-border-strong: var(--border-input);
+  --nox-text-1: var(--text);
+  --nox-text-2: var(--text-2);
+  --nox-text-3: var(--text-3);
+  --nox-text-ghost: color-mix(in srgb, var(--text-3) 45%, var(--surface));
+  --nox-accent: var(--accent);
+  --nox-accent-hover: color-mix(in srgb, var(--accent) 88%, var(--text));
+  --nox-accent-active: color-mix(in srgb, var(--accent) 82%, var(--bg));
+  --nox-accent-ink: var(--accent-ink);
+  --nox-accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --nox-accent-line: color-mix(in srgb, var(--accent) 42%, transparent);
+  --nox-ok: var(--ok);
+  --nox-warn: var(--warn);
+  --nox-err: var(--err);
   --nox-gap: 8px;
   --rail-w: 52px;
   --nox-font: var(--font);
@@ -584,11 +579,11 @@ body[data-view="commands"] .cmd-controls .switch:checked {
   border-color: var(--nox-accent);
 }
 body[data-view="commands"] .cmd-controls .switch:checked::after {
-  background: #fff;
+  background: var(--nox-accent-ink);
   transform: translateX(12px);
 }
 body[data-view="commands"] .cmd-controls .switch:hover:not(:disabled)::after { background: var(--nox-text-1); }
-body[data-view="commands"] .cmd-controls .switch:checked:hover:not(:disabled)::after { background: #fff; }
+body[data-view="commands"] .cmd-controls .switch:checked:hover:not(:disabled)::after { background: var(--nox-accent-ink); }
 body[data-view="commands"] .cmd-controls .switch:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Пустое состояние, «ничего не нашлось», загрузка */
@@ -1157,7 +1152,7 @@ body[data-view="commands"] .nox-editor .arg-hint { font: 400 11px/15px var(--nox
 body[data-view="commands"] .nox-editor .arg .switch { appearance: none; -webkit-appearance: none; position: relative; width: 32px; height: 20px; border: 1px solid var(--nox-border); border-radius: 999px; background: var(--nox-surface-1); }
 body[data-view="commands"] .nox-editor .arg .switch::after { content: ""; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: var(--nox-text-2); transition: transform var(--dur-normal) var(--ease-out), background var(--dur-fast) var(--ease-default); }
 body[data-view="commands"] .nox-editor .arg .switch:checked { background: var(--nox-accent); border-color: var(--nox-accent); }
-body[data-view="commands"] .nox-editor .arg .switch:checked::after { background: #fff; transform: translateX(12px); }
+body[data-view="commands"] .nox-editor .arg .switch:checked::after { background: var(--nox-accent-ink); transform: translateX(12px); }
 body[data-view="commands"] .nox-editor .arg-bool { flex-direction: row; align-items: center; justify-content: space-between; }
 body[data-view="commands"] .nox-editor .step-unavailable {
   height: 18px; padding: 0 7px;
@@ -1332,14 +1327,14 @@ body[data-view="commands"] .dialog {
   border-radius: 16px;
   background: var(--nox-surface-2);
   color: var(--nox-text-1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
+  box-shadow: var(--shadow-pop);
   width: min(640px, calc(100vw - 32px));
   height: fit-content;
   max-height: calc(100vh - 32px);
   overflow: hidden;
 }
 body[data-view="commands"] .dialog.dialog-sm { width: min(480px, calc(100vw - 32px)); }
-body[data-view="commands"] .dialog::backdrop { background: rgba(0, 0, 0, 0.48); }
+body[data-view="commands"] .dialog::backdrop { background: var(--scrim); }
 body[data-view="commands"] .dialog-body {
   display: flex;
   flex-direction: column;
@@ -1584,3 +1579,41 @@ html[data-motion="off"] body[data-view="commands"] *::after {
   animation: none !important;
   transition: none !important;
 }
+
+/* Полки: вид списка и обложки используют одни и те же элементы управления. */
+#commands .nox-cmd-toolbar, #commands .nox-cmd-tools { flex-wrap: wrap; }
+#commands .nox-cmd-tools { flex-shrink: 1; }
+.cmd-shelf { min-width: 0; list-style: none; }
+.cmd-shelf h3 { margin: 8px 0; font-size: 18px; color: var(--nox-text-1); }
+.cmd-shelf-items { display: grid; gap: 6px; padding: 0; margin: 0 0 12px; list-style: none; }
+#commands[data-collection-view="icons"] .cmd-shelf-items { grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); gap: 9px; }
+#commands[data-collection-view="icons"] .cmd-item { height: auto; min-height: 122px; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main toggle" "controls controls"; align-items: start; gap: 10px; border-inline-start: 4px solid var(--nox-accent); background: var(--nox-surface-2); padding: 12px; }
+#commands[data-collection-view="icons"] .cmd-main { grid-area: main; }
+#commands[data-collection-view="icons"] .cmd-toggle { grid-area: toggle; }
+#commands[data-collection-view="icons"] .cmd-controls { grid-area: controls; justify-content: space-between; }
+#commands[data-collection-view="icons"] .cmd-name { font: 500 17px/1.2 var(--font-head); }
+#commands .cmd-enabled { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font: 500 11px/1.4 var(--font); color: var(--nox-text-2); cursor: pointer; }
+#commands :is(.cmd-name, .cmd-meta, .cmd-step, .pack-list li, .pack-phrase) { overflow-wrap: anywhere; white-space: normal; }
+body[data-view="commands"] #commands .pack-list { width: 100%; }
+body[data-view="commands"] #commands .pack-list li { padding-block: 4px; border-bottom: 1px solid var(--nox-border); }
+body[data-view="commands"] #commands .pack-list li:last-child { border-bottom: 0; }
+#commands .nox-editor-body { min-height: 0; }
+#commands .nox-editor-main { scrollbar-gutter: stable; }
+#commands .nox-editor-foot { flex-shrink: 0; }
+#commands .nox-editor .step-title { white-space: normal; overflow-wrap: anywhere; }
+#commands .step-change { align-self: start; justify-self: start; }
+#commands .step .collection-details { margin-top: 7px; }
+#commands #cmdRun { color: var(--nox-text-2); }
+@media (max-width: 960px) {
+  #commands .nox-editor-body { scrollbar-gutter: stable; }
+}
+
+@media (min-width: 961px) {
+  #commands .nox-packs:has(.pack-list[open]) { width: min(52%, 540px); }
+}
+@media (min-width: 961px) and (prefers-reduced-motion: no-preference) {
+  #commands .nox-packs { transition: width 180ms ease; }
+}
+
+#commands[data-collection-view="icons"] .lib-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+#commands[data-collection-view="icons"] .lib-item { min-width: 0; align-items: start; }

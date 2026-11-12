@@ -1,8 +1,8 @@
 /* Nox: вид настольного ассистента. Рейка с подписями, крошки в шапке, мягкие панели, шар на сцене.
  * Цвета только из токенов темы (themes.css), подключается последним. */
-:root { --font-display: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+:root { --font-display: var(--font-head);
   --rail-w: 216px; --header-h: 64px; --pad: 28px; --panel-r: 16px;
-  --font-reply: var(--font);
+  --font-reply: var(--font-head);
   --panel: color-mix(in srgb, var(--text) var(--panel-pct, 4%), transparent);
   --panel-2: color-mix(in srgb, var(--text) calc(var(--panel-pct, 4%) * 1.75), transparent);
   --panel-line: color-mix(in srgb, var(--text) 10%, transparent);

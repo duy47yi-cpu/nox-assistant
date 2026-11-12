@@ -28,6 +28,7 @@ const modes = require('./src/policy/modes');
 const { ApprovalBroker, parseApprovalAnswer, voiceApprovalTarget, DEFAULT_AUTO_CANCEL_MS } = require('./src/policy/approvals');
 const { Journal, maskHistory, searchJournal, maskEventForWindow } = require('./src/journal/journal');
 const { ToolRegistry } = require('./src/tools/registry');
+const { visibleTools } = require('./src/tools/groups');
 const { systemTools, setBrowserExe, findBrowserExe, setAppResolver, setAppLaunchHook, runPowerShell } = require('./src/tools/system');
 const { AppInventory } = require('./src/inventory/apps');
 const { AppUsage } = require('./src/inventory/usage');
@@ -56,6 +57,8 @@ const { diskTools } = require('./src/tools/disk');
 const { memoryTools } = require('./src/tools/memory');
 const { GoalStore, goalsBrief } = require('./src/goals/store');
 const { goalTools } = require('./src/goals/tools');
+const { TurnPlans } = require('./src/agent/plan');
+const { planTools } = require('./src/tools/plan');
 const { MemoryStore, memoryContext, profileNote, backgroundBrief } = require('./src/memory/store');
 const { learnFromTurn } = require('./src/memory/learn');
 const { ReminderStore } = require('./src/schedule/store');
@@ -108,8 +111,6 @@ const { StopSwitch, busyRoute, runHotkey, attachWindowGuards } = require('./src/
 const { createKeepAwake } = require('./src/control/keep-awake');
 const { AccountSession } = require('./src/account/session');
 const { createRouter } = require('./src/brain/tiers');
-const { OWNER_BUILD } = require('./src/config/build');
-const { OwnerProviders } = require('./src/brain/providers');
 const { waitOnLimit } = require('./src/account/limit-wait');
 const { waitTools } = require('./src/tools/wait');
 const { mouseTools } = require('./src/tools/mouse');
@@ -243,6 +244,7 @@ const SYSTEM_PROMPT = [
   '- задачу исполнителя на паузе продолжает только task_resume, и каждое возобновление подтверждает владелец; задачи исполнителя (byExecutor) не меняй другими task_*;',
   '- небольшое дело, которое ведёшь сам в этом разговоре, — task_create, task_plan, task_enqueue, task_start; шаг с проверкой отмечай только через task_verify;',
   '- цель на несколько ходов в этом разговоре — goal_create (название и шаги), дальше goal_step по одному с доказательством, ход — goal_next, итог — goal_close. Шаг без доказательства не отмечай; для работы без владельца это long_task_start, а не цель;',
+  '- дело из трёх и больше шагов в одном ходе — начни с plan_set (шаги словами по порядку), закрывай каждый через plan_done с доказательством, а в ответе назови незакрытое. plan_set — план этого хода, goal_create — цель на несколько ходов. Если дело нельзя довести, кончай ход через turn_stop: impossible (невозможно), needs_human (нужен человек) или unsure (не уверен), а не просто «не получилось»;',
   '- если проверка не прошла или не проводилась, так и скажи владельцу. Не объявляй шаг выполненным сам.',
   '- регулярные дела без участия владельца — mission_add; долгая работа, пока владелец занят или ушёл («ищи весь день», «пиши документ», «поработай за компьютером») — long_task_start, а ход: long_task_list; поручение на паузе «нужен человек» продолжай long_task_resume, только когда владелец сказал, что разобрался;',
   '- мышь — mouse_click и mouse_scroll по точкам снимка screen_look, только если нужного элемента нет в ui_elements;',
@@ -353,6 +355,7 @@ function seedDefaults() {
 
 const { writeFileAtomic } = require('./src/config/atomic');
 const { ChatBook, markCutTurn } = require('./src/chats/book');
+const { styleId, replyStyleNote, forSpeech } = require('./src/agent/reply-style');
 const { WorkspaceBook } = require('./src/workspaces/book');
 const { WorkspaceChat } = require('./src/workspaces/chat');
 const { WorkspaceDeals } = require('./src/workspaces/deals');
@@ -429,11 +432,8 @@ function accountEvent(ev) {
 const smartClient = apiKey && !SERVER_URL && cfg('NOX_SMART_KEY')
   ? new DeepSeekClient({ baseUrl: cfg('NOX_SMART_URL') || 'https://inference.do-ai.run/v1', apiKey: cfg('NOX_SMART_KEY'), model: cfg('NOX_SMART_MODEL') || 'minimax-m3.1-flash' })
   : null;
-// Свои провайдеры владельца (локальные ИИ и любые совместимые адреса): только в сборке владельца, флаг из build-info.json.
-// Шифрование ключей подключается после готовности приложения (app.whenReady ниже).
-const ownerProviders = new OwnerProviders({ ownerBuild: OWNER_BUILD, file: path.join(DATA_DIR, 'providers.json') });
-const routedClient = apiKey || OWNER_BUILD
-  ? createRouter({ clients: { fast: modelClient, ...(smartClient ? { smart: smartClient } : account ? { smart: modelClient } : {}) }, getSettings: () => readSettings(), override: () => ownerProviders.client() })
+const routedClient = apiKey
+  ? createRouter({ clients: { fast: modelClient, ...(smartClient ? { smart: smartClient } : account ? { smart: modelClient } : {}) }, getSettings: () => readSettings() })
   : modelClient;
 const brain = account
   ? waitOnLimit(routedClient, {
@@ -450,6 +450,8 @@ const TURNS_LOG = cfg('NOX_TURNS_LOG').toLowerCase() === 'off' ? null : path.joi
 
 const memory = new MemoryStore(path.join(DATA_DIR, 'memory.json'));
 const goals = new GoalStore(path.join(DATA_DIR, 'goals.json'));
+// План хода: шаги модели в одном ходе и их закрытие. Память процесса, на диск не пишется.
+const turnPlans = new TurnPlans();
 const reminders = new ReminderStore(path.join(DATA_DIR, 'reminders.json'));
 const missions = new MissionStore(path.join(DATA_DIR, 'missions.json'));
 const commands = new CommandStore(path.join(DATA_DIR, 'commands.json'));
@@ -578,6 +580,7 @@ const baseTools = guardDesktopTools([
   ...diskTools(),
   ...memoryTools(memory),
   ...goalTools(goals),
+  ...planTools(turnPlans),
   ...remindersTools(reminders),
   ...workspaceTools(workspaceIndex),
   ...projectTools(workspaceIndex),
@@ -1123,7 +1126,7 @@ function voiceEnabled() {
 function speakReply(text) {
   const clean = String(text || '').trim();
   if (!clean || !voiceEnabled() || !currentVoice().isInstalled()) return;
-  replySpeech.speak(clean);
+  replySpeech.speak(forSpeech(clean));
 }
 
 // Проверка голоса из Настроек: пробная фраза, честный ответ. Ключ из .env читается заново.
@@ -1294,7 +1297,6 @@ function closeMini() {
 // События чата и сборки задач (её emit): в окно — все, включая type 'task' от исполнителя
 // (taskId, title, status, message, а у итога — final и report; у запроса подтверждения — approvalId).
 function emitToWindow(event) {
-  observeTurnEvent(event);
   const task = event.type === 'task' && event.taskId ? runtime.queue.get(event.taskId) : null;
   const visibleEvent = task ? { ...event, workspaceId: task.workspaceId || 'default' } : event;
   if (event.type === 'tool_start') { captureRecordedTool(event); if (BEEP_TOOLS.has(event.name)) beepIds.add(event.id); }
@@ -1358,7 +1360,7 @@ const agent = new Agent({
   emit: emitToWindow,
   mode,
   workspace: WORKSPACE,
-  systemPrompt: () => [SYSTEM_PROMPT, appsPromptNote(), profileNote(memory), goalsBrief(goals)].filter(Boolean).join('\n'),
+  systemPrompt: () => [SYSTEM_PROMPT, replyStyleNote(readSettings().replyStyle), appsPromptNote(), profileNote(memory), goalsBrief(goals)].filter(Boolean).join('\n'),
   clock: () => `Сейчас: ${new Date().toLocaleString('ru-RU', { dateStyle: 'full', timeStyle: 'short' })} (локальное время владельца).`,
   history: chats.active().history,
   turnsLog: TURNS_LOG,
@@ -1368,7 +1370,11 @@ const agent = new Agent({
   // Потолок времени хода чата: не держать владельца молча дольше четырёх минут.
   turnDeadlineMs: 4 * 60 * 1000,
   stream: true,
+  plans: turnPlans,
+  backgroundOffer: true,
   context: (text) => [memoryContext(memory, text), skillHintForTurn(skills, text)].filter(Boolean).join('\n'),
+  // Подбор инструментов под задачу: выключен, пока замер на настоящей модели не покажет, что выбор не страдает.
+  toolView: (list, history) => (readSettings().leanTools === true ? visibleTools(list, history) : list),
 });
 
 function makeParallelAgentTools(space = null, emit = emitToWindow) {
@@ -1399,7 +1405,6 @@ for (const tool of makeParallelAgentTools()) {
 
 let scopedDone = false;
 function emitScoped(event) {
-  observeTurnEvent(event);
   if (event.type === 'tool_start') captureRecordedTool(event);
   if (event.type === 'tool_result' && !event.afterStop) {
     turnTools.push(event.name);
@@ -1442,7 +1447,7 @@ function initWorkspaceHub() {
         ];
       }, renderPdf, policy: modes, approvals, journal: (space) => ({ append: (entry) => journal.append({ ...entry, workspaceId: space.id }) }),
       emit: emitScoped, mode, turnsLog: TURNS_LOG, memoryAuto: () => readSettings().memoryAuto !== false,
-      turnDeadlineMs: 4 * 60 * 1000,
+      turnDeadlineMs: 4 * 60 * 1000, plans: turnPlans,
       clock: () => `Сейчас: ${new Date().toLocaleString('ru-RU', { dateStyle: 'full', timeStyle: 'short' })} (локальное время владельца).`,
       systemPrompt: (space) => [
         CORE_PERSONA_PROMPT,
@@ -1475,6 +1480,20 @@ function fromWindow(event) {
 function fromMini(event) {
   return Boolean(miniWin) && !miniWin.isDestroyed() && event.sender === miniWin.webContents;
 }
+
+// Источник открывается только по нажатию в нашем окне и только как обычная веб-страница.
+ipcMain.handle('source:open', async (event, value) => {
+  if (!fromWindow(event)) return { ok: false, error: 'forbidden' };
+  try {
+    if (typeof value !== 'string' || value.length > 2048) return { ok: false, error: 'Некорректный адрес источника.' };
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return { ok: false, error: 'Можно открыть только веб-источник.' };
+    await shell.openExternal(url.href);
+    return { ok: true };
+  } catch {
+    return { ok: false, error: 'Не удалось открыть источник.' };
+  }
+});
 
 // Мини-окно: показать полное окно или убрать мини-окно с рабочего стола (тогда и настройка выключается).
 ipcMain.handle('window:showMain', (event) => {
@@ -1517,43 +1536,6 @@ function commandTurnJournal(journalLike, runId) {
   };
 }
 
-// Наблюдение за ходом для предложения «сохранить как команду»: собираем шаги текущего
-// запуска тем же проверенным рекордером (секреты и набранный текст не попадают).
-// Предложение появляется только после успешного хода с детерминированными шагами.
-let turnTrace = null;
-function observeTurnEvent(event) {
-  if (!event || typeof event !== 'object') return;
-  if (event.type === 'status' && typeof event.runId === 'string' && event.runId) {
-    if (!turnTrace || turnTrace.runId !== event.runId) {
-      if (event.noSuggest === true) {
-        turnTrace = { runId: event.runId, rec: null };
-      } else {
-        const rec = new CommandRecorder();
-        try { rec.start(); turnTrace = { runId: event.runId, rec }; } catch { turnTrace = { runId: event.runId, rec: null }; }
-      }
-    }
-    return;
-  }
-  if (!turnTrace || !turnTrace.rec) return;
-  if (event.type === 'tool_start' && event.name) {
-    if (turnTrace.rec.state === 'recording') {
-      try { turnTrace.rec.capture({ tool: event.name, args: event.args }); } catch { /* ход важнее подсказки */ }
-    }
-    return;
-  }
-  if (event.type === 'done') {
-    const trace = turnTrace;
-    turnTrace = null;
-    if (!trace || !trace.rec) return;
-    if (event.cancelled === true || event.status === 'cancelled' || event.status !== 'succeeded') return;
-    if (trace.rec.state !== 'recording' || !trace.rec.steps.length || trace.rec.warnings.length) return;
-    let draft = null;
-    try { draft = trace.rec.stop().draft || null; } catch { draft = null; }
-    if (!draft || !Array.isArray(draft.steps) || !draft.steps.length) return;
-    sendToWindow({ type: 'command_suggest', runId: trace.runId, steps: draft.steps, warnings: draft.warnings });
-  }
-}
-
 let screenAgent = null; // идущая работа на экране («сделай на экране: …»)
 
 function stopCurrentTurn() {
@@ -1581,7 +1563,7 @@ async function runCommandNow(cmd, scope = {}) {
     else if (event.type === 'tool_result') extra.step = toolStep;
     emit({ ...event, ...extra });
   };
-  emitTurn({ type: 'status', state: 'acting', status: 'running', runId, step: 0, label: `команда «${cmd.name}»`, noSuggest: true });
+  emitTurn({ type: 'status', state: 'acting', status: 'running', runId, step: 0, label: `команда «${cmd.name}»` });
   turnTitle = `команда «${cmd.name}»`;
   let dealRef = null;
   try { dealRef = openTurn(dealStore, `Команда: ${cmd.name}`); } catch (err) { console.warn(`дело команды не открыто: ${err.message}`); }
@@ -1821,7 +1803,7 @@ async function runOfflineNow(call, scope = {}) {
     else if (event.type === 'tool_result') extra.step = toolStep;
     emit({ ...event, ...extra });
   };
-  emitTurn({ type: 'status', state: 'acting', status: 'running', runId, step: 0, label: String(call.title || 'быстрое действие'), noSuggest: true });
+  emitTurn({ type: 'status', state: 'acting', status: 'running', runId, step: 0, label: String(call.title || 'быстрое действие') });
   turnTitle = call.title;
   let dealRef = null;
   try { dealRef = openTurn(dealStore, call.title); } catch (err) { console.warn(`дело хода не открыто: ${err.message}`); }
@@ -1960,6 +1942,22 @@ ipcMain.handle('chat:send', async (event, text, files) => {
       }).finally(() => { busy = false; });
       return { ok: true, command: null };
     }
+    // «Продолжай в фоне»: незакрытый план хода уходит в долгое поручение. Без плана фраза идёт модели.
+    const backgroundGoal = /^\s*продолжай в фоне/i.test(phrase) ? agent.backgroundGoal() : null;
+    if (backgroundGoal) {
+      let backgroundReply;
+      try {
+        const item = longTasks.start({ goal: backgroundGoal, hours: 1, useDesktop: false });
+        agent.forgetPlan();
+        backgroundReply = `Продолжаю в фоне, не дольше часа. Итог будет в файле ${item.report}. Остановить — скажите «останови поручение».`;
+      } catch (err) {
+        backgroundReply = `Не получилось продолжить в фоне: ${err.message}`;
+      }
+      agent.remember(phrase, backgroundReply);
+      saveConversation();
+      await replyDirect(backgroundReply);
+      return { ok: true, command: 'в фоне' };
+    }
     // «Что повисло» отвечает без модели: работает и без ключа, и при исчерпанном лимите.
     if (isHangingPhrase(phrase)) {
       refreshDeals();
@@ -2091,6 +2089,7 @@ function changeChat(event, change) {
   if (busy) return { ok: false, error: 'busy' };
   if (change() === false) return { ok: false, error: 'нет такого чата' };
   agent.history = chats.active().history;
+  agent.forgetPlan();
   saveConversation();
   return { ok: true, ...chats.list() };
 }
@@ -2684,7 +2683,7 @@ ipcMain.handle('agent:stop', (event) => {
 
 ipcMain.handle('state:get', (event) => {
   if (!fromWindow(event)) return null;
-  return { mode, model: '', hasKey: Boolean(apiKey) || Boolean(ownerProviders.client()) };
+  return { mode, model: '', hasKey: Boolean(apiKey) };
 });
 
 // Задачи, которым нужно внимание владельца: полоса над полем ввода показывает их, пока статус не сменился.
@@ -2766,6 +2765,7 @@ ipcMain.handle('settings:get', (event) => {
     autoStart: app.getLoginItemSettings().openAtLogin === true,
     modelTier: s.modelTier === 'smart' ? 'smart' : 'fast',
     thinking: ['medium', 'high'].includes(s.thinking) ? s.thinking : 'low',
+    replyStyle: styleId(s.replyStyle),
     screenAuto: s.screenAuto === true,
     memoryAuto: s.memoryAuto !== false,
     // «Тише озвучивать очевидное» включено по умолчанию: выключается явным false.
@@ -2773,7 +2773,6 @@ ipcMain.handle('settings:get', (event) => {
     // Режим «не спать» переживает перезапуск: без этого список снова показывал бы «Пока работает».
     keepAwake: ['off', 'while-working', 'always'].includes(s.keepAwake) ? s.keepAwake : 'while-working',
     musicService: SERVICES[s.musicService] ? s.musicService : null,
-    ownerBuild: OWNER_BUILD,
     workspace: workspaceHub && workspaceHub.chat() ? workspaceHub.chat().root() : WORKSPACE,
     connectedFolders: workspaceHub && workspaceHub.chat() ? [] : workspaceIndex.folders,
     voiceVolume: vo.volume,
@@ -2845,15 +2844,11 @@ ipcMain.handle('settings:setModelTier', (event, tier) => {
   return { ok: true, tier };
 });
 
-// Провайдеры владельца. Проверка сборки в ядре (OwnerProviders), не в окне: у покупателя каждый вызов — отказ.
-const OWNER_ACTIONS = new Set(['list', 'save', 'remove', 'select']);
-ipcMain.handle('owner:providers', (event, action, arg) => {
-  if (!fromWindow(event) || !OWNER_ACTIONS.has(action)) return { ok: false };
-  try {
-    return { ok: true, ...ownerProviders[action](arg) };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
+// Оформление ответов в чате: правила дописываются к промпту на следующем ходу.
+ipcMain.handle('settings:setReplyStyle', (event, style) => {
+  if (!fromWindow(event) || styleId(style) !== style) return { ok: false };
+  saveSettings({ replyStyle: style });
+  return { ok: true, style };
 });
 
 ipcMain.handle('settings:setThinking', (event, level) => {
@@ -3695,7 +3690,11 @@ async function applyMotion(contents) {
 }
 
 // ── Подключения (MCP): живой менеджер сервисов, состояние видно без перезапуска.
-ipcMain.handle('mcp:state', (event) => (fromWindow(event) ? mcpManager.state() : { servers: [] }));
+ipcMain.handle('mcp:state', (event) => {
+  if (!fromWindow(event)) return { servers: [], catalog: [] };
+  const { CATALOG } = require('./src/mcp/catalog');
+  return { ...mcpManager.state(), catalog: CATALOG.filter((item) => item.verified === true) };
+});
 ipcMain.handle('mcp:add', (event, name, target, args) => (fromWindow(event) ? mcpManager.add(name, target, args) : { ok: false }));
 ipcMain.handle('mcp:toggle', (event, name, disabled) => (fromWindow(event) ? mcpManager.toggle(name, disabled) : { ok: false }));
 ipcMain.handle('mcp:remove', (event, name) => (fromWindow(event) ? mcpManager.remove(name) : { ok: false }));
@@ -3871,7 +3870,6 @@ if (!app.requestSingleInstanceLock()) {
     const protect = safeStorage.isEncryptionAvailable() ? { encrypt: (s) => safeStorage.encryptString(s), decrypt: (b) => safeStorage.decryptString(b) } : null;
     if (account) account.load(protect);
     gmail.load(protect);
-    ownerProviders.protect = protect;
     // Серверы MCP из settings.json (mcpServers); без вопроса — только имена из mcpAllow.
     mcpManager.startAll().catch((err) => console.warn(`MCP: ${err && err.message}`));
     applyVoiceOptions();

@@ -8,30 +8,26 @@
 
 /* ── 1. Токены раздела ──────────────────────────────────────────── */
 body[data-view="mcp"] {
-  --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-head: var(--font);
-  --font-display: var(--font);
-  --font-reply: var(--font);
-  --nox-bg: #0F0F10;
-  --nox-surface-1: #141415;
-  --nox-surface-2: #18181B;
-  --nox-surface-3: #1C1C1F;
-  --nox-surface-4: #232326;
-  --nox-border: #2A2A2E;
-  --nox-border-strong: #34343A;
-  --nox-text-1: #F1F1F3;
-  --nox-text-2: #9A9AA0;
-  --nox-text-3: #6B6B70;
-  --nox-text-ghost: #3A3A3E;
-  --nox-accent: #2E9AC1;
-  --nox-accent-hover: #3AAAD6;
-  --nox-accent-active: #2280A8;
-  --nox-accent-ink: #061217;
-  --nox-accent-soft: color-mix(in srgb, #2E9AC1 14%, transparent);
-  --nox-accent-line: color-mix(in srgb, #2E9AC1 42%, transparent);
-  --nox-ok: #3DD68C;
-  --nox-warn: #F5A524;
-  --nox-err: #FF5C5C;
+  --nox-bg: var(--bg);
+  --nox-surface-1: var(--surface);
+  --nox-surface-2: var(--surface);
+  --nox-surface-3: var(--surface-2);
+  --nox-surface-4: var(--surface-3);
+  --nox-border: var(--border);
+  --nox-border-strong: var(--border-input);
+  --nox-text-1: var(--text);
+  --nox-text-2: var(--text-2);
+  --nox-text-3: var(--text-3);
+  --nox-text-ghost: color-mix(in srgb, var(--text-3) 45%, var(--surface));
+  --nox-accent: var(--accent);
+  --nox-accent-hover: color-mix(in srgb, var(--accent) 88%, var(--text));
+  --nox-accent-active: color-mix(in srgb, var(--accent) 82%, var(--bg));
+  --nox-accent-ink: var(--accent-ink);
+  --nox-accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --nox-accent-line: color-mix(in srgb, var(--accent) 42%, transparent);
+  --nox-ok: var(--ok);
+  --nox-warn: var(--warn);
+  --nox-err: var(--err);
   --nox-gap: 8px;
   --rail-w: 52px;
   --nox-font: var(--font);
@@ -702,7 +698,7 @@ body[data-view="mcp"] .dialog {
   border-radius: 16px;
   background: var(--nox-surface-2);
   color: var(--nox-text-1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
+  box-shadow: var(--shadow-pop);
   width: min(640px, calc(100vw - 32px));
   height: fit-content;
   max-height: calc(100vh - 32px);
@@ -713,7 +709,7 @@ body[data-view="mcp"] .dialog.mcp-dialog-add { width: min(560px, calc(100vw - 32
 body[data-view="mcp"] .dialog.mcp-dialog-details { width: min(480px, calc(100vw - 32px)); height: min(520px, calc(100vh - 32px)); }
 body[data-view="mcp"] .dialog.mcp-dialog-add .dialog-body,
 body[data-view="mcp"] .dialog.mcp-dialog-details .dialog-body { height: 100%; max-height: none; }
-body[data-view="mcp"] .dialog::backdrop { background: rgba(0, 0, 0, 0.48); }
+body[data-view="mcp"] .dialog::backdrop { background: var(--scrim); }
 body[data-view="mcp"] .dialog-body {
   display: flex;
   flex-direction: column;
@@ -905,7 +901,7 @@ body[data-view="mcp"] .mcp-toggle-row .switch::after {
   transition: transform var(--dur-normal) var(--ease-out), background var(--dur-fast) var(--ease-default);
 }
 body[data-view="mcp"] .mcp-toggle-row .switch:checked { background: var(--nox-accent); border-color: var(--nox-accent); }
-body[data-view="mcp"] .mcp-toggle-row .switch:checked::after { background: #fff; transform: translateX(12px); }
+body[data-view="mcp"] .mcp-toggle-row .switch:checked::after { background: var(--nox-accent-ink); transform: translateX(12px); }
 body[data-view="mcp"] .mcp-toggle-row .switch:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── 9. Адаптивность ──────────────────────────────────────────── */
@@ -942,4 +938,38 @@ html[data-motion="off"] body[data-view="mcp"] *::before,
 html[data-motion="off"] body[data-view="mcp"] *::after {
   animation: none !important;
   transition: none !important;
+}
+
+/* Полка сервисов и компактные строки используют общий список. */
+#mcpPage .nox-conn-toolbar { flex-wrap: wrap; height: auto; }
+#mcpPage[data-collection-view="icons"] :is(.nox-conn-list, .nox-popular-list) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 195px), 1fr));
+  align-items: stretch;
+}
+body[data-view="mcp"] #mcpPage[data-collection-view="icons"] :is(.mcp-card, .mcp-popular-row) {
+  display: flex; flex-direction: column; align-items: flex-start; height: auto; gap: 9px;
+}
+body[data-view="mcp"] #mcpPage[data-collection-view="icons"] .mcp-card-actions { width: 100%; flex-flow: row wrap; margin-top: auto; }
+#mcpPage[data-collection-view="icons"] .mcp-popular-add { margin-top: auto; }
+#mcpPage :is(.mcp-popular-name, .mcp-popular-desc) { white-space: normal; overflow-wrap: anywhere; display: block; }
+
+/* Карточки популярных сервисов остаются компактными в обоих видах. */
+#mcpPage[data-collection-view="icons"] .nox-popular-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+body[data-view="mcp"] #mcpPage[data-collection-view="icons"] .mcp-popular-row {
+  align-items: center;
+  text-align: center;
+  min-height: 114px;
+}
+#mcpPage .mcp-popular-name { white-space: normal; overflow-wrap: anywhere; }
+#mcpPage .mcp-popular-add { max-width: 100%; padding-inline: 7px; }
+#mcpPage .mcp-popular-icon[data-brand="github"] { background: #24292f; }
+#mcpPage .mcp-popular-icon[data-brand] img { display: block; width: 20px; height: 20px; }
+#mcpPage[data-collection-view="icons"] .mcp-popular-icon { width: 36px; height: 36px; }
+@media (max-width: 960px) {
+  #mcpPage[data-collection-view="icons"] .nox-popular-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 136px), 1fr));
+  }
 }

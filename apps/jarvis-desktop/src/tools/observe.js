@@ -3,7 +3,7 @@
 // Инструменты «глаза и руки по id»: один снимок рабочего стола, нажатие и ввод по устойчивому id.
 // Собираются из уже существующих ui_windows/ui_elements/ui_click/ui_type, поэтому не трогают их PowerShell,
 // политику и проверки. Снимок экрана сюда не входит: screen_look остаётся отдельным и спрашивает разрешение по режиму.
-const { buildScene, diffScene, sceneText, sceneSignature } = require('../perception/scene');
+const { buildScene, diffScene, sceneText, sceneSignature, expectMet } = require('../perception/scene');
 const { isPayment, isDeletion, isInstall, isPowerOff, describe, hardDeny } = require('../policy/modes');
 
 const MAX_WINDOW = 120;
@@ -12,7 +12,9 @@ const MAX_LIMIT = 60;
 const MAX_TEXT = 2000;
 const ID_RE = /^e[0-9a-f]{6}$/;
 // Пауза после действия: интерфейс успевает перерисоваться, дельта становится осмысленной.
-const SETTLE_MS = 150;
+const SETTLE_MS = 80;
+// Пауза между повторными чтениями окна после нажатия, если изменений ещё нет.
+const PATIENCE_MS = 250;
 // Сколько действий подряд без изменений на экране считаем застоем: дальше вслепую не действуем.
 const STALL_LIMIT = 3;
 // Типы, среди которых ui_type ищет поле: его номер вхождения считается только по ним.
@@ -65,6 +67,8 @@ function observeTools(ui = [], { mouse = [] } = {}) {
   // и подпись прошлой сцены: по ней видно, менялся ли экран между действиями.
   let stalls = 0;
   let lastSignature = null;
+  // Заголовок окна, выскочившего поверх после действия: пока его не прочитали, по старым id не действуем.
+  let surprise = '';
 
   // Читает окно и элементы, собирает сцену. Ничего не запоминает: это делают вызывающие.
   async function capture({ window: want = '', filter = '', limit = MAX_LIMIT } = {}, ctx = {}) {
@@ -84,12 +88,13 @@ function observeTools(ui = [], { mouse = [] } = {}) {
     });
     scene.total = Number(elements.data && elements.data.total) || scene.total;
     scene.truncated = Boolean(elements.data && elements.data.truncated) || scene.total > scene.elements.length;
-    return { scene, window: chosen };
+    return { scene, window: chosen, front: list.find((x) => x && x.active === true) || null };
   }
 
   // Перечитывает текущее состояние окна и находит элемент по id. Если id пропал — действие не выполняется.
   async function resolve(id, ctx) {
     if (!last) return { error: 'сначала сделай desktop_observe: действие по id требует текущего снимка' };
+    if (surprise) return { error: `поверх появилось окно «${surprise}»: сначала прочитай его — desktop_observe с window «${surprise}»` };
     const current = await capture({ window: last.window.title, limit: MAX_LIMIT }, ctx);
     if (current.error) return { error: current.error };
     if (current.scene.window.title !== last.window.title) return { error: 'окно сменилось; сделай новый desktop_observe' };
@@ -99,12 +104,20 @@ function observeTools(ui = [], { mouse = [] } = {}) {
   }
 
   // Снимок после действия: что изменилось. Ошибка чтения не отменяет уже выполненное действие.
-  async function after(scene, ctx) {
-    const current = await capture({ window: scene.window.title, limit: MAX_LIMIT }, ctx);
+  // patience — сколько раз перечитать окно, если изменений пока не видно (медленный отклик программы).
+  async function after(scene, ctx, patience = 0) {
+    let current = await capture({ window: scene.window.title, limit: MAX_LIMIT }, ctx);
+    for (let i = 0; i < patience && !current.error && sceneSignature(current.scene) === sceneSignature(scene); i += 1) {
+      await delay(PATIENCE_MS);
+      current = await capture({ window: scene.window.title, limit: MAX_LIMIT }, ctx);
+    }
     if (current.error) {
       return { scene: null, diff: null, note: `состояние после действия не прочитано: ${current.error}`, stalled: false, stalls };
     }
     last = current.scene;
+    // Неожиданное окно: после действия сверху оказалось другое окно той же программы (диалог, вопрос, ошибка).
+    const front = current.front;
+    surprise = front && front.handle !== current.window.handle && front.process === current.window.process ? String(front.title || 'без названия') : '';
     const diff = diffScene(scene, current.scene);
     // Застой: экран после действия не изменился. Подряд несколько раз — дальше вслепую не действуем.
     const signature = sceneSignature(current.scene);
@@ -116,11 +129,12 @@ function observeTools(ui = [], { mouse = [] } = {}) {
     const note = stalled
       ? `состояние не меняется: ${stalls} действия подряд без изменений — не повторяй, скажи владельцу`
       : '';
-    return { scene: current.scene, diff, note, stalled, stalls };
+    return { scene: current.scene, diff, note, stalled, stalls, surprise };
   }
 
   // Хвост ответа действия: застой важнее обычной дельты, иначе модель не заметит предупреждение.
   function tailOf(state) {
+    if (state.surprise) return `; поверх появилось окно «${state.surprise}» — следующим шагом прочитай его: desktop_observe с window «${state.surprise}»`;
     if (state.stalled) return `; ${state.note}`;
     if (state.diff) return `; ${state.diff.summary}`;
     return `; ${state.note}`;
@@ -151,6 +165,7 @@ function observeTools(ui = [], { mouse = [] } = {}) {
       if (!scene) return { ok: false, summary: current.error, data: current.windows ? { windows: current.windows } : {} };
       const diff = diffScene(last, scene);
       last = scene;
+      surprise = '';
       // Новый снимок — осознанная проверка экрана: счётчик застоя начинается заново.
       stalls = 0;
       lastSignature = sceneSignature(scene);
@@ -174,11 +189,11 @@ function observeTools(ui = [], { mouse = [] } = {}) {
   if (clickTool || mouseClick) {
     tools.push({
       name: 'desktop_click',
-      description: 'Нажать элемент по id из desktop_observe. Перед нажатием перечитывает окно и проверяет, что элемент ещё тот; после — снимает изменения. Если id исчез, откажет и попросит новый снимок.',
+      description: 'Нажать элемент по id из desktop_observe. Перед нажатием перечитывает окно и проверяет, что элемент ещё тот; после — снимает изменения. Если id исчез, откажет и попросит новый снимок. expect — что должно появиться после нажатия (название окна, кнопки или надпись): по нему подтверждается результат, указывай всегда, когда знаешь.',
       risk: 'T1',
       parameters: {
         type: 'object',
-        properties: { id: { type: 'string', pattern: '^e[0-9a-f]{6}$' } },
+        properties: { id: { type: 'string', pattern: '^e[0-9a-f]{6}$' }, expect: { type: 'string', maxLength: 120 } },
         required: ['id'],
       },
       async run(args = {}, ctx = {}) {
@@ -216,7 +231,7 @@ function observeTools(ui = [], { mouse = [] } = {}) {
         // Если оно началось и не дало успеха, повторять мышью по координатам нельзя: действие могло сработать.
         const started = Boolean(element.name && clickTool);
         if (started) {
-          action = await clickTool.run({ window: scene.window.title, name: element.name, occurrence: occurrenceOf(scene.elements, element) }, ctx);
+          action = await clickTool.run({ window: scene.window.title, name: element.name, occurrence: occurrenceOf(scene.elements, element) }, { ...ctx, quickCheck: true });
           if (!action || action.ok !== true) {
             // Пустой ответ вложенного инструмента — тоже неизвестный исход: мышью не повторяем.
             return action || { ok: false, summary: 'ui_click не вернул ответ: исход нажатия неизвестен, мышью не повторяю', data: {} };
@@ -234,7 +249,7 @@ function observeTools(ui = [], { mouse = [] } = {}) {
           return action || { ok: false, summary: 'нажатие не выполнено', data: {} };
         }
         await delay(SETTLE_MS);
-        const state = await after(scene, ctx);
+        const state = await after(scene, ctx, 2);
         const tail = tailOf(state);
         return {
           ok: true,
@@ -256,6 +271,11 @@ function observeTools(ui = [], { mouse = [] } = {}) {
           // Ответ вложенной проверки окончательный: неопределённость не превращаем
           // в успех по смене окна, а отказ проверки — в подтверждение.
           if (verdict && verdict.status === 'confirmed') return verdict;
+          // Названное заранее ожидание сбылось — это подтверждение. Просто «что-то изменилось» им не считается.
+          // Кнопки с внешним эффектом (отправить, опубликовать, купить) так не подтверждаются: надпись на экране не доказывает доставку.
+          const outward = /отправ|опублик|разместит|купит|оплат|заказат|send|submit|publish|post|pay|buy|order/i.test(data.element.name || '');
+          const met = outward ? null : expectMet(args && args.expect, data.diff, data.scene);
+          if (met) return { status: 'confirmed', evidence: `ожидание сбылось: ${met}` };
           if (verdict) return { status: 'unknown', evidence: verdict.evidence || 'результат нажатия не подтверждён' };
         }
         if (data.diff && !data.diff.first && data.diff.summary !== 'без изменений') {

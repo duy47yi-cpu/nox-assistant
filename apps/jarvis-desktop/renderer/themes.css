@@ -37,6 +37,10 @@ body { font-optical-sizing: auto; }
 
 [data-theme] {
   --bg-image: none;
+  --font: var(--theme-font);
+  --font-head: var(--theme-font-head);
+  --font-display: var(--theme-font-head);
+  --font-reply: var(--theme-font-head);
   /* Прозрачность панелей и размытие — часть темы. Ручки в Настройках ставят свои значения на корень и перебивают эти. */
   --panel-pct: 4%; --glass-blur: 20px;
   --hue-deals: var(--hue);
@@ -64,9 +68,16 @@ body, .theme-mini {
   --focus: var(--hue);
 }
 
+select.input option {
+  background: var(--surface);
+  color: var(--text);
+}
+
 /* ── Основные ──────────────────────────────────────────────── */
 [data-theme="dark"] {
   color-scheme: dark;
+  --theme-font: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
   /* Тёплый графит: нейтрали с жёлто-бурым оттенком, акцент прежний (по нему окрашено ядро). */
   --g1: #14120E; --g2: #14120E; --g3: #14120E;
   --bg: #14120E;
@@ -81,6 +92,8 @@ body, .theme-mini {
 
 [data-theme="light"] {
   color-scheme: light;
+  --theme-font: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: Georgia, "Times New Roman", serif;
   --bg: #F4F1EB; --surface: #FFFDF9; --surface-2: #EFEBE3; --surface-3: #E4DED3; --border: #D9D1C3;
   --text: #17140F; --text-2: #4B4439; --text-3: #5C5447;
   --hue: #2F5FD0; --accent-ink: #FFFFFF;
@@ -93,6 +106,8 @@ body, .theme-mini {
 /* ── Монохромные: цвет раздела выключен, янтарь единственное цветное пятно ── */
 [data-theme="graphite"] {
   color-scheme: dark;
+  --theme-font: "Bahnschrift", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "Bahnschrift", "Segoe UI Variable Text", system-ui, sans-serif;
   --bg: #131313; --surface: #1D1D1D; --surface-2: #272727; --surface-3: #333333; --border: #3A3A3A;
   --text: #F2F2F2; --text-2: #C2C2C2; --text-3: #A0A0A0;
   --hue: #E8E8E8; --accent-ink: #131313;
@@ -102,6 +117,8 @@ body, .theme-mini {
 
 [data-theme="lime"] {
   color-scheme: light;
+  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: Georgia, "Times New Roman", serif;
   --bg: #F4F4F1; --surface: #FFFFFF; --surface-2: #ECECE8; --surface-3: #DFDFDA; --border: #CFCFC9;
   --text: #111111; --text-2: #404040; --text-3: #575757;
   --hue: #111111; --accent-ink: #FFFFFF;
@@ -113,6 +130,8 @@ body, .theme-mini {
 /* ── Цветные: весь фон в цвете, а не только акцент ───────────── */
 [data-theme="paper"] {
   color-scheme: light;
+  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "Sitka Heading", "Sitka Text", Georgia, serif;
   --bg: #F2EADA; --surface: #FBF6EA; --surface-2: #EEE5D2; --surface-3: #E3D8C0; --border: #D8CAAD;
   --text: #241C12; --text-2: #54483A; --text-3: #655846;
   --hue: #1F5A46; --accent-ink: #FBF6EA;
@@ -124,6 +143,8 @@ body, .theme-mini {
 
 [data-theme="forest"] {
   color-scheme: dark;
+  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "Sitka Heading", "Sitka Text", Georgia, serif;
   --bg: #12291F; --surface: #183427; --surface-2: #204233; --surface-3: #2B5241; --border: #33604C;
   --text: #F2EDDD; --text-2: #CFD4BF; --text-3: #B2BCA4;
   --hue: #C7E08A; --accent-ink: #12291F;
@@ -134,6 +155,8 @@ body, .theme-mini {
 
 [data-theme="wine"] {
   color-scheme: dark;
+  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: Georgia, "Times New Roman", serif;
   --bg: #2A0C16; --surface: #38111E; --surface-2: #481828; --surface-3: #5A2134; --border: #6E2C41;
   --text: #FBEFE6; --text-2: #E4CCC4; --text-3: #CFB0A9;
   --hue: #F2B7A0; --accent-ink: #2A0C16;
@@ -143,6 +166,8 @@ body, .theme-mini {
 
 [data-theme="cobalt"] {
   color-scheme: dark;
+  --theme-font: "Bahnschrift", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
   --bg: #1234B8; --surface: #0E2A9A; --surface-2: #14339F; --surface-3: #1D3FB0; --border: #3D5CCB;
   --text: #FFFFFF; --text-2: #DCE3FF; --text-3: #C7D2FF;
   --hue: #FFFFFF; --accent-ink: #0E2A9A;
@@ -153,6 +178,8 @@ body, .theme-mini {
 /* ── Градиентные: панели спокойные, цвет живёт в фоне ─────────── */
 [data-theme="aurora"] {
   color-scheme: dark;
+  --theme-font: "Inter", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
   --g1: #05262B; --g2: #0B4A45; --g3: #2A1C5C;
   --bg: #0C2C36;
   --bg-image: radial-gradient(90% 80% at 85% 5%, var(--g2), transparent 70%), radial-gradient(80% 90% at 5% 100%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
@@ -166,6 +193,8 @@ body, .theme-mini {
 
 [data-theme="ember"] {
   color-scheme: dark;
+  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: Georgia, "Times New Roman", serif;
   --g1: #260E25; --g2: #561B30; --g3: #93391F;
   --bg: #3C1428;
   --bg-image: radial-gradient(85% 85% at 100% 100%, var(--g3), transparent 72%), radial-gradient(70% 70% at 45% 55%, var(--g2), transparent 80%), linear-gradient(var(--g1), var(--g1));
@@ -179,6 +208,8 @@ body, .theme-mini {
 
 [data-theme="dawn"] {
   color-scheme: light;
+  --theme-font: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: Georgia, "Times New Roman", serif;
   --g1: #FFE3CF; --g2: #F8D5E4; --g3: #D8DCF8;
   --bg: #F6DFE3;
   --bg-image: radial-gradient(80% 90% at 100% 0%, var(--g3), transparent 72%), radial-gradient(70% 70% at 50% 60%, var(--g2), transparent 80%), linear-gradient(var(--g1), var(--g1));
@@ -195,6 +226,8 @@ body, .theme-mini {
  * Цвета свои. Эффекты фона (звёзды, волны, лунный свет, тёплый рассвет) — в разделе «Эффекты фона» ниже. */
 [data-theme="liquid"] {
   color-scheme: dark;
+  --theme-font: "Inter", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
   --g1: #070D1C; --g2: #0E2350; --g3: #0A1630;
   --bg: #0A1428;
   --bg-image: radial-gradient(70% 60% at 100% 100%, var(--g2), transparent 72%), linear-gradient(170deg, var(--g3), var(--g1) 60%);
@@ -208,6 +241,8 @@ body, .theme-mini {
 
 [data-theme="liquidday"] {
   color-scheme: light;
+  --theme-font: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "Cambria", Georgia, "Times New Roman", serif;
   --g1: #E6EEFB; --g2: #CFE0FA; --g3: #EEF2FA;
   --bg: #E4ECF8;
   --bg-image: radial-gradient(70% 60% at 100% 100%, var(--g2), transparent 72%), linear-gradient(170deg, var(--g3), var(--g1) 60%);
@@ -222,6 +257,8 @@ body, .theme-mini {
 
 [data-theme="frost"] {
   color-scheme: light;
+  --theme-font: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "Sitka Heading", "Sitka Text", Georgia, serif;
   --g1: #DDE3EA; --g2: #EEF1F5; --g3: #D3DBE5;
   --bg: #E2E7EE;
   --bg-image: linear-gradient(150deg, var(--g2), var(--g1) 50%, var(--g3));
@@ -236,6 +273,8 @@ body, .theme-mini {
 
 [data-theme="gradient"] {
   color-scheme: dark;
+  --theme-font: "Century Gothic", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
   --g1: #140F2E; --g2: #3A1A5E; --g3: #0E3A5C;
   --bg: #1F1640;
   --bg-image: radial-gradient(80% 80% at 0% 0%, var(--g2), transparent 70%), radial-gradient(80% 90% at 100% 100%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
@@ -249,6 +288,8 @@ body, .theme-mini {
 
 [data-theme="gradientday"] {
   color-scheme: light;
+  --theme-font: "Century Gothic", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: Georgia, "Times New Roman", serif;
   --g1: #F3E8FF; --g2: #FFE1EE; --g3: #DDEBFF;
   --bg: #F1E7F8;
   --bg-image: radial-gradient(80% 80% at 0% 0%, var(--g2), transparent 70%), radial-gradient(80% 90% at 100% 100%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
@@ -263,6 +304,8 @@ body, .theme-mini {
 
 [data-theme="midnight"] {
   color-scheme: dark;
+  --theme-font: "Bahnschrift", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
   --g1: #05070D; --g2: #0B1226; --g3: #05070D;
   --bg: #070A14;
   --bg-image: radial-gradient(90% 70% at 50% 0%, var(--g2), transparent 75%), linear-gradient(var(--g1), var(--g1));
@@ -276,6 +319,8 @@ body, .theme-mini {
 
 [data-theme="neon"] {
   color-scheme: dark;
+  --theme-font: "Bahnschrift", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "Bahnschrift", "Segoe UI Variable Text", system-ui, sans-serif;
   --g1: #07050F; --g2: #1E0836; --g3: #032029;
   --bg: #0A0714;
   --bg-image: radial-gradient(60% 50% at 90% 10%, var(--g2), transparent 72%), radial-gradient(60% 60% at 0% 100%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
@@ -289,6 +334,8 @@ body, .theme-mini {
 
 [data-theme="starry"] {
   color-scheme: dark;
+  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: Georgia, "Times New Roman", serif;
   --g1: #0A1030; --g2: #1B2C6B; --g3: #0D1A40;
   --bg: #0E1638;
   --bg-image: radial-gradient(60% 45% at 75% 20%, var(--g2), transparent 70%), radial-gradient(70% 60% at 10% 90%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
@@ -301,6 +348,8 @@ body, .theme-mini {
 
 [data-theme="moonlight"] {
   color-scheme: dark;
+  --theme-font: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "Sitka Heading", "Sitka Text", Georgia, serif;
   --g1: #0B1018; --g2: #1E2A3A; --g3: #0E141E;
   --bg: #0F1520;
   --bg-image: radial-gradient(55% 50% at 85% 10%, var(--g2), transparent 72%), linear-gradient(180deg, var(--g3), var(--g1));
@@ -314,6 +363,8 @@ body, .theme-mini {
 
 [data-theme="sunrise"] {
   color-scheme: dark;
+  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: Georgia, "Times New Roman", serif;
   --g1: #1A1530; --g2: #4A2238; --g3: #7A3A22;
   --bg: #2A1A30;
   --bg-image: radial-gradient(90% 60% at 50% 110%, var(--g3), transparent 72%), radial-gradient(80% 60% at 50% 70%, var(--g2), transparent 80%), linear-gradient(var(--g1), var(--g1));
@@ -329,6 +380,8 @@ body, .theme-mini {
  * поверх темы его перебивают, «Как в теме» возвращает эти значения. */
 [data-theme="glass"] {
   color-scheme: dark;
+  --theme-font: "Inter", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
   --g1: #0E1217; --g2: #141B24; --g3: #10161C;
   --bg: #0E1217;
   --bg-image: linear-gradient(160deg, var(--g2), var(--g1) 55%, var(--g3));
@@ -345,21 +398,21 @@ body, .theme-mini {
 
 /* ── Эффекты фона: свои рисунки на CSS, слабые, под панелями (.rail и .main выше по z-index) ──
  * Звёзды — «Звёздная ночь», волны — «Жидкое стекло», мягкий свет — «Лунный свет», тёплое небо — «Рассвет»,
- * медленный перелив — «Градиент», сетка — «Неон». Сплошной фон в «Виде» их убирает; движение выключают
+ * медленный перелив — «Градиент», сетка — «Неон». Какой эффект показать, решает theme-boot.js (html[data-fx]):
+ * «Как в теме» — эффект темы (сплошной фон и своя картинка его убирают) или выбранный в «Виде». Движение выключают
  * системное «уменьшить движение» и выключатель «Анимации». */
 .theme-fx { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; display: none; }
 .theme-fx::before, .theme-fx::after { content: ""; position: absolute; inset: 0; }
-html:is([data-theme="starry"], [data-theme="liquid"], [data-theme="liquidday"], [data-theme="moonlight"], [data-theme="sunrise"], [data-theme="gradient"], [data-theme="gradientday"], [data-theme="neon"]) .theme-fx { display: block; }
-html[data-bg="solid"] .theme-fx { display: none; }
+html[data-fx] .theme-fx { display: block; }
 
-html[data-theme="starry"] .theme-fx::before {
+html[data-fx="stars"] .theme-fx::before {
   background:
     radial-gradient(circle at 20% 30%, #FFFFFFD9 0 1px, transparent 1.7px) 0 0 / 173px 151px,
     radial-gradient(circle at 70% 65%, #FFE7A8CC 0 1.1px, transparent 1.9px) 0 0 / 241px 197px,
     radial-gradient(circle at 45% 85%, #CFE0FFB3 0 0.8px, transparent 1.4px) 0 0 / 127px 113px;
   opacity: .55; animation: fxTwinkle 6s ease-in-out infinite alternate;
 }
-html[data-theme="starry"] .theme-fx::after {
+html[data-fx="stars"] .theme-fx::after {
   background:
     radial-gradient(circle at 60% 20%, #FFFFFFCC 0 0.9px, transparent 1.5px) 0 0 / 211px 167px,
     radial-gradient(circle at 15% 70%, #FFF3C4B3 0 1.3px, transparent 2.2px) 0 0 / 317px 263px;
@@ -372,41 +425,41 @@ html[data-theme="starry"] .theme-fx::after {
   --fx-wave-dark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='240' viewBox='0 0 1200 240' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%237DB4FF' stroke-width='1.4'%3E%3Cpath stroke-opacity='.30' d='M0 120 C150 60 450 180 600 120 C750 60 1050 180 1200 120'/%3E%3Cpath stroke-opacity='.20' d='M0 150 C150 100 450 200 600 150 C750 100 1050 200 1200 150'/%3E%3Cpath stroke-opacity='.13' d='M0 180 C150 140 450 220 600 180 C750 140 1050 220 1200 180'/%3E%3C/g%3E%3Cpath fill='%233A6FD8' fill-opacity='.10' d='M0 200 C150 170 450 230 600 200 C750 170 1050 230 1200 200 L1200 240 L0 240Z'/%3E%3C/svg%3E");
   --fx-wave-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='240' viewBox='0 0 1200 240' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%231F56C2' stroke-width='1.4'%3E%3Cpath stroke-opacity='.20' d='M0 120 C150 60 450 180 600 120 C750 60 1050 180 1200 120'/%3E%3Cpath stroke-opacity='.13' d='M0 150 C150 100 450 200 600 150 C750 100 1050 200 1200 150'/%3E%3Cpath stroke-opacity='.08' d='M0 180 C150 140 450 220 600 180 C750 140 1050 220 1200 180'/%3E%3C/g%3E%3Cpath fill='%231F56C2' fill-opacity='.06' d='M0 200 C150 170 450 230 600 200 C750 170 1050 230 1200 200 L1200 240 L0 240Z'/%3E%3C/svg%3E");
 }
-html:is([data-theme="liquid"], [data-theme="liquidday"]) .theme-fx::before {
+html[data-fx="waves"] .theme-fx::before {
   top: auto; height: 42%;
   background: var(--fx-wave-dark) repeat-x 0 100% / 1200px 100%;
   animation: fxWave 60s linear infinite;
 }
-html:is([data-theme="liquid"], [data-theme="liquidday"]) .theme-fx::after {
+html[data-fx="waves"] .theme-fx::after {
   top: auto; height: 30%; opacity: .7; transform: scaleX(-1);
   background: var(--fx-wave-dark) repeat-x 0 100% / 1200px 100%;
   animation: fxWave 85s linear infinite;
 }
-html[data-theme="liquidday"] .theme-fx::before, html[data-theme="liquidday"] .theme-fx::after { background-image: var(--fx-wave-light); }
+html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"]) .theme-fx::before, html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"]) .theme-fx::after { background-image: var(--fx-wave-light); }
 @keyframes fxWave { to { background-position-x: -1200px; } }
 
 /* Лунный свет: мягкое пятно света сверху справа и редкий косой луч; свет медленно дышит. */
-html[data-theme="moonlight"] .theme-fx::before {
+html[data-fx="moon"] .theme-fx::before {
   background: radial-gradient(circle at 84% 12%, #E6EEFA33 0, #DDE7F81A 120px, transparent 420px);
   animation: fxBreathe 14s ease-in-out infinite alternate;
 }
-html[data-theme="moonlight"] .theme-fx::after {
+html[data-fx="moon"] .theme-fx::after {
   background: linear-gradient(205deg, transparent 30%, #DDE7F80D 42%, transparent 55%);
 }
 @keyframes fxBreathe { from { opacity: .65; } to { opacity: 1; } }
 
 /* Рассвет: тёплое зарево у нижнего края медленно поднимается и садится. */
-html[data-theme="sunrise"] .theme-fx::before {
+html[data-fx="dawn"] .theme-fx::before {
   background: radial-gradient(75% 45% at 50% 100%, #FF9A5A3D, #FF6A6A14 55%, transparent 75%);
   animation: fxRise 20s ease-in-out infinite alternate;
 }
-html[data-theme="sunrise"] .theme-fx::after {
+html[data-fx="dawn"] .theme-fx::after {
   background: linear-gradient(0deg, #FFB0701A, transparent 35%);
 }
 @keyframes fxRise { from { transform: translateY(6%); opacity: .7; } to { transform: translateY(0); opacity: 1; } }
 
 /* Градиент: большое цветное пятно медленно плывёт по окну. */
-html:is([data-theme="gradient"], [data-theme="gradientday"]) .theme-fx::before {
+html[data-fx="drift"] .theme-fx::before {
   inset: -20%;
   background: radial-gradient(35% 35% at 50% 50%, color-mix(in srgb, var(--hue-deals) 16%, transparent), transparent 70%);
   animation: fxDrift 30s ease-in-out infinite alternate;
@@ -414,13 +467,53 @@ html:is([data-theme="gradient"], [data-theme="gradientday"]) .theme-fx::before {
 @keyframes fxDrift { from { transform: translate(-18%, -12%); } to { transform: translate(18%, 14%); } }
 
 /* Неон: неподвижная тонкая сетка у нижнего края, гаснет кверху. */
-html[data-theme="neon"] .theme-fx::before {
+html[data-fx="grid"] .theme-fx::before {
   top: 55%;
   background:
     linear-gradient(90deg, #FF6AD514 1px, transparent 1px) 0 0 / 48px 48px,
     linear-gradient(0deg, #45E6FF14 1px, transparent 1px) 0 0 / 48px 48px;
   -webkit-mask-image: linear-gradient(transparent, #000); mask-image: linear-gradient(transparent, #000);
 }
+
+/* Снег, дождь и узоры: цвет берётся из текста темы, поэтому видны и на светлых темах.
+ * Плитка каждого слоя по высоте равна --fx-tile: сдвиг ровно на плитку даёт бесшовный цикл. */
+html[data-fx="snow"] .theme-fx::before {
+  --fx-tile: 240px;
+  background:
+    radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--text) 70%, transparent) 0 1.6px, transparent 2.4px) 0 0 / 190px 240px,
+    radial-gradient(circle at 70% 75%, color-mix(in srgb, var(--text) 55%, transparent) 0 1.1px, transparent 1.9px) 0 0 / 130px 240px;
+  opacity: .5; animation: fxFall 14s linear infinite;
+}
+html[data-fx="snow"] .theme-fx::after {
+  --fx-tile: 360px;
+  background:
+    radial-gradient(circle at 40% 50%, color-mix(in srgb, var(--text) 60%, transparent) 0 2.2px, transparent 3.2px) 0 0 / 310px 360px,
+    radial-gradient(circle at 85% 15%, color-mix(in srgb, var(--text) 45%, transparent) 0 1.4px, transparent 2.2px) 0 0 / 230px 360px;
+  opacity: .4; animation: fxFall 22s linear infinite;
+}
+html[data-fx="rain"] .theme-fx::before {
+  --fx-tile: 180px; inset: -15%; transform: rotate(9deg);
+  background:
+    radial-gradient(ellipse 1px 14px at 30% 40%, color-mix(in srgb, var(--text) 50%, transparent) 0 40%, transparent 100%) 0 0 / 83px 180px,
+    radial-gradient(ellipse 1px 10px at 75% 80%, color-mix(in srgb, var(--text) 38%, transparent) 0 40%, transparent 100%) 0 0 / 121px 180px;
+  opacity: .45; animation: fxFall .9s linear infinite;
+}
+html[data-fx="rain"] .theme-fx::after {
+  --fx-tile: 260px; inset: -15%; transform: rotate(9deg);
+  background:
+    radial-gradient(ellipse 1px 18px at 55% 30%, color-mix(in srgb, var(--text) 42%, transparent) 0 40%, transparent 100%) 0 0 / 157px 260px;
+  opacity: .35; animation: fxFall 1.5s linear infinite;
+}
+@keyframes fxFall { to { background-position-y: var(--fx-tile); } }
+:root {
+  --fx-topo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='640' viewBox='0 0 1200 640'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.3'%3E%3Cpath d='M0 40 C150 14 450 66 600 40 C750 14 1050 66 1200 40'/%3E%3Cpath d='M0 120 C150 76 450 164 600 120 C750 76 1050 164 1200 120'/%3E%3Cpath d='M0 200 C150 182 450 218 600 200 C750 182 1050 218 1200 200'/%3E%3Cpath d='M0 280 C150 228 450 332 600 280 C750 228 1050 332 1200 280'/%3E%3Cpath d='M0 360 C150 330 450 390 600 360 C750 330 1050 390 1200 360'/%3E%3Cpath d='M0 440 C150 400 450 480 600 440 C750 400 1050 480 1200 440'/%3E%3Cpath d='M0 520 C150 498 450 542 600 520 C750 498 1050 542 1200 520'/%3E%3Cpath d='M0 600 C150 552 450 648 600 600 C750 552 1050 648 1200 600'/%3E%3C/g%3E%3C/svg%3E");
+}
+html[data-fx="pattern"] .theme-fx::before {
+  background: var(--text); opacity: .1;
+  -webkit-mask: var(--fx-topo) 0 0 / 1200px 640px; mask: var(--fx-topo) 0 0 / 1200px 640px;
+  animation: fxTopo 160s linear infinite;
+}
+@keyframes fxTopo { to { -webkit-mask-position: -1200px 0; mask-position: -1200px 0; } }
 
 /* Выключатель «Анимации» в Настройках тоже включает reduce (main.js, applyMotion). */
 @media (prefers-reduced-motion: reduce) {
@@ -488,7 +581,7 @@ html[data-theme="glass"] .rail { backdrop-filter: var(--glass-panel, none); -web
 
 /* ── Движение: быстро отвечает на действие, мягко садится ─ */
 :root { --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
-.view:not([hidden]) { animation: viewIn 320ms var(--ease-out); }
+body[data-view="dialog"] .view-dialog:not([hidden]) { animation: viewIn 320ms var(--ease-out); }
 @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } }
 .btn, .icon-btn, .rail-item, .chat-tab, .theme-opt, .wait-row { transition: background 180ms var(--ease-out), color 180ms var(--ease-out), border-color 180ms var(--ease-out), transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out), filter 180ms var(--ease-out); }
 .btn:hover:not(:disabled), .theme-opt:hover { transform: translateY(-1px); }

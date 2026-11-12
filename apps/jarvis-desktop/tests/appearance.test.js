@@ -125,6 +125,24 @@ test('неизвестная тема — «Ночь», «Как в систем
   assert.equal(light.root.dataset.theme, 'light');
 });
 
+test('шрифты по умолчанию принадлежат теме, а свой выбор можно сбросить', () => {
+  const { T, props } = boot();
+  assert.equal(T.LOOK_DEFAULT.ui, 'theme');
+  assert.equal(T.LOOK_DEFAULT.head, 'theme');
+  assert.equal(T.LOOK_DEFAULT.reply, 'theme');
+  assert.equal(props['--font'], undefined);
+  assert.equal(props['--font-head'], undefined);
+  assert.equal(props['--font-reply'], undefined);
+  T.setLook({ ui: 'candara', head: 'plex', reply: 'ui' });
+  assert.match(props['--font'], /Candara/);
+  assert.match(props['--font-head'], /IBM Plex Serif/);
+  assert.match(props['--font-reply'], /Candara/);
+  T.resetLook();
+  assert.equal(props['--font'], undefined);
+  assert.equal(props['--font-head'], undefined);
+  assert.equal(props['--font-reply'], undefined);
+});
+
 test('свой акцент читается на каждой теме: текст от 4,5:1 и подпись на плашке', () => {
   for (const [id, tokens] of Object.entries(themes)) {
     const { T, root, props, setTokens } = boot();

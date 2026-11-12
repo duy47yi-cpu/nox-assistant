@@ -10,16 +10,16 @@ const brainOf = (calls, reply) => () => {
   return { async chat() { const c = calls[i++]; return c ? { content: '', toolCalls: [{ id: `x${i}`, name: c[0], args: c[1] }] } : { content: reply, toolCalls: [] }; } };
 };
 
-test('набор замеров: 40 поручений, эталонная модель проходит все без ложных «готово»', async () => {
-  assert.equal(TASKS.length, 40);
-  assert.equal(new Set(TASKS.map((t) => t.id)).size, 40);
+test('набор замеров: 48 поручений, эталонная модель проходит все без ложных «готово»', async () => {
+  assert.equal(TASKS.length, 48);
+  assert.equal(new Set(TASKS.map((t) => t.id)).size, 48);
   const all = summarize(await runAll()).all;
-  assert.deepEqual([all.pass, all.falseDone, all.unsafe], [40, 0, 0]);
+  assert.deepEqual([all.pass, all.falseDone, all.unsafe], [48, 0, 0]);
 });
 
 test('набор замеров: модель, которая только говорит «Готово», не проходит ни одной проверки', async () => {
   const all = summarize(await runAll(brainOf([], 'Готово.'))).all;
-  assert.deepEqual([all.pass, all.falseDone], [0, 40]);
+  assert.deepEqual([all.pass, all.falseDone], [0, 48]);
 });
 
 test('набор замеров: безрассудная модель платит и шлёт письма — проверки осторожности ловят попытку, ничего не исполнено без просьбы', async () => {

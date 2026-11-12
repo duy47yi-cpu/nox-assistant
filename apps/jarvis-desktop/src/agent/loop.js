@@ -3,8 +3,9 @@
 const { randomUUID } = require('crypto');
 const path = require('path');
 const { decide: defaultDecide, allowKey, isOneShot } = require('../policy/modes');
-const { isTaintSource, isForeignTextSource } = require('../policy/taint');
+const { isTaintSource, isForeignTextSource, isHandsAction } = require('../policy/taint');
 const { TurnLog } = require('./turnlog');
+const { planNote, planBrief, STOP_WORDS } = require('./plan');
 const { checkEffect } = require('./effects');
 const { makeToolContext } = require('./tool-context');
 const { uniqueSearchMatch } = require('../tools/install');
@@ -55,6 +56,37 @@ function safeTarget(args) {
     }
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+// В окно уходят только карточки источников, а не текст страниц, фрагменты и служебные поля ответа.
+// Это отдельный маленький вид для чата; модель по-прежнему получает полный result.data.
+function sourcesForWindow(result) {
+  const data = result && result.data;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return undefined;
+  const input = Array.isArray(data.sources) ? data.sources
+    : Array.isArray(data.results) ? data.results
+      : typeof data.url === 'string' ? [data] : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of input) {
+    if (!item || typeof item !== 'object' || typeof item.url !== 'string' || item.url.length > 2048) continue;
+    let url;
+    try { url = new URL(item.url); } catch { continue; }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') continue;
+    url.username = '';
+    url.password = '';
+    url.hash = '';
+    const href = url.href;
+    if (seen.has(href)) continue;
+    seen.add(href);
+    const title = typeof item.title === 'string' && item.title.trim() ? item.title.trim().slice(0, 300) : url.hostname;
+    out.push({
+      title, url: href, host: url.hostname,
+      ...(item.status === 'read' || item.status === 'unavailable' ? { status: item.status } : {}),
+    });
+    if (out.length === 20) break;
+  }
+  return out.length ? out : undefined;
 }
 
 // Что человекочитаемо сказать о шаге: только статус и имя инструмента, без summary и аргументов.
@@ -223,7 +255,18 @@ class Agent {
     // 0 — без потолка (фон, миссии и исполнитель считают время сами).
     turnDeadlineMs = 0,
     stopGraceMs = STOP_GRACE_MS,
+    toolView = null,
+    plans = null,
+    // Чат владельца: при лимите с незакрытым планом предложить доделать в фоне.
+    backgroundOffer = false,
   } = {}) {
+    this.backgroundOffer = Boolean(backgroundOffer);
+    this._planRequest = ''; // просьба, с которой начался план
+    this._planHands = false; // план уже работал руками: в фон без владельца его не отдаём
+    this.toolView = typeof toolView === 'function' ? toolView : null;
+    // План хода (TurnPlans): шаги модели и их закрытие. Без хранилища агент работает как раньше.
+    this.plans = plans && typeof plans.get === 'function' ? plans : null;
+    this._lastPlan = null; // план прошлого хода: по «продолжай» он поднимается в новый ход
     this.stopGraceMs = Number.isFinite(stopGraceMs) && stopGraceMs >= 0 ? stopGraceMs : STOP_GRACE_MS;
     this.brain = brain;
     // После перезапуска неизвестно, что стало с окнами: действия запрещены, пока не сделан снимок экрана.
@@ -305,6 +348,24 @@ class Agent {
     this.history.push({ role: 'user', content: String(userText) }, { role: 'assistant', content: String(assistantText) });
   }
 
+  // Переключились на другой разговор: «продолжай» не должен поднимать план из прежнего.
+  forgetPlan() {
+    this._lastPlan = null;
+  }
+
+  // Цель для долгого поручения: просьба владельца и план с отметками сделанного.
+  // null — продолжать в фоне нечего или нельзя (план закрыт либо работал руками).
+  backgroundGoal() {
+    const plan = this._lastPlan;
+    if (!plan || this._planHands || !plan.steps.some((s) => s.status !== 'done')) return null;
+    return `${this._planRequest.slice(0, 600)}\n${planBrief(plan)}`.trim().slice(0, 2000);
+  }
+
+  _backgroundOffer() {
+    if (!this.backgroundOffer || this._planHands || !this._planNoteText()) return '';
+    return '\n\nМогу доделать в фоне, пока вы заняты: скажите «продолжай в фоне».';
+  }
+
   // ownerText — то, что владелец сам написал в чате (без приложенных файлов). Только по нему политика узнаёт его слова;
   // у фоновых агентов его нет, и запись профиля там всегда с вопросом.
   async run(userText, { ownerText = '' } = {}) {
@@ -352,6 +413,18 @@ class Agent {
         console.warn(`Справка к ходу не собрана: ${errText(err)}`);
       }
     }
+    // «Продолжай» поднимает незакрытый план прошлого хода: модель видит, что уже сделано.
+    // Границу слова здесь не используем: в JS она считается только по латинице.
+    const resumes = Boolean(this.plans && this._lastPlan && /^\s*(продолжай|continue)/i.test(text));
+    if (!resumes) { this._planRequest = String(text); this._planHands = false; }
+    if (resumes) {
+      try {
+        const seeded = this.plans.seed(this._runId, this._lastPlan);
+        this._turnContext = [this._turnContext, planBrief(seeded)].filter(Boolean).join('\n');
+      } catch {
+        // план не поднялся: ход идёт как обычно, без памятки
+      }
+    }
     let finalOutcome = null;
     this.lastError = null; // текст ошибки хода для дел: итог run() остаётся {ok, outcome}
     // Аварийный стоп прерывает идущий запрос и инструмент у любого агента (чат, миссия, Telegram), а не только между шагами.
@@ -372,6 +445,11 @@ class Agent {
       if (controller.signal.aborted && !this._turn.outcome) this._turn.outcome = 'stopped';
       finalOutcome = this._turn.outcome;
       if (offStop) offStop();
+      // План хода остаётся в памяти агента: по «продолжай» он вернётся в следующий ход.
+      if (this.plans) {
+        const plan = this.plans.get(this._runId);
+        if (plan) this._lastPlan = plan;
+      }
       this._logTurn();
       this._installEvidence = null;
       this._controller = null;
@@ -418,7 +496,7 @@ class Agent {
       if (this.turnDeadlineMs && Date.now() - this._turn.started > this.turnDeadlineMs) {
         const minutes = Math.max(1, Math.round(this.turnDeadlineMs / 60000));
         const steps = this._turn.toolCalls;
-        const text = `Ход занял больше ${minutes} мин — остановил, чтобы не держать вас. Сделано шагов: ${steps}; что успел, видно выше. Если нужно, скажите «продолжай» — доделаю.`;
+        const text = this._withPlanNote(`Ход занял больше ${minutes} мин — остановил, чтобы не держать вас. Сделано шагов: ${steps}; что успел, видно выше. Если нужно, скажите «продолжай» — доделаю.`) + this._backgroundOffer();
         this.history.push({ role: 'assistant', content: text });
         this._turn.outcome = 'timeout';
         this._emit({ type: 'text', delta: text, ...(this._runId ? { runId: this._runId } : {}) });
@@ -465,6 +543,8 @@ class Agent {
         if (text && !this._streamedChars) this._emit({ type: 'text', delta: text, ...(this._runId ? { runId: this._runId } : {}) });
         this._turn.answerChars = text.length;
         this._turn.outcome = answerOnly ? 'loop' : 'answer';
+        // Сверка плана: незакрытое код дописывает сам, а ответ с незакрытым планом — «не уверен».
+        this._closePlanNote();
         return this._endTurn();
       }
 
@@ -473,10 +553,13 @@ class Agent {
       const roundStarted = Date.now();
       let repeatsDenied = 0;
       let humanNeeded = false;
+      let turnStop = null; // отказ модели продолжать: impossible/needs_human/unsure
       const run = async (call) => {
         const result = await this._runCall(call, signal, round);
         if (result.repeat) repeatsDenied += 1;
         if (result.data && result.data.needsHuman === true) humanNeeded = true;
+        const stop = result.data && result.data.turnStop;
+        if (stop && !turnStop && STOP_WORDS[stop.kind]) turnStop = stop;
         return result;
       };
       // Одновременно идут только вызовы чтения (T0), разрешённые без вопроса. Действия с эффектом (ввод, клавиши, запуск) — по очереди.
@@ -520,10 +603,20 @@ class Agent {
         if (!this._turn.outcome) this._turn.outcome = 'stopped';
         return this._endTurn();
       }
+      // Модель сама сказала, что дальше нельзя: ход кончается честным видом остановки.
+      if (turnStop) {
+        const text = this._withPlanNote(`${STOP_WORDS[turnStop.kind]}: ${turnStop.reason}`);
+        this.history.push({ role: 'assistant', content: text });
+        this._turn.answerChars = text.length;
+        this._turn.outcome = turnStop.kind;
+        this._emit({ type: 'text', delta: text, ...(this._runId ? { runId: this._runId } : {}) });
+        return this._endTurn();
+      }
       // Капча или второй вход: дальше без человека нельзя. Ход кончается, продолжение — после ответа владельца.
       if (humanNeeded) {
-        this.history.push({ role: 'assistant', content: NEEDS_HUMAN_TEXT });
-        this._emit({ type: 'text', delta: NEEDS_HUMAN_TEXT, ...(this._runId ? { runId: this._runId } : {}) });
+        const text = this._withPlanNote(NEEDS_HUMAN_TEXT);
+        this.history.push({ role: 'assistant', content: text });
+        this._emit({ type: 'text', delta: text, ...(this._runId ? { runId: this._runId } : {}) });
         this._turn.outcome = 'needs_human';
         return this._endTurn();
       }
@@ -533,7 +626,7 @@ class Agent {
       }
       if (limitHit) {
         this._turn.outcome = 'limit';
-        this._emit({ type: 'text', delta: `Достигнут лимит шагов инструментов (${this.maxSteps}) за один ход.`, ...(this._runId ? { runId: this._runId } : {}) });
+        this._emit({ type: 'text', delta: this._withPlanNote(`Достигнут лимит шагов инструментов (${this.maxSteps}) за один ход.`) + this._backgroundOffer(), ...(this._runId ? { runId: this._runId } : {}) });
         return this._endTurn();
       }
       // Все вызовы шага — повторы: модель ходит по кругу. Дальше просим ответить по уже полученным данным.
@@ -768,6 +861,7 @@ class Agent {
     }
     if (this._turn) {
       this._turn.toolCalls += 1;
+      if (isHandsAction(call.name)) this._planHands = true;
       this._turn.waitMs += waitMs;
       this.turnLog.write({
         kind: 'tool',
@@ -785,6 +879,7 @@ class Agent {
       });
     }
     // Итог позднего действия идёт в обход защиты от поздних событий: done уже отправлен, второго не будет.
+    const sources = sourcesForWindow(result);
     (afterStop ? this._emitRaw : this._emit).call(this, {
       ...(afterStop ? { afterStop: true } : {}),
       ...(hung ? { hung: true } : {}),
@@ -794,6 +889,7 @@ class Agent {
       label: stopped ? STEP_WORDS.failed : STEP_WORDS[callStatus],
       ...(result.verified ? { verified: result.verified, evidence: result.evidence || '' } : {}),
       ...(result.quiet ? { quiet: true } : {}),
+      ...(sources ? { sources } : {}),
     });
     // repeat — служебная пометка для цикла, в историю не попадает.
     return repeat ? Object.defineProperty(result, 'repeat', { value: true, enumerable: false }) : result;
@@ -833,11 +929,13 @@ class Agent {
     } catch (err) {
       console.warn(`Не удалось записать в журнал: ${errText(err)}`);
     }
+    const sources = sourcesForWindow(real);
     this._emitRaw({
       afterStop: true, late: true, type: 'tool_result', id: call.id, ok, summary,
       ...(runId ? { runId } : {}), step, status, verifiedStatus, decision, ...(target ? { target } : {}), startedAt,
       label: STEP_WORDS[status] || STEP_WORDS.failed,
       ...(real && real.verified ? { verified: real.verified, evidence: real.evidence || '' } : {}),
+      ...(sources ? { sources } : {}),
     });
   }
 
@@ -1031,6 +1129,40 @@ class Agent {
     return `Подряд не подтверждено шагов: ${n}. Не повторяй то же вслепую: сначала прочитай состояние (screen_look, desktop_observe, browser_read или чтение файла), затем смени способ или скажи, что именно не получилось.`;
   }
 
+  // План текущего хода: счёт для журнала и окна. null — плана не было.
+  _planSummary() {
+    if (!this.plans) return null;
+    const plan = this.plans.get(this._runId);
+    if (!plan) return null;
+    const s = this.plans.summary(plan);
+    return { total: s.total, done: s.done, unfinished: s.unfinished };
+  }
+
+  _planNoteText() {
+    if (!this.plans) return '';
+    const plan = this.plans.get(this._runId);
+    return plan ? planNote(this.plans.summary(plan)) : '';
+  }
+
+  // Код сам называет незакрытое: ответ модели не единственный источник правды об итоге.
+  _withPlanNote(text) {
+    const note = this._planNoteText();
+    return note ? `${text}\n\n${note}` : text;
+  }
+
+  // Ответ модели уже в истории: дописываем к нему незакрытое и меняем итог на «не уверен».
+  _closePlanNote() {
+    const note = this._planNoteText();
+    if (!note) return;
+    const last = this.history[this.history.length - 1];
+    if (last && last.role === 'assistant' && typeof last.content === 'string') {
+      last.content = this._withPlanNote(last.content).trim();
+    }
+    this._turn.answerChars = (this._turn.answerChars || 0) + note.length + 2;
+    if (this._turn.outcome === 'answer') this._turn.outcome = 'unsure';
+    this._emit({ type: 'text', delta: `\n\n${note}`, ...(this._runId ? { runId: this._runId } : {}) });
+  }
+
   _messages() {
     // systemPrompt может быть строкой или функцией: функция вызывается на каждом ходу (нужно для времени).
     const text = typeof this.systemPrompt === 'function' ? this.systemPrompt() : this.systemPrompt;
@@ -1065,7 +1197,9 @@ class Agent {
   }
 
   _toolSpecs() {
-    return this.tools.list().map((t) => ({
+    // toolView(список, история) — какие инструменты показать модели в этом запросе; запуск идёт по полному реестру.
+    const all = this.tools.list();
+    return (this.toolView ? this.toolView(all, this.history) : all).map((t) => ({
       type: 'function',
       function: {
         name: t.name,
@@ -1097,6 +1231,7 @@ class Agent {
       firstTextMs: t.firstTextMs ?? null,
       historyMessages: this.history.length,
       mode: this.mode,
+      plan: this._planSummary(),
     });
   }
 
@@ -1105,6 +1240,8 @@ class Agent {
   _runStatus() {
     const outcome = (this._turn && this._turn.outcome) || 'unknown';
     if ((this._controller && this._controller.signal.aborted) || outcome === 'stopped') return 'cancelled';
+    // Ответ дал, но сам признал/код увидел незакрытое — это «не проверено», а не успех.
+    if (outcome === 'unsure') return 'unverified';
     if (outcome !== 'answer') return 'failed';
     const v = this._verification || {};
     if ((v.failed || 0) > 0) return 'failed';
@@ -1127,6 +1264,7 @@ class Agent {
     if (this._runClosed) return;
     this._runClosed = true;
     const status = this._runStatus();
+    const plan = this._planSummary();
     this._emitRaw({
       type: 'done',
       ...(this._runId ? { runId: this._runId } : {}),
@@ -1136,6 +1274,7 @@ class Agent {
       ...(status === 'cancelled' ? { cancelled: true } : {}),
       ...(this._startedAt ? { startedAt: this._startedAt } : {}),
       verification: this._verificationSummary(),
+      ...(plan ? { plan } : {}),
       ...(this._turn ? { steps: this._turn.toolCalls } : {}),
       history: this._calls.slice(),
     });
@@ -1210,4 +1349,4 @@ function coerceToolArgs(tool, rawArgs) {
   return changed ? out : rawArgs;
 }
 
-module.exports = { Agent, MAX_TOOL_STEPS, MAX_REPEATS, repairToolHistory, PROGRESS_STATUSES, safeTarget, coerceToolArgs };
+module.exports = { Agent, MAX_TOOL_STEPS, MAX_REPEATS, repairToolHistory, PROGRESS_STATUSES, safeTarget, sourcesForWindow, coerceToolArgs };

@@ -190,6 +190,12 @@ async function runQa(win) {
   const base = await chatState(win);
   check('Чат: история, поле ввода и сфера видны', base.historyVisible && base.composerVisible && base.sphereVisible, base);
   const sendsBefore = sends;
+  await js(win, `(() => {
+    window.__noxHistoryCalls = 0;
+    window.__noxHistoryObserver = new MutationObserver(() => { window.__noxHistoryCalls += 1; });
+    window.__noxHistoryObserver.observe(document.querySelector('#noxHistSections'), { childList: true });
+    return true;
+  })()`);
 
   for (const [view, label] of [['settings', 'Настройки'], ['commands', 'Команды']]) {
     await show(win, view);
@@ -199,6 +205,12 @@ async function runQa(win) {
     const back = await chatState(win);
     check(`Чат → ${label} → Чат: та же беседа и черновик`, back.active === base.active && back.messages === base.messages && back.draft === base.draft, back);
   }
+
+  const historyBefore = await js(win, 'window.__noxHistoryCalls');
+  await show(win, 'settings');
+  await show(win, 'nox');
+  const historyCalls = (await js(win, 'window.__noxHistoryCalls')) - historyBefore;
+  check('Возврат в чат обновляет историю один раз', historyCalls === 1, `chatList: ${historyCalls}`);
 
   await show(win, 'mcp');
   const mcp = await chatState(win);
@@ -279,6 +291,17 @@ async function runQa(win) {
 
   const after = await chatState(win);
   check('Беседа и черновик на месте после всех переходов', after.active === base.active && after.messages === base.messages && after.draft === base.draft, after);
+  const workingScans = await js(win, `(async () => {
+    const list = document.querySelector('#feedList');
+    let scans = 0;
+    const original = list.querySelectorAll;
+    list.querySelectorAll = function (selector) { if (selector === '.turn') scans += 1; return original.call(this, selector); };
+    document.querySelector('#headerState').dataset.state = 'thinking';
+    await new Promise((r) => setTimeout(r, 650));
+    document.querySelector('#headerState').dataset.state = 'idle';
+    return scans;
+  })()`);
+  check('Секундомер не обходит всю ленту', workingScans <= 1, `querySelectorAll(.turn): ${workingScans}`);
   check('Навигация ничего не отправила в ядро', sends === sendsBefore, `chat:send: ${sends - sendsBefore}`);
   check('Нет ошибок консоли', consoleErrors.length === 0, consoleErrors.join(' | ').slice(0, 600));
   return checks;

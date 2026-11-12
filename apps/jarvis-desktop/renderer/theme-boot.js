@@ -11,7 +11,7 @@
     if (id !== 'system') return IDS.includes(id) ? id : 'dark';
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   };
-  const apply = (id) => { document.documentElement.dataset.theme = resolve(id); applyAccent(); };
+  const apply = (id) => { document.documentElement.dataset.theme = resolve(id); applyAccent(); applyFx(); };
 
   // Цвета акцента: на тёмных темах светлее, на светлых темнее, чтобы текст и значки акцентом читались (от 4,5:1).
   const LIGHT_THEMES = ['light', 'lime', 'paper', 'dawn', 'liquidday', 'frost', 'gradientday'];
@@ -116,19 +116,23 @@
   const SERIF_END = ', Georgia, "Times New Roman", serif';
   const FONTS = {
     ui: {
-      inter: ['Inter (по умолчанию)', `"Inter", ${SANS}`],
+      theme: ['Как в теме', null],
+      inter: ['Inter', `"Inter", ${SANS}`],
       system: ['Системный Windows', SANS],
+      aptos: ['Aptos', `"Aptos", ${SANS}`],
       bahn: ['Bahnschrift', `"Bahnschrift", ${SANS}`],
       candara: ['Candara', `"Candara", ${SANS}`],
+      century: ['Century Gothic', `"Century Gothic", ${SANS}`],
       book: ['Книжный Sitka', `"Sitka Text", "Sitka Small"${SERIF_END}`],
     },
     head: {
-      sitka: ['Sitka (по умолчанию)', `"Sitka Heading", "Sitka Text"${SERIF_END}`],
+      theme: ['Как в теме', null],
+      sitka: ['Sitka', `"Sitka Heading", "Sitka Text"${SERIF_END}`],
       plex: ['IBM Plex Serif', `"IBM Plex Serif"${SERIF_END}`],
       georgia: ['Georgia', `Georgia, "Times New Roman", serif`],
       cambria: ['Cambria', `"Cambria"${SERIF_END}`],
       constantia: ['Constantia', `"Constantia"${SERIF_END}`],
-      ui: ['Тот же, что в интерфейсе', null],
+      ui: ['Тот же, что в интерфейсе', 'ui'],
     },
   };
   const SIZES = { s: ['Мелкий', 0.92], m: ['Обычный', 1], l: ['Крупный', 1.08], xl: ['Очень крупный', 1.16] };
@@ -138,7 +142,16 @@
   // Размытие стеклянных поверхностей (поле ввода, диалоги). «Стекло» включает размытие и у панелей.
   const BLURS = { off: ['Без размытия', 0], m: ['Как в теме', 20], l: ['Стекло', 28] };
   // Фон окна: цвет темы с её градиентом или спокойный сплошной.
-  const BGS = { theme: ['Как в теме', 'theme'], solid: ['Сплошной', 'solid'] };
+  const BGS = { theme: ['Как в теме', 'theme'], solid: ['Сплошной', 'solid'], image: ['Своя картинка', 'image'] };
+  // Своя картинка (хранит backdrop.js): затемнение цветом темы в процентах и размытие в пикселях.
+  const BG_DIMS = Object.fromEntries(Array.from({ length: 19 }, (_, i) => [String(i * 5), [`${i * 5} %`, i * 5]]));
+  const BG_BLURS = { 0: ['Чёткая', 0], 6: ['Лёгкое', 6], 16: ['Сильное', 16] };
+  // Эффект на фоне отдельно от темы. «Как в теме» — тот, что задуман темой (THEME_FX), рисунки в themes.css.
+  const FXS = {
+    theme: ['Как в теме'], off: ['Без эффекта'], stars: ['Звёзды'], waves: ['Волны'], snow: ['Снег'], rain: ['Дождь'],
+    pattern: ['Узоры'], moon: ['Лунный свет'], dawn: ['Зарево'], drift: ['Перелив'], grid: ['Сетка'],
+  };
+  const THEME_FX = { starry: 'stars', liquid: 'waves', liquidday: 'waves', moonlight: 'moon', sunrise: 'dawn', gradient: 'drift', gradientday: 'drift', neon: 'grid' };
   // Прозрачность и радиус самого окна. Ключи — проценты и пиксели строкой: так их хранит jarvis.look
   // (как остальные id настроек). 0 % прозрачности и 0 px радиуса — как было до настройки.
   const WIN_ALPHAS = {
@@ -148,7 +161,7 @@
   };
   const WIN_RADII = { 0: ['Прямые', 0], 8: ['8', 8], 14: ['14', 14], 22: ['22', 22], 28: ['28', 28] };
   const FS = { '2xs': 11, xs: 12, sm: 13, md: 14, read: 15, lg: 16, xl: 20, '2xl': 24 };
-  const LOOK_DEFAULT = { ui: 'inter', head: 'sitka', reply: 'head', size: 'm', round: 'm', panel: 'm', orb: 'm', blur: 'm', bg: 'theme', glow: true, winAlpha: '0', winRadius: '0' };
+  const LOOK_DEFAULT = { ui: 'theme', head: 'theme', reply: 'theme', size: 'm', round: 'm', panel: 'm', orb: 'm', blur: 'm', bg: 'theme', bgDim: '40', bgBlur: '6', fx: 'theme', glow: true, winAlpha: '0', winRadius: '0' };
   let look = { ...LOOK_DEFAULT };
 
   // Битое сохранённое значение не должно ломать окно: каждая настройка проверяется по своему списку,
@@ -159,13 +172,16 @@
     return {
       ui: pickId(FONTS.ui, v.ui, LOOK_DEFAULT.ui),
       head: pickId(FONTS.head, v.head, LOOK_DEFAULT.head),
-      reply: pickId({ head: 1, ui: 1 }, v.reply, LOOK_DEFAULT.reply),
+      reply: pickId({ theme: 1, head: 1, ui: 1 }, v.reply, LOOK_DEFAULT.reply),
       size: pickId(SIZES, v.size, LOOK_DEFAULT.size),
       round: pickId(ROUNDS, v.round, LOOK_DEFAULT.round),
       panel: pickId(PANELS, v.panel, LOOK_DEFAULT.panel),
       orb: pickId(ORBS, v.orb, LOOK_DEFAULT.orb),
       blur: pickId(BLURS, v.blur, LOOK_DEFAULT.blur),
       bg: pickId(BGS, v.bg, LOOK_DEFAULT.bg),
+      bgDim: pickId(BG_DIMS, v.bgDim, LOOK_DEFAULT.bgDim),
+      bgBlur: pickId(BG_BLURS, v.bgBlur, LOOK_DEFAULT.bgBlur),
+      fx: pickId(FXS, v.fx, LOOK_DEFAULT.fx),
       glow: v.glow !== false,
       winAlpha: pickId(WIN_ALPHAS, v.winAlpha, LOOK_DEFAULT.winAlpha),
       winRadius: pickId(WIN_RADII, v.winRadius, LOOK_DEFAULT.winRadius),
@@ -173,12 +189,18 @@
   }
   function applyLook() {
     const r = document.documentElement;
-    const ui = FONTS.ui[look.ui] || FONTS.ui.inter;
-    const head = FONTS.head[look.head] || FONTS.head.sitka;
-    const headStack = head[1] || ui[1];
-    r.style.setProperty('--font', ui[1]);
-    r.style.setProperty('--font-head', headStack);
-    r.style.setProperty('--font-reply', look.reply === 'ui' ? ui[1] : headStack);
+    const ui = FONTS.ui[look.ui] || FONTS.ui.theme;
+    const head = FONTS.head[look.head] || FONTS.head.theme;
+    const uiStack = look.ui === 'theme' ? null : ui[1];
+    const headStack = look.head === 'theme' ? null : (head[1] === 'ui' ? (uiStack || 'var(--font)') : head[1]);
+    if (uiStack) r.style.setProperty('--font', uiStack);
+    else r.style.removeProperty('--font');
+    if (headStack) r.style.setProperty('--font-head', headStack);
+    else r.style.removeProperty('--font-head');
+    if (look.reply === 'theme') r.style.removeProperty('--font-reply');
+    else if (look.reply === 'ui') r.style.setProperty('--font-reply', uiStack || 'var(--font)');
+    else if (headStack) r.style.setProperty('--font-reply', headStack);
+    else r.style.removeProperty('--font-reply');
     const k = (SIZES[look.size] || SIZES.m)[1];
     for (const [key, px] of Object.entries(FS)) r.style.setProperty(`--fs-${key}`, `${Math.round(px * k * 2) / 2}px`);
     const q = (ROUNDS[look.round] || ROUNDS.m)[1];
@@ -195,8 +217,11 @@
     else r.style.setProperty('--glass-blur', `${(BLURS[look.blur] || BLURS.m)[1]}px`);
     if (look.blur === 'off' || look.blur === 'l') r.dataset.glass = look.blur;
     else delete r.dataset.glass;
-    if (look.bg === 'solid') r.dataset.bg = 'solid';
-    else delete r.dataset.bg;
+    if (look.bg === 'theme') delete r.dataset.bg;
+    else r.dataset.bg = look.bg;
+    r.style.setProperty('--own-bg-dim', `${(BG_DIMS[look.bgDim] || BG_DIMS['40'])[1]}%`);
+    r.style.setProperty('--own-bg-blur', `${(BG_BLURS[look.bgBlur] || BG_BLURS['6'])[1]}px`);
+    applyFx();
     if (look.glow === false) r.dataset.glow = 'off'; else delete r.dataset.glow;
     // Прозрачность окна: --win-alpha — доля прозрачности 0..0.6 (0 — как сейчас, фон непрозрачный).
     // Радиус окна: --win-radius в пикселях, 0 — прямые углы. Читает presence.css; текст не трогается.
@@ -208,6 +233,13 @@
     if (winPercent > 0) r.dataset.winAlpha = 'on'; else delete r.dataset.winAlpha;
     // Радиус без прозрачности тоже требует прозрачной подложки: иначе углы закрасит body.
     if (winRadius > 0) r.dataset.winRadius = 'on'; else delete r.dataset.winRadius;
+  }
+  // Эффект темы слушается выбора фона (сплошной и своя картинка его убирают);
+  // явно выбранный эффект виден на любой теме и любом фоне.
+  function applyFx() {
+    const r = document.documentElement;
+    const fx = look.fx === 'theme' ? (look.bg === 'theme' ? THEME_FX[r.dataset.theme] : null) : (look.fx === 'off' ? null : look.fx);
+    if (fx) r.dataset.fx = fx; else delete r.dataset.fx;
   }
   function setLook(patch) {
     look = sanitizeLook({ ...look, ...(patch && typeof patch === 'object' ? patch : {}) });
@@ -247,7 +279,7 @@
 
   window.JarvisTheme = {
     IDS, resolve, apply, ACCENTS, setAccent, getAccent: () => accent, getAccentInfo: () => ({ ...accentInfo }), normHex, MIN_CONTRAST,
-    FONTS, SIZES, ROUNDS, PANELS, ORBS, BLURS, BGS, WIN_ALPHAS, WIN_RADII, LOOK_DEFAULT, sanitizeLook,
+    FONTS, SIZES, ROUNDS, PANELS, ORBS, BLURS, BGS, BG_DIMS, BG_BLURS, FXS, THEME_FX, WIN_ALPHAS, WIN_RADII, LOOK_DEFAULT, sanitizeLook,
     contrast, readable, getLook: () => ({ ...look }), setLook, resetLook, resetToTheme,
   };
 })();

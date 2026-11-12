@@ -245,6 +245,18 @@ function diffScene(prev, next) {
   };
 }
 
+// Сбылось ли ожидание действия: названное владельцем или моделью (окно, элемент, текст) появилось в изменениях сцены.
+// Любое изменение экрана подтверждением не считается — только совпавшее с ожиданием. Исчезновение не проверяем.
+function expectMet(expect, diff, scene) {
+  const norm = (v) => String(v || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+  const want = norm(expect);
+  if (want.length < 2 || !diff || diff.first) return null;
+  const title = scene && scene.window ? scene.window.title : '';
+  if (diff.windowChanged && norm(title).includes(want)) return `открылось окно «${title}»`;
+  const hit = [...(diff.added || []), ...(diff.changed || [])].find((e) => norm(e.name).includes(want));
+  return hit ? `на экране появилось «${hit.name}»` : null;
+}
+
 // Подпись состояния сцены: окно, фокус и устойчивые поля элементов в постоянном порядке.
 // Равные подписи означают, что экран не изменился, даже если порядок элементов другой.
 function sceneSignature(scene) {
@@ -260,6 +272,7 @@ function sceneSignature(scene) {
 }
 
 module.exports = {
+  expectMet,
   buildScene,
   diffScene,
   sceneSignature,

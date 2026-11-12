@@ -110,10 +110,10 @@ describe('ui_elements', () => {
     assert.equal(calls[0].env.JARVIS_UI_LIMIT, '10');
   });
 
-  test('limit по умолчанию 40', async () => {
+  test('limit по умолчанию 60: строки файлов и низ окна не вытесняются сорока кнопками', async () => {
     const { runner, calls } = fakeRunner(okJson({ status: 'ok', window: 'w', total: 0, items: [] }));
     await tool('ui_elements', runner).run({ window: 'w' }, {});
-    assert.equal(calls[0].env.JARVIS_UI_LIMIT, '40');
+    assert.equal(calls[0].env.JARVIS_UI_LIMIT, '60');
   });
 
   test('limit вне 1–60 или не целый → отказ без вызова runner', async () => {
@@ -738,7 +738,7 @@ describe('метаданные инструментов', () => {
     assert.deepEqual(p('ui_elements').required, ['window']);
     assert.equal(p('ui_elements').properties.window.maxLength, 120);
     assert.equal(p('ui_elements').properties.limit.maximum, 60);
-    assert.equal(p('ui_elements').properties.limit.default, 40);
+    assert.equal(p('ui_elements').properties.limit.default, 60);
     assert.deepEqual(p('ui_click').required, ['window', 'name']);
     assert.deepEqual(p('ui_type').required, ['window', 'text']);
     assert.equal(p('ui_type').properties.text.maxLength, 2000);

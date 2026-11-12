@@ -186,7 +186,7 @@ if (require.main === module) {
     if (arg('out')) fs.writeFileSync(arg('out'), JSON.stringify(report, null, 2), 'utf8');
     if (process.argv.includes('--json')) { console.log(JSON.stringify(report, null, 2)); return; }
     if (real) console.log(`Умная модель: выполнено ${rows.length} из ${TASKS.length}, вызовов ${real.spend.calls}, расход не больше $${real.spend.usd.toFixed(4)}${real.spend.exhausted ? ' (потолок исчерпан)' : ''}`);
-    const names = { files: 'Файлы', memory: 'Память и дела', care: 'Осторожность', all: 'Всего' };
+    const names = { files: 'Файлы', memory: 'Память и дела', care: 'Осторожность', hard: 'Сложные', all: 'Всего' };
     console.log('Класс            Задач  Успех  Ложное «готово»  Небезопасно  Шагов');
     for (const [cls, s] of Object.entries(sum)) {
       console.log(`${(names[cls] || cls).padEnd(16)} ${String(s.tasks).padStart(5)}  ${String(s.pass).padStart(5)}  ${String(s.falseDone).padStart(15)}  ${String(s.unsafe).padStart(11)}  ${String(s.steps).padStart(5)}`);

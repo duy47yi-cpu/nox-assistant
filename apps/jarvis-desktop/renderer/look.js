@@ -60,6 +60,25 @@
     g.dataset.lookKey = key;
     return g;
   }
+  function alpha(key, map, label) {
+    const wrap = make('span', 'look-alpha');
+    const input = make('input', 'range');
+    const values = Object.keys(map);
+    input.type = 'range';
+    input.min = values[0];
+    input.max = values[values.length - 1];
+    input.step = '5';
+    input.value = T.getLook()[key];
+    input.setAttribute('aria-label', label);
+    input.dataset.lookKey = key;
+    const output = make('output', 'look-alpha-value', `${input.value} %`);
+    input.addEventListener('input', () => {
+      output.textContent = `${input.value} %`;
+      T.setLook({ [key]: input.value });
+    });
+    wrap.append(input, output);
+    return wrap;
+  }
   function toggle(key, label) {
     const c = make('input', 'switch');
     c.type = 'checkbox';
@@ -71,8 +90,48 @@
     return c;
   }
 
+  // Своя картинка: выбор файла и «Убрать». Файл хранит backdrop.js; выбор сразу включает фон «Своя картинка».
+  function ownBg() {
+    const wrap = make('span', 'look-own');
+    const file = make('input');
+    file.type = 'file';
+    file.accept = 'image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp';
+    file.hidden = true;
+    const pick = make('button', 'btn btn-secondary btn-sm', 'Выбрать картинку');
+    const drop = make('button', 'btn btn-secondary btn-sm', 'Убрать');
+    const note = make('span', 'look-own-note');
+    note.setAttribute('role', 'status');
+    pick.type = drop.type = 'button';
+    pick.id = 'lookOwnPick';
+    drop.id = 'lookOwnDrop';
+    const say = (text, err) => { note.textContent = text; if (err) note.dataset.err = '1'; else delete note.dataset.err; };
+    const sync = () => {
+      const B = window.NoxBackdrop;
+      const has = !!(B && B.has());
+      drop.hidden = !has;
+      if (!note.dataset.err) say(!has && T.getLook().bg === 'image' ? 'Картинка не выбрана — показан фон темы' : '');
+    };
+    pick.addEventListener('click', () => file.click());
+    file.addEventListener('change', async () => {
+      const f = file.files && file.files[0];
+      file.value = '';
+      if (!f || !window.NoxBackdrop) return;
+      try { await window.NoxBackdrop.set(f); say(''); T.setLook({ bg: 'image' }); }
+      catch (e) { say(e && e.message ? e.message : 'Не удалось сохранить картинку', true); }
+    });
+    drop.addEventListener('click', async () => {
+      try { await window.NoxBackdrop.clear(); say(''); if (T.getLook().bg === 'image') T.setLook({ bg: 'theme' }); }
+      catch { say('Не удалось убрать картинку', true); }
+    });
+    document.addEventListener('nox:backdrop', sync);
+    document.addEventListener('jarvis:look', sync);
+    wrap.append(file, pick, drop, note);
+    sync();
+    return wrap;
+  }
+
   const uiFonts = Object.fromEntries(Object.entries(T.FONTS.ui).map(([k, v]) => [k, v]));
-  const replyMap = { head: ['Книжным, как заголовки'], ui: ['Обычным, как интерфейс'] };
+  const replyMap = { theme: ['Как в теме'], head: ['Книжным, как заголовки'], ui: ['Обычным, как интерфейс'] };
 
   row('Шрифт интерфейса', 'Меню, кнопки и подписи. Показываются установленные в Windows шрифты', select('ui', uiFonts, 'Шрифт интерфейса'));
   row('Шрифт заголовков', 'Названия разделов и слово состояния у шара', select('head', T.FONTS.head, 'Шрифт заголовков'));
@@ -81,8 +140,12 @@
   row('Скругление углов', 'Панели, кнопки и поля', seg('round', T.ROUNDS, 'Скругление углов'));
   row('Панели', 'Насколько заметны карточки на фоне. «Как в теме» — как задумано темой', seg('panel', T.PANELS, 'Панели'));
   row('Размытие стекла', '«Как в теме» — как задумано темой. «Стекло» размывает и панели', seg('blur', T.BLURS, 'Размытие стекла'));
-  row('Фон окна', 'Как в теме — градиент темы; сплошной — ровный цвет', seg('bg', T.BGS, 'Фон окна'));
-  row('Прозрачность окна', '0 % — как сейчас. Прозрачнее — фон окна светлеет, текст не меняется', seg('winAlpha', T.WIN_ALPHAS, 'Прозрачность окна'));
+  row('Фон окна', 'Как в теме — градиент темы; сплошной — ровный цвет; своя картинка — ваш файл под панелями', seg('bg', T.BGS, 'Фон окна'));
+  row('Своя картинка', 'PNG, JPG, WebP или GIF до 25 МБ. Хранится только на этом компьютере', ownBg());
+  row('Затемнение картинки', 'Чем больше, тем спокойнее фон и легче читать текст', alpha('bgDim', T.BG_DIMS, 'Затемнение картинки'));
+  row('Размытие картинки', 'Размытый фон меньше спорит с текстом', seg('bgBlur', T.BG_BLURS, 'Размытие картинки'));
+  row('Эффект на фоне', 'Звёзды, волны, снег, дождь, узоры — поверх любой темы. Движение выключает «Анимации»', select('fx', T.FXS, 'Эффект на фоне'));
+  row('Прозрачность окна', '0 % — непрозрачное окно; до 60 % — виден фон за окном. Текст остаётся непрозрачным', alpha('winAlpha', T.WIN_ALPHAS, 'Прозрачность окна'));
   row('Радиус окна', 'Скругление самого окна в пикселях; «Прямые» — как сейчас', seg('winRadius', T.WIN_RADII, 'Радиус окна'));
   row('Размер шара', 'Только на главной', seg('orb', T.ORBS, 'Размер шара'));
   row('Свет за окном', 'Цветное свечение фона, берёт цвет акцента', toggle('glow', 'Свет за окном'));
@@ -93,7 +156,7 @@
   reset.addEventListener('click', () => { T.resetToTheme(); paint(); });
   const foot = make('div', 'set-row look-row');
   const ft = make('span', 'set-text');
-  ft.append(make('span', 'set-name', 'Сбросить к теме'), make('span', 'set-hint', 'Шрифты, размер текста, скругление, панели, размытие, фон, прозрачность и радиус окна, размер шара и свой цвет акцента вернутся к выбранной теме. Тема и вид шара остаются'));
+  ft.append(make('span', 'set-name', 'Сбросить к теме'), make('span', 'set-hint', 'Шрифты, размер текста, скругление, панели, размытие, фон и эффект, прозрачность и радиус окна, размер шара и свой цвет акцента вернутся к выбранной теме. Тема и вид шара остаются'));
   foot.append(ft, reset);
   rows.push(foot);
 
@@ -119,7 +182,13 @@
       // Если выбранного варианта нет, группа всё равно должна попадать в Tab.
       if (!anyOn && opts[0]) opts[0].tabIndex = 0;
     }
-    for (const c of section.querySelectorAll('input[data-look-key]')) c.checked = cur[c.dataset.lookKey] !== false;
+    for (const c of section.querySelectorAll('input[data-look-key]')) {
+      if (c.type === 'range') {
+        c.value = cur[c.dataset.lookKey];
+        const output = c.parentElement && c.parentElement.querySelector('output');
+        if (output) output.textContent = `${c.value} %`;
+      } else c.checked = cur[c.dataset.lookKey] !== false;
+    }
   }
   document.addEventListener('jarvis:look', paint);
   paint();

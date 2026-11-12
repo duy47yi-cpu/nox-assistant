@@ -33,7 +33,8 @@ function findBrowserExe(exists = require('fs').existsSync) {
 
 // Запуск PowerShell-скрипта без склейки пользовательского текста в код.
 // env передаёт значения, script — постоянный текст. Длинный скрипт идёт файлом: командная строка Windows короче.
-function runPowerShell(script, env, { timeoutMs = 30000, signal, cwd } = {}) {
+// maxOutput — предел прочитанного вывода: сцена окна с сотнями элементов не влезает в общий предел.
+function runPowerShell(script, env, { timeoutMs = 30000, signal, cwd, maxOutput = MAX_OUTPUT } = {}) {
   return new Promise((resolve) => {
     // Уже остановлено: слушатель abort не сработал бы, и скрипт ушёл бы выполняться.
     if (signal && signal.aborted) {
@@ -88,8 +89,8 @@ function runPowerShell(script, env, { timeoutMs = 30000, signal, cwd } = {}) {
     child.stderr.on('data', (d) => { stderr += d; });
     child.on('error', (err) => finish({ ok: false, summary: err.message, data: {} }));
     child.on('close', (code) => {
-      const out = stdout.slice(0, MAX_OUTPUT);
-      const err = stderr.slice(0, MAX_OUTPUT);
+      const out = stdout.slice(0, maxOutput);
+      const err = stderr.slice(0, maxOutput);
       finish({
         ok: code === 0,
         summary: code === 0 ? 'готово' : `код выхода ${code}`,

@@ -274,7 +274,7 @@
     if (!S.working || !S.working.isConnected) return;
     const ms = performance.now() - S.workingStart;
     const text = S.working.querySelector('.nox-working-text');
-    if (text) text.textContent = `Ход работы · Выполняется · ${(ms / 1000).toFixed(1)} с`;
+    if (text && text.firstChild) text.firstChild.nodeValue = `Ход работы · Выполняется · ${(ms / 1000).toFixed(1)} с`;
   }
 
   function finishWorking(label, tone) {
@@ -464,18 +464,27 @@
     }
     if (refs.feedList) {
       let copyScheduled = false;
-      new MutationObserver(() => {
+      new MutationObserver((records) => {
+        const changes = records.filter((record) => {
+          const target = record.target;
+          return !(target && target.nodeType === 1 && target.closest('.nox-working'));
+        });
+        if (!changes.length) return;
         syncEmpty();
         if (S.working && !S.working.isConnected) { S.working = null; clearInterval(S.workingTimer); }
-        // Кнопка копирования: под каждым готовым ответом, один раз на ход.
-        if (!copyScheduled) {
+        const needsCopy = changes.some((record) => [...record.addedNodes].some((node) => {
+          if (node.nodeType !== 1) return false;
+          return node.matches('.turn') || Boolean(node.querySelector('.turn, .md'));
+        }));
+        // Кнопка копирования нужна новому ответу, а не каждому изменению его текста.
+        if (needsCopy && !copyScheduled) {
           copyScheduled = true;
           requestAnimationFrame(() => { copyScheduled = false; ensureCopyButtons(); });
         }
         if (!S.working) return;
         // Новый ход: строка должна стоять перед ответом текущего хода.
-        const turns = refs.feedList.querySelectorAll('.turn');
-        const last = turns.length ? turns[turns.length - 1] : null;
+        let last = refs.feedList.lastElementChild;
+        while (last && !last.classList.contains('turn')) last = last.previousElementSibling;
         if (last && last.previousElementSibling !== S.working) refs.feedList.insertBefore(S.working, last);
       }).observe(refs.feedList, { childList: true, subtree: true });
     }

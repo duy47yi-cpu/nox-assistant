@@ -147,8 +147,11 @@
       case 'shell_run': return /ошибк|fail/i.test(args.command) ? { ok: false, summary: 'код выхода 1: команда не найдена' } : { ok: true, summary: 'команда выполнена' };
       case 'remind_in': return { ok: true, summary: `напомню через ${args.minutes} мин` };
       case 'windows_list': return { ok: true, summary: '6 окон' };
-      case 'web_search': return { ok: true, summary: '5 результатов' };
-      case 'web_fetch': return { ok: true, summary: null };
+      case 'web_search': return { ok: true, summary: '5 результатов', sources: [
+        { title: 'Документация Nox', url: 'https://example.com/nox', host: 'example.com' },
+        { title: 'Свежие материалы', url: 'https://example.org/news', host: 'example.org' },
+      ] };
+      case 'web_fetch': return { ok: true, summary: null, sources: [{ title: 'example.com', url: args.url, host: 'example.com' }] };
       default:
         if (name.startsWith('lib_')) {
           const e = LIBRARY.find((x) => 'lib_' + x.id === name);
@@ -180,7 +183,7 @@
       result = fakeRun(name, args);
     }
     journal.unshift({ ts: new Date().toISOString(), tool: name, args, risk, mode: state.mode, decision, ok: result.ok, summary: result.summary, verified: result.verified || null, evidence: result.evidence || null });
-    emit({ type: 'tool_result', id, ok: result.ok, summary: result.summary, verified: result.verified, evidence: result.evidence });
+    emit({ type: 'tool_result', id, ok: result.ok, summary: result.summary, verified: result.verified, evidence: result.evidence, sources: result.sources });
     if (!state.aborted && !opts.noThink) status('thinking');
     return { tool: name, ...result };
   }
@@ -426,6 +429,11 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       settings.modelTier = tier;
       return { ok: true, tier };
     },
+    setReplyStyle: async (style) => {
+      if (!['plain', 'rich', 'notes'].includes(style)) return { ok: false };
+      settings.replyStyle = style;
+      return { ok: true, style };
+    },
     setThinking: async (level) => {
       if (!['low', 'medium', 'high'].includes(level)) return { ok: false };
       settings.thinking = level;
@@ -638,6 +646,7 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       return pickRound % 3 === 0 ? [] : SAMPLE_FILES.slice((pickRound - 1) % 3, ((pickRound - 1) % 3) + 2).map((f) => ({ ...f }));
     },
     openWorkspace: async () => { console.info('[dev-stub] открыть папку', settings.workspace); return { ok: true }; },
+    openSource: async (url) => { console.info('[dev-stub] открыть источник', url); return { ok: true }; },
     addFolder: async () => {
       settings.connectedFolders = [...settings.connectedFolders, `D:\\Проекты\\папка-${settings.connectedFolders.length + 1}`];
       return { ok: true, folders: [...settings.connectedFolders] };

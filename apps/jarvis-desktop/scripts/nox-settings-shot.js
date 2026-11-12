@@ -309,7 +309,7 @@ async function readGeometry(win, extra) {
       '#extensionsSettings', '#clipEnabled', '#snipForm', '#dlAnalyze', '#brainRecheck', '#chatClear',
       '#settings-sphere', '#sphereVariant', '#sphereSize', '#sphereGlow', '#spherePreview',
       '#sphereApply', '#sphereReset', '#sphereBadge', '#spherePreviewNote',
-      '#settings-model', '#ownerProviders', '#themeSeg', '#orbPick',
+      '#settings-model', '#themeSeg', '#orbPick',
       '#toasts',
     ];
     for (const sel of selectors) els[sel] = rectEl(sel);
@@ -511,8 +511,8 @@ async function qaSettingsPhase1Page() {
     const rail = rectOf('.rail');
     const scrollWidth = document.documentElement.scrollWidth;
     const titles = cards().map((c) => ((c.querySelector('h2, .set-title') || {}).textContent || '').trim());
-    const expected = ['Окно и уведомления', 'Рабочая папка', 'Разговор', 'ИИ и провайдеры', 'Модель и связь', 'Провайдеры владельца', 'Ответы', 'Память', 'Напоминания', 'Вид', 'Сфера Nox — предпросмотр', 'Режим доступа', 'Почта Gmail', 'Расширения'];
-    const orderOk = titles.length === 14 && titles.join('|') === expected.join('|');
+    const expected = ['Окно и уведомления', 'Рабочая папка', 'Разговор', 'ИИ и провайдеры', 'Модель и связь', 'Ответы', 'Память', 'Напоминания', 'Вид', 'Сфера Nox — предпросмотр', 'Режим доступа', 'Почта Gmail', 'Расширения'];
+    const orderOk = titles.length === 13 && titles.join('|') === expected.join('|');
     const winControls = qa('#setHead .nox-win-controls [data-act]').length;
     const ok = Boolean(rail && Math.abs(rail.w - 52) <= 2
       && panel && Math.abs(panel.w - 1122) <= 14 && Math.abs(panel.h - 660) <= 14
@@ -578,7 +578,7 @@ async function qaSettingsPhase1Page() {
     return { ok, detail: 'всего=' + total + ' после поиска=' + narrowCards + ' контролы ' + controlsBefore + '→' + controlsAfter + ' сброс=' + restored + ' заглушка=' + emptyVisible + ' 0карточек=' + zeroCards + ' Escape=' + escaped };
   });
 
-  await check('5. Чипы: ИИ→ai, Вид→look+sphere, Голос→voice, Все→14; поиск сохраняется при смене чипа', async () => {
+  await check('5. Чипы: ИИ→ai, Вид→look+sphere, Голос→voice, Все→13; поиск сохраняется при смене чипа', async () => {
     const total = cards().length;
     const catsOf = () => [...new Set(visibleCards().map((c) => c.dataset.cat || 'general'))].sort();
     await clickChip('ai');
@@ -719,22 +719,58 @@ async function qaSettingsPhase1Page() {
     return { ok: seeded, detail: 'seeded always=' + seeded + ', смена и возврат сохранены' };
   });
 
-  await check('11. Внешний вид: 23 темы, акцент-кружки и HEX, строки Вид', async () => {
+  await check('11. Внешний вид: 23 темы меняют вычисленные цвета и шрифты во всех панелях, акцент и HEX работают', async () => {
     const themeBtns = qa('#themeSeg [data-theme-opt]');
+    // «Как в системе» — не палитра, а выбор одной из двух; в подсчёт разных видов не входит.
+    const paletteBtns = themeBtns.filter((b) => b.dataset.themeOpt !== 'system');
     const T = window.JarvisTheme;
     const curTheme = document.documentElement.dataset.theme || '';
-    const otherTheme = themeBtns.find((b) => b.dataset.themeOpt !== curTheme);
-    let themeChanged = false;
-    if (otherTheme) {
-      otherTheme.click();
-      await sleep(600);
-      const next = document.documentElement.dataset.theme || '';
-      let stored = null;
-      try { stored = JSON.parse(localStorage.getItem('jarvis.theme') || 'null'); } catch { stored = null; }
-      themeChanged = next !== curTheme && (next === otherTheme.dataset.themeOpt || stored === otherTheme.dataset.themeOpt);
-      const back = themeBtns.find((b) => b.dataset.themeOpt === curTheme);
-      if (back) { back.click(); await sleep(500); }
+    const probe = (decl) => {
+      const el = document.createElement('div');
+      el.style.cssText = 'position:fixed;left:-10000px;top:0;' + decl;
+      document.body.appendChild(el);
+      const cs = getComputedStyle(el);
+      const out = { bg: cs.backgroundColor, color: cs.color, font: cs.fontFamily };
+      el.remove();
+      return out;
+    };
+    const bgToken = (name) => probe(`background-color:var(--${name})`).bg;
+    const colorToken = (name) => probe(`color:var(--${name})`).color;
+    const fontToken = (name) => probe(`font-family:var(--${name})`).font;
+    const style = (sel, prop) => { const el = q(sel); return el ? getComputedStyle(el).getPropertyValue(prop).trim() : ''; };
+    const signatures = new Set();
+    const mismatches = [];
+    const samples = [];
+    for (const btn of paletteBtns) {
+      const id = btn.dataset.themeOpt;
+      btn.click();
+      await sleep(110);
+      const bg = bgToken('bg');
+      const text = colorToken('text');
+      const accent = colorToken('accent');
+      const surface = bgToken('surface');
+      const noxBg = bgToken('nox-bg');
+      const noxSurface = bgToken('nox-surface-2');
+      const noxText = colorToken('nox-text-1');
+      const noxAccent = colorToken('nox-accent');
+      const fonts = fontToken('font');
+      const heads = fontToken('font-head');
+      signatures.add([bg, surface, text, accent, fonts, heads].join('#'));
+      if (document.documentElement.dataset.theme !== id) mismatches.push(id + ':root');
+      if (noxBg !== bg || noxSurface !== surface || noxText !== text || noxAccent !== accent) mismatches.push(id + ':nox');
+      // Панель, подпись и поле раздела обязаны реально получить цвета темы.
+      const railBg = style('.rail', 'background-color');
+      const nameColor = style('.set-name', 'color');
+      const mainColor = style('#setMain', 'color');
+      if (railBg !== surface) mismatches.push(id + ':rail=' + railBg + '≠' + surface);
+      if (nameColor !== text) mismatches.push(id + ':text=' + nameColor + '≠' + text);
+      if (mainColor !== text) mismatches.push(id + ':main=' + mainColor);
+      const option = q('#setModelTier option');
+      if (option && getComputedStyle(option).backgroundColor === 'rgba(0, 0, 0, 0)') mismatches.push(id + ':option');
+      if (samples.length < 3) samples.push({ id, bg, text, accent, fonts, heads });
     }
+    const back = themeBtns.find((b) => b.dataset.themeOpt === curTheme);
+    if (back) { back.click(); await sleep(300); }
     const origAccent = T ? T.getAccent() : '';
     const swatches = qa('.accent-swatches .accent-opt');
     let accentChanged = false;
@@ -761,10 +797,38 @@ async function qaSettingsPhase1Page() {
       T.setAccent(origAccent);
       await sleep(200);
     }
+    // Строка прозрачности: ползунок и значение в одной строке, текст не сжат в столбик.
+    const transparencyRow = qa('.look-row').find((el) => (el.textContent || '').includes('Прозрачность окна'));
+    let lookRow = null;
+    let lookMetrics = null;
+    if (transparencyRow) {
+      const rowR = transparencyRow.getBoundingClientRect();
+      const textEl = transparencyRow.querySelector('.set-text');
+      const textR = textEl.getBoundingClientRect();
+      const control = transparencyRow.querySelector('.look-alpha');
+      const controlR = control ? control.getBoundingClientRect() : null;
+      const slider = control && control.querySelector('input[type="range"]');
+      const output = control && control.querySelector('output');
+      const before = slider ? slider.value : '';
+      if (slider) {
+        slider.value = '35';
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+        await sleep(80);
+      }
+      const outputOk = Boolean(output && /^35\s*%$/.test((output.textContent || '').trim()));
+      if (slider) {
+        slider.value = before;
+        slider.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const insideRow = Boolean(controlR && controlR.left >= rowR.left - 1 && controlR.right <= rowR.right + 1 && controlR.bottom <= rowR.bottom + 1);
+      const separate = Boolean(controlR && controlR.left >= textR.right - 1);
+      lookMetrics = { row: Math.round(rowR.width), text: Math.round(textR.width) + 'x' + Math.round(textR.height), control: controlR ? Math.round(controlR.width) + 'x' + Math.round(controlR.height) : 'нет', separate, insideRow, outputOk };
+      lookRow = Boolean(controlR && textR.width >= 170 && textR.height <= 64 && separate && insideRow && outputOk);
+    }
     const text = (q('#settingsPage') || {}).textContent || '';
-    const rows = ['Шрифт интерфейса', 'Размер текста', 'Прозрачность окна', 'Радиус окна', 'Сбросить к теме'].every((s) => text.includes(s));
-    const ok = themeBtns.length === 23 && themeChanged && swatches.length > 0 && accentChanged && hexApplied && hexInvalid && rows;
-    return { ok, detail: 'тем=' + themeBtns.length + ' тема сменилась=' + themeChanged + ' кружков=' + swatches.length + ' акцент=' + accentChanged + ' hex=' + hexApplied + ' hexНевалидный=' + hexInvalid + ' строкиВида=' + rows };
+    const rows = ['Шрифт интерфейса', 'Шрифт заголовков', 'Шрифт ответов', 'Размер текста', 'Прозрачность окна', 'Радиус окна', 'Сбросить к теме'].every((s) => text.includes(s));
+    const ok = themeBtns.length === 23 && paletteBtns.length === 22 && signatures.size === 22 && mismatches.length === 0 && swatches.length > 0 && accentChanged && hexApplied && hexInvalid && rows && lookRow;
+    return { ok, detail: 'кнопокТем=' + themeBtns.length + ' палитр=' + paletteBtns.length + ' разныхВид=' + signatures.size + ' расхождений=' + (mismatches.slice(0, 5).join('; ') || 'нет') + ' кружков=' + swatches.length + ' акцент=' + accentChanged + ' hex=' + hexApplied + ' hexНевалидный=' + hexInvalid + ' строкиВида=' + rows + ' строкаПрозрачности=' + lookRow + ' мерки=' + JSON.stringify(lookMetrics) + ' образцы=' + JSON.stringify(samples) };
   });
 
   await check('12. Сфера: вариант Wire/Nox реальный, ползунки preview-only, превью и сброс, живая сфера не меняется', async () => {
@@ -869,6 +933,66 @@ async function qaSettingsPhase1Page() {
     return { ok, detail: seq.join(', ') };
   });
 
+  await check('19. Все разделы следуют теме: фон, панели, текст и шрифт меняются вместе с тёмной и светлой темой', async () => {
+    const T = window.JarvisTheme;
+    if (!T || typeof T.apply !== 'function') return { ok: false, detail: 'нет JarvisTheme.apply' };
+    const original = document.documentElement.dataset.theme || 'dark';
+    const views = ['settings', 'nox', 'commands', 'mcp'];
+    const read = () => {
+      const probe = (decl) => {
+        const el = document.createElement('div');
+        el.style.cssText = 'position:fixed;left:-10000px;top:0;' + decl;
+        document.body.appendChild(el);
+        const cs = getComputedStyle(el);
+        const out = { bg: cs.backgroundColor, color: cs.color, font: cs.fontFamily };
+        el.remove();
+        return out;
+      };
+      const rail = q('.rail');
+      const app = q('.app');
+      return {
+        bg: probe('background-color:var(--bg)').bg,
+        text: probe('color:var(--text)').color,
+        surface: probe('background-color:var(--surface)').bg,
+        noxBg: probe('background-color:var(--nox-bg)').bg,
+        noxText: probe('color:var(--nox-text-1)').color,
+        railBg: rail ? getComputedStyle(rail).backgroundColor : '',
+        railText: rail ? getComputedStyle(rail).color : '',
+        railFont: rail ? getComputedStyle(rail).fontFamily : '',
+        appBg: app ? getComputedStyle(app).backgroundColor : '',
+        appImage: app ? getComputedStyle(app).backgroundImage : '',
+      };
+    };
+    const seen = {};
+    const mismatches = [];
+    for (const theme of ['dark', 'light']) {
+      T.apply(theme);
+      await sleep(250);
+      for (const view of views) {
+        window.JarvisNox.show(view);
+        await until(() => document.body.dataset.view === view && visible(q('.app')) && visible(q('.rail')), 10000);
+        await sleep(250);
+        const r = read();
+        seen[theme + ':' + view] = r;
+        if (r.noxBg !== r.bg || r.noxText !== r.text) mismatches.push(theme + ':' + view + ':nox');
+        if (r.railBg !== r.surface) mismatches.push(theme + ':' + view + ':rail=' + r.railBg + '≠' + r.surface);
+        if (r.railText !== r.text) mismatches.push(theme + ':' + view + ':text=' + r.railText + '≠' + r.text);
+        if (!r.railFont || !r.railFont.toLowerCase().includes('aptos')) mismatches.push(theme + ':' + view + ':font=' + r.railFont);
+      }
+    }
+    for (const view of views) {
+      const dark = seen['dark:' + view];
+      const light = seen['light:' + view];
+      if (!dark || !light || dark.bg === light.bg || dark.railBg === light.railBg || dark.appBg === light.appBg) mismatches.push(view + ':темы не различаются');
+    }
+    T.apply(original);
+    window.JarvisNox.show('settings');
+    await until(() => document.body.dataset.view === 'settings' && visible(q('#setPanel')), 10000);
+    await sleep(300);
+    const ok = Object.keys(seen).length === 8 && mismatches.length === 0;
+    return { ok, detail: 'разделов=' + Object.keys(seen).length + ' расхождений=' + (mismatches.slice(0, 6).join('; ') || 'нет') + ' шрифт=' + (seen['dark:settings'] || {}).railFont };
+  });
+
   // Уборка состояния: поиск/чип/акцент/модель уже восстановлены внутри проверок.
   try { await setSearch(''); await clickChip('all'); } catch (err) { /* пусто */ }
 
@@ -914,6 +1038,32 @@ async function qaSettingsPhase864Page() {
     const scrollWidth2 = document.documentElement.scrollWidth;
     const ok = innerW === 864 && innerH === 520 && scrollWidth <= innerW + 1 && scrollWidth2 <= innerW + 1 && noOverflow && navAboveMain && navStrip && scrollable && previewInside;
     return { ok, detail: 'inner=' + innerW + 'x' + innerH + ' scrollWidth=' + scrollWidth + '/' + scrollWidth2 + ' nav=' + JSON.stringify(nav) + ' main=' + JSON.stringify(mainR) + ' search=' + JSON.stringify(search) + ' chips=' + JSON.stringify(chips) + ' navНадMain=' + navAboveMain + ' полоса=' + navStrip + ' mainПрокручивается=' + scrollable + ' превью=' + JSON.stringify(canvas) + ' вОкне=' + previewInside };
+  });
+
+  await check('2b. 864×520: «Прозрачность окна» — текст и ползунок в одной строке, без вертикального разрыва', async () => {
+    const lookBtn = q('#setNavList button[data-cat="look"]');
+    if (lookBtn) { lookBtn.click(); await sleep(700); }
+    const row = qa('.look-row').find((el) => (el.textContent || '').includes('Прозрачность окна'));
+    if (!row) return { ok: false, detail: 'нет строки «Прозрачность окна»' };
+    const rowR = row.getBoundingClientRect();
+    const textEl = row.querySelector('.set-text');
+    const textR = textEl.getBoundingClientRect();
+    const control = row.querySelector('.look-alpha');
+    const controlR = control.getBoundingClientRect();
+    const slider = control.querySelector('input[type="range"]');
+    const output = control.querySelector('output');
+    const before = slider.value;
+    slider.value = '35';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(100);
+    const outputOk = /^35\s*%$/.test((output.textContent || '').trim());
+    slider.value = before;
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    const scrollWidth = document.documentElement.scrollWidth;
+    const ok = textR.width >= 170 && textR.height <= 64
+      && controlR.left >= rowR.left - 1 && controlR.right <= rowR.right + 1
+      && controlR.bottom <= rowR.bottom + 1 && outputOk && scrollWidth <= innerWidth + 1;
+    return { ok, detail: 'row=' + Math.round(rowR.width) + ' text=' + Math.round(textR.width) + 'x' + Math.round(textR.height) + ' control=' + Math.round(controlR.width) + 'x' + Math.round(controlR.height) + ' output=' + outputOk + ' scrollWidth=' + scrollWidth };
   });
 
   return { checks };

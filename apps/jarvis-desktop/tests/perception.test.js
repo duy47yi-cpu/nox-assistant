@@ -310,6 +310,52 @@ describe('desktop_observe', () => {
     const result = await tool.run({ id: seen.data.scene.elements[0].id });
     assert.equal(result.ok, true);
     assert.equal((await tool.verify({}, result)).status, 'unknown');
+    assert.equal((await tool.verify({ expect: 'Готово' }, result)).status, 'unknown', 'надпись на экране не доказывает отправку');
+  });
+
+  test('ожидание (expect) подтверждает нажатие, только если названное появилось на экране', async () => {
+    const click = fakeAction('ui_click');
+    click.tool.verify = async () => ({ status: 'unknown', evidence: 'кнопка не сообщает о результате' });
+    const btn = element('Настройки', 'Button');
+    const { ui } = fakeUi([[btn], [btn], [btn, element('Параметры экрана', 'Text')]], [click.tool]);
+    const tools = observeTools(ui);
+    const seen = await tools.find((t) => t.name === 'desktop_observe').run({ window: 'Блок' });
+    const tool = tools.find((t) => t.name === 'desktop_click');
+    const result = await tool.run({ id: seen.data.scene.elements[0].id, expect: 'параметры экрана' });
+    assert.equal(result.ok, true);
+    const met = await tool.verify({ expect: 'параметры экрана' }, result);
+    assert.equal(met.status, 'confirmed');
+    assert.match(met.evidence, /ожидание сбылось: на экране появилось «Параметры экрана»/);
+    assert.equal((await tool.verify({ expect: 'Звук' }, result)).status, 'unknown', 'другое изменение ожиданием не считается');
+    assert.equal((await tool.verify({}, result)).status, 'unknown', 'без ожидания — как раньше');
+  });
+
+  test('неожиданное окно той же программы: следующий шаг — прочитать его, по старым id действовать нельзя', async () => {
+    const click = fakeAction('ui_click');
+    const btn = element('Сохранить', 'Button');
+    const { ui } = fakeUi([[btn]], [click.tool]);
+    let dialog = false;
+    ui[0].run = async () => ({ ok: true, summary: 'окна', data: { windows: [
+      { title: 'Блокнот — привет.txt', process: 'notepad', handle: 1, active: !dialog },
+      ...(dialog ? [{ title: 'Подтвердить сохранение', process: 'notepad', handle: 3, active: true }] : []),
+      { title: 'Проводник', process: 'explorer', handle: 2 },
+    ] } });
+    const tools = observeTools(ui);
+    const observe = tools.find((t) => t.name === 'desktop_observe');
+    const tool = tools.find((t) => t.name === 'desktop_click');
+    const seen = await observe.run({ window: 'Блокнот' });
+    const id = seen.data.scene.elements[0].id;
+    dialog = true;
+    const first = await tool.run({ id });
+    assert.equal(first.ok, true);
+    assert.match(first.summary, /поверх появилось окно «Подтвердить сохранение»/);
+    const blind = await tool.run({ id });
+    assert.equal(blind.ok, false, 'второе нажатие вслепую не выполняется');
+    assert.match(blind.summary, /сначала прочитай его/);
+    assert.equal(click.calls.length, 1);
+    assert.equal((await observe.run({ window: 'Подтвердить' })).ok, true);
+    dialog = false;
+    assert.equal((await tool.run({ id: (await observe.run({ window: 'Блокнот' })).data.scene.elements[0].id })).ok, true, 'после чтения окна работа продолжается');
   });
 
   test('удаление, установку и выключение desktop_click не нажимает: режим решает по имени', async () => {

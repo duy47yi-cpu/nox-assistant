@@ -36,6 +36,7 @@ const COMMON = new Set([
   'youtube_play', 'windows_focus', 'windows_arrange', 'windows_minimize_all', 'windows_restore_all', 'windows_close_all',
   'organize_workspace', 'restore_workspace', 'clipboard_get', 'clipboard_set', 'media_control', 'volume_set', 'monitor_off', 'pc_shutdown',
   'apps_find', 'apps_scan', 'apps_usage', 'disk_free_space', 'disk_cleanup_suggest', 'wait', 'speak',
+  'plan_set', 'plan_done', 'turn_stop',
 ]);
 const MAX_HISTORY = 80;
 
@@ -100,10 +101,10 @@ function toolsFor(space, commonTools, renderPdf, scopedTools, skills) {
 }
 
 class WorkspaceChat {
-  constructor({ book, brain, commonTools = [], scopedTools = null, renderPdf, builtinSkillsDir = null, systemPrompt = '', policy, approvals, journal, emit, mode = 'ask', stop, clock, turnsLog, memoryAuto = () => true, turnDeadlineMs = 0 } = {}) {
+  constructor({ book, brain, commonTools = [], scopedTools = null, renderPdf, builtinSkillsDir = null, systemPrompt = '', policy, approvals, journal, emit, mode = 'ask', stop, clock, turnsLog, memoryAuto = () => true, turnDeadlineMs = 0, plans = null } = {}) {
     if (!book || !brain) throw new Error('нужны реестр пространств и модель');
     this.book = book;
-    this.options = { brain, commonTools, scopedTools, renderPdf, builtinSkillsDir, systemPrompt, policy, approvals, journal, emit, mode, stop, clock, turnsLog, memoryAuto, turnDeadlineMs };
+    this.options = { brain, commonTools, scopedTools, renderPdf, builtinSkillsDir, systemPrompt, policy, approvals, journal, emit, mode, stop, clock, turnsLog, memoryAuto, turnDeadlineMs, plans };
     this.busy = false;
     this.session = this._open(book.current().id);
   }
@@ -127,6 +128,7 @@ class WorkspaceChat {
       emit: this.options.emit, mode: this.options.mode, stop: this.options.stop,
       workspace: space.root, history: chats.active().history, systemPrompt: prompt,
       clock: this.options.clock, turnsLog: this.options.turnsLog, maxSteps: 24, stream: true, turnDeadlineMs: this.options.turnDeadlineMs || 0,
+      plans: this.options.plans,
       context: (text) => [memoryContext(space.memory, text), skillHintForTurn(skills, text)].filter(Boolean).join('\n'),
     });
     return { space, conversation, chats, registry, agent, skills, skillsDir };
@@ -158,6 +160,7 @@ class WorkspaceChat {
     saveChats(this.session.conversation, draft);
     this.session.chats = draft;
     this.session.agent.history = draft.active().history;
+    this.session.agent.forgetPlan();
     return draft.list();
   }
 

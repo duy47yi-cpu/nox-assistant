@@ -24,8 +24,10 @@ const MAX_TEXT = 2000;
 const MAX_KEYS = 100;
 const MAX_KEY_TOKENS = 20;
 const MAX_OCCURRENCE = 1000;
-const LIMIT_DEFAULT = 40;
+const LIMIT_DEFAULT = 60;
 const LIMIT_MAX = 60;
+// Предел вывода для сцены: окно Проводника отдаёт до 300 элементов, вместе с JSON это десятки килобайт.
+const ELEMENTS_MAX_OUTPUT = 65536;
 // Уровень, которым найдена цель (лестница поиска): что показать владельцу и модели.
 const RESOLUTION_WORDS = { automationId: 'по AutomationId', name: 'по точному имени', 'name-part': 'по части имени' };
 
@@ -296,6 +298,8 @@ const WINDOWS_MAIN = [
   'function Main {',
   '  $out = New-Object System.Collections.ArrayList',
   '  $budget = 0',
+  // active — окно сейчас сверху: по нему видно диалог, выскочивший после действия.
+  '  $fg = [JarvisUi.User32]::GetForegroundWindow().ToInt64()',
   '  foreach ($w in (Get-JTopWindows)) {',
   '    if ($out.Count -ge 40 -or $budget -gt 7000) { break }',
   '    $c = $w.Current',
@@ -303,7 +307,7 @@ const WINDOWS_MAIN = [
   '    try { $pn = (Get-Process -Id $c.ProcessId -ErrorAction Stop).ProcessName } catch {}',
   '    $t = Cut $c.Name 120',
   '    $budget += $t.Length + $pn.Length + 50',
-  '    [void]$out.Add([ordered]@{ title = $t; process = $pn; handle = [int64]$c.NativeWindowHandle })',
+  '    [void]$out.Add([ordered]@{ title = $t; process = $pn; handle = [int64]$c.NativeWindowHandle; active = ([int64]$c.NativeWindowHandle -eq $fg) })',
   '  }',
   '  $script:R = $out',
   '}',
@@ -313,7 +317,7 @@ const WINDOWS_TAIL = [
   "  ConvertTo-Json -Compress -InputObject @{ status = 'error'; message = (Cut $_.Exception.Message 300) }",
   '}',
 ].join('\n');
-const WINDOWS_SCRIPT = buildScript([PS_HEAD, PS_UIA, WINDOWS_MAIN, WINDOWS_TAIL]);
+const WINDOWS_SCRIPT = buildScript([PS_HEAD, PS_USER32, PS_UIA, WINDOWS_MAIN, WINDOWS_TAIL]);
 
 // --- ui_elements ----------------------------------------------------------
 const ELEMENTS_MAIN = [
@@ -324,6 +328,11 @@ const ELEMENTS_MAIN = [
   // Собираем все подходящие элементы (до 300): порядок, лимит и бюджет считает JS ниже,
   // чтобы фокус и текст результата не вытеснялись сорока кнопками (идея Ghosthand).
   '  $scanMax = 300',
+  // Часть программ (Chrome, окна сохранения, Проводник) отдаёт кнопки и поля как Pane/Custom:
+  // настоящая роль видна по поддержке шаблонов. Проверяем только такие элементы и не больше $probeMax,
+  // чтобы чтение сцены не растянулось.
+  '  $probeMax = 150',
+  '  $probed = 0',
   '  $items = New-Object System.Collections.ArrayList',
   '  $total = 0',
   "  $interactive = @('Button','Edit','MenuItem','ListItem','Hyperlink','CheckBox','RadioButton','ComboBox','TabItem','TreeItem','DataItem','Slider','Spinner','SplitButton')",
@@ -336,6 +345,33 @@ const ELEMENTS_MAIN = [
   "    $v = ''",
   '    if ($pw) { $v = "[скрыто]" } else { try { $v = Cut ([string]$e.GetCachedPropertyValue([System.Windows.Automation.ValuePattern]::ValueProperty)) 80 } catch {} }',
   '    $t = TypeOf $e.Cached.ControlType',
+  "    if ($t -eq 'Pane' -or $t -eq 'Custom' -or $t -eq 'Group') {",
+  '      if ($probed -lt $probeMax) {',
+  '        $probed++',
+  '        try {',
+  '          $pats = $e.GetSupportedPatterns()',
+  '          if ($pats -contains [System.Windows.Automation.ValuePattern]::Pattern) { $t = \'Edit\' }',
+  '          elseif ($pats -contains [System.Windows.Automation.InvokePattern]::Pattern) { $t = \'Button\' }',
+  '          elseif ($pats -contains [System.Windows.Automation.TogglePattern]::Pattern) { $t = \'CheckBox\' }',
+  '          elseif ($pats -contains [System.Windows.Automation.SelectionItemPattern]::Pattern) { $t = \'ListItem\' }',
+  '          elseif ($pats -contains [System.Windows.Automation.LegacyIAccessiblePattern]::Pattern) {',
+  // Старые диалоги (comdlg32, «Открыть»/«Сохранить как») отдают кнопки как Pane без Invoke:
+  // роль видна только в старом MSAA-шаблоне. Коды ролей MSAA: 43 кнопка, 44 флажок, 45 переключатель,
+  // 46 список, 12 пункт меню, 30 ссылка, 34 строка списка.
+  '            $lp = $null',
+  '            $role = 0',
+  '            if ($e.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$lp)) { $role = [int]$lp.Current.Role }',
+  "            if ($role -eq 43) { $t = 'Button' }",
+  "            elseif ($role -eq 44) { $t = 'CheckBox' }",
+  "            elseif ($role -eq 45) { $t = 'RadioButton' }",
+  "            elseif ($role -eq 46) { $t = 'ComboBox' }",
+  "            elseif ($role -eq 12) { $t = 'MenuItem' }",
+  "            elseif ($role -eq 30) { $t = 'Hyperlink' }",
+  "            elseif ($role -eq 34) { $t = 'ListItem' }",
+  '          }',
+  '        } catch {}',
+  '      }',
+  '    }',
   '    $r = $e.Cached.BoundingRectangle',
   '    $b = $null',
   '    if (-not $r.IsEmpty -and $r.Width -gt 0 -and $r.Height -gt 0) { $b = [ordered]@{ x = [int]$r.X; y = [int]$r.Y; w = [int]$r.Width; h = [int]$r.Height } }',
@@ -410,7 +446,9 @@ const CLICK_MAIN = [
   '  $wpid = [int]$w.Current.ProcessId',
   // Два замера до действия: если число элементов меняется само, по нему судить нельзя.
   '  $b0 = Get-JWinState $w $h $wpid',
-  '  Start-Sleep -Milliseconds 200',
+  // Быстрый режим — для desktop_click: он сам перечитывает окно после нажатия, долго ждать здесь незачем.
+  "  $fast = [string]$env:JARVIS_UI_FAST -eq '1'",
+  '  Start-Sleep -Milliseconds $(if ($fast) { 30 } else { 200 })',
   '  $b1 = Get-JWinState $w $h $wpid',
   '  $tb = Get-JTargetState $w $needle $occ',
   '  $p = $null',
@@ -437,12 +475,15 @@ const CLICK_MAIN = [
   "    $method = 'click'",
   '  }',
   '  $sb = ConvertTo-Json -Compress -Depth 4 -InputObject @($b1, $tb)',
-  '  for ($i = 0; $i -lt 3; $i++) {',
-  '    Start-Sleep -Milliseconds 250',
+  // Короткий опрос вместо долгих пауз: выходим, как только состояние изменилось.
+  '  $sw = [System.Diagnostics.Stopwatch]::StartNew()',
+  '  $limit = $(if ($fast) { 0 } else { 900 })',
+  '  do {',
+  '    Start-Sleep -Milliseconds 80',
   '    $a = Get-JWinState $w $h $wpid',
   '    $ta = Get-JTargetState $w $needle $occ',
   '    if ((ConvertTo-Json -Compress -Depth 4 -InputObject @($a, $ta)) -ne $sb) { break }',
-  '  }',
+  '  } while ($sw.ElapsedMilliseconds -lt $limit)',
   "  $check = @{ before = $b1; after = $a; target = $tb; targetAfter = $ta; noisy = ($b0.count -ne $b1.count) }",
   "  $script:R = @{ status = 'ok'; window = $title; element = $info; method = $method; count = $f.count; resolution = $f.resolution; check = $check }",
   '}',
@@ -856,6 +897,7 @@ function parseWindows(stdout) {
       title: String(item.title ?? '').slice(0, MAX_WINDOW),
       process: String(item.process ?? ''),
       handle: Number(item.handle) || 0,
+      ...(item.active === true ? { active: true } : {}),
     };
   });
 }
@@ -1044,15 +1086,40 @@ const RANK_INTERACTIVE = new Set([
   'Button', 'Edit', 'MenuItem', 'ListItem', 'Hyperlink', 'CheckBox', 'RadioButton',
   'ComboBox', 'TabItem', 'TreeItem', 'DataItem', 'Slider', 'Spinner', 'SplitButton',
 ]);
+// Кнопки, которыми закрывают диалог: они всегда внизу окна, и без отдельного приоритета
+// строки списка вытесняют их из выдачи. Сравнение точное, чтобы «Сохранить как» не считалось.
+const ACTION_NAME_RE = /^(ok|ок|отмена|cancel|сохранить|save|открыть|open|закрыть|close|применить|apply|да|yes|нет|no|продолжить|continue|не сохранять|don't save|сбросить|reset)$/i;
 const ELEMENTS_BUDGET = 6500;
 const RESULT_RESERVE = 8;
 
+// Ячейки строк таблицы: Проводник и окна сохранения отдают на каждую строку ещё и Edit с колонками
+// (имя, дата, тип, размер) на той же высоте. Для действия достаточно самой строки ListItem/DataItem,
+// а ячейки только вытесняют соседей из лимита. Поле с фокусом не выбрасываем: в него могут печатать.
+function dropRowCells(items) {
+  const rows = items.filter((it) => (it.type === 'ListItem' || it.type === 'DataItem')
+    && it.bounds && Number.isFinite(Number(it.bounds.y)) && Number.isFinite(Number(it.bounds.x)));
+  if (!rows.length) return items;
+  return items.filter((it) => {
+    if (it.focus === true || it.type !== 'Edit' || !it.bounds) return true;
+    const y = Number(it.bounds.y);
+    const x = Number(it.bounds.x);
+    if (!Number.isFinite(y) || !Number.isFinite(x)) return true;
+    return !rows.some((row) => Math.abs(Number(row.bounds.y) - y) <= 3 && x > Number(row.bounds.x));
+  });
+}
+
 function rankElements(items, { limit = LIMIT_DEFAULT, budget = ELEMENTS_BUDGET, reserve = RESULT_RESERVE } = {}) {
-  const entries = (Array.isArray(items) ? items : []).map((item, index) => ({ item, index }));
+  const entries = dropRowCells(Array.isArray(items) ? items : []).map((item, index) => ({ item, index }));
   const category = (entry) => {
     const item = entry.item || {};
     if (item.focus === true) return 0;
-    if (RANK_INTERACTIVE.has(String(item.type || ''))) return 1;
+    const type = String(item.type || '');
+    const name = String(item.name || '').trim();
+    // Кнопка действия диалога и ссылка содержательнее панелей и списков: они первыми после фокуса.
+    // Старые диалоги отдают кнопки как Pane без шаблонов (только имя и координаты) — их тоже поднимаем.
+    if ((type === 'Button' || type === 'Pane') && ACTION_NAME_RE.test(name)) return 0.5;
+    if (type === 'Hyperlink' && name) return 0.5;
+    if (RANK_INTERACTIVE.has(type)) return 1;
     return item.name || item.value ? 2 : 3;
   };
   const coord = (entry, field) => {
@@ -1116,10 +1183,15 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
       JARVIS_UI_VK: '',
       JARVIS_UI_SAVE_GUARD: '',
       JARVIS_UI_STATE: '',
+      JARVIS_UI_FAST: '',
       ...env,
       JARVIS_UI_SELF_PID: pidEnv,
     };
-    const res = await runner(SCRIPTS[tool], fullEnv, { timeoutMs: TIMEOUT_MS, signal });
+    // Сцена окна — единственный ответ, который бывает в десятки килобайт (сотни элементов Проводника):
+    // ему нужен больший предел вывода, остальным вызовам хватает общего.
+    const options = { timeoutMs: TIMEOUT_MS, signal };
+    if (tool === 'ui_elements') options.maxOutput = ELEMENTS_MAX_OUTPUT;
+    const res = await runner(SCRIPTS[tool], fullEnv, options);
     if (!res || !res.ok) {
       let summary = (res && res.summary) || 'PowerShell не ответил';
       if (extra.actionTimeoutNote && /таймаут/i.test(summary)) {
@@ -1242,7 +1314,7 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
       if (o.error) return fail(o.error);
       const { result, parsed } = await call(
         'ui_click',
-        { JARVIS_UI_WINDOW: w.value, JARVIS_UI_NAME: n.value, JARVIS_UI_OCCURRENCE: String(o.value) },
+        { JARVIS_UI_WINDOW: w.value, JARVIS_UI_NAME: n.value, JARVIS_UI_OCCURRENCE: String(o.value), JARVIS_UI_FAST: ctx && ctx.quickCheck ? '1' : '' },
         ctx,
         { actionTimeoutNote: true }
       );

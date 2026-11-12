@@ -65,6 +65,11 @@ const dumpPath = dumpArg ? path.resolve(dumpArg) : '';
 const keepTemp = has('keep-temp');
 const keepBanner = has('keep-banner');
 const keepFocus = has('keep-focus');
+// --look '{"theme":"starry","fx":"snow"}' — тема и ручки «Вида» (JarvisTheme.apply / setLook) перед снимком.
+// --own-bg — своя картинка на фоне: пробный рисунок проходит настоящий путь NoxBackdrop.set (IndexedDB окна).
+let lookArg = null;
+try { lookArg = JSON.parse(arg('look', 'null')); } catch { bad('--look: нужен JSON'); }
+const ownBg = has('own-bg');
 
 // ── Временный профиль и данные ────────────────────────────────────
 // Прошлые запуски на Windows не всегда успевают удалить профиль Chromium до выхода
@@ -250,9 +255,30 @@ async function settle(win) {
     return { applied: 'localStorage', name };
   })()`).catch((err) => ({ applied: 'error', name: orb, error: err.message }));
 
+  const lookApplied = await win.webContents.executeJavaScript(`(async () => {
+    const look = ${JSON.stringify(lookArg)};
+    const T = window.JarvisTheme;
+    if (!T) return { error: 'нет JarvisTheme' };
+    if (${ownBg}) {
+      const c = document.createElement('canvas');
+      c.width = 1280; c.height = 800;
+      const g = c.getContext('2d');
+      const sky = g.createLinearGradient(0, 0, 1280, 800);
+      sky.addColorStop(0, '#1B2A6B'); sky.addColorStop(0.5, '#7A3E9D'); sky.addColorStop(1, '#F2A65A');
+      g.fillStyle = sky; g.fillRect(0, 0, 1280, 800);
+      for (let i = 0; i < 9; i++) { g.fillStyle = 'hsla(' + (200 + i * 17) + ', 80%, 62%, .35)'; g.beginPath(); g.arc(140 * i + 60, 400 + 180 * Math.sin(i), 150, 0, 7); g.fill(); }
+      const blob = await new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+      await window.NoxBackdrop.set(new File([blob], 'demo.png', { type: 'image/png' }));
+      T.setLook({ bg: 'image' });
+    }
+    if (look) { if (look.theme) T.apply(look.theme); T.setLook(look); }
+    const r = document.documentElement;
+    return { theme: r.dataset.theme, fx: r.dataset.fx || null, bg: r.dataset.bg || null, ownBg: r.dataset.ownBg || null };
+  })()`).catch((e) => ({ error: String(e && e.message || e) }));
+
   // Ждём шар, шрифты и переход варианта.
   await sleep(waitMs);
-  return { page, variant, cleaned };
+  return { page, variant, cleaned, lookApplied };
 }
 
 async function readGeometry(win) {
@@ -296,7 +322,7 @@ async function capture(win) {
     await sleep(50);
   }
 
-  const { page, variant, cleaned } = await settle(win);
+  const { page, variant, cleaned, lookApplied } = await settle(win);
   // Лента прокручена вниз: видимая верхушка — хвост последнего длинного ответа, как в кадре 01.
   await win.webContents.executeJavaScript(`(() => {
     const feed = document.querySelector('#feed');
@@ -323,6 +349,7 @@ async function capture(win) {
     orb,
     variant,
     cleaned,
+    lookApplied,
     page,
     noxGeometry: geometry && geometry.noxScreen ? geometry.noxScreen : null,
     geometryPath: dumpPath || null,

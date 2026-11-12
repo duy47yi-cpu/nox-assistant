@@ -331,7 +331,6 @@ const NAV_SECTIONS = [
   ['settings-sphere', 'sphere', 'Сфера Nox — предпросмотр', ['Вид сферы', 'Размер']],
   ['folder', 'general', 'Рабочая папка', ['Подключённые папки']],
   ['settings-model', 'ai', 'Модель и связь', ['Проверить снова']],
-  ['ownerProviders', 'ai', 'Провайдеры владельца', ['Свои модели']],
   ['chat', 'general', 'Разговор', ['Очистить переписку']],
 ];
 
@@ -399,7 +398,7 @@ test('навигация: шесть категорий в утверждённ�
   assert.equal(buttons.slice(1).some((b) => b.getAttribute('aria-current') === 'true'), false);
   // Карточки разложены по порядку категорий, внутри категории — как были.
   const cats = catOfPage(dom.page);
-  assert.deepEqual(cats, ['general', 'general', 'general', 'ai', 'ai', 'ai', 'voice', 'voice', 'voice', 'look', 'sphere', 'security', 'security', 'security']);
+  assert.deepEqual(cats, ['general', 'general', 'general', 'ai', 'ai', 'voice', 'voice', 'voice', 'look', 'sphere', 'security', 'security', 'security']);
   assert.equal(api.getState().q, '');
   assert.equal(api.getState().chip, 'all');
 });
@@ -420,7 +419,7 @@ test('поиск: прячет неподходящие карточки и ст
 
   dom.search.value = '';
   dom.search.fire('input');
-  assert.equal(visibleSections(dom).length, 14, 'пустой запрос возвращает все карточки');
+  assert.equal(visibleSections(dom).length, 13, 'пустой запрос возвращает все карточки');
   assert.equal(dom.page.querySelectorAll('.set-filtered').length, 0);
 });
 
@@ -440,7 +439,7 @@ test('чипы: ИИ, Вид (вид+сфера), Голос и Все', () => {
   const chipOf = (id) => dom.chipsButtons.find((button) => button.dataset.setChip === id);
 
   click(chipOf('ai'));
-  assert.deepEqual(visibleSections(dom).map((section) => section.dataset.cat), ['ai', 'ai', 'ai']);
+  assert.deepEqual(visibleSections(dom).map((section) => section.dataset.cat), ['ai', 'ai']);
   assert.equal(chipOf('ai').getAttribute('aria-pressed'), 'true');
   assert.equal(chipOf('all').getAttribute('aria-pressed'), 'false');
 
@@ -451,7 +450,7 @@ test('чипы: ИИ, Вид (вид+сфера), Голос и Все', () => {
   assert.deepEqual(visibleSections(dom).map((section) => section.dataset.cat), ['voice', 'voice', 'voice']);
 
   click(chipOf('all'));
-  assert.equal(visibleSections(dom).length, 14);
+  assert.equal(visibleSections(dom).length, 13);
   assert.equal(dom.noMatches.classList.contains('is-hidden'), true);
 });
 
@@ -462,7 +461,7 @@ test('Escape очищает поиск, клик по категории сбр�
   dom.search.fire('input');
   dom.search.fire('keydown', { key: 'Escape', preventDefault() {}, stopPropagation() {} });
   assert.equal(dom.search.value, '');
-  assert.equal(visibleSections(dom).length, 14);
+  assert.equal(visibleSections(dom).length, 13);
   assert.equal(dom.noMatches.classList.contains('is-hidden'), true);
 
   // Клик по категории сбрасывает поиск и подсвечивает категорию.
@@ -477,7 +476,7 @@ test('Escape очищает поиск, клик по категории сбр�
 
 // ── nox-settings.js: карточки модели и сферы ──────────────────────────────
 
-function makeSettingsDom({ bridge, withScreen = true, getSettings } = {}) {
+function makeSettingsDom({ bridge, withScreen = true, getSettings, setTimeoutImpl } = {}) {
   const { document, body } = makeDocument();
   const view = node('section', { class: 'view view-settings' });
   const header = node('header', { class: 'nox-set-head' });
@@ -591,7 +590,7 @@ function makeSettingsDom({ bridge, withScreen = true, getSettings } = {}) {
     },
     CustomEvent,
     Promise,
-    setTimeout,
+    setTimeout: setTimeoutImpl || setTimeout,
     clearTimeout,
     console: { warn() {}, error() {} },
   };
@@ -689,6 +688,23 @@ test('чтение настроек: ошибка ядра видна строк
   assert.match(env.document.getElementById('setErrorText').textContent, /Настройки не прочитаны: ядро не ответило/);
 });
 
+test('зависшее чтение настроек снимает загрузку по таймауту', async () => {
+  const env = makeSettingsDom({
+    getSettings: () => new Promise(() => {}),
+    setTimeoutImpl: (fn) => { fn(); return 1; },
+  });
+  await wait();
+  await wait();
+  assert.equal(env.main.getAttribute('data-loading'), null);
+  assert.equal(env.document.getElementById('setStatus').textContent, 'Не удалось прочитать настройки');
+  assert.match(env.document.getElementById('setErrorText').textContent, /не ответило вовремя/);
+});
+
+test('загрузка не блокирует нажатия в остальных карточках настроек', () => {
+  const css = read('nox-settings.css');
+  assert.doesNotMatch(css, /#setMain\[data-loading="true"\]\s*\{[^}]*pointer-events:\s*none/);
+});
+
 // ── статические контракты: ничего из прежних настроек не потеряно ─────────
 
 test('app.js и main.js: новые ключи terseReplies и keepAwake на месте', () => {
@@ -710,7 +726,7 @@ test('model-pick.js слушает смену модели из Настроек
   assert.match(read('nox-settings.js'), /dispatchEvent\(new CustomEvent\('jarvis:tier'/);
 });
 
-test('index.html: 14 карточек с категориями, новые карточки и прежние id на месте', () => {
+test('index.html: 13 карточек с категориями, новые карточки и прежние id на месте', () => {
   const html = read('index.html');
   const start = html.indexOf('class="view view-settings"');
   const end = html.indexOf('<!-- Подтверждение действия', start);
@@ -718,13 +734,13 @@ test('index.html: 14 карточек с категориями, новые ка
   const view = html.slice(start, end);
 
   const sections = [...view.matchAll(/<section class="set-section"([^>]*)>/g)].map((match) => match[1]);
-  assert.equal(sections.length, 14, 'карточек настроек');
+  assert.equal(sections.length, 13, 'карточек настроек');
   const cats = sections.map((attrs) => /data-cat="([a-z]+)"/.exec(attrs));
   assert.equal(cats.every(Boolean), true, 'у каждой карточки есть data-cat');
   const counts = {};
   for (const match of cats) counts[match[1]] = (counts[match[1]] || 0) + 1;
-  assert.deepEqual(counts, { ai: 3, security: 3, voice: 3, general: 3, look: 1, sphere: 1 });
-  assert.equal((view.match(/class="set-title"/g) || []).length, 14, 'у каждой карточки есть заголовок');
+  assert.deepEqual(counts, { ai: 2, security: 3, voice: 3, general: 3, look: 1, sphere: 1 });
+  assert.equal((view.match(/class="set-title"/g) || []).length, 13, 'у каждой карточки есть заголовок');
 
   for (const id of ['setNav', 'setSearch', 'setChips', 'setNavList', 'setMain', 'settingsPage', 'setNoMatches', 'setStatus', 'setError', 'settings-ai', 'settings-sphere', 'setModelTier', 'setThinking', 'setModelHint', 'setThinkingHint', 'sphereVariant', 'sphereSize', 'sphereGlow', 'sphereReset', 'sphereApply', 'spherePreview']) {
     assert.ok(view.includes(`id="${id}"`), `id="${id}" потерян`);
@@ -746,8 +762,8 @@ test('index.html: 14 карточек с категориями, новые ка
     'snipForm', 'snipTrigger', 'snipText', 'snipSave', 'snipList', 'snipError', 'snipEmpty', 'dlAnalyze', 'dlRemove', 'dlNote', 'dlList',
     'setLookTitle', 'themeSeg', 'themeLabel', 'orbPick', 'orbPickLabel', 'openClassic',
     'setFolderTitle', 'workspacePath', 'workspaceOpen', 'folderAdd', 'folderList',
-    'settings-model', 'brainState', 'brainStateText', 'brainModel', 'coreState', 'brainRecheck', 'brainHint', 'brainHintOwner',
-    'ownerProviders', 'ownerProvNone', 'ownerProvList', 'ownerProvForm', 'setChatTitle', 'chatClear', 'chatClearText',
+    'settings-model', 'brainState', 'brainStateText', 'brainModel', 'coreState', 'brainRecheck', 'brainHint',
+    'setChatTitle', 'chatClear', 'chatClearText',
   ];
   const lost = legacyIds.filter((id) => !view.includes(`id="${id}"`));
   assert.deepEqual(lost, [], 'потерянные id настроек');

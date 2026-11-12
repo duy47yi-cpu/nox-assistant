@@ -142,9 +142,96 @@ test('CSS читает переменные: color-mix с transparent, скру�
   assert.match(presence, /html\[data-win-alpha\] body \{ background: transparent; \}/);
 });
 
+test('эффект на фоне: «как в теме» берёт эффект темы, свой выбор виден на любой теме и фоне', () => {
+  const { T, root, store } = boot({ 'jarvis.theme': JSON.stringify('starry') });
+  assert.equal(T.LOOK_DEFAULT.fx, 'theme');
+  assert.equal(root.dataset.fx, 'stars', 'звёздная ночь показывает звёзды');
+  T.setLook({ bg: 'solid' });
+  assert.equal(root.dataset.fx, undefined, 'сплошной фон убирает эффект темы');
+  T.setLook({ fx: 'rain' });
+  assert.equal(root.dataset.fx, 'rain', 'явный выбор виден и на сплошном фоне');
+  assert.equal(JSON.parse(store.get('jarvis.look')).fx, 'rain');
+  T.setLook({ fx: 'off', bg: 'theme' });
+  assert.equal(root.dataset.fx, undefined, '«Без эффекта» выключает и эффект темы');
+  T.setLook({ fx: 'theme' });
+  T.apply('dark');
+  assert.equal(root.dataset.fx, undefined, 'у «Ночи» своего эффекта нет');
+  T.apply('liquid');
+  assert.equal(root.dataset.fx, 'waves', 'смена темы меняет эффект');
+  T.setLook({ fx: 'snow' });
+  T.apply('light');
+  assert.equal(root.dataset.fx, 'snow');
+  for (const bad of ['fog', '', 5, null, {}]) assert.equal(T.sanitizeLook({ fx: bad }).fx, 'theme');
+  for (const fx of Object.values(T.THEME_FX)) assert.ok(T.FXS[fx], `эффект темы ${fx} можно выбрать вручную`);
+  T.resetToTheme();
+  assert.equal(root.dataset.fx, 'waves' === T.THEME_FX[root.dataset.theme] ? 'waves' : undefined);
+});
+
+test('своя картинка: фон image, затемнение и размытие уходят в CSS-переменные', () => {
+  const { T, root, props } = boot();
+  assert.equal(props['--own-bg-dim'], '40%');
+  assert.equal(props['--own-bg-blur'], '6px');
+  assert.equal(root.dataset.bg, undefined);
+  T.setLook({ bg: 'image', bgDim: '35', bgBlur: '16' });
+  assert.equal(root.dataset.bg, 'image');
+  assert.equal(props['--own-bg-dim'], '35%');
+  assert.equal(props['--own-bg-blur'], '16px');
+  assert.equal(Object.keys(T.BG_DIMS).length, 19, '0–90 % шагом 5');
+  for (const bad of ['95', '-5', '7', 40, null]) assert.equal(T.sanitizeLook({ bgDim: bad, bgBlur: bad }).bgDim, '40');
+  assert.equal(T.sanitizeLook({ bg: 'video' }).bg, 'theme');
+  T.setLook({ bg: 'solid' });
+  assert.equal(root.dataset.bg, 'solid', 'сплошной фон работает как раньше');
+  T.resetToTheme();
+  assert.equal(root.dataset.bg, undefined);
+});
+
+test('backdrop.js: принимает только картинки до 25 МБ, без хранилища окно не падает', () => {
+  const attrs = {};
+  const sandbox = {
+    window: {},
+    document: { documentElement: { dataset: attrs, style: { setProperty() {}, removeProperty() {} } }, dispatchEvent() {} },
+    indexedDB: { open() { throw new Error('нет хранилища'); } },
+    URL: { createObjectURL: () => 'blob:x', revokeObjectURL() {} },
+    Event: class {},
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(RENDERER, 'backdrop.js'), 'utf8'), sandbox);
+  const B = sandbox.window.NoxBackdrop;
+  assert.equal(B.has(), false);
+  assert.equal(B.reject({ type: 'image/png', size: 1024 }), null);
+  assert.equal(B.reject({ type: 'image/gif', size: B.MAX_BYTES }), null);
+  assert.match(B.reject({ type: 'image/png', size: B.MAX_BYTES + 1 }), /25 МБ/);
+  assert.match(B.reject({ type: 'image/png', size: 0 }), /пустой/);
+  for (const type of ['image/svg+xml', 'video/mp4', 'text/html', '']) assert.match(B.reject({ type, size: 10 }), /Нужна картинка/, type);
+  assert.match(B.reject(null), /Нужна картинка/);
+});
+
+test('фон в разделах Nox: слои под панелями, панели полупрозрачны только с картинкой или эффектом', () => {
+  const html = fs.readFileSync(path.join(RENDERER, 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(RENDERER, 'backdrop.css'), 'utf8');
+  assert.match(html, /<div class="theme-bg" aria-hidden="true"><\/div>/);
+  assert.match(html, /img-src 'self' data: blob:;/, 'картинка показывается из blob: этого окна');
+  assert.ok(html.indexOf('backdrop.css') > html.indexOf('nox-shell.css'), 'backdrop.css — последний слой');
+  assert.ok(html.indexOf('backdrop.js') < html.indexOf('look.js'));
+  assert.match(css, /html\[data-bg="image"\]\[data-own-bg\] \.theme-bg \{ display: block; \}/);
+  assert.match(css, /\.theme-bg \{[^}]*pointer-events: none;[^}]*display: none; \}/);
+  // Стекло у всех тем с градиентом фона и только у них: список в backdrop.css не расходится с themes.css.
+  const themesCss = fs.readFileSync(path.join(RENDERER, 'themes.css'), 'utf8');
+  const gradient = [...themesCss.matchAll(/\[data-theme="([a-z]+)"\] \{([^}]*)\}/g)].filter((m) => /--bg-image: (?!none)/.test(m[2])).map((m) => m[1]).sort();
+  const glassRule = css.match(/html:is\(\[data-fx\], \[data-bg="image"\]\[data-own-bg\], :is\(([^)]*)\):not\(\[data-bg\]\)\) body\[data-view\] \{\s*--nox-surface-1:/);
+  assert.ok(glassRule, 'правило полупрозрачных панелей');
+  assert.deepEqual([...glassRule[1].matchAll(/data-theme="([a-z]+)"/g)].map((m) => m[1]).sort(), gradient);
+  const settingsCss = fs.readFileSync(path.join(RENDERER, 'nox-settings.css'), 'utf8');
+  assert.doesNotMatch(settingsCss, /\.theme-mini \.tm-panel \{ display: none; \}/, 'образец темы в Настройках показывается целиком');
+  assert.match(lookSource, /row\('Своя картинка'/);
+  assert.match(lookSource, /alpha\('bgDim', T\.BG_DIMS/);
+  assert.match(lookSource, /seg\('bgBlur', T\.BG_BLURS/);
+  assert.match(lookSource, /select\('fx', T\.FXS/);
+});
+
 test('строки настроек есть в look.js и берут значения из theme-boot', () => {
   assert.match(lookSource, /row\('Прозрачность окна'/);
-  assert.match(lookSource, /seg\('winAlpha', T\.WIN_ALPHAS/);
+  assert.match(lookSource, /alpha\('winAlpha', T\.WIN_ALPHAS/, 'компактный ползунок вместо 13 кнопок');
+  assert.doesNotMatch(lookSource, /seg\('winAlpha'/);
   assert.match(lookSource, /row\('Радиус окна'/);
   assert.match(lookSource, /seg\('winRadius', T\.WIN_RADII/);
   assert.match(lookSource, /resetToTheme/);

@@ -389,25 +389,6 @@
   flex: 0 1 180px;
 }
 
-/* Предложение сохранить ход как команду */
-.command-suggest {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.command-suggest .suggest-text {
-  flex: 1 1 220px;
-  color: var(--text-2);
-}
-
-.command-suggest .suggest-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 /* Подключения: тоны статуса и популярные серверы. Здесь, а не <style> из JS: CSP style-src 'self'. */
 .mcp-state[data-tone="err"]{color:var(--err);border-color:var(--err-line)}
 .mcp-state[data-tone="busy"]{color:var(--warn);border-color:var(--warn-line)}

@@ -8,6 +8,10 @@ const path = require('path');
 const vm = require('vm');
 
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'nox-shell.js'), 'utf8');
+const APP_SRC = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'app.js'), 'utf8');
+const SCREEN_SRC = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'nox-screen.js'), 'utf8');
+const SCREEN_CSS = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'nox-screen.css'), 'utf8');
+const THEMES_CSS = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'themes.css'), 'utf8');
 
 function node(id, attrs = {}) {
   const listeners = {};
@@ -115,4 +119,34 @@ test('узкое окно: история скрыта, выезжает и за
   assert.equal(env.key('Escape').stopped, false);
   // Выбор в узком окне не меняет запомненное для широкого.
   assert.equal(env.store.get('noxHistCollapsed'), '0');
+});
+
+test('переход раздела вызывает перенос беседы только через одно событие', () => {
+  const start = APP_SRC.indexOf('function show(view)');
+  const show = APP_SRC.slice(start, APP_SRC.indexOf('// ── Виджеты', start));
+  assert.ok(show, 'функция show(view) найдена');
+  assert.doesNotMatch(show, /NoxScreen\.onView/, 'show() не вызывает перенос напрямую вдобавок к событию');
+  assert.match(show, /dispatchEvent\(new CustomEvent\('jarvis:view'/);
+  assert.match(SCREEN_SRC, /addEventListener\('jarvis:view', \(e\) => onView\(e\.detail\)\)/);
+});
+
+test('секундомер и поток ответа не запускают обход всех сообщений', () => {
+  const start = SCREEN_SRC.indexOf('function tickWorking()');
+  const tick = SCREEN_SRC.slice(start, SCREEN_SRC.indexOf('function finishWorking', start));
+  assert.match(tick, /nodeValue/, 'время меняется в текстовом узле без childList-мутации');
+  assert.match(SCREEN_SRC, /new MutationObserver\(\(records\) =>/);
+  assert.match(SCREEN_SRC, /closest\('\.nox-working'\)/, 'служебная строка отфильтрована наблюдателем');
+  assert.match(SCREEN_SRC, /needsCopy/, 'кнопки копирования проверяются только для новых ответов');
+});
+
+test('Nox не наследует старое стекло чата и анимацию всего раздела', () => {
+  const convo = SCREEN_CSS.slice(SCREEN_CSS.indexOf('.view-nox .convo {'), SCREEN_CSS.indexOf('.view-nox .convo > .chat-tabs'));
+  assert.match(convo, /backdrop-filter:\s*none\s*!important/);
+  assert.doesNotMatch(THEMES_CSS, /^\.view:not\(\[hidden\]\)/m, 'глобальная анимация старого каркаса не действует на разделы Nox');
+});
+
+test('поздние ответы настроек не перезаписывают новый выбор', () => {
+  assert.match(APP_SRC, /const settingRevisions = new Map\(\)/);
+  assert.match(APP_SRC, /settingRevisions\.get\(key\) !== revision/);
+  assert.match(APP_SRC, /const revisions = new Map\(settingRevisions\)/);
 });

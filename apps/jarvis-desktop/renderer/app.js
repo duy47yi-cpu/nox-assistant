@@ -237,9 +237,6 @@
     }
     if (view === 'journal') reloadJournal();
     // Экран Nox получает беседу и поле ввода; классический — возвращает их на место.
-    if (window.NoxScreen && typeof window.NoxScreen.onView === 'function') {
-      try { window.NoxScreen.onView(view); } catch (err) { console.error('[nox] перенос беседы:', err); }
-    }
     document.dispatchEvent(new CustomEvent('jarvis:view', { detail: view }));
     if (view === 'deals' || view === 'dialog') reloadDeals();
     placeOrb();
@@ -756,8 +753,13 @@
     syncDictationVisible();
   }
 
+  const settingRevisions = new Map();
+  let settingsLoadSeq = 0;
+
   async function changeSetting(key, value) {
     if (!SETTING_KEYS.includes(key)) return;
+    const revision = (settingRevisions.get(key) || 0) + 1;
+    settingRevisions.set(key, revision);
     const prev = S.settings[key];
     S.settings[key] = value;
     syncToggles();
@@ -770,6 +772,7 @@
     } catch (e) {
       why = errText(e);
     }
+    if (settingRevisions.get(key) !== revision) return;
     if (!ok) {
       S.settings[key] = prev;
       syncToggles();
@@ -1028,22 +1031,23 @@
   }
 
   async function loadSettings() {
-    try {
-      const s = await call('getSettings');
-      if (s && typeof s === 'object') {
-        for (const k of SETTING_KEYS) S.settings[k] = s[k] === true;
-        if (['off', 'while-working', 'always'].includes(s.keepAwake)) S.settings.keepAwake = s.keepAwake;
-        if (TIER_NAMES[s.modelTier]) S.tier = s.modelTier;
-        S.workspace = s.workspace ? String(s.workspace) : '';
-        S.folders = Array.isArray(s.connectedFolders) ? s.connectedFolders.map(String) : [];
-        S.ownerBuild = s.ownerBuild === true;
+    const seq = ++settingsLoadSeq;
+    const revisions = new Map(settingRevisions);
+    let s = null;
+    try { s = await call('getSettings'); } catch { /* старое ядро: оставляем значения по умолчанию */ }
+    if (seq !== settingsLoadSeq) return;
+    if (s && typeof s === 'object') {
+      for (const k of SETTING_KEYS) {
+        if ((settingRevisions.get(k) || 0) === (revisions.get(k) || 0)) S.settings[k] = s[k] === true;
       }
-    } catch { /* старое ядро: оставляем значения по умолчанию */ }
+      if (['off', 'while-working', 'always'].includes(s.keepAwake)) S.settings.keepAwake = s.keepAwake;
+      if (TIER_NAMES[s.modelTier]) S.tier = s.modelTier;
+      S.workspace = s.workspace ? String(s.workspace) : '';
+      S.folders = Array.isArray(s.connectedFolders) ? s.connectedFolders.map(String) : [];
+    }
     syncToggles();
     renderTier();
     renderWorkspace();
-    $('#brainHintOwner').hidden = !S.ownerBuild;
-    if (S.ownerBuild) ownerProviders('list');
   }
 
   function renderMode() {
@@ -1277,35 +1281,6 @@
     }
   }
 
-  // ── Провайдеры владельца ─────────────────────────────────────
-  // Блок виден только в сборке владельца (ownerBuild из ядра); ядро и само отказывает покупателю.
-  async function ownerProviders(action, arg) {
-    try {
-      const r = await call('ownerProviders', action, arg);
-      if (!r || r.ok === false) throw new Error((r && r.error) || 'ядро не приняло запрос');
-      renderOwner(r);
-      if (action !== 'list') loadState();
-      return true;
-    } catch (e) {
-      toast('Провайдеры: ' + errText(e), 'error');
-      return false;
-    }
-  }
-
-  function renderOwner(r) {
-    $('#ownerProviders').hidden = false;
-    $('#ownerProvNone').disabled = !r.selected;
-    $('#ownerProvList').replaceChildren(...(r.providers || []).map((p) => {
-      const on = p.name === r.selected;
-      return el('div', { class: 'set-row' },
-        el('span', { class: 'set-text' },
-          el('span', { class: 'set-name', text: p.name + (on ? ' — выбран' : '') }),
-          el('span', { class: 'set-hint mono', text: p.baseUrl + ' · ' + p.model + (p.hasKey ? ' · ключ есть' : '') })),
-        el('button', { class: 'btn btn-secondary btn-sm', type: 'button', text: 'Выбрать', disabled: on || null, onclick: () => ownerProviders('select', p.name) }),
-        el('button', { class: 'btn btn-danger btn-sm', type: 'button', text: 'Удалить', 'aria-label': 'Удалить ' + p.name, onclick: () => ownerProviders('remove', p.name) }));
-    }));
-  }
-
   const clearArm = { on: false, timer: 0 };
 
   function disarmClear() {
@@ -1404,17 +1379,47 @@
       }
     });
     $('#folderAdd').addEventListener('click', () => changeFolders('addFolder'));
-    $('#ownerProvNone').addEventListener('click', () => ownerProviders('select', ''));
-    $('#ownerProvForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const form = e.currentTarget;
-      if (await ownerProviders('save', Object.fromEntries(new FormData(form)))) form.reset();
-    });
     $('#chatClear').addEventListener('click', clearChat);
     $('#chatClear').addEventListener('dblclick', (e) => e.preventDefault());
   }
 
   // ── Журнал действий ──────────────────────────────
+  function initCollectionViews() {
+    const collections = [
+      ['journal', '#journalPanel .filter-search', '#journalPanel'],
+      ['commands', '#commands .nox-cmd-tools', '#commands'],
+      ['connections', '#mcpPage .nox-conn-toolbar', '#mcpPage'],
+    ];
+    for (const [key, host, target] of collections) {
+      const root = $(target);
+      const toolbar = $(host);
+      if (!root || !toolbar) continue;
+      const pref = 'nox.collection.' + key;
+      let mode = 'icons';
+      try {
+        const stored = localStorage.getItem(pref);
+        if (stored === 'list' || stored === 'icons') mode = stored;
+      } catch {}
+      const group = el('div', { class: 'collection-view', role: 'group', 'aria-label': 'Вид раздела' });
+      function select(value) {
+        root.dataset.collectionView = value;
+        for (const btn of group.children) btn.setAttribute('aria-pressed', String(btn.dataset.mode === value));
+      }
+      for (const [value, label] of [['icons', 'Крупные значки'], ['list', 'Список']]) {
+        group.append(el('button', { type: 'button', dataset: { mode: value }, text: label, onclick: () => {
+          select(value);
+          try { localStorage.setItem(pref, value); } catch {}
+        } }));
+      }
+      toolbar.append(group);
+      select(mode);
+    }
+  }
+
+  const journalStatus = { confirmed: 'Подтверждено', unverified: 'Не проверено', failed: 'Не получилось', refused: 'Отклонено' };
+  const journalDay = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' });
+  const journalTime = new Intl.DateTimeFormat('ru', { hour: '2-digit', minute: '2-digit' });
+  const compactLinks = (text) => U.humanize(text).replace(/https?:\/\/[^\s<>]+/g, (url) => U.clip(url, 54));
   const H = { journal: [], loadError: '', filter: 'all', q: '' };
 
   function recordToEntry(r, i) {
@@ -1424,7 +1429,7 @@
       tool: rec.tool || rec.name || rec.kind || 'запись',
       args: rec.args,
       risk: typeof rec.risk === 'string' ? rec.risk : '',
-      status: U.statusOfRecord(rec),
+      status: ({ done: 'unverified', error: 'failed' })[U.statusOfRecord(rec)] || U.statusOfRecord(rec),
       summary: U.cleanSummary(rec.summary),
       evidence: U.cleanSummary(rec.evidence),
       ts: U.toMs(rec.ts),
@@ -1440,7 +1445,7 @@
     }
     try {
       const recs = await call('recentJournal', JOURNAL_LIMIT);
-      H.journal = (Array.isArray(recs) ? recs : []).map(recordToEntry);
+      H.journal = (Array.isArray(recs) ? recs : []).map(recordToEntry).sort((a, b) => (b.ts || 0) - (a.ts || 0));
       H.loadError = '';
     } catch (e) {
       H.loadError = 'Журнал не прочитан: ' + errText(e);
@@ -1465,24 +1470,27 @@
       return true;
     });
     $('#histCount').textContent = all.length ? `Показано ${rows.length} из ${all.length}` : '';
-    $('#histBody').replaceChildren(...rows.map((e) => {
-      const brief = U.argsBrief(e.args, 120);
-      return el('tr', { 'data-status': e.status },
-        el('td', { class: 'jt-time', 'data-label': 'Время' },
-          el('time', { datetime: new Date(e.ts).toISOString(), title: U.absTime(e.ts), text: U.shortTime(e.ts) })),
-        el('td', { class: 'jt-cmd', 'data-label': 'Действие' },
-          el('span', { class: 'jt-title', text: U.toolTitle(e.tool) }),
-          brief ? el('span', { class: 'jt-args', title: U.argsBrief(e.args, 1000), text: brief }) : null),
-        el('td', { class: 'jt-risk', 'data-label': 'Риск' }, riskNode(e.risk) || el('span', { class: 'muted', text: '—' })),
-        el('td', { class: 'jt-status', 'data-label': 'Статус' }, U.statusBadge(e.status)),
-        el('td', { class: 'jt-sum', 'data-label': 'Итог' },
-          e.summary ? el('span', { title: e.summary, text: U.clip(e.summary, 160) }) : el('span', { class: 'muted', text: '—' }),
-          // У подтверждённого итог молчит о доказательстве, у остальных причина уже есть в итоге.
-          e.status === 'confirmed' && e.evidence ? el('span', { class: 'jt-evidence', title: e.evidence, text: U.clip(e.evidence, 160) }) : null));
-    }));
+    const days = new Map();
+    for (const e of rows) {
+      const day = Number.isFinite(e.ts) && e.ts > 0 ? journalDay.format(e.ts) : 'Без даты';
+      if (!days.has(day)) days.set(day, []);
+      days.get(day).push(el('li', { class: 'journal-entry', dataset: { status: e.status } },
+        el('span', { class: 'journal-mark', 'aria-hidden': 'true' }, icon('file')),
+        el('div', { class: 'journal-content' },
+          el('div', { class: 'journal-entry-head' },
+            el('strong', { text: U.toolTitle(e.tool) }),
+            el('time', { text: day === 'Без даты' ? '—' : journalTime.format(e.ts) }),
+            el('span', { class: 'journal-status', text: journalStatus[e.status] })),
+          el('p', { text: e.summary ? compactLinks(e.summary) : 'Итог не записан.' }),
+          e.evidence && e.evidence !== e.summary ? el('p', { class: 'journal-evidence', text: compactLinks(e.evidence) }) : null,
+          e.args || e.risk ? el('details', { class: 'collection-details' },
+            el('summary', { text: 'Подробнее' }),
+            el('p', { text: [e.tool, U.argsBrief(e.args, 500)].filter(Boolean).join(' · ') }), riskNode(e.risk)) : null)));
+    }
+    $('#histBody').replaceChildren(...Array.from(days, ([day, entries]) => el('section', { class: 'journal-day' },
+      el('h2', { text: day }), el('ul', {}, entries))));
     const empty = $('#histEmpty');
     empty.hidden = rows.length > 0;
-    $('.table-wrap').hidden = rows.length === 0;
     if (!rows.length) {
       $('#histEmptyText').textContent = H.loadError || (all.length ? 'Ничего не нашлось. Измените фильтр или запрос.' : 'Журнал пуст. Здесь появятся действия Джарвиса.');
     }
@@ -1943,6 +1951,18 @@
         continue;
       }
       if (!line.trim()) { flush(); list = null; continue; }
+      // Формула на нескольких строках: $$ … $$ собирается в одну.
+      if (/^\s*\$\$\s*$/.test(line)) {
+        const end = lines.findIndex((l, k) => k > i && /^\s*\$\$\s*$/.test(l));
+        if (end > i) {
+          flush(); list = null;
+          const p = document.createElement('p');
+          appendInline(p, '$$' + lines.slice(i + 1, end).join(' ') + '$$');
+          frag.append(p);
+          i = end;
+          continue;
+        }
+      }
       const ul = /^\s*[-*•]\s+(.*)$/.exec(line);
       const ol = /^\s*(\d{1,3})[.)]\s+(.*)$/.exec(line);
       if (ul || ol) {
@@ -1989,9 +2009,23 @@
         c.textContent = part.slice(1, -1);
         parent.append(c);
       } else {
-        appendBold(parent, part);
+        appendMath(parent, part);
       }
     }
+  }
+
+  // Формулы: $$…$$ и \[…\] — отдельной строкой, $…$ и \(…\) — внутри текста. Одиночный $…$ считается формулой,
+  // только если внутри есть признак математики (\ ^ _ =): суммы в долларах остаются текстом.
+  const MATH_RE = /(\$\$[^$]+\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$(?=\S)[^$\n]*[\\^_=][^$\n]*\$)/;
+  function appendMath(parent, text) {
+    if (!window.NoxMath || !/[$\\]/.test(text)) { appendBold(parent, text); return; }
+    String(text).split(MATH_RE).forEach((part, i) => {
+      if (!part) return;
+      if (i % 2 === 0) { appendBold(parent, part); return; }
+      const block = part.startsWith('$$') || part.startsWith('\\[');
+      const cut = part.startsWith('$$') || part.startsWith('\\') ? 2 : 1;
+      parent.append(window.NoxMath.render(part.slice(cut, -cut), block));
+    });
   }
 
   function appendBold(parent, text) {
@@ -2162,13 +2196,13 @@
   }
 
   // ── Строка действий хода ──────────────────────────────────────
-  // Свёрнута: «3 действия · выполнено». Пока ход идёт — текущее действие. По клику — список строк.
+  // Свёрнута: обычные действия — итогом, поиск — маленькой кнопкой «Источники». Раскрытие только по клику.
   function ensureActs() {
     if (C.act) return C.act;
     const sum = el('summary', { class: 'acts-sum' });
     const list = el('ol', { class: 'acts-list' });
     const progress = el('progress', { class: 'acts-progress', 'aria-label': 'Завершённые действия' });
-    const node = el('details', { class: 'turn-acts', open: true }, sum, progress, el('div', { class: 'acts-body' }, list));
+    const node = el('details', { class: 'turn-acts', open: false }, sum, progress, el('div', { class: 'acts-body' }, list));
     // В чате главное — ответ. Шаги видны под шаром и в Журнале, здесь одна строка, раскрывается по клику.
     C.act = { node, sum, list, items: new Map() };
     ensureTurn().append(node);
@@ -2182,9 +2216,88 @@
     return U.toolTitle(e.tool) + (brief ? ': ' + brief : '');
   }
 
+  function searchingLabel() {
+    return el('span', { class: 'search-status', role: 'status', 'aria-label': 'Ищу' },
+      el('span', { class: 'search-word', 'aria-hidden': 'true', text: 'Ищу' }),
+      el('span', { class: 'search-dots', 'aria-hidden': 'true' },
+        el('span', { text: '.' }), el('span', { text: '.' }), el('span', { text: '.' })));
+  }
+
+  function sourceRows(sources, searches) {
+    if (!sources.length) {
+      const running = searches.some((e) => e.status === 'running');
+      const failed = searches.find((e) => e.status === 'error' || e.status === 'failed');
+      return [el('li', { class: 'research-empty', text: running ? 'Источники появятся после поиска.'
+        : failed ? U.clip(U.cleanSummary(failed.summary) || 'Не удалось получить источники.', 180) : 'Источники не найдены.' })];
+    }
+    return sources.map((source, index) => el('li', { class: 'research-source' },
+      el('button', {
+        class: 'research-source-link', type: 'button', title: source.url,
+        'aria-label': `Открыть источник: ${source.title}`,
+        onclick: async () => {
+          const res = await call('openSource', source.url).catch(() => null);
+          if (!res || res.ok === false) toast((res && res.error) || 'Не удалось открыть источник.', 'error');
+        },
+      },
+      el('span', { class: 'research-source-index', 'aria-hidden': 'true', text: String(index + 1) }),
+      el('span', { class: 'research-source-copy' },
+        el('span', { class: 'research-source-title', text: source.title }),
+        el('span', { class: 'research-source-host', text: source.host })),
+      source.status === 'unavailable' ? el('span', { class: 'research-source-state', text: 'недоступен' }) : null)));
+  }
+
+  // Поиск не показывает внутренние шаги и тексты страниц: в ленте только статус и настоящие ссылки.
+  function renderResearchActs(act, items, searches) {
+    const pending = items.find((e) => e.status === 'pending');
+    const running = items.find((e) => e.status === 'running');
+    const searching = searches.some((e) => e.status === 'running');
+    const sources = [];
+    const seen = new Set();
+    for (const entry of searches) {
+      for (const source of Array.isArray(entry.sources) ? entry.sources : []) {
+        if (!source || typeof source.url !== 'string' || seen.has(source.url)) continue;
+        let url;
+        try { url = new URL(source.url); } catch { continue; }
+        if (url.protocol !== 'https:' && url.protocol !== 'http:') continue;
+        seen.add(source.url);
+        sources.push({
+          title: String(source.title || source.host || url.hostname).slice(0, 300),
+          url: source.url.slice(0, 2048), host: String(source.host || url.hostname).slice(0, 255),
+          ...(source.status === 'unavailable' ? { status: 'unavailable' } : {}),
+        });
+      }
+    }
+    const failed = items.some((e) => e.status === 'error' || e.status === 'failed');
+    const unverified = items.some((e) => e.status === 'unverified');
+    const refused = items.some((e) => e.status === 'refused');
+    const tone = pending ? 'pending' : running ? 'running' : failed ? 'error' : unverified ? 'unverified' : refused ? 'refused' : 'done';
+    const label = pending ? actLabel(pending) + ' · ждёт решения'
+      : running && !searching ? actLabel(running)
+        : sources.length ? `Источники · ${sources.length}` : failed ? 'Поиск не удался' : 'Поиск завершён';
+    act.node.classList.add('is-research');
+    act.node.dataset.tone = tone;
+    act.sum.title = sources.length ? 'Показать источники' : 'Показать результат поиска';
+    act.node.querySelector('progress').hidden = true;
+    act.list.className = 'acts-list research-sources';
+    act.list.replaceChildren(...sourceRows(sources, searches));
+    fill(act.sum,
+      el('span', { class: 'acts-icon' }, icon(pending ? 'hourglass' : searching ? 'search' : sources.length ? 'book' : failed ? 'help' : 'search')),
+      searching && !pending ? searchingLabel() : el('span', { class: 'acts-text', text: label }),
+      el('span', { class: 'acts-chev', 'data-icon': 'chevron', 'aria-hidden': 'true' }));
+    U.fillIcons(act.sum);
+  }
+
+  function isSourceSearch(e) {
+    return /^web_(?:search|wiki|fetch|research)$/.test(String(e.tool || ''))
+      || (U.isSearchTool(e.tool, e.args) && Array.isArray(e.sources));
+  }
+
   function renderActs(act = C.act) {
     if (!act) return;
     const items = [...act.items.values()].map((x) => x.entry);
+    const searches = items.filter(isSourceSearch);
+    if (searches.length) { renderResearchActs(act, items, searches); return; }
+    act.node.classList.remove('is-research');
     const pending = items.find((e) => e.status === 'pending');
     const running = items.find((e) => e.status === 'running');
     let tone;
@@ -2246,7 +2359,7 @@
 
   // Цепочка шагов текущего поручения под шаром: шаг за шагом, у каждого значок проверки.
   function renderChain() {
-    const items = C.act ? [...C.act.items.values()].map((x) => x.entry).slice(-5) : [];
+    const items = C.act ? [...C.act.items.values()].map((x) => x.entry).filter((e) => !isSourceSearch(e)).slice(-5) : [];
     if (orb && orb.setSteps) orb.setSteps(items.map((e) => e.status));
     $('#chain').replaceChildren(...items.map((e) => el('li', { 'data-status': e.status, title: U.toolTitle(e.tool) },
       el('span', { class: 'chain-node', 'aria-hidden': 'true' }, U.glyph(U.STATUS_GLYPH[e.status] || '○')),
@@ -2276,6 +2389,7 @@
       if (!rec) return;
       rec.entry.summary = ev.summary;
       rec.entry.evidence = ev.evidence;
+      rec.entry.sources = ev.sources;
       rec.entry.status = ev.hung === true ? 'unverified' : U.statusOfResult(ev.ok, ev.summary, false, ev.verified); // не ответило: исход неизвестен, а не «ошибка»
       fillActRow(rec.li, rec.entry);
       renderActs(acts);
@@ -2290,7 +2404,7 @@
       const act = ensureActs();
       rec = { li: el('li', { class: 'act-row' }), entry: { id: actionId, tool: ev.name, args: ev.args, status: 'running', summary: '' } };
       act.items.set(actionId, rec);
-      act.list.append(rec.li);
+      if (!act.node.classList.contains('is-research')) act.list.append(rec.li);
     }
     const e = rec.entry;
     if (ev.type === 'approval_request') { e.status = 'pending'; e.approvalId = ev.id; }
@@ -2298,6 +2412,7 @@
     else if (ev.type === 'tool_result') {
       e.summary = ev.summary;
       e.evidence = ev.evidence;
+      e.sources = ev.sources;
       e.status = U.statusOfResult(ev.ok, ev.summary, C.rejected.has(actionId), ev.verified);
     }
     fillActRow(rec.li, e);
@@ -3151,59 +3266,6 @@
     setTimeout(() => { live.textContent = 'Ответ готов'; }, 50);
   }
 
-  // ── Предложение сохранить ход как команду ────────────────────
-  const SUGGESTED = new Set();
-
-  // После успешного хода с детерминированными шагами ядро предлагает сохранить их командой.
-  // Предложение можно отклонить; сохранение идёт обычным редактором (с проверкой и политикой).
-  function suggestCommand(ev) {
-    if (!ev || !Array.isArray(ev.steps) || !ev.steps.length) return;
-    const key = String(ev.runId || '');
-    if (key) {
-      if (SUGGESTED.has(key)) return;
-      SUGGESTED.add(key);
-      if (SUGGESTED.size > 40) SUGGESTED.delete(SUGGESTED.values().next().value);
-    }
-    const n = ev.steps.length;
-    const block = el('div', { class: 'notice command-suggest', role: 'status' },
-      icon('plus'),
-      el('span', { class: 'suggest-text', text: `Эти шаги (${n}) можно сохранить как команду и запускать по фразе или горячей клавише.` }),
-      el('span', { class: 'suggest-actions' },
-        el('button', {
-          class: 'btn btn-secondary btn-sm', type: 'button', text: 'Сохранить как команду',
-          onclick: () => { block.remove(); openSuggestedCommand(ev.steps); },
-        }),
-        el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Не сейчас', onclick: () => block.remove() })));
-    appendToFeed(block);
-    U.fillIcons(block);
-  }
-
-  async function openSuggestedCommand(steps) {
-    if (!has('saveCommand')) { toast('Эта версия ядра не сохраняет команды.', 'error'); return; }
-    if (!(await confirmLeave())) return;
-    setCmdTab('mine');
-    K.selectedId = null;
-    K.draft = {
-      id: null,
-      name: '',
-      phrases: [],
-      steps: steps.map((s) => ({
-        tool: String((s && s.tool) || ''),
-        args: s && s.args && typeof s.args === 'object' && !Array.isArray(s.args) ? { ...s.args } : {},
-      })).filter((s) => s.tool),
-      enabled: true,
-      lastRunAt: null,
-      folder: null,
-      hotkey: null,
-      origin: 'recorded',
-      warnings: [],
-    };
-    K.dirty = true;
-    show('commands');
-    openEditor();
-    $('#cmdName').focus();
-  }
-
   // ── События ядра ──────────────────────────────────────────────
   function onEvent(ev) {
     if (!ev || typeof ev !== 'object') return;
@@ -3245,10 +3307,6 @@
             REC.steps.push({ tool: String(ev.tool || ''), warnings: Array.isArray(ev.warnings) ? ev.warnings : [] });
             renderRecordSteps();
           }
-          break;
-        // Ядро предлагает сохранить удачный ход как команду (без автозапуска и без секретов).
-        case 'command_suggest':
-          suggestCommand(ev);
           break;
         // Короткое сообщение ядра в ленту (например: «жду, пока вы закончите печатать»).
         case 'notice':
@@ -3478,7 +3536,7 @@
     for (const a of c.args) values[a] = String(c.values[a] || '').trim();
     const missing = c.args.filter((a) => !values[a]);
     if (missing.length) {
-      L.results.set(c.id, { ok: false, text: 'Заполните: ' + missing.join(', ') });
+      L.results.set(c.id, { ok: false, text: 'Заполните: ' + missing.map((key) => ARG_LABELS[key] || 'параметр действия').join(', ') });
       renderLibrary();
       const first = $(`#${CSS.escape(`lib-${c.id}-${missing[0]}`.replace(/[^\w-]/g, '_'))}`);
       if (first) first.focus();
@@ -3660,7 +3718,7 @@
         el('span', { text: c.name }),
         el('span', { class: 'pack-phrase', text: `«${c.phrase}»` })))));
 
-    card.append(head, meta, hint, el('div', { class: 'pack-foot' }, details, btn));
+    card.append(head, meta, hint, el('div', { class: 'pack-foot' }, btn), details);
     return card;
   }
 
@@ -3698,15 +3756,22 @@
   const cmdOpen = new Set();
 
   // Превью шагов в раскрытой строке: одна строка моноширинным, как в макете.
+  function describeCommandStep(step) {
+    if (!step.tool) return 'Действие не выбрано';
+    const args = step.args || {};
+    if (step.tool === 'ui_keys') {
+      const keys = typeof args.keys === 'string' ? args.keys.trim() : '';
+      if (!keys) return 'Нажать клавиши';
+      const chord = keys.split('+').map((key) => ({ win: 'Win', ctrl: 'Ctrl', alt: 'Alt', shift: 'Shift' })[key.toLowerCase()] || key.toUpperCase()).join('+');
+      return `Нажать ${chord}${chord === 'Win+L' ? ' — заблокировать экран' : ''}`;
+    }
+    const brief = U.humanize(U.argsBrief(args, 80));
+    return U.toolTitle(step.tool) + (brief ? ': ' + brief : '');
+  }
+
   function cmdStepsPreview(c, listId) {
     const box = el('div', { class: 'cmd-steps cmd-steps-preview', id: listId });
-    for (let i = 0; i < c.steps.length; i += 1) {
-      const s = c.steps[i];
-      const brief = U.argsBrief(s.args, 46);
-      box.append(el('span', { class: 'cmd-step' },
-        el('b', { text: `${i + 1}. ${s.tool || '—'}` }),
-        brief ? el('span', { text: brief }) : null));
-    }
+    c.steps.forEach((step, i) => box.append(el('span', { class: 'cmd-step', text: `${i + 1}. ${describeCommandStep(step)}` })));
     if (!c.steps.length) box.append(el('span', { text: 'шагов нет' }));
     return box;
   }
@@ -3722,7 +3787,10 @@
         || (c.folder || '').toLowerCase().includes(q)
         || c.phrases.some((p) => p.toLowerCase().includes(q)))
       : K.list;
-    list.replaceChildren(...shown.map((c) => cmdRow(c, canSave, canRun)));
+    list.replaceChildren(...window.CmdSteps.groupCommands(shown).map((group) =>
+      el('li', { class: 'cmd-shelf' },
+        el('h3', { text: group.folder ? group.title : 'Общие' }),
+        el('ul', { class: 'cmd-shelf-items' }, group.commands.map((c) => cmdRow(c, canSave, canRun))))));
     U.fillIcons(list);
 
     const noteShown = !$('#cmdApiNote').hidden;
@@ -3788,7 +3856,7 @@
         'aria-label': `Запустить «${name}»`,
         onclick: (e) => { e.stopPropagation(); runCommand(c, e.currentTarget); },
       }, el('span', { class: 'btn-label', text: 'Запустить' })),
-      sw));
+      el('label', { class: 'cmd-enabled' }, sw, el('span', { text: c.enabled ? 'Включена' : 'Выключена' }))));
     item.addEventListener('click', (e) => {
       if (e.target.closest('button, input, label')) return;
       selectCommand(c.id);
@@ -3821,7 +3889,7 @@
     if (!(await confirmLeave())) return;
     setCmdTab('mine');
     K.selectedId = null;
-    K.draft = { id: null, name: '', phrases: [], steps: [{ tool: '', args: {} }], enabled: true, lastRunAt: null, folder: null, hotkey: null, origin: 'manual', warnings: [] };
+    K.draft = { id: null, name: '', phrases: ['рабочее утро'], steps: [{ tool: '', args: {} }], enabled: true, lastRunAt: null, folder: null, hotkey: null, origin: 'manual', warnings: [] };
     K.dirty = false;
     openEditor();
     $('#cmdName').focus();
@@ -3979,7 +4047,7 @@
     note.textContent = K.catalogNote;
     note.hidden = !K.catalogNote;
     $('#cmdSteps').replaceChildren(...d.steps.map((s, i) => stepNode(s, i, d.steps.length)));
-    $('#cmdStepCount').textContent = `${d.steps.length} / ${MAX_STEPS}`;
+    $('#cmdStepCount').textContent = String(d.steps.length);
     const add = $('#cmdStepAdd');
     add.disabled = d.steps.length >= MAX_STEPS;
     add.title = d.steps.length >= MAX_STEPS ? `Достигнут лимит ${MAX_STEPS} шагов` : 'Выбрать действие для нового шага';
@@ -3988,30 +4056,7 @@
 
   function stepNode(step, i, total) {
     const { tool, props, required } = schemaOf(step.tool);
-    const sel = el('select', { class: 'input', 'aria-label': `Шаг ${i + 1}: инструмент` });
-    sel.append(el('option', { value: '', text: 'Действие…' }));
-    for (const t of K.catalog) {
-      sel.append(el('option', { value: t.name, text: t.name }));
-    }
-    if (step.tool && !tool) sel.append(el('option', { value: step.tool, text: step.tool }));
-    sel.value = step.tool;
-    sel.addEventListener('change', async () => {
-      const nextName = sel.value;
-      const next = schemaOf(nextName);
-      const kept = {};
-      for (const k of Object.keys(next.props)) if (k in step.args) kept[k] = step.args[k];
-      const lost = Object.keys(step.args).filter((k) => !(k in next.props)
-        && step.args[k] !== undefined && step.args[k] !== null && step.args[k] !== '');
-      if (lost.length) {
-        sel.value = step.tool;
-        const ok = await ask('Сменить действие?', `Смена действия удалит заполненные поля: ${lost.join(', ')}.`, 'Сменить', 'Оставить');
-        if (!ok) { renderSteps(); return; }
-      }
-      step.tool = nextName;
-      step.args = kept;
-      renderSteps();
-      markDirty();
-    });
+    const change = el('button', { type: 'button', class: 'nox-btn step-change', text: step.tool ? 'Сменить действие' : 'Выбрать действие', onclick: () => openActionPicker(i) });
 
     const d = K.draft;
     const move = (dir) => {
@@ -4029,17 +4074,13 @@
     if (!tool) keys = Object.keys(step.args);
     for (const key of keys) args.append(argField(step, key, tool ? props[key] || {} : { type: 'string' }, required.includes(key), i));
 
-    const title = step.tool
-      ? (tool ? U.toolTitle(step.tool) : 'Инструмент недоступен')
-      : 'Действие не выбрано';
+    const title = step.tool && !tool ? 'Действие недоступно' : describeCommandStep(step);
 
     return el('li', { class: 'step' },
       el('div', { class: 'step-head' },
         el('span', { class: 'step-num', text: String(i + 1) }),
-        sel,
-        el('span', { class: 'step-title', title, text: title }),
+        el('span', { class: 'step-title', text: title }),
         tool && /^T[23]$/.test(tool.risk || '') ? riskNode(tool.risk) : null,
-        !tool && step.tool ? el('span', { class: 'step-unavailable', text: 'инструмент недоступен' }) : null,
         el('div', { class: 'step-tools' },
           el('button', { class: 'icon-btn', type: 'button', 'data-move': 'up', title: 'Выше', 'aria-label': `Шаг ${i + 1} выше`, disabled: i === 0, onclick: () => move(-1) }, icon('up')),
           el('button', { class: 'icon-btn', type: 'button', 'data-move': 'down', title: 'Ниже', 'aria-label': `Шаг ${i + 1} ниже`, disabled: i === total - 1, onclick: () => move(1) }, icon('down')),
@@ -4047,26 +4088,32 @@
             class: 'icon-btn', type: 'button', title: 'Удалить шаг', 'aria-label': `Удалить шаг ${i + 1}`,
             onclick: () => { d.steps.splice(i, 1); renderSteps(); markDirty(); },
           }, icon('x')))),
-      tool && tool.description ? el('p', { class: 'step-desc', text: tool.description }) : null,
-      args);
+      args, change,
+      step.tool ? el('details', { class: 'collection-details' },
+        el('summary', { text: 'Подробнее' }),
+        el('p', { text: step.tool }),
+        tool?.description ? el('p', { text: tool.description }) : null,
+        step.tool === 'ui_keys' && props.keys?.description ? el('p', { text: props.keys.description }) : null) : null);
   }
 
   function argField(step, key, spec, req, stepIndex) {
     const id = `arg-${stepIndex}-${key}`.replace(/[^\w-]/g, '_');
     const type = Array.isArray(spec.type) ? spec.type[0] : spec.type;
     const label = el('label', { class: 'arg-label', for: id },
-      el('span', { text: ARG_LABELS[key] || key }),
+      el('span', { text: ARG_LABELS[key] || 'Параметр действия' }),
       req ? el('span', { class: 'req', 'aria-hidden': 'true', text: '*' }) : null);
     const hints = [];
     if (type === 'integer' || type === 'number') {
       if (spec.minimum !== undefined && spec.maximum !== undefined) hints.push(`от ${spec.minimum} до ${spec.maximum}`);
     }
-    if (spec.description) hints.push(spec.description);
+    if (spec.description && !(step.tool === 'ui_keys' && key === 'keys')) hints.push(U.humanize(spec.description));
     const hint = hints.length ? el('span', { class: 'arg-hint', text: hints.join(' · ') }) : null;
     const cur = step.args[key];
     const set = (v) => {
       if (v === undefined || v === '' || (typeof v === 'number' && Number.isNaN(v))) delete step.args[key];
       else step.args[key] = v;
+      const title = document.querySelectorAll('#cmdSteps .step-title')[stepIndex];
+      if (title) title.textContent = describeCommandStep(step);
       markDirty();
     };
 
@@ -4114,7 +4161,7 @@
       const v = step.args[k];
       return v === undefined || v === null || v === '';
     });
-    if (missing.length) return { state: 'warn', text: 'заполните: ' + missing.join(', ') };
+    if (missing.length) return { state: 'warn', text: 'заполните: ' + missing.map((key) => ARG_LABELS[key] || 'параметр действия').join(', ') };
     return { state: 'ok', text: 'готов к сохранению' };
   }
 
@@ -4125,8 +4172,7 @@
     if (!d || !box) return;
     const rows = d.steps.map((s, i) => {
       const r = stepReadiness(s, i);
-      const brief = U.argsBrief(s.args, 34);
-      const titleText = `${i + 1}. ${s.tool || '—'}${brief ? ' ' + brief : ''}`;
+      const titleText = `${i + 1}. ${describeCommandStep(s)}`;
       return el('li', { class: 'nox-ready-item' },
         el('span', { class: 'nox-ready-step' },
           el('span', { class: 'nox-dot', dataset: { state: r.state }, 'aria-hidden': 'true' }),
@@ -4152,7 +4198,7 @@
     d.steps.forEach((s, i) => {
       const n = i + 1;
       const stepEl = () => $$('#cmdSteps .step')[i];
-      if (!s.tool) { add(`Заполните: шаг ${n} — инструмент.`, () => stepEl() && $('select', stepEl())); return; }
+      if (!s.tool) { add(`Заполните: шаг ${n} — инструмент.`, () => stepEl() && $('.step-change', stepEl())); return; }
       const { tool, required } = schemaOf(s.tool);
       if (!tool) return;
       const fieldEl = (k) => () => $('#' + CSS.escape(`arg-${i}-${k}`.replace(/[^\w-]/g, '_')));
@@ -4180,7 +4226,7 @@
       return;
     }
     showCmdError('');
-    const lines = window.CmdSteps.describeSteps(d.steps, (t) => U.toolTitle(t), (a) => U.argsBrief(a, 80));
+    const lines = d.steps.map((step, i) => `${i + 1}. ${describeCommandStep(step)}`);
     const box = $('#cmdRunResult');
     box.hidden = false;
     box.replaceChildren(
@@ -4414,22 +4460,24 @@
         icon(PICK_ICON[t.name] || 'bolt'),
         el('span', { class: 'nox-picker-item-body' },
           el('span', { class: 'nox-picker-item-name', text: U.toolTitle(t.name) }),
-          el('span', { class: 'nox-picker-item-desc', title: t.description || '', text: t.name + (t.description ? ' · ' + U.clip(t.description, 130) : '') })));
+          el('span', { class: 'nox-picker-item-desc', text: t.name === 'ui_keys' ? 'Нажать клавишу или сочетание, например Win+L.' : U.clip(U.humanize(t.description || 'Добавить это действие в команду.'), 130) })));
         return item;
       }));
     }
     U.fillIcons(listBox);
     const add = $('#npAdd');
     add.disabled = !PICK.selected;
-    add.textContent = PICK.selected ? `Добавить «${U.toolTitle(PICK.selected)}»` : 'Добавить';
+    add.textContent = PICK.index !== null ? 'Выбрать действие' : 'Добавить действие';
   }
 
-  function openActionPicker() {
+  function openActionPicker(index = null) {
     const d = K.draft;
     if (!d) return;
-    if (d.steps.length >= MAX_STEPS) { showCmdError(`Достигнут предел ${MAX_STEPS} шагов.`, $('#cmdStepAdd')); return; }
+    if (!Number.isInteger(index)) index = null;
+    if (index === null && d.steps.length >= MAX_STEPS) { showCmdError(`Достигнут предел ${MAX_STEPS} шагов.`, $('#cmdStepAdd')); return; }
     PICK.open = true;
-    PICK.selected = null;
+    PICK.index = index;
+    PICK.selected = index === null ? null : d.steps[index]?.tool || null;
     PICK.cat = 'all';
     PICK.q = '';
     const search = $('#npSearch');
@@ -4446,26 +4494,37 @@
     PICK.open = false;
     const dlg = $('#cmdActionDialog');
     if (dlg && dlg.open) dlg.close();
-    if (back) $('#cmdStepAdd')?.focus();
+    if (back) ($$('#cmdSteps .step-change')[PICK.index] || $('#cmdStepAdd'))?.focus();
   }
 
-  function addPickedTool(name) {
+  async function addPickedTool(name) {
     const d = K.draft;
     const tool = name || PICK.selected;
     if (!d || !tool) return;
-    if (d.steps.length >= MAX_STEPS) { closeActionPicker(true); showCmdError(`Достигнут предел ${MAX_STEPS} шагов.`, $('#cmdStepAdd')); return; }
-    d.steps.push({ tool, args: {} });
+    const index = PICK.index;
+    if (index === null && d.steps.length >= MAX_STEPS) { closeActionPicker(true); showCmdError(`Достигнут предел ${MAX_STEPS} шагов.`, $('#cmdStepAdd')); return; }
+    const prev = index === null ? null : d.steps[index];
+    const props = schemaOf(tool).props;
+    const args = Object.fromEntries(Object.entries(prev?.args || {}).filter(([key]) => Object.hasOwn(props, key)));
     closeActionPicker(false);
+    if (prev && Object.keys(args).length < Object.keys(prev.args).length
+      && !(await ask('Сменить действие?', 'Некоторые заполненные поля будут очищены.', 'Сменить', 'Оставить'))) {
+      $$('#cmdSteps .step-change')[index]?.focus();
+      return;
+    }
+    if (K.draft !== d) return;
+    if (index === null) d.steps.push({ tool, args });
+    else d.steps[index] = { tool, args };
     renderSteps();
     markDirty();
-    const idx = d.steps.length - 1;
+    const idx = index ?? d.steps.length - 1;
     const { required } = schemaOf(tool);
     const key = required[0];
     let focusEl = null;
     if (key) focusEl = $('#' + CSS.escape(`arg-${idx}-${key}`.replace(/[^\w-]/g, '_')));
     if (!focusEl) {
       const steps = $$('#cmdSteps .step');
-      focusEl = steps[idx] ? $('select', steps[idx]) : null;
+      focusEl = steps[idx] ? $('.step-change', steps[idx]) : null;
     }
     if (focusEl) {
       focusEl.focus();
@@ -5033,6 +5092,7 @@
     safe('расширения', () => { if (window.JarvisExtensions) window.JarvisExtensions.init({ toast, ask }); });
     safe('левая панель', initRail);
     safe('скорость', initTier);
+    safe('вид списков', initCollectionViews);
     safe('журнал', initJournal);
     safe('настройки', initSettings);
     safe('тема', initTheme);

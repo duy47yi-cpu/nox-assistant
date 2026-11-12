@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="color-scheme" content="dark light">
   <title>Nox — Джарвис</title>
   <link rel="stylesheet" href="styles.css">
@@ -21,6 +21,8 @@
   <link rel="stylesheet" href="nox-settings.css">
   <!-- Общая оболочка Nox для всех разделов: шапка, рейка, Журнал, Аккаунт. Последний слой. -->
   <link rel="stylesheet" href="nox-shell.css">
+  <!-- Фон окна: своя картинка и эффекты под панелями всех разделов. Последний слой. -->
+  <link rel="stylesheet" href="backdrop.css">
   <!-- Без defer: тема ставится до первой отрисовки -->
   <script src="theme-boot.js"></script>
   <!-- dev-stub.js здесь не подключается: shared.js догружает его сам и только в обычном браузере без window.jarvis. -->
@@ -32,10 +34,12 @@
   <script src="cmd-steps.js" defer></script>
   <script src="desks.js" defer></script>
   <script src="extensions.js" defer></script>
+  <script src="math.js" defer></script>
   <script src="app.js" defer></script>
   <script src="account.js" defer></script>
   <script src="model-pick.js" defer></script>
   <script src="accent.js" defer></script>
+  <script src="backdrop.js" defer></script>
   <script src="look.js" defer></script>
   <script src="connections.js" defer></script>
   <script src="settings-nav.js" defer></script>
@@ -50,6 +54,7 @@
   <div class="hands-banner" id="handsBanner" hidden><div class="hands-pill" role="status"><span class="hands-dot" aria-hidden="true"></span><span class="hands-text">Nox работает на вашем ПК</span><span class="hands-sep" aria-hidden="true">·</span><kbd>Esc</kbd><span class="hands-hint">— остановить</span></div></div>
   <div class="app" id="app">
     <!-- Эффект фона темы (звёзды, волны, лунный свет, рассвет): только рисунок, под панелями, правила в themes.css. -->
+    <div class="theme-bg" aria-hidden="true"></div>
     <div class="theme-fx" aria-hidden="true"></div>
 
     <!-- ── Общая шапка Nox: одна на все разделы (классический экран её не показывает) ── -->
@@ -322,27 +327,19 @@
                 <span class="counter" id="histCount"></span>
               </div>
               <div class="filters">
-                <div class="seg" id="statusFilter" role="group" aria-label="Фильтр журнала">
-                  <button type="button" class="seg-btn" data-value="all" aria-pressed="true">Все</button>
-                  <button type="button" class="seg-btn" data-value="confirmed" aria-pressed="false">Подтверждено</button>
-                  <button type="button" class="seg-btn" data-value="unverified" aria-pressed="false">Не проверено</button>
-                  <button type="button" class="seg-btn" data-value="failed" aria-pressed="false">Провалено</button>
-                  <button type="button" class="seg-btn" data-value="error" aria-pressed="false">Ошибки</button>
-                  <button type="button" class="seg-btn" data-value="refused" aria-pressed="false">Отклонённые</button>
-                </div>
                 <div class="filter-search">
                   <input class="input input-sm" id="histSearch" type="search" placeholder="Поиск по журналу" aria-label="Поиск по журналу">
                   <button class="btn btn-secondary btn-sm" type="button" id="histReload" title="Обновить из журнала"><span data-icon="refresh" aria-hidden="true"></span>Обновить</button>
                 </div>
+                <div class="seg journal-chips" id="statusFilter" role="group" aria-label="Фильтр журнала">
+                  <button type="button" class="seg-btn" data-value="all" aria-pressed="true">Все</button>
+                  <button type="button" class="seg-btn" data-value="confirmed" aria-pressed="false">Подтверждено</button>
+                  <button type="button" class="seg-btn" data-value="unverified" aria-pressed="false">Не проверено</button>
+                  <button type="button" class="seg-btn" data-value="failed" aria-pressed="false">Не получилось</button>
+                  <button type="button" class="seg-btn" data-value="refused" aria-pressed="false">Отклонено</button>
+                </div>
               </div>
-              <div class="table-wrap">
-                <table class="jtable">
-                  <thead>
-                    <tr><th scope="col">Время</th><th scope="col">Действие</th><th scope="col">Риск</th><th scope="col">Статус</th><th scope="col">Итог</th></tr>
-                  </thead>
-                  <tbody id="histBody"></tbody>
-                </table>
-              </div>
+              <div id="histBody" class="journal-days" aria-label="Записи по дням"></div>
               <div class="empty" id="histEmpty" hidden>
                 <p id="histEmptyText">Журнал пуст. Здесь появятся действия Джарвиса.</p>
               </div>
@@ -399,7 +396,7 @@
                     </div>
                     <div class="nox-empty" id="cmdNoResults" hidden>
                       <p class="nox-empty-title">Ничего не нашлось</p>
-                      <p class="nox-empty-text">Попробуйте другое слово: имя, папка или фраза.</p>
+                      <p class="nox-empty-text">Попробуйте другое слово: название, группа или фраза.</p>
                       <button class="nox-link" type="button" id="cmdResetSearch">Сбросить поиск</button>
                     </div>
                   </div>
@@ -455,7 +452,7 @@
               <div class="nox-editor-body">
                 <div class="nox-editor-main">
                   <div class="field">
-                    <label class="field-label" for="cmdName">Имя команды</label>
+                    <label class="field-label" for="cmdName">Название</label>
                     <input class="input" id="cmdName" type="text" maxlength="60" placeholder="Например, «Рабочее утро»">
                   </div>
 
@@ -475,8 +472,8 @@
 
                   <div class="field-row">
                     <div class="field">
-                      <label class="field-label" for="cmdFolder">Папка</label>
-                      <input class="input" id="cmdFolder" type="text" maxlength="60" placeholder="Необязательно, до 60 знаков">
+                      <label class="field-label" for="cmdFolder">Где показывать</label>
+                      <input class="input" id="cmdFolder" type="text" maxlength="60" placeholder="Например, Браузер">
                     </div>
                     <div class="field">
                       <label class="field-label" for="cmdHotkey">Горячая клавиша</label>
@@ -489,7 +486,7 @@
 
                   <div class="field">
                     <div class="steps-head">
-                      <h2 class="steps-title" id="cmdStepsLabel">Шаги <span class="counter" id="cmdStepCount">0 / 20</span></h2>
+                      <h2 class="steps-title" id="cmdStepsLabel">Шаги <span class="counter" id="cmdStepCount">0</span></h2>
                       <button class="nox-btn" type="button" id="cmdStepAdd"><span data-icon="plus" aria-hidden="true"></span>Добавить действие</button>
                     </div>
                     <p class="nox-note" id="cmdCatalogNote" hidden></p>
@@ -516,7 +513,7 @@
                 <button class="nox-btn nox-btn-danger" type="button" id="cmdDelete"><span data-icon="trash" aria-hidden="true"></span><span id="cmdDeleteText">Удалить</span></button>
                 <span class="editor-foot-gap"></span>
                 <button class="btn btn-secondary" type="button" id="cmdCheck" title="Показать, что будет делать команда, без запуска"><span data-icon="search" aria-hidden="true"></span>Проверить</button>
-                <button class="btn btn-secondary" type="button" id="cmdRun"><span data-icon="play" aria-hidden="true"></span>Запустить сейчас</button>
+                <button class="btn btn-ghost" type="button" id="cmdRun"><span data-icon="play" aria-hidden="true"></span>Запустить сейчас</button>
                 <button class="btn btn-ghost" type="button" id="cmdCancel">Отмена</button>
                 <button class="btn btn-primary" type="submit" id="cmdSave" title="Сохранить (Ctrl+S)">Сохранить</button>
               </footer>
@@ -573,7 +570,7 @@
                   <div class="nox-popular-head"><h3 class="nox-popular-title" id="mcpPopularTitle">Популярные</h3></div>
                   <div class="nox-popular-cats" id="mcpPopularCats" role="group" aria-label="Категории популярных сервисов"></div>
                   <div class="nox-popular-list" id="mcpPopularList"></div>
-                  <p class="nox-popular-note" id="mcpPopularNote">Ключи доступа сюда не подставляются: сервисы с ключами добавляются вручную. Пакеты ставятся только после вашего подтверждения.</p>
+
                 </aside>
               </div>
             </section>
@@ -630,6 +627,14 @@
                   <option value="low">Кратко</option>
                   <option value="medium">Обычно</option>
                   <option value="high">Глубоко</option>
+                </select>
+              </div>
+              <div class="set-row">
+                <span class="set-text"><span class="set-name" id="setReplyStyleLabel">Оформление ответов</span><span class="set-hint" id="setReplyStyleHint">Коротко и по делу, без оформления.</span></span>
+                <select class="input input-sm" id="setReplyStyle" aria-labelledby="setReplyStyleLabel" aria-describedby="setReplyStyleHint">
+                  <option value="plain">Простой</option>
+                  <option value="rich">Выразительный</option>
+                  <option value="notes">Конспект</option>
                 </select>
               </div>
             </section>
@@ -953,26 +958,7 @@
               </div>
               <div class="hint" id="brainHint" hidden>
                 <p>Джарвис пока не подключён к модели. Войдите в аккаунт или свяжитесь с нами.</p>
-                <div id="brainHintOwner" hidden>
-                  <p>Для разработчика: откройте файл <code>.env</code> в папке проекта и добавьте строку <code>NOX_BRAIN_KEY=ваш ключ</code>, затем перезапустите Джарвиса.</p>
-                </div>
               </div>
-            </section>
-
-            <section class="set-section" id="ownerProviders" data-cat="ai" aria-labelledby="setOwnerTitle" hidden>
-              <h2 class="set-title" id="setOwnerTitle">Провайдеры владельца</h2>
-              <div class="set-row">
-                <span class="set-text"><span class="set-name">Свои модели</span><span class="set-hint">Выбранный провайдер заменяет «Быструю» и «Умную». Ключ хранится зашифрованным. Правила режимов те же</span></span>
-                <button class="btn btn-secondary btn-sm" type="button" id="ownerProvNone">Без провайдера</button>
-              </div>
-              <div id="ownerProvList"></div>
-              <form class="set-row" id="ownerProvForm">
-                <input class="input input-sm" name="name" type="text" maxlength="60" placeholder="Имя" aria-label="Имя провайдера" required>
-                <input class="input input-sm" name="baseUrl" type="url" placeholder="http://localhost:11434/v1" aria-label="Адрес" required>
-                <input class="input input-sm" name="model" type="text" placeholder="Модель" aria-label="Модель" required>
-                <input class="input input-sm" name="key" type="password" placeholder="Ключ, если нужен" aria-label="Ключ" autocomplete="off">
-                <button class="btn btn-secondary btn-sm" type="submit"><span data-icon="plus" aria-hidden="true"></span>Добавить</button>
-              </form>
             </section>
 
             <section class="set-section" data-cat="general" aria-labelledby="setChatTitle">

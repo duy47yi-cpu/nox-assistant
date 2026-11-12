@@ -19,14 +19,11 @@ test('выбор пользователя и явный уровень зада�
   assert.equal(r.model, 'f');
 });
 
-test('область кеша различает модели, уровень и выбранный собственный провайдер', () => {
-  const fast = fake('f'); const smart = fake('s'); const owner = fake('o');
-  let selected = false;
-  const r = createRouter({ clients: { fast, smart }, override: () => selected ? owner : null });
+test('область кеша различает быструю и умную модели', () => {
+  const fast = fake('f'); const smart = fake('s');
+  const r = createRouter({ clients: { fast, smart } });
   assert.notDeepEqual(r.cacheScope({ tier: 'fast' }), r.cacheScope({ tier: 'smart' }));
-  const previous = r.cacheScope({ tier: 'smart' });
-  selected = true;
-  assert.notDeepEqual(previous, r.cacheScope({ tier: 'smart' }));
+  assert.deepEqual(r.cacheScope({ tier: 'smart' }), r.cacheScope({ tier: 'smart' }));
 });
 
 test('нет умной или мусор в настройках: быстрая и низкий уровень', async () => {

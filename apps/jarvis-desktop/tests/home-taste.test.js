@@ -16,10 +16,13 @@ const rule = (sel) => {
   return all.at(-1)[1];
 };
 
-test('шрифт заголовка IBM Plex Serif подключён из fonts/ и стоит на обоих заголовках главной', () => {
+test('шрифт заголовков: IBM Plex Serif подключён из fonts/, а заголовки главной берут гарнитуру темы', () => {
   assert.match(themesCss, /@font-face \{ font-family: "IBM Plex Serif"; src: url\("fonts\/IBMPlexSerif-Regular\.ttf"\)/);
   assert.ok(fs.statSync(path.join(R, 'fonts', 'IBMPlexSerif-Regular.ttf')).size > 50000);
-  assert.match(presence, /--font-display: "IBM Plex Serif"/);
+  // Заголовки идут за темой, а не за одной жёстко прописанной гарнитурой.
+  assert.match(presence, /--font-display: var\(--font-head\)/);
+  assert.match(themesCss, /--font-head: var\(--theme-font-head\)/);
+  assert.match(themesCss, /\[data-theme="dark"\] \{[^}]*--theme-font-head: "IBM Plex Serif"/);
   const size = (body) => Number(body.match(/(\d+)px\/\d+px var\(--font-display\)/)[1]);
   const h = size(rule('.chat-empty h2'));
   const s = size(rule('#stageStatus .status-main'));

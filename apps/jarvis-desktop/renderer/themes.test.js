@@ -45,10 +45,18 @@ test('наборы по мотивам Luxify: в IDS, в темах и кноп
 });
 
 test('эффекты фона: у своих наборов, слабые, движение выключается', () => {
-  for (const id of ['starry', 'liquid', 'moonlight', 'sunrise']) {
-    assert.match(css, new RegExp(`html(\\[data-theme="${id}"\\]|:is\\([^)]*"${id}"[^)]*\\)) \\.theme-fx::before \\{[^}]*animation: fx`), `эффект ${id}`);
+  // Эффект выбирается отдельно от темы: рисунки висят на html[data-fx], а не на теме.
+  for (const id of ['stars', 'waves', 'moon', 'dawn', 'snow', 'rain', 'pattern']) {
+    assert.match(css, new RegExp(`html\\[data-fx="${id}"\\] \\.theme-fx::before \\{[^}]*animation: fx`), `эффект ${id}`);
   }
-  assert.match(css, /html\[data-bg="solid"\] \.theme-fx \{ display: none; \}/, 'сплошной фон убирает эффект');
+  assert.doesNotMatch(css, /\nhtml(:is\()?\[data-theme[^{\n]*\.theme-fx/, 'эффекты не привязаны к теме');
+  const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
+  // У каждого эффекта из списка в «Виде» есть рисунок, и у каждого эффекта темы тоже.
+  const offered = [...boot.match(/const FXS = \{([\s\S]*?)\};/)[1].matchAll(/([a-z]+): \[/g)].map((m) => m[1]).filter((id) => id !== 'theme' && id !== 'off');
+  const themed = [...boot.match(/const THEME_FX = \{([^}]*)\}/)[1].matchAll(/: '([a-z]+)'/g)].map((m) => m[1]);
+  assert.ok(offered.length >= 9);
+  for (const id of new Set([...offered, ...themed])) assert.ok(css.includes(`html[data-fx="${id}"] .theme-fx::before {`), `рисунок эффекта ${id}`);
+  assert.match(css, /html\[data-fx\] \.theme-fx \{ display: block; \}/);
   assert.match(css, /\.theme-fx \{[^}]*pointer-events: none/, 'эффект не ловит мышь');
   const rm = css.match(/@media \(prefers-reduced-motion: reduce\) \{\s*\.theme-fx::before, \.theme-fx::after \{ animation: none !important; \}/);
   assert.ok(rm, 'reduced-motion выключает движение эффектов');
@@ -121,4 +129,26 @@ test('тема — набор целиком: «Стекло» задаёт св
   const block = css.slice(css.indexOf('/* Стекло:'), css.indexOf('/* Фон окна'));
   assert.ok(block.length > 100);
   assert.ok(!/radial-gradient|text-shadow|background-clip:\s*text/.test(block));
+});
+
+test('все разделы Nox берут палитру и гарнитуры у активной темы', () => {
+  for (const file of ['nox-screen.css', 'nox-settings.css', 'nox-commands.css', 'nox-connections.css', 'nox-shell.css']) {
+    const source = fs.readFileSync(path.join(__dirname, file), 'utf8');
+    assert.match(source, /--nox-bg:\s*var\(--bg\)/, file);
+    assert.match(source, /--nox-surface-2:\s*var\(--surface\)/, file);
+    assert.match(source, /--nox-text-1:\s*var\(--text\)/, file);
+    assert.match(source, /--nox-accent:\s*var\(--accent\)/, file);
+    assert.doesNotMatch(source, /--nox-(?:bg|surface-[1-4]|border(?:-strong)?|text-(?:1|2|3|ghost)|accent(?:-hover|-active|-ink)?|ok|warn|err):\s*#[0-9a-f]/i, file);
+    assert.doesNotMatch(source, /--font:\s*['"]/, file);
+  }
+});
+
+test('у каждой темы свои гарнитуры, а списки выбора окрашены токенами', () => {
+  for (const id of Object.keys(themes)) {
+    const block = css.match(new RegExp(`\\[data-theme="${id}"\\] \\{([^}]*)\\}`))[1];
+    assert.match(block, /--theme-font:/, id);
+    assert.match(block, /--theme-font-head:/, id);
+  }
+  assert.match(css, /select\.input option\s*\{[^}]*background:\s*var\(--surface\)/);
+  assert.match(css, /select\.input option\s*\{[^}]*color:\s*var\(--text\)/);
 });

@@ -8,48 +8,29 @@
 
 /* ── 1. Токены для разделов, у которых не было своего слоя ─────── */
 body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) {
-  --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-head: var(--font);
-  --font-display: var(--font);
-  --font-reply: var(--font);
-  --nox-bg: #0F0F10;
-  --nox-surface-1: #141415;
-  --nox-surface-2: #18181B;
-  --nox-surface-3: #1C1C1F;
-  --nox-surface-4: #232326;
-  --nox-border: #2A2A2E;
-  --nox-border-strong: #34343A;
-  --nox-text-1: #F1F1F3;
-  --nox-text-2: #9A9AA0;
-  --nox-text-3: #6B6B70;
-  --nox-text-ghost: #3A3A3E;
-  --nox-accent: #2E9AC1;
-  --nox-accent-hover: #3AAAD6;
-  --nox-accent-ink: #061217;
-  --nox-accent-soft: color-mix(in srgb, #2E9AC1 14%, transparent);
-  --nox-ok: #3DD68C;
-  --nox-warn: #F5A524;
-  --nox-err: #FF5C5C;
+  --nox-bg: var(--bg);
+  --nox-surface-1: var(--surface);
+  --nox-surface-2: var(--surface);
+  --nox-surface-3: var(--surface-2);
+  --nox-surface-4: var(--surface-3);
+  --nox-border: var(--border);
+  --nox-border-strong: var(--border-input);
+  --nox-text-1: var(--text);
+  --nox-text-2: var(--text-2);
+  --nox-text-3: var(--text-3);
+  --nox-text-ghost: color-mix(in srgb, var(--text-3) 45%, var(--surface));
+  --nox-accent: var(--accent);
+  --nox-accent-hover: color-mix(in srgb, var(--accent) 88%, var(--text));
+  --nox-accent-ink: var(--accent-ink);
+  --nox-accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --nox-ok: var(--ok);
+  --nox-warn: var(--warn);
+  --nox-err: var(--err);
   --nox-font: var(--font);
   --nox-mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
   --rail-w: 52px;
   --dur-fast: 120ms;
   --ease-default: cubic-bezier(0.2, 0, 0, 1);
-  /* Старые стили журнала и аккаунта читают эти имена — даём им палитру Nox. */
-  --bg: var(--nox-bg);
-  --surface: var(--nox-surface-1);
-  --surface-2: var(--nox-surface-3);
-  --surface-3: var(--nox-surface-4);
-  --border: var(--nox-border);
-  --border-input: var(--nox-border-strong);
-  --text: var(--nox-text-1);
-  --text-2: var(--nox-text-2);
-  --text-3: #8A8A90;
-  --accent: var(--nox-accent);
-  --accent-ink: var(--nox-accent-ink);
-  --accent-bg: var(--nox-accent-soft);
-  --accent-line: color-mix(in srgb, #2E9AC1 42%, transparent);
-  --focus: var(--nox-accent);
   background: transparent;
   color: var(--nox-text-1);
 }
@@ -67,7 +48,8 @@ body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-
   column-gap: 8px;
   padding: 4px 8px 8px;
   height: 100vh;
-  background: var(--nox-bg);
+  background: var(--grain), var(--bg-image), var(--win-bg);
+  background-size: 180px 180px, auto, auto;
   border: 1px solid color-mix(in srgb, var(--nox-border) 80%, transparent);
   border-radius: 12px;
   overflow: clip;
@@ -338,7 +320,7 @@ body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail
   z-index: 30;
   top: 0; bottom: 0; left: 0;
   width: 244px;
-  box-shadow: 16px 0 40px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-dialog);
 }
 
 /* ── 7. Низкое окно: шапки разделов компактнее, работе больше места ── */
@@ -361,3 +343,93 @@ body:is([data-view="journal"], [data-view="account"], [data-view="deals"]) .rail
 @media (min-width: 1400px) {
   body[data-view="nox"] { --nox-sphere-w: 400px; --nox-orb-size: 368px; }
 }
+
+/* Коллекции: единая типографика и переключатель представления. */
+:is(#journalPanel, #commands, #mcpPage) :is(h1, .nox-cmd-title, #cmdEditorTitle, .cmd-shelf h3, .journal-day h2, .nox-popular-title, .nox-packs-title) {
+  font-family: var(--font-head);
+  font-weight: 500;
+}
+.collection-view { display: inline-flex; flex: none; gap: 3px; padding: 3px; border: 1px solid var(--nox-border); border-radius: 9px; background: var(--nox-surface-2); -webkit-app-region: no-drag; }
+.collection-view button { cursor: pointer; border: 0; border-radius: 6px; padding: 5px 8px; background: transparent; color: var(--nox-text-2); font: 500 11px/16px var(--font); white-space: nowrap; }
+.collection-view button[aria-pressed="true"] { color: var(--nox-text-1); background: var(--nox-surface-3); box-shadow: inset 0 0 0 1px var(--nox-border); }
+.collection-view button:focus-visible, .collection-details summary:focus-visible { outline: 2px solid var(--nox-accent); outline-offset: 2px; }
+.collection-details { color: var(--nox-text-2); font: 400 12px/1.5 var(--font); overflow-wrap: anywhere; }
+.collection-details summary { cursor: pointer; width: fit-content; }
+.collection-details p { margin: 6px 0; }
+
+#journalCard .filters { display: grid; gap: 10px; }
+#journalCard .filter-search { display: flex; flex-wrap: wrap; gap: 8px; }
+#histSearch { flex: 1 1 170px; min-width: 0; }
+#journalCard .journal-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; border: 0; background: none; }
+#journalCard .journal-chips .seg-btn { border: 1px solid var(--nox-border); border-radius: 20px; padding: 5px 11px; }
+.journal-days { display: grid; gap: 16px; }
+.journal-day h2 { margin: 0 0 8px; color: var(--nox-text-2); font-size: 17px; }
+.journal-day ul { display: grid; gap: 5px; list-style: none; padding: 0; margin: 0; }
+.journal-entry { content-visibility: auto; contain-intrinsic-block-size: auto 90px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 12px; border: 1px solid var(--nox-border); border-radius: 10px; background: var(--nox-surface-2); color: var(--nox-text-1); overflow-wrap: anywhere; }
+.journal-entry-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.journal-entry-head strong { margin-right: auto; }
+.journal-entry-head time, .journal-evidence { color: var(--nox-text-2); }
+.journal-content p { margin: 5px 0; white-space: pre-wrap; line-height: 1.45; }
+.journal-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--nox-surface-3); color: var(--nox-text-2); }
+.journal-mark svg { width: 16px; height: 16px; }
+.journal-status { --journal-tone: var(--nox-text-2); color: var(--journal-tone); background: color-mix(in srgb, var(--journal-tone) 12%, transparent); border-radius: 20px; padding: 3px 8px; font-size: 11px; }
+[data-status="confirmed"] .journal-status { --journal-tone: var(--nox-ok); }
+[data-status="failed"] .journal-status { --journal-tone: var(--nox-err); }
+[data-status="refused"] .journal-status { --journal-tone: var(--nox-warn); }
+#journalPanel[data-collection-view="icons"] .journal-day ul { grid-template-columns: repeat(auto-fit, minmax(min(100%, 275px), 1fr)); }
+#journalPanel[data-collection-view="icons"] .journal-entry { display: flex; flex-direction: column; }
+#journalPanel[data-collection-view="icons"] .journal-mark { width: 48px; height: 48px; }
+#journalPanel[data-collection-view="icons"] .journal-mark svg { width: 24px; height: 24px; }
+@media (prefers-reduced-motion: no-preference) {
+  :is(.view-journal, .view-commands, .view-mcp):not([hidden]) > :first-child,
+  :is(#panelMine, #panelLib):not([hidden]),
+  :is(.collection-details, .pack-list)[open] > :not(summary),
+  .cmd-steps-preview { animation: collection-enter 180ms ease-out both; }
+  @keyframes collection-enter { from { opacity: .72; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+}
+
+#journalCard .filter-search { margin-inline: 0; min-width: 0; }
+#journalCard .filter-search .input { flex: 1 1 170px; }
+
+/* Журнал использует форму карточек и меток раздела «Подключения». */
+.journal-day ul { gap: 12px; align-items: start; }
+.journal-entry {
+  --journal-tone: var(--nox-text-2);
+  --journal-outline: var(--nox-border);
+  padding: 14px;
+  border-color: var(--journal-outline);
+  border-radius: 12px;
+}
+.journal-entry[data-status="confirmed"] { --journal-tone: var(--nox-ok); --journal-outline: color-mix(in srgb, var(--nox-ok) 26%, var(--nox-border)); }
+.journal-entry[data-status="failed"] { --journal-tone: var(--nox-err); --journal-outline: color-mix(in srgb, var(--nox-err) 34%, var(--nox-border)); }
+.journal-entry[data-status="refused"] { --journal-tone: var(--nox-warn); --journal-outline: color-mix(in srgb, var(--nox-warn) 34%, var(--nox-border)); }
+.journal-entry .journal-mark {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--journal-outline);
+  color: var(--journal-tone);
+}
+.journal-entry .journal-mark svg { width: 16px; height: 16px; }
+.journal-entry .journal-status {
+  --journal-tone: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--journal-outline);
+  color: var(--journal-tone);
+  font: 600 11px/1.25 var(--font);
+}
+.journal-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+}
+.journal-entry-head time { font: 400 11px/1.25 var(--font); }
+#journalPanel[data-collection-view="icons"] .journal-day ul { grid-template-columns: repeat(auto-fill, minmax(min(100%, 235px), 1fr)); align-items: stretch; }
+#journalPanel[data-collection-view="icons"] .journal-entry .journal-mark { width: 32px; height: 32px; }
+#journalPanel[data-collection-view="icons"] .journal-entry .journal-mark svg { width: 16px; height: 16px; }
+#journalPanel[data-collection-view="icons"] .journal-entry-head { justify-content: space-between; }
+#journalPanel[data-collection-view="icons"] .journal-entry-head strong { flex-basis: 100%; }

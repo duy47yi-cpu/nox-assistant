@@ -16,7 +16,7 @@
   const api = () => window.jarvis || null;
 
   // ── 2. Состояние раздела: загрузка и ошибки ───────────────────
-  const state = { loaded: false, model: 'fast', level: 'low' };
+  const state = { loaded: false, loading: false, revision: 0, model: 'fast', level: 'low' };
 
   function setStatus(text, tone) {
     const node = $('#setStatus');
@@ -54,15 +54,21 @@
   function loadStatus() {
     const bridge = api();
     if (!bridge || typeof bridge.getSettings !== 'function') return;
-    if (state.loaded) return;
+    if (state.loaded || state.loading) return;
+    state.loading = true;
+    const revision = state.revision;
     const main = $('#setMain');
     if (main) main.dataset.loading = 'true';
     setStatus('Проверяю настройки…');
-    Promise.resolve(bridge.getSettings())
+    let timer = 0;
+    const deadline = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('ядро не ответило вовремя')), 8000);
+    });
+    Promise.race([Promise.resolve().then(() => bridge.getSettings()), deadline])
       .then((s) => {
         state.loaded = true;
         if (s && typeof s === 'object') {
-          syncTierCard(s);
+          if (state.revision === revision) syncTierCard(s);
           setStatus('');
         } else {
           setStatus('Настройки недоступны в этой версии ядра', 'err');
@@ -73,6 +79,8 @@
         showError('Настройки не прочитаны: ' + String((err && err.message) || err || 'ядро не ответило'));
       })
       .finally(() => {
+        clearTimeout(timer);
+        state.loading = false;
         if (main) main.removeAttribute('data-loading');
       });
   }
@@ -104,6 +112,7 @@
     if (thinking) thinking.value = level;
     setHint('setModelHint', MODEL_HINT[model]);
     setHint('setThinkingHint', THINKING_HINT[level]);
+    syncReplyStyle(settings);
     // Поле выбора у чата показывает те же значения — сообщаем ему, а не перерисовываем его.
     try { document.dispatchEvent(new CustomEvent('jarvis:tier', { detail: { tier: model, level } })); } catch { /* без DOM */ }
   }
@@ -112,6 +121,7 @@
     const bridge = api();
     const select = $('#setModelTier');
     if (!bridge || typeof bridge.setModelTier !== 'function') return;
+    state.revision += 1;
     // Прежнее значение запоминаем до сохранения: select.value уже содержит новый вариант.
     const prev = state.model || (select ? select.value : 'fast');
     if (select) select.disabled = true;
@@ -135,6 +145,7 @@
     const bridge = api();
     const select = $('#setThinking');
     if (!bridge || typeof bridge.setThinking !== 'function') return;
+    state.revision += 1;
     const prev = state.level || (select ? select.value : 'low');
     if (select) select.disabled = true;
     try {
@@ -153,7 +164,44 @@
     }
   }
 
+  // Оформление ответов: правила уходят модели (ядро), вид текста — атрибут body для стилей ленты.
+  const REPLY_STYLES = ['plain', 'rich', 'notes'];
+  const REPLY_HINT = {
+    plain: 'Коротко и по делу, без оформления.',
+    rich: 'Подписи блоков, жирные числа и формулы — для объяснений и расчётов. Ответы длиннее.',
+    notes: 'Название, короткие пункты и итог одной строкой.',
+  };
+  function syncReplyStyle(settings) {
+    const value = settings && REPLY_STYLES.includes(settings.replyStyle) ? settings.replyStyle : 'plain';
+    state.replyStyle = value;
+    const select = $('#setReplyStyle');
+    if (select) select.value = value;
+    setHint('setReplyStyleHint', REPLY_HINT[value]);
+    document.body.dataset.replyStyle = value;
+  }
+
+  async function changeReplyStyle(next) {
+    const bridge = api();
+    const select = $('#setReplyStyle');
+    if (!bridge || typeof bridge.setReplyStyle !== 'function') return;
+    state.revision += 1;
+    const prev = state.replyStyle || 'plain';
+    if (select) select.disabled = true;
+    try {
+      const r = await bridge.setReplyStyle(next);
+      if (!r || r.ok === false) throw new Error('ядро отклонило выбор');
+      syncReplyStyle({ replyStyle: r.style });
+    } catch (err) {
+      if (select) select.value = prev;
+      showError('Оформление ответов не сохранено: ' + String((err && err.message) || err));
+    } finally {
+      if (select) select.disabled = false;
+    }
+  }
+
   function bindTierCard() {
+    const reply = $('#setReplyStyle');
+    if (reply) reply.addEventListener('change', () => changeReplyStyle(REPLY_STYLES.includes(reply.value) ? reply.value : 'plain'));
     const tier = $('#setModelTier');
     const thinking = $('#setThinking');
     if (tier) tier.addEventListener('change', () => changeTier(tier.value === 'smart' ? 'smart' : 'fast'));
