@@ -1,0 +1,2513 @@
+{
+  "size": "864x520",
+  "results": [
+    {
+      "id": "S01",
+      "title": "новый запрос открывает диалог сам; «Разрешить» выполняет показанное",
+      "startedAt": 2565,
+      "shown": {
+        "open": true,
+        "current": "2fa31f0d-bbcf-4b81-8f21-026b85739dec",
+        "question": "Действие: ZM-ALPHA-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "approvalId": "2fa31f0d-bbcf-4b81-8f21-026b85739dec",
+      "callId": "call_0",
+      "after": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-ALPHA-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "verdict": "PASS",
+      "effects": [
+        "ZM-ALPHA-1"
+      ],
+      "ipcCalls": [
+        {
+          "id": "2fa31f0d-bbcf-4b81-8f21-026b85739dec",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S02",
+      "title": "Escape отклоняет запрос, закрывает диалог и возвращает фокус",
+      "startedAt": 3147,
+      "shown": {
+        "open": true,
+        "current": "be4b6e61-09fe-4442-884d-8a01da419a5d",
+        "question": "Действие: ZM-ALPHA-2?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "approvalId": "be4b6e61-09fe-4442-884d-8a01da419a5d",
+      "after": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-ALPHA-2?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "brokerEmpty": true,
+      "verdict": "PASS",
+      "effects": [],
+      "ipcCalls": [
+        {
+          "id": "be4b6e61-09fe-4442-884d-8a01da419a5d",
+          "decision": "reject",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S03-click-then-B",
+      "title": "одинаковый callId у двух агентов, нажатие синхронно с приходом B (click-then-B)",
+      "startedAt": 3635,
+      "shown": {
+        "open": true,
+        "current": "cd22d95a-82fd-4be4-85c0-1f5d0b937883",
+        "question": "Действие: ZM-VISIBLE-A?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "approvalA": "cd22d95a-82fd-4be4-85c0-1f5d0b937883",
+      "approvalB": "4f9d5a99-0abe-4152-b9c0-70bee406f455",
+      "callIdA": "call_0",
+      "callIdB": "call_0",
+      "afterA": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-HIDDEN-B?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "verdict": "PASS",
+      "effects": [
+        "ZM-VISIBLE-A"
+      ],
+      "ipcCalls": [
+        {
+          "id": "cd22d95a-82fd-4be4-85c0-1f5d0b937883",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S03-B-then-click",
+      "title": "одинаковый callId у двух агентов, нажатие синхронно с приходом B (B-then-click)",
+      "startedAt": 4233,
+      "shown": {
+        "open": true,
+        "current": "7babd822-e7e2-4d8b-9059-c24433214ff9",
+        "question": "Действие: ZM-VISIBLE-A?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "approvalA": "7babd822-e7e2-4d8b-9059-c24433214ff9",
+      "approvalB": "cf2d589b-ac36-47cc-9e1e-a3fd9c2c4895",
+      "callIdA": "call_0",
+      "callIdB": "call_0",
+      "afterA": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-HIDDEN-B?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "verdict": "PASS",
+      "effects": [
+        "ZM-VISIBLE-A"
+      ],
+      "ipcCalls": [
+        {
+          "id": "7babd822-e7e2-4d8b-9059-c24433214ff9",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S04",
+      "title": "видно A, B уже в очереди; позднее нажатие; затем ответ на B",
+      "startedAt": 4815,
+      "shownA": {
+        "open": true,
+        "current": "8318a09d-0161-436d-bd9e-84a477d6a715",
+        "question": "Действие: ZM-QUEUE-A1?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 2,
+        "toasts": []
+      },
+      "shownB": {
+        "open": true,
+        "current": "8b029a03-5127-4817-8129-04066a0916ff",
+        "question": "Действие: ZM-QUEUE-B1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "afterClickB": {
+        "open": true,
+        "current": "8b029a03-5127-4817-8129-04066a0916ff",
+        "question": "Действие: ZM-QUEUE-B1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "approvalDialog",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "bRanByClick": false,
+      "escWorked": true,
+      "approvalA": "8318a09d-0161-436d-bd9e-84a477d6a715",
+      "approvalB": "8b029a03-5127-4817-8129-04066a0916ff",
+      "verdictBinding": "PASS",
+      "verdictNextUsable": "FAIL",
+      "effects": [
+        "ZM-QUEUE-A1"
+      ],
+      "ipcCalls": [
+        {
+          "id": "8318a09d-0161-436d-bd9e-84a477d6a715",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "id": "8b029a03-5127-4817-8129-04066a0916ff",
+          "decision": "reject",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S05",
+      "title": "двойное нажатие «Разрешить», B в очереди",
+      "startedAt": 7108,
+      "shown": {
+        "open": true,
+        "current": "076eaf1e-2990-4382-bf0b-e7e536c966d8",
+        "question": "Действие: ZM-DOUBLE-A1?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 2,
+        "toasts": []
+      },
+      "after": {
+        "open": true,
+        "current": "f21295dd-dcde-46ac-92a2-cf129da41620",
+        "question": "Действие: ZM-DOUBLE-B1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "approvalDialog",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "bRan": false,
+      "verdict": "PASS",
+      "effects": [
+        "ZM-DOUBLE-A1"
+      ],
+      "ipcCalls": [
+        {
+          "id": "076eaf1e-2990-4382-bf0b-e7e536c966d8",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S06-all-0",
+      "title": "A истекает в ядре, нажатие через 0 мс (all): что одобрено",
+      "startedAt": 8274,
+      "shownBeforeClick": {
+        "open": true,
+        "current": "f21295dd-dcde-46ac-92a2-cf129da41620",
+        "question": "Действие: ZM-DOUBLE-B1?",
+        "queueLabel": "1 из 3",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 3,
+        "toasts": []
+      },
+      "after": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-DOUBLE-B1?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": [
+          "Не удалось передать решение: запрос уже неактуален"
+        ]
+      },
+      "approvalA": "1ee3fbc5-7f18-49ab-83a0-0dc1f1f5d57f",
+      "approvalB": "37aeea07-236a-4f2e-a216-b61f7aa25c99",
+      "bRan": false,
+      "verdict": "SAFE",
+      "effects": [],
+      "ipcCalls": [
+        {
+          "id": "f21295dd-dcde-46ac-92a2-cf129da41620",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": false,
+            "reason": "запрос уже неактуален"
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S06-worker-0",
+      "title": "A истекает в ядре, нажатие через 0 мс (worker): что одобрено",
+      "startedAt": 9285,
+      "shownBeforeClick": {
+        "open": true,
+        "current": "c39fcccf-e6e4-4a5c-8a34-a01d4b28486f",
+        "question": "Действие: ZM-SWAP-A-worker-000?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 2,
+        "toasts": []
+      },
+      "after": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-SWAP-B-worker-000?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "approvalA": "c39fcccf-e6e4-4a5c-8a34-a01d4b28486f",
+      "approvalB": "de25a5e8-9596-408d-a4e7-56dde0268468",
+      "bRan": true,
+      "verdict": "VULNERABLE: B approved by a click aimed at A",
+      "effects": [
+        "ZM-SWAP-B-worker-000"
+      ],
+      "ipcCalls": [
+        {
+          "id": "de25a5e8-9596-408d-a4e7-56dde0268468",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S06-worker-40",
+      "title": "A истекает в ядре, нажатие через 40 мс (worker): что одобрено",
+      "startedAt": 10323,
+      "shownBeforeClick": {
+        "open": true,
+        "current": "03560f2c-df75-43f5-86d0-99cbb6def62e",
+        "question": "Действие: ZM-SWAP-A-worker-040?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 2,
+        "toasts": []
+      },
+      "after": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-SWAP-B-worker-040?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "approvalA": "03560f2c-df75-43f5-86d0-99cbb6def62e",
+      "approvalB": "b5df2984-7a65-462e-be4a-fe128ec892e5",
+      "bRan": true,
+      "verdict": "VULNERABLE: B approved by a click aimed at A",
+      "effects": [
+        "ZM-SWAP-B-worker-040"
+      ],
+      "ipcCalls": [
+        {
+          "id": "b5df2984-7a65-462e-be4a-fe128ec892e5",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S06-worker-120",
+      "title": "A истекает в ядре, нажатие через 120 мс (worker): что одобрено",
+      "startedAt": 11394,
+      "shownBeforeClick": {
+        "open": true,
+        "current": "ca3ee40d-8204-4462-9101-3891cc983813",
+        "question": "Действие: ZM-SWAP-A-worker-120?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 2,
+        "toasts": []
+      },
+      "after": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-SWAP-B-worker-120?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "approvalA": "ca3ee40d-8204-4462-9101-3891cc983813",
+      "approvalB": "388d57aa-a223-467a-ad91-86b3937369a6",
+      "bRan": true,
+      "verdict": "VULNERABLE: B approved by a click aimed at A",
+      "effects": [
+        "ZM-SWAP-B-worker-120"
+      ],
+      "ipcCalls": [
+        {
+          "id": "388d57aa-a223-467a-ad91-86b3937369a6",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S06-worker-250",
+      "title": "A истекает в ядре, нажатие через 250 мс (worker): что одобрено",
+      "startedAt": 12529,
+      "shownBeforeClick": {
+        "open": true,
+        "current": "4b68b813-06c1-4cb6-95d9-8841e8cbedec",
+        "question": "Действие: ZM-SWAP-A-worker-250?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 2,
+        "toasts": []
+      },
+      "after": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-SWAP-B-worker-250?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "approvalA": "4b68b813-06c1-4cb6-95d9-8841e8cbedec",
+      "approvalB": "fb9b80ff-325e-451f-9857-7268803712fb",
+      "bRan": true,
+      "verdict": "VULNERABLE: B approved by a click aimed at A",
+      "effects": [
+        "ZM-SWAP-B-worker-250"
+      ],
+      "ipcCalls": [
+        {
+          "id": "fb9b80ff-325e-451f-9857-7268803712fb",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S07",
+      "title": "истёкший запрос: диалог закрывается, позднее нажатие ничего не делает",
+      "startedAt": 13791,
+      "shown": {
+        "open": true,
+        "current": "97a34160-6b0c-4dcd-b7c4-5a4aa42ff077",
+        "question": "Действие: ZM-EXPIRE-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "after": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-EXPIRE-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "lateIpc": {
+        "ok": false,
+        "reason": "время на подтверждение вышло"
+      },
+      "reason": "время на подтверждение вышло",
+      "verdict": "PASS",
+      "effects": [],
+      "ipcCalls": [
+        {
+          "id": "97a34160-6b0c-4dcd-b7c4-5a4aa42ff077",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": false,
+            "reason": "время на подтверждение вышло"
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S08",
+      "title": "отказ и сразу новый запрос с тем же callId",
+      "startedAt": 16151,
+      "first": {
+        "open": true,
+        "current": "79af1600-83a4-413d-a99c-245452cc3f65",
+        "question": "Действие: ZM-RETRY-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "second": {
+        "open": true,
+        "current": "4fcdb0c3-f468-4e91-b22d-c6413a66308f",
+        "question": "Действие: ZM-RETRY-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "approval1": "79af1600-83a4-413d-a99c-245452cc3f65",
+      "approval2": "4fcdb0c3-f468-4e91-b22d-c6413a66308f",
+      "staleIpc": {
+        "ok": false,
+        "reason": "запрос уже неактуален"
+      },
+      "verdict": "PASS",
+      "effects": [
+        "ZM-RETRY-1"
+      ],
+      "ipcCalls": [
+        {
+          "id": "79af1600-83a4-413d-a99c-245452cc3f65",
+          "decision": "reject",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "id": "79af1600-83a4-413d-a99c-245452cc3f65",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": false,
+            "reason": "запрос уже неактуален"
+          }
+        },
+        {
+          "id": "4fcdb0c3-f468-4e91-b22d-c6413a66308f",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S09",
+      "title": "ход остановлен во время ожидания; поздний ответ",
+      "startedAt": 16607,
+      "shown": {
+        "open": true,
+        "current": "ae0cc0c6-0464-45f5-bfa8-7c9bf9726d7c",
+        "question": "Действие: ZM-CANCEL-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "after": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-CANCEL-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "lateIpc": {
+        "ok": false,
+        "reason": "запрос уже неактуален"
+      },
+      "verdict": "PASS",
+      "effects": [],
+      "ipcCalls": [
+        {
+          "id": "ae0cc0c6-0464-45f5-bfa8-7c9bf9726d7c",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": false,
+            "reason": "запрос уже неактуален"
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S10",
+      "title": "IPC падает до ядра: запрос остаётся, повтор работает",
+      "startedAt": 17409,
+      "kind": "fail-before",
+      "approvalId": "bcd37527-e2fc-4155-a052-e25855b909e5",
+      "shown": {
+        "open": true,
+        "current": "bcd37527-e2fc-4155-a052-e25855b909e5",
+        "question": "Действие: ZM-IPC-S10?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "during": {
+        "open": true,
+        "current": "bcd37527-e2fc-4155-a052-e25855b909e5",
+        "question": "Действие: ZM-IPC-S10?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "once",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: Error invoking remote method 'approval:respond': Error: synthetic IPC failure before core"
+        ]
+      },
+      "brokerDuring": [
+        {
+          "id": "bcd37527-e2fc-4155-a052-e25855b909e5",
+          "text": "ZM-IPC-S10"
+        }
+      ],
+      "atTimeout": null,
+      "retried": true,
+      "afterRetry": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-IPC-S10?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": [
+          "Не удалось передать решение: Error invoking remote method 'approval:respond': Error: synthetic IPC failure before core"
+        ]
+      },
+      "afterRelease": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-IPC-S10?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": [
+          "Не удалось передать решение: Error invoking remote method 'approval:respond': Error: synthetic IPC failure before core"
+        ]
+      },
+      "bResult": null,
+      "aRuns": 1,
+      "verdict": "PASS",
+      "effects": [
+        "ZM-IPC-S10"
+      ],
+      "ipcCalls": [
+        {
+          "id": "bcd37527-e2fc-4155-a052-e25855b909e5",
+          "decision": "once",
+          "fault": "fail-before",
+          "result": "threw-before"
+        },
+        {
+          "id": "bcd37527-e2fc-4155-a052-e25855b909e5",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S11",
+      "title": "IPC падает после решения ядра",
+      "startedAt": 18261,
+      "kind": "fail-after",
+      "approvalId": "2787cb1d-5782-4fc2-a031-2d551cc475f4",
+      "shown": {
+        "open": true,
+        "current": "2787cb1d-5782-4fc2-a031-2d551cc475f4",
+        "question": "Действие: ZM-IPC-S11?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 2,
+        "toasts": []
+      },
+      "during": {
+        "open": true,
+        "current": "10982b28-b4a6-4f51-bf72-a86f7940e663",
+        "question": "Действие: ZM-IPCB-S11?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: Error invoking remote method 'approval:respond': Error: synthetic IPC failure after core"
+        ]
+      },
+      "brokerDuring": [
+        {
+          "id": "10982b28-b4a6-4f51-bf72-a86f7940e663",
+          "text": "ZM-IPCB-S11"
+        }
+      ],
+      "atTimeout": null,
+      "retried": false,
+      "afterRetry": {
+        "open": true,
+        "current": "10982b28-b4a6-4f51-bf72-a86f7940e663",
+        "question": "Действие: ZM-IPCB-S11?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: Error invoking remote method 'approval:respond': Error: synthetic IPC failure after core"
+        ]
+      },
+      "afterRelease": {
+        "open": true,
+        "current": "10982b28-b4a6-4f51-bf72-a86f7940e663",
+        "question": "Действие: ZM-IPCB-S11?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: Error invoking remote method 'approval:respond': Error: synthetic IPC failure after core"
+        ]
+      },
+      "bResult": {
+        "snapBeforeClick": {
+          "open": true,
+          "current": "10982b28-b4a6-4f51-bf72-a86f7940e663",
+          "question": "Действие: ZM-IPCB-S11?",
+          "queueLabel": null,
+          "buttonsDisabled": [
+            false,
+            false,
+            false
+          ],
+          "focus": "BODY",
+          "pendingBadge": 1,
+          "toasts": [
+            "Не удалось передать решение: Error invoking remote method 'approval:respond': Error: synthetic IPC failure after core"
+          ]
+        },
+        "ran": true
+      },
+      "aRuns": 1,
+      "verdict": "PASS",
+      "effects": [
+        "ZM-IPC-S11",
+        "ZM-IPCB-S11"
+      ],
+      "ipcCalls": [
+        {
+          "id": "2787cb1d-5782-4fc2-a031-2d551cc475f4",
+          "decision": "once",
+          "fault": "fail-after",
+          "result": {
+            "ok": true
+          },
+          "after": "threw-after"
+        },
+        {
+          "id": "10982b28-b4a6-4f51-bf72-a86f7940e663",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S12",
+      "title": "ответ IPC завис до ядра: через 5 с кнопки снова активны, повтор работает",
+      "startedAt": 19552,
+      "kind": "hang-before",
+      "approvalId": "5fb4b954-3bd5-47c7-9b03-8f123904aa6a",
+      "shown": {
+        "open": true,
+        "current": "5fb4b954-3bd5-47c7-9b03-8f123904aa6a",
+        "question": "Действие: ZM-IPC-S12?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "during": {
+        "open": true,
+        "current": "5fb4b954-3bd5-47c7-9b03-8f123904aa6a",
+        "question": "Действие: ZM-IPC-S12?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "brokerDuring": [
+        {
+          "id": "5fb4b954-3bd5-47c7-9b03-8f123904aa6a",
+          "text": "ZM-IPC-S12"
+        }
+      ],
+      "atTimeout": {
+        "open": true,
+        "current": "5fb4b954-3bd5-47c7-9b03-8f123904aa6a",
+        "question": "Действие: ZM-IPC-S12?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: ответ ядра не получен за 5 секунд"
+        ],
+        "reenabledAfterExtraMs": 0
+      },
+      "retried": true,
+      "afterRetry": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-IPC-S12?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": [
+          "Не удалось передать решение: ответ ядра не получен за 5 секунд"
+        ]
+      },
+      "afterRelease": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-IPC-S12?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": [
+          "Не удалось передать решение: ответ ядра не получен за 5 секунд"
+        ]
+      },
+      "bResult": null,
+      "aRuns": 1,
+      "verdict": "PASS",
+      "effects": [
+        "ZM-IPC-S12"
+      ],
+      "ipcCalls": [
+        {
+          "id": "5fb4b954-3bd5-47c7-9b03-8f123904aa6a",
+          "decision": "once",
+          "fault": "hang-before",
+          "lateResult": {
+            "ok": false,
+            "reason": "запрос уже неактуален"
+          }
+        },
+        {
+          "id": "5fb4b954-3bd5-47c7-9b03-8f123904aa6a",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S13",
+      "title": "ответ IPC завис после решения ядра, B в очереди",
+      "startedAt": 25929,
+      "kind": "hang-after",
+      "approvalId": "c58683dc-dc83-4ecc-bc1b-6b86343c4a77",
+      "shown": {
+        "open": true,
+        "current": "c58683dc-dc83-4ecc-bc1b-6b86343c4a77",
+        "question": "Действие: ZM-IPC-S13?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 2,
+        "toasts": []
+      },
+      "during": {
+        "open": true,
+        "current": "47533265-4daf-4d59-b687-fca17d0d9be4",
+        "question": "Действие: ZM-IPCB-S13?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "brokerDuring": [
+        {
+          "id": "47533265-4daf-4d59-b687-fca17d0d9be4",
+          "text": "ZM-IPCB-S13"
+        }
+      ],
+      "atTimeout": {
+        "open": true,
+        "current": "47533265-4daf-4d59-b687-fca17d0d9be4",
+        "question": "Действие: ZM-IPCB-S13?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: ответ ядра не получен за 5 секунд"
+        ],
+        "reenabledAfterExtraMs": 1
+      },
+      "retried": false,
+      "afterRetry": {
+        "open": true,
+        "current": "47533265-4daf-4d59-b687-fca17d0d9be4",
+        "question": "Действие: ZM-IPCB-S13?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: ответ ядра не получен за 5 секунд"
+        ]
+      },
+      "afterRelease": {
+        "open": true,
+        "current": "47533265-4daf-4d59-b687-fca17d0d9be4",
+        "question": "Действие: ZM-IPCB-S13?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: ответ ядра не получен за 5 секунд"
+        ]
+      },
+      "bResult": {
+        "snapBeforeClick": {
+          "open": true,
+          "current": "47533265-4daf-4d59-b687-fca17d0d9be4",
+          "question": "Действие: ZM-IPCB-S13?",
+          "queueLabel": null,
+          "buttonsDisabled": [
+            false,
+            false,
+            false
+          ],
+          "focus": "BODY",
+          "pendingBadge": 1,
+          "toasts": [
+            "Не удалось передать решение: ответ ядра не получен за 5 секунд"
+          ]
+        },
+        "ran": true
+      },
+      "aRuns": 1,
+      "verdict": "PASS",
+      "effects": [
+        "ZM-IPC-S13",
+        "ZM-IPCB-S13"
+      ],
+      "ipcCalls": [
+        {
+          "id": "c58683dc-dc83-4ecc-bc1b-6b86343c4a77",
+          "decision": "once",
+          "fault": "hang-after",
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "id": "47533265-4daf-4d59-b687-fca17d0d9be4",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S14",
+      "title": "поздний ответ IPC (7 с) после решения ядра, B в очереди",
+      "startedAt": 32712,
+      "kind": "late-after",
+      "approvalId": "ca610453-d71f-4364-8a5f-7459ce5fed93",
+      "shown": {
+        "open": true,
+        "current": "ca610453-d71f-4364-8a5f-7459ce5fed93",
+        "question": "Действие: ZM-IPC-S14?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 2,
+        "toasts": []
+      },
+      "during": {
+        "open": true,
+        "current": "a4bed401-cb21-4c02-acc2-698120cdc512",
+        "question": "Действие: ZM-IPCB-S14?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          true,
+          true,
+          true
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "brokerDuring": [
+        {
+          "id": "a4bed401-cb21-4c02-acc2-698120cdc512",
+          "text": "ZM-IPCB-S14"
+        }
+      ],
+      "atTimeout": {
+        "open": true,
+        "current": "a4bed401-cb21-4c02-acc2-698120cdc512",
+        "question": "Действие: ZM-IPCB-S14?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: ответ ядра не получен за 5 секунд"
+        ],
+        "reenabledAfterExtraMs": 0
+      },
+      "retried": false,
+      "afterRetry": {
+        "open": true,
+        "current": "a4bed401-cb21-4c02-acc2-698120cdc512",
+        "question": "Действие: ZM-IPCB-S14?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: ответ ядра не получен за 5 секунд"
+        ]
+      },
+      "afterRelease": {
+        "open": true,
+        "current": "a4bed401-cb21-4c02-acc2-698120cdc512",
+        "question": "Действие: ZM-IPCB-S14?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "BODY",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: ответ ядра не получен за 5 секунд"
+        ]
+      },
+      "bResult": {
+        "snapBeforeClick": {
+          "open": true,
+          "current": "a4bed401-cb21-4c02-acc2-698120cdc512",
+          "question": "Действие: ZM-IPCB-S14?",
+          "queueLabel": null,
+          "buttonsDisabled": [
+            false,
+            false,
+            false
+          ],
+          "focus": "BODY",
+          "pendingBadge": 1,
+          "toasts": [
+            "Не удалось передать решение: ответ ядра не получен за 5 секунд"
+          ]
+        },
+        "ran": true
+      },
+      "aRuns": 1,
+      "verdict": "PASS",
+      "effects": [
+        "ZM-IPC-S14",
+        "ZM-IPCB-S14"
+      ],
+      "ipcCalls": [
+        {
+          "id": "ca610453-d71f-4364-8a5f-7459ce5fed93",
+          "decision": "once",
+          "fault": "late-after",
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "id": "a4bed401-cb21-4c02-acc2-698120cdc512",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": true
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S15",
+      "title": "рабочий агент остановлен во время ожидания: карточка-призрак",
+      "startedAt": 39192,
+      "shown": {
+        "open": true,
+        "current": "46a65903-e421-4fbe-bad5-268ac8b97e8d",
+        "question": "Действие: ZM-WORKER-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "afterStop": {
+        "open": true,
+        "current": "46a65903-e421-4fbe-bad5-268ac8b97e8d",
+        "question": "Действие: ZM-WORKER-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "afterClick": {
+        "open": true,
+        "current": "46a65903-e421-4fbe-bad5-268ac8b97e8d",
+        "question": "Действие: ZM-WORKER-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "once",
+        "pendingBadge": 1,
+        "toasts": [
+          "Не удалось передать решение: запрос уже неактуален"
+        ]
+      },
+      "brokerPending": 0,
+      "verdict": "DESYNC: window shows a request the core already closed",
+      "effects": [],
+      "ipcCalls": [
+        {
+          "id": "46a65903-e421-4fbe-bad5-268ac8b97e8d",
+          "decision": "once",
+          "fault": null,
+          "result": {
+            "ok": false,
+            "reason": "запрос уже неактуален"
+          }
+        }
+      ],
+      "pendingAfter": []
+    },
+    {
+      "id": "S16",
+      "title": "done другого агента убирает чужую карточку, ядро ещё ждёт",
+      "startedAt": 40470,
+      "shown": {
+        "open": true,
+        "current": "46a65903-e421-4fbe-bad5-268ac8b97e8d",
+        "question": "Действие: ZM-WORKER-1?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 2,
+        "toasts": []
+      },
+      "after": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-WORKER-1?",
+        "queueLabel": "1 из 2",
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "corePending": [
+        {
+          "id": "f0c94c06-0fc8-402d-9d12-940eaa929ab5",
+          "text": "ZM-CROSS-X"
+        }
+      ],
+      "verdict": "DESYNC: core waits, window shows nothing",
+      "effects": [],
+      "ipcCalls": [],
+      "pendingAfter": []
+    },
+    {
+      "id": "S17",
+      "title": "окно закрыто крестиком во время ожидания",
+      "startedAt": 41145,
+      "shown": {
+        "open": true,
+        "current": "6bf4aec2-5037-4fbc-82b2-64b13752c56e",
+        "question": "Действие: ZM-CLOSE-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "visibleAfterClose": false,
+      "pendingWhileHidden": [
+        {
+          "id": "6bf4aec2-5037-4fbc-82b2-64b13752c56e",
+          "text": "ZM-CLOSE-1"
+        }
+      ],
+      "afterShow": {
+        "open": false,
+        "current": null,
+        "question": "Действие: ZM-CLOSE-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "reason": "время на подтверждение вышло",
+      "verdict": "PASS",
+      "effects": [],
+      "ipcCalls": [],
+      "pendingAfter": []
+    },
+    {
+      "id": "S18",
+      "title": "перезагрузка окна (renderer) во время ожидания",
+      "startedAt": 44191,
+      "shown": {
+        "open": true,
+        "current": "b4969292-acf4-47fc-b4b2-e9934615067c",
+        "question": "Действие: ZM-RELOAD-1?",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "reject",
+        "pendingBadge": 1,
+        "toasts": []
+      },
+      "afterReload": {
+        "open": false,
+        "current": null,
+        "question": "",
+        "queueLabel": null,
+        "buttonsDisabled": [
+          false,
+          false,
+          false
+        ],
+        "focus": "chatInput",
+        "pendingBadge": 0,
+        "toasts": []
+      },
+      "corePending": [
+        {
+          "id": "b4969292-acf4-47fc-b4b2-e9934615067c",
+          "text": "ZM-RELOAD-1"
+        }
+      ],
+      "reason": "время на подтверждение вышло",
+      "verdict": "SAFE but DESYNC: pending request invisible after reload until auto-cancel",
+      "effects": [],
+      "ipcCalls": [],
+      "pendingAfter": []
+    }
+  ],
+  "effects": [
+    {
+      "t": 2723,
+      "marker": "ZM-ALPHA-1",
+      "text": "ZM-ALPHA-1"
+    },
+    {
+      "t": 3703,
+      "marker": "ZM-VISIBLE-A",
+      "text": "ZM-VISIBLE-A"
+    },
+    {
+      "t": 4292,
+      "marker": "ZM-VISIBLE-A",
+      "text": "ZM-VISIBLE-A"
+    },
+    {
+      "t": 5426,
+      "marker": "ZM-QUEUE-A1",
+      "text": "ZM-QUEUE-A1"
+    },
+    {
+      "t": 7488,
+      "marker": "ZM-DOUBLE-A1",
+      "text": "ZM-DOUBLE-A1"
+    },
+    {
+      "t": 9701,
+      "marker": "ZM-SWAP-B-worker-000",
+      "text": "ZM-SWAP-B-worker-000"
+    },
+    {
+      "t": 10765,
+      "marker": "ZM-SWAP-B-worker-040",
+      "text": "ZM-SWAP-B-worker-040"
+    },
+    {
+      "t": 11904,
+      "marker": "ZM-SWAP-B-worker-120",
+      "text": "ZM-SWAP-B-worker-120"
+    },
+    {
+      "t": 13161,
+      "marker": "ZM-SWAP-B-worker-250",
+      "text": "ZM-SWAP-B-worker-250"
+    },
+    {
+      "t": 16389,
+      "marker": "ZM-RETRY-1",
+      "text": "ZM-RETRY-1"
+    },
+    {
+      "t": 17727,
+      "marker": "ZM-IPC-S10",
+      "text": "ZM-IPC-S10"
+    },
+    {
+      "t": 18344,
+      "marker": "ZM-IPC-S11",
+      "text": "ZM-IPC-S11"
+    },
+    {
+      "t": 18816,
+      "marker": "ZM-IPCB-S11",
+      "text": "ZM-IPCB-S11"
+    },
+    {
+      "t": 25094,
+      "marker": "ZM-IPC-S12",
+      "text": "ZM-IPC-S12"
+    },
+    {
+      "t": 25994,
+      "marker": "ZM-IPC-S13",
+      "text": "ZM-IPC-S13"
+    },
+    {
+      "t": 31976,
+      "marker": "ZM-IPCB-S13",
+      "text": "ZM-IPCB-S13"
+    },
+    {
+      "t": 32793,
+      "marker": "ZM-IPC-S14",
+      "text": "ZM-IPC-S14"
+    },
+    {
+      "t": 38471,
+      "marker": "ZM-IPCB-S14",
+      "text": "ZM-IPCB-S14"
+    }
+  ],
+  "ipcCalls": [
+    {
+      "t": 2722,
+      "id": "2fa31f0d-bbcf-4b81-8f21-026b85739dec",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 3206,
+      "id": "be4b6e61-09fe-4442-884d-8a01da419a5d",
+      "decision": "reject",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 3703,
+      "id": "cd22d95a-82fd-4be4-85c0-1f5d0b937883",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 4292,
+      "id": "7babd822-e7e2-4d8b-9059-c24433214ff9",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 5426,
+      "id": "8318a09d-0161-436d-bd9e-84a477d6a715",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 6479,
+      "id": "8b029a03-5127-4817-8129-04066a0916ff",
+      "decision": "reject",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 7488,
+      "id": "076eaf1e-2990-4382-bf0b-e7e536c966d8",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 8656,
+      "id": "f21295dd-dcde-46ac-92a2-cf129da41620",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": false,
+        "reason": "запрос уже неактуален"
+      }
+    },
+    {
+      "t": 9701,
+      "id": "de25a5e8-9596-408d-a4e7-56dde0268468",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 10765,
+      "id": "b5df2984-7a65-462e-be4a-fe128ec892e5",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 11903,
+      "id": "388d57aa-a223-467a-ad91-86b3937369a6",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 13161,
+      "id": "fb9b80ff-325e-451f-9857-7268803712fb",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 15931,
+      "id": "97a34160-6b0c-4dcd-b7c4-5a4aa42ff077",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": false,
+        "reason": "время на подтверждение вышло"
+      }
+    },
+    {
+      "t": 16205,
+      "id": "79af1600-83a4-413d-a99c-245452cc3f65",
+      "decision": "reject",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 16388,
+      "id": "79af1600-83a4-413d-a99c-245452cc3f65",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": false,
+        "reason": "запрос уже неактуален"
+      }
+    },
+    {
+      "t": 16389,
+      "id": "4fcdb0c3-f468-4e91-b22d-c6413a66308f",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 16977,
+      "id": "ae0cc0c6-0464-45f5-bfa8-7c9bf9726d7c",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": false,
+        "reason": "запрос уже неактуален"
+      }
+    },
+    {
+      "t": 17465,
+      "id": "bcd37527-e2fc-4155-a052-e25855b909e5",
+      "decision": "once",
+      "fault": "fail-before",
+      "result": "threw-before"
+    },
+    {
+      "t": 17727,
+      "id": "bcd37527-e2fc-4155-a052-e25855b909e5",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 18344,
+      "id": "2787cb1d-5782-4fc2-a031-2d551cc475f4",
+      "decision": "once",
+      "fault": "fail-after",
+      "result": {
+        "ok": true
+      },
+      "after": "threw-after"
+    },
+    {
+      "t": 18816,
+      "id": "10982b28-b4a6-4f51-bf72-a86f7940e663",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 19615,
+      "id": "5fb4b954-3bd5-47c7-9b03-8f123904aa6a",
+      "decision": "once",
+      "fault": "hang-before",
+      "lateResult": {
+        "ok": false,
+        "reason": "запрос уже неактуален"
+      },
+      "released": 25398
+    },
+    {
+      "t": 25094,
+      "id": "5fb4b954-3bd5-47c7-9b03-8f123904aa6a",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 25994,
+      "id": "c58683dc-dc83-4ecc-bc1b-6b86343c4a77",
+      "decision": "once",
+      "fault": "hang-after",
+      "result": {
+        "ok": true
+      },
+      "released": 31461
+    },
+    {
+      "t": 31976,
+      "id": "47533265-4daf-4d59-b687-fca17d0d9be4",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 32793,
+      "id": "ca610453-d71f-4364-8a5f-7459ce5fed93",
+      "decision": "once",
+      "fault": "late-after",
+      "result": {
+        "ok": true
+      },
+      "released": 39799
+    },
+    {
+      "t": 38471,
+      "id": "a4bed401-cb21-4c02-acc2-698120cdc512",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 39644,
+      "id": "46a65903-e421-4fbe-bad5-268ac8b97e8d",
+      "decision": "once",
+      "fault": null,
+      "result": {
+        "ok": false,
+        "reason": "запрос уже неактуален"
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "rendererEvents": [],
+  "log": [
+    {
+      "t": 2568,
+      "what": "approval_request",
+      "marker": "ZM-ALPHA-1",
+      "approvalId": "2fa31f0d-bbcf-4b81-8f21-026b85739dec",
+      "callId": "call_0",
+      "agentId": "9c47db15-6ad0-4a0f-9823-4600d0bcc210"
+    },
+    {
+      "t": 2723,
+      "what": "EFFECT",
+      "marker": "ZM-ALPHA-1",
+      "text": "ZM-ALPHA-1"
+    },
+    {
+      "t": 2926,
+      "what": "scenario-done",
+      "id": "S01",
+      "effects": [
+        "ZM-ALPHA-1"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "t": 3149,
+      "what": "approval_request",
+      "marker": "ZM-ALPHA-2",
+      "approvalId": "be4b6e61-09fe-4442-884d-8a01da419a5d",
+      "callId": "call_0",
+      "agentId": "dfadfcde-d404-40ad-9303-47b2f570d3e5"
+    },
+    {
+      "t": 3415,
+      "what": "scenario-done",
+      "id": "S02",
+      "effects": [],
+      "verdict": "PASS"
+    },
+    {
+      "t": 3635,
+      "what": "approval_request",
+      "marker": "ZM-VISIBLE-A",
+      "approvalId": "cd22d95a-82fd-4be4-85c0-1f5d0b937883",
+      "callId": "call_0",
+      "agentId": "b23e73bc-b1f5-4fcb-bedc-77cace256988"
+    },
+    {
+      "t": 3698,
+      "what": "approval_request",
+      "marker": "ZM-HIDDEN-B",
+      "approvalId": "4f9d5a99-0abe-4152-b9c0-70bee406f455",
+      "callId": "call_0",
+      "agentId": "ac8f5112-126e-4454-8240-d9efc7dd3061"
+    },
+    {
+      "t": 3703,
+      "what": "EFFECT",
+      "marker": "ZM-VISIBLE-A",
+      "text": "ZM-VISIBLE-A"
+    },
+    {
+      "t": 4015,
+      "what": "scenario-done",
+      "id": "S03-click-then-B",
+      "effects": [
+        "ZM-VISIBLE-A"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "t": 4233,
+      "what": "approval_request",
+      "marker": "ZM-VISIBLE-A",
+      "approvalId": "7babd822-e7e2-4d8b-9059-c24433214ff9",
+      "callId": "call_0",
+      "agentId": "6afb75ab-e6c4-48ba-8d5c-6005f6df0932"
+    },
+    {
+      "t": 4287,
+      "what": "approval_request",
+      "marker": "ZM-HIDDEN-B",
+      "approvalId": "cf2d589b-ac36-47cc-9e1e-a3fd9c2c4895",
+      "callId": "call_0",
+      "agentId": "5a540ace-55e5-432c-bfbe-ad049259bfc2"
+    },
+    {
+      "t": 4292,
+      "what": "EFFECT",
+      "marker": "ZM-VISIBLE-A",
+      "text": "ZM-VISIBLE-A"
+    },
+    {
+      "t": 4595,
+      "what": "scenario-done",
+      "id": "S03-B-then-click",
+      "effects": [
+        "ZM-VISIBLE-A"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "t": 4815,
+      "what": "approval_request",
+      "marker": "ZM-QUEUE-A1",
+      "approvalId": "8318a09d-0161-436d-bd9e-84a477d6a715",
+      "callId": "call_0",
+      "agentId": "1e35b273-8a6a-4ae0-8e9c-67a0ec357bfa"
+    },
+    {
+      "t": 4856,
+      "what": "approval_request",
+      "marker": "ZM-QUEUE-B1",
+      "approvalId": "8b029a03-5127-4817-8129-04066a0916ff",
+      "callId": "call_0",
+      "agentId": "6a0017b0-e7e2-4d20-b956-57411cc6e371"
+    },
+    {
+      "t": 5426,
+      "what": "EFFECT",
+      "marker": "ZM-QUEUE-A1",
+      "text": "ZM-QUEUE-A1"
+    },
+    {
+      "t": 6887,
+      "what": "scenario-done",
+      "id": "S04",
+      "effects": [
+        "ZM-QUEUE-A1"
+      ]
+    },
+    {
+      "t": 7108,
+      "what": "approval_request",
+      "marker": "ZM-DOUBLE-A1",
+      "approvalId": "076eaf1e-2990-4382-bf0b-e7e536c966d8",
+      "callId": "call_0",
+      "agentId": "7a6a959c-f6ad-42e1-8903-f170c72b7eab"
+    },
+    {
+      "t": 7142,
+      "what": "approval_request",
+      "marker": "ZM-DOUBLE-B1",
+      "approvalId": "f21295dd-dcde-46ac-92a2-cf129da41620",
+      "callId": "call_0",
+      "agentId": "8e9bef30-a9f8-4381-a114-10a66ee3ee6b"
+    },
+    {
+      "t": 7488,
+      "what": "EFFECT",
+      "marker": "ZM-DOUBLE-A1",
+      "text": "ZM-DOUBLE-A1"
+    },
+    {
+      "t": 8054,
+      "what": "scenario-done",
+      "id": "S05",
+      "effects": [
+        "ZM-DOUBLE-A1"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "t": 8274,
+      "what": "approval_request",
+      "marker": "ZM-SWAP-A-all-000",
+      "approvalId": "1ee3fbc5-7f18-49ab-83a0-0dc1f1f5d57f",
+      "callId": "call_0",
+      "agentId": "c5d925cb-41bf-443a-a5b1-41ead672cb1f"
+    },
+    {
+      "t": 8330,
+      "what": "approval_request",
+      "marker": "ZM-SWAP-B-all-000",
+      "approvalId": "37aeea07-236a-4f2e-a216-b61f7aa25c99",
+      "callId": "call_0",
+      "agentId": "096c745f-b263-40dd-b87c-b9404f287888"
+    },
+    {
+      "t": 9065,
+      "what": "scenario-done",
+      "id": "S06-all-0",
+      "effects": [],
+      "verdict": "SAFE"
+    },
+    {
+      "t": 9285,
+      "what": "approval_request",
+      "marker": "ZM-SWAP-A-worker-000",
+      "approvalId": "c39fcccf-e6e4-4a5c-8a34-a01d4b28486f",
+      "callId": "call_0",
+      "agentId": "11e90c61-5738-42b9-b2c6-5e086d9fc314"
+    },
+    {
+      "t": 9340,
+      "what": "approval_request",
+      "marker": "ZM-SWAP-B-worker-000",
+      "approvalId": "de25a5e8-9596-408d-a4e7-56dde0268468",
+      "callId": "call_0",
+      "agentId": "42a7d1ce-b5c8-4758-af86-fa2b7a22dd74"
+    },
+    {
+      "t": 9701,
+      "what": "EFFECT",
+      "marker": "ZM-SWAP-B-worker-000",
+      "text": "ZM-SWAP-B-worker-000"
+    },
+    {
+      "t": 10104,
+      "what": "scenario-done",
+      "id": "S06-worker-0",
+      "effects": [
+        "ZM-SWAP-B-worker-000"
+      ],
+      "verdict": "VULNERABLE: B approved by a click aimed at A"
+    },
+    {
+      "t": 10324,
+      "what": "approval_request",
+      "marker": "ZM-SWAP-A-worker-040",
+      "approvalId": "03560f2c-df75-43f5-86d0-99cbb6def62e",
+      "callId": "call_0",
+      "agentId": "1d2e8a73-0c51-42ee-9b38-81b346f4a003"
+    },
+    {
+      "t": 10360,
+      "what": "approval_request",
+      "marker": "ZM-SWAP-B-worker-040",
+      "approvalId": "b5df2984-7a65-462e-be4a-fe128ec892e5",
+      "callId": "call_0",
+      "agentId": "bfa24078-6237-4587-8ac8-57ecb3fc1a55"
+    },
+    {
+      "t": 10765,
+      "what": "EFFECT",
+      "marker": "ZM-SWAP-B-worker-040",
+      "text": "ZM-SWAP-B-worker-040"
+    },
+    {
+      "t": 11177,
+      "what": "scenario-done",
+      "id": "S06-worker-40",
+      "effects": [
+        "ZM-SWAP-B-worker-040"
+      ],
+      "verdict": "VULNERABLE: B approved by a click aimed at A"
+    },
+    {
+      "t": 11394,
+      "what": "approval_request",
+      "marker": "ZM-SWAP-A-worker-120",
+      "approvalId": "ca3ee40d-8204-4462-9101-3891cc983813",
+      "callId": "call_0",
+      "agentId": "e72d9d18-d5f1-450e-a6bf-f1b3935d49ea"
+    },
+    {
+      "t": 11430,
+      "what": "approval_request",
+      "marker": "ZM-SWAP-B-worker-120",
+      "approvalId": "388d57aa-a223-467a-ad91-86b3937369a6",
+      "callId": "call_0",
+      "agentId": "f4fdc6cc-a6e0-4bf7-9498-5057ba2533b3"
+    },
+    {
+      "t": 11904,
+      "what": "EFFECT",
+      "marker": "ZM-SWAP-B-worker-120",
+      "text": "ZM-SWAP-B-worker-120"
+    },
+    {
+      "t": 12309,
+      "what": "scenario-done",
+      "id": "S06-worker-120",
+      "effects": [
+        "ZM-SWAP-B-worker-120"
+      ],
+      "verdict": "VULNERABLE: B approved by a click aimed at A"
+    },
+    {
+      "t": 12530,
+      "what": "approval_request",
+      "marker": "ZM-SWAP-A-worker-250",
+      "approvalId": "4b68b813-06c1-4cb6-95d9-8841e8cbedec",
+      "callId": "call_0",
+      "agentId": "ad496180-5b35-4e47-9d4b-c0652391eaa3"
+    },
+    {
+      "t": 12567,
+      "what": "approval_request",
+      "marker": "ZM-SWAP-B-worker-250",
+      "approvalId": "fb9b80ff-325e-451f-9857-7268803712fb",
+      "callId": "call_0",
+      "agentId": "a2bec8e0-58c4-415a-bb4b-08716d7561d1"
+    },
+    {
+      "t": 13161,
+      "what": "EFFECT",
+      "marker": "ZM-SWAP-B-worker-250",
+      "text": "ZM-SWAP-B-worker-250"
+    },
+    {
+      "t": 13577,
+      "what": "scenario-done",
+      "id": "S06-worker-250",
+      "effects": [
+        "ZM-SWAP-B-worker-250"
+      ],
+      "verdict": "VULNERABLE: B approved by a click aimed at A"
+    },
+    {
+      "t": 13791,
+      "what": "approval_request",
+      "marker": "ZM-EXPIRE-1",
+      "approvalId": "97a34160-6b0c-4dcd-b7c4-5a4aa42ff077",
+      "callId": "call_0",
+      "agentId": "2c82ff60-6483-4995-bb44-bad4cb8e5bca"
+    },
+    {
+      "t": 15931,
+      "what": "scenario-done",
+      "id": "S07",
+      "effects": [],
+      "verdict": "PASS"
+    },
+    {
+      "t": 16151,
+      "what": "approval_request",
+      "marker": "ZM-RETRY-1",
+      "approvalId": "79af1600-83a4-413d-a99c-245452cc3f65",
+      "callId": "call_0",
+      "agentId": "94a3cf1a-b803-4e27-8d0c-e49f804f7c47"
+    },
+    {
+      "t": 16205,
+      "what": "approval_request",
+      "marker": "ZM-RETRY-1",
+      "approvalId": "4fcdb0c3-f468-4e91-b22d-c6413a66308f",
+      "callId": "call_0",
+      "agentId": "94a3cf1a-b803-4e27-8d0c-e49f804f7c47"
+    },
+    {
+      "t": 16389,
+      "what": "EFFECT",
+      "marker": "ZM-RETRY-1",
+      "text": "ZM-RETRY-1"
+    },
+    {
+      "t": 16389,
+      "what": "scenario-done",
+      "id": "S08",
+      "effects": [
+        "ZM-RETRY-1"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "t": 16607,
+      "what": "approval_request",
+      "marker": "ZM-CANCEL-1",
+      "approvalId": "ae0cc0c6-0464-45f5-bfa8-7c9bf9726d7c",
+      "callId": "call_0",
+      "agentId": "a577df8d-a2d3-4ed0-b2e8-7076f3db0753"
+    },
+    {
+      "t": 17190,
+      "what": "scenario-done",
+      "id": "S09",
+      "effects": [],
+      "verdict": "PASS"
+    },
+    {
+      "t": 17409,
+      "what": "approval_request",
+      "marker": "ZM-IPC-S10",
+      "approvalId": "bcd37527-e2fc-4155-a052-e25855b909e5",
+      "callId": "call_0",
+      "agentId": "25d27a7b-93d3-40a5-9d50-c6fdde1fe8e0"
+    },
+    {
+      "t": 17727,
+      "what": "EFFECT",
+      "marker": "ZM-IPC-S10",
+      "text": "ZM-IPC-S10"
+    },
+    {
+      "t": 18043,
+      "what": "scenario-done",
+      "id": "S10",
+      "effects": [
+        "ZM-IPC-S10"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "t": 18261,
+      "what": "approval_request",
+      "marker": "ZM-IPC-S11",
+      "approvalId": "2787cb1d-5782-4fc2-a031-2d551cc475f4",
+      "callId": "call_0",
+      "agentId": "09db554f-6553-41e6-81f3-bebb10fef888"
+    },
+    {
+      "t": 18301,
+      "what": "approval_request",
+      "marker": "ZM-IPCB-S11",
+      "approvalId": "10982b28-b4a6-4f51-bf72-a86f7940e663",
+      "callId": "call_0",
+      "agentId": "58bf5dfb-0fc3-49a8-b5b7-1ef8dfbad69a"
+    },
+    {
+      "t": 18344,
+      "what": "EFFECT",
+      "marker": "ZM-IPC-S11",
+      "text": "ZM-IPC-S11"
+    },
+    {
+      "t": 18816,
+      "what": "EFFECT",
+      "marker": "ZM-IPCB-S11",
+      "text": "ZM-IPCB-S11"
+    },
+    {
+      "t": 19333,
+      "what": "scenario-done",
+      "id": "S11",
+      "effects": [
+        "ZM-IPC-S11",
+        "ZM-IPCB-S11"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "t": 19552,
+      "what": "approval_request",
+      "marker": "ZM-IPC-S12",
+      "approvalId": "5fb4b954-3bd5-47c7-9b03-8f123904aa6a",
+      "callId": "call_0",
+      "agentId": "47e4b7dc-8bd7-4d61-a93c-b8b91a950226"
+    },
+    {
+      "t": 25094,
+      "what": "EFFECT",
+      "marker": "ZM-IPC-S12",
+      "text": "ZM-IPC-S12"
+    },
+    {
+      "t": 25710,
+      "what": "scenario-done",
+      "id": "S12",
+      "effects": [
+        "ZM-IPC-S12"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "t": 25930,
+      "what": "approval_request",
+      "marker": "ZM-IPC-S13",
+      "approvalId": "c58683dc-dc83-4ecc-bc1b-6b86343c4a77",
+      "callId": "call_0",
+      "agentId": "2283eec8-75d4-4577-8247-2d343de36b00"
+    },
+    {
+      "t": 25966,
+      "what": "approval_request",
+      "marker": "ZM-IPCB-S13",
+      "approvalId": "47533265-4daf-4d59-b687-fca17d0d9be4",
+      "callId": "call_0",
+      "agentId": "46aabe24-faec-4b75-a9da-b8d891cccc7a"
+    },
+    {
+      "t": 25994,
+      "what": "EFFECT",
+      "marker": "ZM-IPC-S13",
+      "text": "ZM-IPC-S13"
+    },
+    {
+      "t": 31976,
+      "what": "EFFECT",
+      "marker": "ZM-IPCB-S13",
+      "text": "ZM-IPCB-S13"
+    },
+    {
+      "t": 32491,
+      "what": "scenario-done",
+      "id": "S13",
+      "effects": [
+        "ZM-IPC-S13",
+        "ZM-IPCB-S13"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "t": 32712,
+      "what": "approval_request",
+      "marker": "ZM-IPC-S14",
+      "approvalId": "ca610453-d71f-4364-8a5f-7459ce5fed93",
+      "callId": "call_0",
+      "agentId": "3d54d0b5-e978-49a5-9fb6-daf0e7f6a80b"
+    },
+    {
+      "t": 32754,
+      "what": "approval_request",
+      "marker": "ZM-IPCB-S14",
+      "approvalId": "a4bed401-cb21-4c02-acc2-698120cdc512",
+      "callId": "call_0",
+      "agentId": "736e9ad6-c8fe-40d7-a1ae-b4141cc2181a"
+    },
+    {
+      "t": 32793,
+      "what": "EFFECT",
+      "marker": "ZM-IPC-S14",
+      "text": "ZM-IPC-S14"
+    },
+    {
+      "t": 38471,
+      "what": "EFFECT",
+      "marker": "ZM-IPCB-S14",
+      "text": "ZM-IPCB-S14"
+    },
+    {
+      "t": 38972,
+      "what": "scenario-done",
+      "id": "S14",
+      "effects": [
+        "ZM-IPC-S14",
+        "ZM-IPCB-S14"
+      ],
+      "verdict": "PASS"
+    },
+    {
+      "t": 39192,
+      "what": "approval_request",
+      "marker": "ZM-WORKER-1",
+      "approvalId": "46a65903-e421-4fbe-bad5-268ac8b97e8d",
+      "callId": "call_0",
+      "agentId": "153ea9e3-f944-4fa3-a1ea-1783d6b25232"
+    },
+    {
+      "t": 40250,
+      "what": "scenario-done",
+      "id": "S15",
+      "effects": [],
+      "verdict": "DESYNC: window shows a request the core already closed"
+    },
+    {
+      "t": 40471,
+      "what": "approval_request",
+      "marker": "ZM-CROSS-X",
+      "approvalId": "f0c94c06-0fc8-402d-9d12-940eaa929ab5",
+      "callId": "call_0",
+      "agentId": "6be93566-c495-4f06-9394-162e4e1c3e8d"
+    },
+    {
+      "t": 40926,
+      "what": "scenario-done",
+      "id": "S16",
+      "effects": [],
+      "verdict": "DESYNC: core waits, window shows nothing"
+    },
+    {
+      "t": 41145,
+      "what": "approval_request",
+      "marker": "ZM-CLOSE-1",
+      "approvalId": "6bf4aec2-5037-4fbc-82b2-64b13752c56e",
+      "callId": "call_0",
+      "agentId": "14522e13-d80d-4946-83fd-ebf0f01ee536"
+    },
+    {
+      "t": 43969,
+      "what": "scenario-done",
+      "id": "S17",
+      "effects": [],
+      "verdict": "PASS"
+    },
+    {
+      "t": 44191,
+      "what": "approval_request",
+      "marker": "ZM-RELOAD-1",
+      "approvalId": "b4969292-acf4-47fc-b4b2-e9934615067c",
+      "callId": "call_0",
+      "agentId": "7d01cd04-678f-4ad1-b93e-7c7e6b5fa858"
+    },
+    {
+      "t": 48408,
+      "what": "scenario-done",
+      "id": "S18",
+      "effects": [],
+      "verdict": "SAFE but DESYNC: pending request invisible after reload until auto-cancel"
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "voice": false,
+  "backgroundModelRuns": false,
+  "alwaysListen": false,
+  "dictation": false,
+  "desktopOverlay": false,
+  "alwaysOnTop": false,
+  "motion": true,
+  "seededBrief": true,
+  "mcpServers": {
+    "echo-check": {
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": [
+        "D:\\nox-release\\docs\\audits\\zero-mercy\\evidence\\visual-extra-temp\\nox-connections-shot-1ThY1F\\echo-server.js"
+      ]
+    },
+    "bad-path": {
+      "command": "nox-no-such-command"
+    },
+    "off-service": {
+      "url": "https://example.com/mcp",
+      "disabled": true
+    },
+    "drift-check": {
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": [
+        "D:\\nox-release\\docs\\audits\\zero-mercy\\evidence\\visual-extra-temp\\nox-connections-shot-1ThY1F\\echo-server.js"
+      ]
+    }
+  },
+  "mcpToolSnapshots": {
+    "drift-check": {
+      "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "at": "2026-11-10T17:02:22.208Z",
+      "tools": [
+        {
+          "name": "old_action",
+          "title": "Старое действие",
+          "description": ""
+        }
+      ]
+    },
+    "echo-check": {
+      "hash": "e1e0e3c749a9368b2cd8babbf3e07d8219386d597d278ae3e3a1a32c1eb373ee",
+      "at": "2026-11-10T17:02:22.895Z",
+      "tools": [
+        {
+          "name": "repeat",
+          "description": "Повторить текст",
+          "inputSchema": {
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "name": "sum",
+          "description": "Сложить два числа",
+          "inputSchema": {
+            "properties": {
+              "a": {
+                "type": "number"
+              },
+              "b": {
+                "type": "number"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    }
+  },
+  "windowBg": "#14120E"
+}

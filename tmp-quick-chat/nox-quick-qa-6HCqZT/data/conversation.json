@@ -1,0 +1,77 @@
+{
+  "activeId": "4d2e973c-9d1e-43bc-9a93-0f8c6148907a",
+  "chats": [
+    {
+      "id": "4d2e973c-9d1e-43bc-9a93-0f8c6148907a",
+      "history": [
+        {
+          "role": "user",
+          "content": "какая погода"
+        },
+        {
+          "role": "assistant",
+          "content": "Не вышло: Скажите город (ответ без модели)"
+        },
+        {
+          "role": "user",
+          "content": "проверка разрешения отклонить"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "qa-write",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"quick-qa.txt\",\"content\":\"Точный тестовый текст\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "qa-write",
+          "content": "{\"ok\":false,\"summary\":\"отклонено\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Тестовый ответ."
+        },
+        {
+          "role": "user",
+          "content": "проверка разрешения разрешить"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "qa-write",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"quick-qa.txt\",\"content\":\"Точный тестовый текст\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "qa-write",
+          "content": "{\"ok\":false,\"summary\":\"отклонено\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Тестовый ответ."
+        },
+        {
+          "role": "user",
+          "content": "проверка остановка"
+        }
+      ],
+      "updatedAt": 1794492021319
+    }
+  ]
+}

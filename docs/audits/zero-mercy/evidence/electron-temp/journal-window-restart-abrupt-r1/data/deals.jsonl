@@ -1,0 +1,5 @@
+{"seq":1,"ts":"2026-11-10T17:59:52.695Z","ref":"turn:2c2d70c6","title":"Подготовь пробную запись для проверки перезапуска.","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-10T17:59:52.695Z","cleared":false}
+{"seq":2,"ts":"2026-11-10T17:59:52.922Z","ref":"approval:audit-restart-unapproved","title":"workspace_write","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-10T17:59:52.922Z","cleared":false}
+{"seq":3,"ts":"2026-11-10T17:59:54.176Z","ref":"turn:2c2d70c6","title":"Подготовь пробную запись для проверки перезапуска.","state":"failed","reason":"ход прерван перезапуском, результат неизвестен","due":null,"since":"2026-11-10T17:59:54.175Z","cleared":false}
+{"seq":4,"ts":"2026-11-10T17:59:54.177Z","ref":"call:audit-restart-unapproved","title":"workspace_write","source":"interrupted","state":"waiting","reason":"вызов прерван перезапуском, результат неизвестен","due":null,"since":"2026-11-10T17:59:52.728Z","cleared":false}
+{"seq":5,"ts":"2026-11-10T17:59:54.178Z","ref":"approval:audit-restart-unapproved","forget":true}

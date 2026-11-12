@@ -1,0 +1,125 @@
+{
+  "ok": true,
+  "mode": "qa",
+  "qa": {
+    "passed": 18,
+    "failed": 0,
+    "checks": [
+      {
+        "name": "1. Раскладка 1200: рейка 52, панель ~1122×702, шапка 72, nav 252, main ~824, поиск 40, чипы 32, без переполнения, порядок карточек",
+        "ok": true,
+        "detail": "rail={\"x\":9,\"y\":9,\"w\":52,\"h\":702,\"right\":61,\"bottom\":711} panel={\"x\":69,\"y\":9,\"w\":1122,\"h\":702,\"right\":1191,\"bottom\":711} head={\"x\":70,\"y\":10,\"w\":1120,\"h\":72,\"right\":1190,\"bottom\":82} nav={\"x\":86,\"y\":94,\"w\":252,\"h\":600,\"right\":338,\"bottom\":694} main={\"x\":350,\"y\":94,\"w\":824,\"h\":600,\"right\":1174,\"bottom\":694} search={\"x\":99,\"y\":107,\"w\":226,\"h\":40,\"right\":325,\"bottom\":147} chips={\"x\":99,\"y\":159,\"w\":226,\"h\":32,\"right\":325,\"bottom\":191} titles=14 order=true controls=3 scrollWidth=1200"
+      },
+      {
+        "name": "3. Категории: 6 пунктов, клик прокручивает и ставит aria-current, ручная прокрутка обновляет подсветку",
+        "ok": true,
+        "detail": "order=true current=[{\"cat\":\"general\",\"current\":\"true\",\"top\":0},{\"cat\":\"ai\",\"current\":\"true\",\"top\":915},{\"cat\":\"voice\",\"current\":\"true\",\"top\":1584},{\"cat\":\"look\",\"current\":\"true\",\"top\":2654},{\"cat\":\"sphere\",\"current\":\"true\",\"top\":4572},{\"cat\":\"security\",\"current\":\"true\",\"top\":4994}] общийTop=0 ручнаяПодсветка=true"
+      },
+      {
+        "name": "4. Поиск: «громкость» сужает, контролы не удаляются, сброс, «фывапролдж» → заглушка, Escape очищает",
+        "ok": true,
+        "detail": "всего=14 после поиска=2 контролы 142→142 сброс=true заглушка=true 0карточек=true Escape=true"
+      },
+      {
+        "name": "5. Чипы: ИИ→ai, Вид→look+sphere, Голос→voice, Все→14; поиск сохраняется при смене чипа",
+        "ok": true,
+        "detail": "ai=[\"ai\"] look=[\"look\",\"sphere\"] voice=[\"voice\"] поискСохранён=true все=true"
+      },
+      {
+        "name": "6. Модель и мышление: селекты меняют настройки через мост и восстанавливаются",
+        "ok": true,
+        "detail": "модель fast→smart→fast, мышление low→high→low; подсказки=90"
+      },
+      {
+        "name": "7. Режим доступа: 3 варианта, «Спрашивать» через мост, возврат прежнего",
+        "ok": true,
+        "detail": "вариантов=3 режим auto→ask→auto"
+      },
+      {
+        "name": "8. Голос: seeded 0.7/1.1 и характер «Дворецкий», изменение громкости сохраняется",
+        "ok": true,
+        "detail": "характер=\"Дворецкий\"; при «Как есть» слайдеры показали 70/1.1; 55→0.55=true; 70→0.7=true; характер вернули=true (persona перекрывает доли — это честное поведение)"
+      },
+      {
+        "name": "9. terseReplies: seeded false, переключатель включает и выключает настройку",
+        "ok": true,
+        "detail": "был выключен=true, включили и выключили через мост"
+      },
+      {
+        "name": "10. keepAwake: seeded always, смена на while-working сохраняется и возвращается",
+        "ok": true,
+        "detail": "seeded always=true, смена и возврат сохранены"
+      },
+      {
+        "name": "11. Внешний вид: 23 темы, акцент-кружки и HEX, строки Вид",
+        "ok": true,
+        "detail": "тем=23 тема сменилась=true кружков=8 акцент=true hex=true hexНевалидный=true строкиВида=true"
+      },
+      {
+        "name": "12. Сфера: вариант Wire/Nox реальный, ползунки preview-only, превью и сброс, живая сфера не меняется",
+        "ok": true,
+        "detail": "вариант nox→wire→nox localStorage=wire отмечено=true canvas=true previewOnly=true Apply.disabled=true size=110 % reset=true вернули=true"
+      },
+      {
+        "name": "13. Память/напоминания/расширения: карточки, пустая память, три подкарточки расширений",
+        "ok": true,
+        "detail": "память=true напоминания=true подкарточек=4 [История буфера, Быстрые вставки, Уборка загрузок, Освободить место] контролы=true"
+      },
+      {
+        "name": "14. Безопасность: режим доступа, почта честно недоступна в этой сборке, расширения здесь же",
+        "ok": true,
+        "detail": "радио=3 почта видна=true статус=\"Почта недоступна в этой сборке\" расширенияВБезопасности=true"
+      },
+      {
+        "name": "15. Состояния: нет data-loading, #setStatus/#setError на месте, почта disabled",
+        "ok": true,
+        "detail": "data-loading=false status=true errorHidden=true mailDisabled=true"
+      },
+      {
+        "name": "16. Кириллица: точные подписи «Настройки», «ИИ и провайдеры», «Сфера Nox», «Безопасность»",
+        "ok": true,
+        "detail": "все подписи на месте"
+      },
+      {
+        "name": "17. Регрессии: чат, «Команды», «Подключения» открываются, возврат в настройки",
+        "ok": true,
+        "detail": "nox:true, commands:true, mcp:true, settings:true"
+      },
+      {
+        "name": "2. 864×520: scrollWidth=864, nav полосой над main, main прокручивается, превью сферы в окне, без переполнения",
+        "ok": true,
+        "detail": "inner=864x520 scrollWidth=864/864 nav={\"x\":78,\"y\":84,\"w\":762,\"h\":114,\"right\":840,\"bottom\":198} main={\"x\":78,\"y\":208,\"w\":762,\"h\":288,\"right\":840,\"bottom\":496} search={\"x\":89,\"y\":95,\"w\":513,\"h\":40,\"right\":602,\"bottom\":135} chips={\"x\":610,\"y\":99,\"w\":219,\"h\":32,\"right\":829,\"bottom\":131} navНадMain=true полоса=true mainПрокручивается=true превью={\"x\":640,\"y\":334,\"w\":150,\"h\":150,\"right\":790,\"bottom\":484} вОкне=true"
+      },
+      {
+        "name": "18. Ошибки консоли",
+        "ok": true,
+        "detail": "нет"
+      }
+    ]
+  },
+  "width": 1200,
+  "height": 720,
+  "contentSize": {
+    "width": 1200,
+    "height": 720
+  },
+  "view": "settings",
+  "page": {
+    "innerWidth": 1200,
+    "innerHeight": 720,
+    "dpr": 1,
+    "title": "Nox — Джарвис"
+  },
+  "cleaned": {
+    "banner": true,
+    "blurred": true
+  },
+  "ready": {
+    "navItems": 6,
+    "cards": 14,
+    "main": true
+  },
+  "consoleErrors": [],
+  "windowsCount": 1,
+  "elapsedMs": 33340
+}

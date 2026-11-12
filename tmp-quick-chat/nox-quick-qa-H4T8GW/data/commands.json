@@ -1,0 +1,373 @@
+{
+  "items": [
+    {
+      "id": "914d760c-a501-4b5a-9b40-6b9c71187b7e",
+      "schemaVersion": 2,
+      "name": "Работа",
+      "phrases": [
+        "работа",
+        "начинаем работу",
+        "режим работы"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "windows_minimize_all",
+          "args": {}
+        },
+        {
+          "tool": "url_open",
+          "args": {
+            "url": "https://ya.ru"
+          }
+        },
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 30
+          }
+        },
+        {
+          "tool": "speak",
+          "args": {
+            "text": "Режим работы"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-12T14:12:16.895Z",
+      "updatedAt": "2026-11-12T14:12:16.895Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": null,
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "441fc6b9-193c-40c7-974c-2207d279087b",
+      "schemaVersion": 2,
+      "name": "Игра",
+      "phrases": [
+        "игра",
+        "начинаем игру",
+        "игровой режим"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "windows_minimize_all",
+          "args": {}
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 800
+          }
+        },
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 70
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-12T14:12:17.147Z",
+      "updatedAt": "2026-11-12T14:12:17.147Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": null,
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "a6a6655b-8327-47b6-868b-0ed1f8941d5a",
+      "schemaVersion": 2,
+      "name": "Рабочий режим",
+      "phrases": [
+        "рабочий режим"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "windows_minimize_all",
+          "args": {}
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1500
+          }
+        },
+        {
+          "tool": "url_open",
+          "args": {
+            "url": "https://ya.ru"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 2000
+          }
+        },
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "code"
+          }
+        },
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 30
+          }
+        },
+        {
+          "tool": "speak",
+          "args": {
+            "text": "Рабочий режим включён"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-12T14:12:17.159Z",
+      "updatedAt": "2026-11-12T14:12:17.159Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": null,
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "251baf20-bdf0-47fd-b334-d6f4d70d5832",
+      "schemaVersion": 2,
+      "name": "Отбой",
+      "phrases": [
+        "отбой",
+        "спокойной ночи"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "speak",
+          "args": {
+            "text": "Спокойной ночи, владелец"
+          }
+        },
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 0
+          }
+        },
+        {
+          "tool": "monitor_off",
+          "args": {}
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-12T14:12:17.170Z",
+      "updatedAt": "2026-11-12T14:12:17.170Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": null,
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "e7e8f406-21a5-409f-bc41-eed3163b79cf",
+      "schemaVersion": 2,
+      "name": "Новый рабочий стол",
+      "phrases": [
+        "новый рабочий стол",
+        "создай новый рабочий стол"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+ctrl+d"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-12T14:12:17.179Z",
+      "updatedAt": "2026-11-12T14:12:17.179Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "bc890b1d-aa82-424f-beba-1d0436f77502",
+      "schemaVersion": 2,
+      "name": "Панель эмодзи",
+      "phrases": [
+        "панель эмодзи",
+        "вставь эмодзи"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+."
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-12T14:12:17.191Z",
+      "updatedAt": "2026-11-12T14:12:17.191Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "d4142185-8f68-47d0-825e-759dff56c4b0",
+      "schemaVersion": 2,
+      "name": "Буфер обмена",
+      "phrases": [
+        "буфер обмена",
+        "история буфера обмена"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+v"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-12T14:12:17.202Z",
+      "updatedAt": "2026-11-12T14:12:17.202Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "50b395ac-d542-4d8f-98b2-58ca4a4a43f0",
+      "schemaVersion": 2,
+      "name": "Экранная лупа",
+      "phrases": [
+        "экранная лупа",
+        "включи лупу"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+plus"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-12T14:12:17.288Z",
+      "updatedAt": "2026-11-12T14:12:17.288Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "a825ae34-c2b6-485f-8e3f-81bf20da40be",
+      "schemaVersion": 2,
+      "name": "Блокировка экрана",
+      "phrases": [
+        "блокировка экрана",
+        "заблокируй экран",
+        "заблокируй компьютер"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+l"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-12T14:12:17.300Z",
+      "updatedAt": "2026-11-12T14:12:17.300Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "f56a92ca-f168-4da4-ac6f-1012db1c75ed",
+      "schemaVersion": 2,
+      "name": "Свернуть все окна",
+      "phrases": [
+        "свернуть все окна",
+        "сверни все окна",
+        "покажи рабочий стол"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "windows_minimize_all",
+          "args": {}
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-12T14:12:17.307Z",
+      "updatedAt": "2026-11-12T14:12:17.307Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "63c2957c-9d8a-4836-8d4e-e02dc73adcc7",
+      "schemaVersion": 2,
+      "name": "Проводник и диспетчер задач",
+      "phrases": [
+        "проводник и диспетчер задач",
+        "открой проводник и диспетчер"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "explorer"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1000
+          }
+        },
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "taskmgr"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-12T14:12:17.317Z",
+      "updatedAt": "2026-11-12T14:12:17.317Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    }
+  ]
+}

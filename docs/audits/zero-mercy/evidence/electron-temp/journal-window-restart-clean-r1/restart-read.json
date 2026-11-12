@@ -1,0 +1,157 @@
+{
+  "mode": "restart-read",
+  "pid": 1760,
+  "readyMs": 2465.5296999999996,
+  "electron": "44.9.3",
+  "chromium": "152.0.7977.167",
+  "initialTheme": {
+    "theme": null,
+    "accent": null,
+    "look": null,
+    "resolved": "dark",
+    "systemLight": false,
+    "bg": "#14120E",
+    "appBg": "rgb(15, 15, 16)"
+  },
+  "restart": {
+    "modelCalls": 0,
+    "ui": {
+      "dialog": false,
+      "pendingRows": 0,
+      "lastChat": "Подготовь пробную запись для проверки перезапуска."
+    },
+    "fileExists": false,
+    "journal": [
+      {
+        "ts": "2026-11-10T18:00:01.165Z",
+        "tool": "workspace_write",
+        "args": {
+          "path": "reports/audit-restart-unapproved.txt",
+          "content": "Действие требует согласия.\n"
+        },
+        "risk": "T1",
+        "mode": "ask",
+        "decision": "reject",
+        "ok": false,
+        "summary": "отклонено",
+        "callId": "audit-restart-unapproved",
+        "runId": "ae3cd147",
+        "step": 1,
+        "status": "failed",
+        "verified": null,
+        "verifiedStatus": null,
+        "evidence": null
+      }
+    ],
+    "turns": [
+      {
+        "ts": "2026-11-10T18:00:00.968Z",
+        "kind": "model",
+        "turn": "ae3cd147",
+        "round": 1,
+        "messages": 2,
+        "tools": 126,
+        "ms": 10,
+        "ok": true,
+        "requestChars": 73419,
+        "promptTokens": null,
+        "cachedTokens": null,
+        "completionTokens": null,
+        "reasoningTokens": null,
+        "reasoningChars": 0,
+        "reasoning": null,
+        "toolCalls": [
+          "workspace_write"
+        ],
+        "answerChars": 0
+      },
+      {
+        "ts": "2026-11-10T18:00:00.971Z",
+        "kind": "tool_start",
+        "turn": "ae3cd147",
+        "round": 1,
+        "callId": "audit-restart-unapproved",
+        "name": "workspace_write",
+        "risk": "T1"
+      },
+      {
+        "ts": "2026-11-10T18:00:01.168Z",
+        "kind": "tool",
+        "turn": "ae3cd147",
+        "round": 1,
+        "callId": "audit-restart-unapproved",
+        "name": "workspace_write",
+        "ms": 0,
+        "waitMs": 194,
+        "totalMs": 198,
+        "decision": "reject",
+        "ok": false,
+        "verified": null
+      },
+      {
+        "ts": "2026-11-10T18:00:01.169Z",
+        "kind": "turn",
+        "turn": "ae3cd147",
+        "ms": 217,
+        "outcome": "stopped",
+        "modelCalls": 1,
+        "modelMs": 10,
+        "toolCalls": 1,
+        "toolWallMs": 200,
+        "waitMs": 194,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "reasoningTokens": 0,
+        "reasoningChars": 0,
+        "userChars": 50,
+        "answerChars": 0,
+        "firstTextMs": null,
+        "historyMessages": 3,
+        "mode": "ask"
+      }
+    ],
+    "deals": {
+      "waiting": [],
+      "failed": [
+        {
+          "ts": "2026-11-10T18:00:01.169Z",
+          "ref": "turn:1a55327a",
+          "title": "Подготовь пробную запись для проверки перезапуска.",
+          "source": "turn",
+          "state": "failed",
+          "reason": "ход остановлен, часть действий могла выполниться",
+          "due": null,
+          "since": "2026-11-10T18:00:01.169Z",
+          "cleared": false
+        }
+      ],
+      "overdue": [],
+      "stale": [],
+      "unverified": [],
+      "started": [],
+      "promised": []
+    }
+  },
+  "processes": [
+    {
+      "type": "Browser",
+      "cpuPercent": 0,
+      "workingSetKiB": 159976
+    },
+    {
+      "type": "GPU",
+      "cpuPercent": 0,
+      "workingSetKiB": 168384
+    },
+    {
+      "type": "Utility",
+      "cpuPercent": 0,
+      "workingSetKiB": 101580
+    },
+    {
+      "type": "Tab",
+      "cpuPercent": 0,
+      "workingSetKiB": 158544
+    }
+  ]
+}

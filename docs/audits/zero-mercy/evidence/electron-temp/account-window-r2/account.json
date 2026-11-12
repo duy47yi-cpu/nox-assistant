@@ -1,0 +1,289 @@
+{
+  "initial": {
+    "gate": true,
+    "title": "Первый запуск Nox",
+    "busy": false,
+    "error": "",
+    "focus": "chatInput",
+    "screen": [
+      864,
+      520
+    ],
+    "cardBounds": [
+      242,
+      72,
+      622,
+      448
+    ],
+    "page": "Аккаунт и лимитыВыйтиЗа 5 часовЗа неделюВход не нуженЭто сборка со своими ключами модели: аккаунт Nox, тариф и лимиты здесь не используются. Всё хранится на этом компьютере.",
+    "pageVisible": false,
+    "accountPanel": false,
+    "visibleMessages": []
+  },
+  "registering": {
+    "gate": true,
+    "title": "Первый запуск Nox",
+    "busy": true,
+    "error": "",
+    "focus": "chatInput",
+    "screen": [
+      864,
+      520
+    ],
+    "cardBounds": [
+      242,
+      72,
+      622,
+      448
+    ],
+    "page": "Аккаунт и лимитыВыйтиЗа 5 часовЗа неделюВход не нуженЭто сборка со своими ключами модели: аккаунт Nox, тариф и лимиты здесь не используются. Всё хранится на этом компьютере.",
+    "pageVisible": false,
+    "accountPanel": false,
+    "visibleMessages": []
+  },
+  "registrationError": {
+    "gate": true,
+    "title": "Первый запуск Nox",
+    "busy": false,
+    "error": "Фикстура: такая почта уже зарегистрирована",
+    "focus": "chatInput",
+    "screen": [
+      864,
+      520
+    ],
+    "cardBounds": [
+      242,
+      56,
+      622,
+      464
+    ],
+    "page": "Аккаунт и лимитыВыйтиЗа 5 часовЗа неделюВход не нуженЭто сборка со своими ключами модели: аккаунт Nox, тариф и лимиты здесь не используются. Всё хранится на этом компьютере.",
+    "pageVisible": false,
+    "accountPanel": false,
+    "visibleMessages": [
+      "Фикстура: такая почта уже зарегистрирована"
+    ]
+  },
+  "keyboard": [
+    {
+      "id": "chatInput",
+      "label": "Поручение для Джарвиса",
+      "inGate": false
+    },
+    {
+      "id": "dictationBtn",
+      "label": "Диктовка",
+      "inGate": false
+    },
+    {
+      "id": "pickTrigger",
+      "label": "Модель: Быстрая, думает кратко. Изменить",
+      "inGate": false
+    },
+    {
+      "id": null,
+      "label": "Оформление",
+      "inGate": false
+    },
+    {
+      "id": null,
+      "label": "Свернуть",
+      "inGate": false
+    }
+  ],
+  "signedIn": {
+    "gate": false,
+    "title": "С возвращением",
+    "busy": false,
+    "error": "",
+    "focus": null,
+    "screen": [
+      864,
+      520
+    ],
+    "cardBounds": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "page": "Аккаунт и лимиты\naudit@example.invalid\nТариф: Пробный\nВыйти\nЗа 5 часов\n25 %\nЗа неделю\n12 %",
+    "pageVisible": true,
+    "accountPanel": true,
+    "visibleMessages": []
+  },
+  "offlineBeforeRefresh": {
+    "gate": false,
+    "title": "С возвращением",
+    "busy": false,
+    "error": "",
+    "focus": null,
+    "screen": [
+      864,
+      520
+    ],
+    "cardBounds": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "page": "Аккаунт и лимиты\naudit@example.invalid\nТариф: Пробный\nВыйти\nЗа 5 часов\n25 %\nЗа неделю\n12 %",
+    "pageVisible": true,
+    "accountPanel": true,
+    "visibleMessages": []
+  },
+  "offline": {
+    "gate": false,
+    "title": "С возвращением",
+    "busy": false,
+    "error": "",
+    "focus": null,
+    "screen": [
+      864,
+      520
+    ],
+    "cardBounds": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "page": "",
+    "pageVisible": true,
+    "accountPanel": false,
+    "visibleMessages": [],
+    "state": {
+      "enabled": true,
+      "signedIn": true,
+      "offline": true,
+      "error": "Фикстура: аккаунт недоступен"
+    }
+  },
+  "revoked": {
+    "gate": true,
+    "title": "С возвращением",
+    "busy": false,
+    "error": "",
+    "focus": "acEmail",
+    "screen": [
+      864,
+      520
+    ],
+    "cardBounds": [
+      242,
+      82,
+      622,
+      438
+    ],
+    "page": "",
+    "pageVisible": true,
+    "accountPanel": false,
+    "visibleMessages": []
+  },
+  "afterHeaders": {
+    "gate": true,
+    "title": "С возвращением",
+    "busy": true,
+    "error": "",
+    "focus": "acEmail",
+    "screen": [
+      864,
+      520
+    ],
+    "cardBounds": [
+      242,
+      82,
+      622,
+      438
+    ],
+    "page": "",
+    "pageVisible": true,
+    "accountPanel": false,
+    "visibleMessages": []
+  },
+  "afterTimeout": {
+    "gate": true,
+    "title": "С возвращением",
+    "busy": true,
+    "error": "",
+    "focus": "acEmail",
+    "screen": [
+      864,
+      520
+    ],
+    "cardBounds": [
+      242,
+      82,
+      622,
+      438
+    ],
+    "page": "",
+    "pageVisible": true,
+    "accountPanel": false,
+    "visibleMessages": [],
+    "elapsedMs": 15844.951700000001,
+    "responseOpen": true
+  },
+  "afterBody": {
+    "gate": true,
+    "title": "С возвращением",
+    "busy": false,
+    "error": "Фикстура: поздний ответ",
+    "focus": "acEmail",
+    "screen": [
+      864,
+      520
+    ],
+    "cardBounds": [
+      242,
+      66,
+      622,
+      454
+    ],
+    "page": "",
+    "pageVisible": true,
+    "accountPanel": false,
+    "visibleMessages": [
+      "Фикстура: поздний ответ"
+    ]
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/v1/auth/register",
+      "hasAuthorization": false
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/login",
+      "hasAuthorization": false
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me",
+      "hasAuthorization": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me",
+      "hasAuthorization": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me",
+      "hasAuthorization": true
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me",
+      "hasAuthorization": true
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/login",
+      "hasAuthorization": false
+    }
+  ],
+  "errors": []
+}

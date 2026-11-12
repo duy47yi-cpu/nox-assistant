@@ -1,0 +1,378 @@
+--- a/apps/jarvis-desktop/renderer/app.js
++++ b/apps/jarvis-desktop/renderer/app.js
+@@ -1505,7 +1505,12 @@
+   }
+ 
+   // ── Подтверждения ─────────────────────────────────────────────
+-  const A = { queue: [], busy: false, countdownTimer: null, syncing: false, closedDuringSync: new Set() };
++  // Ответ привязан к показу (R3-01): у каждого показа свой номер (view.seq) и токен ядра (approval:shown).
++  // Кнопка отвечает только на id показа, при котором началось нажатие; смена показа гасит начатое нажатие.
++  // Ушедший запрос не подменяется следующим в том же диалоге: нужен явный «Показать следующий».
++  // sending — запросы, ответ на которые сейчас передаётся (R3-02: блокировка своя у каждого запроса).
++  const APPROVAL_ARM_MS = 700; // «Разрешить» включается не раньше токена ядра и этой паузы — вторая линия защиты
++  const A = { queue: [], sending: new Set(), view: null, viewSeq: 0, press: null, gate: false, countdownTimer: null, syncing: false, closedDuringSync: new Set() };
+ 
+   // Обратный отсчёт до автоотмены: время приходит из ядра (autoCancelAt), окно только показывает.
+   // Элемент строится из JS: разметку диалога в index.html не трогаем.
+@@ -1571,7 +1576,9 @@
+     if (!ev.id || A.queue.some((q) => q.id === ev.id)) return;
+     A.queue.push(ev);
+     updatePending();
+-    showApproval();
++    // Диалог сам открывается только из закрытого состояния; открытый показ новым запросом не подменяется.
++    if (!$('#approvalDialog').open) showApprovalView(A.queue[0].id);
++    else refreshApproval();
+   }
+ 
+   function approvalDrop(id) {
+@@ -1579,13 +1586,13 @@
+     if (i < 0) return;
+     A.queue.splice(i, 1);
+     updatePending();
+-    showApproval();
++    refreshApproval();
+   }
+ 
+   function approvalClear() {
+     A.queue.length = 0;
+     updatePending();
+-    showApproval();
++    refreshApproval();
+   }
+ 
+   // Конец хода чата: его подтверждения уже решены или отменены. Запросы исполнителя задач (T.approvals)
+@@ -1596,14 +1603,15 @@
+     if (keep.length === A.queue.length) return;
+     A.queue.splice(0, A.queue.length, ...keep);
+     updatePending();
+-    showApproval();
++    refreshApproval();
+   }
+ 
++  // Явное открытие запроса владельцем («Решить», «Показать следующий»).
+   function openApproval(id) {
+     const i = A.queue.findIndex((q) => q.id === id);
+     if (i < 0) { toast('Запрос уже неактуален.'); return; }
+     A.queue.unshift(A.queue.splice(i, 1)[0]);
+-    showApproval();
++    showApprovalView(id);
+   }
+ 
+   function updatePending() {
+@@ -1644,20 +1652,91 @@
+     return U.toolTitle(cur.name) + (brief ? ': ' + brief : '') + '?';
+   }
+ 
+-  function showApproval() {
++  // Кнопка «Показать следующий» строится из JS: разметку диалога не трогаем.
++  function ensureApprovalNext() {
++    let b = $('#apNext');
++    if (b) return b;
++    const actions = $('#approvalDialog .dialog-actions');
++    b = document.createElement('button');
++    b.id = 'apNext';
++    b.type = 'button';
++    b.className = 'btn btn-primary';
++    b.hidden = true;
++    b.textContent = 'Показать следующий';
++    b.addEventListener('click', () => { if (A.gate && A.queue.length) openApproval(A.queue[0].id); });
++    actions.appendChild(b);
++    return b;
++  }
++
++  function setApprovalGateMode(on) {
+     const dlg = $('#approvalDialog');
+-    const cur = A.queue[0];
+-    if (!cur) {
+-      stopApprovalCountdown();
+-      if (dlg.open) dlg.close();
+-      return;
+-    }
+-    const fresh = dlg.dataset.current !== String(cur.id);
+-    dlg.dataset.current = String(cur.id);
++    for (const b of $$('[data-decision]', dlg)) b.hidden = on;
++    $('#apMeta').hidden = on;
++    $('#apDetails').hidden = on;
++    if (on) $('#apPreview').hidden = true;
++    ensureApprovalNext().hidden = !on;
++  }
++
++  function renderApprovalCount() {
+     const n = A.queue.length;
+     const count = $('#apQueue');
+-    count.hidden = n < 2;
++    count.hidden = A.gate || n < 2;
+     count.textContent = '1 из ' + n;
++  }
++
++  // Кнопки показа: отказ доступен сразу, «Разрешить» и «На сессию» — только после токена ядра и паузы.
++  function renderApprovalButtons() {
++    const v = A.view;
++    const sending = !v || A.sending.has(v.id);
++    for (const b of $$('#approvalDialog [data-decision]')) {
++      b.disabled = sending || (b.dataset.decision !== 'reject' && !v.armed);
++    }
++  }
++
++  function gateText() {
++    return 'Этот запрос больше не ждёт решения. Ждут ещё: ' + A.queue.length + '.';
++  }
++
++  // Показанный запрос ушёл (ответ, автоотмена, отмена ядром). Начатое нажатие гаснет, кнопок решения нет:
++  // следующий запрос владелец открывает сам, иначе клик, нацеленный на ушедший, попал бы в чужой (R3-01).
++  function showApprovalGate() {
++    const dlg = $('#approvalDialog');
++    A.viewSeq++;
++    A.view = null;
++    A.press = null;
++    A.gate = true;
++    stopApprovalCountdown();
++    const elc = $('#apCountdown');
++    if (elc) elc.hidden = true;
++    delete dlg.dataset.current;
++    setApprovalGateMode(true);
++    $('#apQuestion').textContent = gateText();
++    renderApprovalCount();
++    ensureApprovalNext().focus();
++  }
++
++  // Обновление без смены показа: счётчик и кнопки. Ушедший показ — в «закрыт», пустая очередь — закрыть.
++  function refreshApproval() {
++    const dlg = $('#approvalDialog');
++    if (!dlg.open) return;
++    if (!A.queue.length) { dlg.close(); return; }
++    if (A.view && !A.queue.some((q) => q.id === A.view.id)) { showApprovalGate(); return; }
++    if (A.gate) $('#apQuestion').textContent = gateText();
++    renderApprovalCount();
++    renderApprovalButtons();
++  }
++
++  // Новый показ запроса id: новый номер показа, прежнее нажатие и токен недействительны.
++  function showApprovalView(id) {
++    const dlg = $('#approvalDialog');
++    const cur = A.queue.find((q) => q.id === id);
++    if (!cur) { refreshApproval(); return; }
++    const seq = ++A.viewSeq;
++    A.view = { id: cur.id, seq, token: null, armed: false };
++    A.press = null;
++    A.gate = false;
++    dlg.dataset.current = String(cur.id);
++    setApprovalGateMode(false);
+     $('#apQuestion').textContent = approvalQuestion(cur);
+     $('#apTool').textContent = U.toolTitle(cur.name);
+     const risk = $('#apRisk');
+@@ -1693,58 +1772,109 @@
+     }
+     // Автоотмена: честно показываем, сколько осталось до отказа (30 с задаёт ядро).
+     startApprovalCountdown(cur);
+-    if (fresh) $('#apDetails').open = false;
+-    for (const b of $$('[data-decision]', dlg)) b.disabled = A.busy;
++    $('#apDetails').open = false;
+     // Отправка, публикация и удаление: «На сессию» не предлагаем (см. loop.js, allowSession).
+     $('#apSession').hidden = cur.allowSession === false;
++    renderApprovalCount();
++    renderApprovalButtons();
+     if (!dlg.open) {
+       const back = document.activeElement;
+       A.returnFocus = back && back !== document.body ? back : null;
+       try { dlg.showModal(); } catch { dlg.setAttribute('open', ''); }
+     }
+-    if (fresh) $('[data-decision="reject"]', dlg).focus();
++    $('[data-decision="reject"]', dlg).focus();
++    armApproval(seq);
++  }
++
++  // Ядро запоминает показ и выдаёт токен; без токена «Разрешить» остаётся выключенным.
++  async function armApproval(seq) {
++    const id = A.view && A.view.id;
++    if (!id) return;
++    const pause = new Promise((resolve) => setTimeout(resolve, APPROVAL_ARM_MS));
++    let token = null;
++    try {
++      const r = await call('markApprovalShown', id);
++      token = r && r.ok === true && typeof r.token === 'string' ? r.token : null;
++    } catch { token = null; }
++    await pause;
++    if (!A.view || A.view.seq !== seq || !token) return;
++    A.view.token = token;
++    A.view.armed = true;
++    renderApprovalButtons();
+   }
+ 
+-  async function answerApproval(decision) {
+-    const cur = A.queue[0];
+-    if (!cur || A.busy) return;
+-    const currentKey = cur.id;
+-    A.busy = true;
+-    for (const b of $$('#approvalDialog [data-decision]')) b.disabled = true;
++  async function answerApproval(decision, seq) {
++    const v = A.view;
++    if (!v || v.seq !== seq || A.sending.has(v.id)) return;
++    if (decision !== 'reject' && !v.armed) return;
++    const id = v.id;
++    const cur = A.queue.find((q) => q.id === id);
++    if (!cur) return;
++    A.sending.add(id);
++    renderApprovalButtons();
+     let ok = false;
+     let why = '';
+     try {
+       const r = await Promise.race([
+-        call('respondApproval', currentKey, decision),
++        call('respondApproval', id, decision, v.token),
+         new Promise((_, reject) => setTimeout(() => reject(new Error('ответ ядра не получен за 5 секунд')), 5000)),
+       ]);
+       ok = !(r && r.ok === false);
+       why = r && typeof r.reason === 'string' ? r.reason : '';
+     } catch (err) { why = errText(err); ok = false; }
+-    if (!ok) toast(why ? 'Не удалось передать решение: ' + why : 'Не удалось передать решение. Запрос остался в ожидании.', 'error');
++    A.sending.delete(id);
+     if (!ok) {
+-      A.busy = false;
+-      for (const b of $$('#approvalDialog [data-decision]')) b.disabled = false;
+-      showApproval();
++      toast(why ? 'Не удалось передать решение: ' + why : 'Не удалось передать решение. Запрос остался в ожидании.', 'error');
++      refreshApproval();
+       return;
+     }
+     if (decision === 'reject') {
+       tracker.markRejected(cur.callId || cur.id);
+       C.rejected.add(cur.callId || cur.id);
+     }
+-    A.busy = false;
+-    approvalDrop(currentKey);
++    approvalDrop(id);
+   }
+ 
+   function initApproval() {
+     const dlg = $('#approvalDialog');
+-    for (const b of $$('[data-decision]', dlg)) b.addEventListener('click', () => answerApproval(b.dataset.decision));
+-    // Esc в окне подтверждения = отказ.
+-    dlg.addEventListener('cancel', (e) => { e.preventDefault(); answerApproval('reject'); });
++    ensureApprovalNext();
++    // Нажатие засчитывается показу, при котором оно началось (мышь — pointerdown, клавиатура — первый keydown).
++    // Клик без начала (экранный диктор) принимается, только если он доверенный и без мыши (detail 0).
++    for (const b of $$('[data-decision]', dlg)) {
++      const decision = b.dataset.decision;
++      b.addEventListener('pointerdown', () => { A.press = A.view && !b.disabled ? { seq: A.view.seq, decision } : null; });
++      b.addEventListener('keydown', (e) => {
++        if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) A.press = A.view && !b.disabled ? { seq: A.view.seq, decision } : null;
++      });
++      b.addEventListener('click', (e) => {
++        const p = A.press;
++        A.press = null;
++        if (!A.view) return;
++        if (p) {
++          if (p.seq !== A.view.seq || p.decision !== decision) return;
++        } else if (!e.isTrusted || e.detail !== 0) return;
++        answerApproval(decision, A.view.seq);
++      });
++    }
++    // Esc в окне подтверждения = отказ показанному запросу; в «закрыт» — просто закрыть диалог.
++    dlg.addEventListener('cancel', (e) => {
++      e.preventDefault();
++      if (A.view) answerApproval('reject', A.view.seq);
++      else dlg.close();
++    });
+     // После закрытия фокус возвращается туда, где был.
+     dlg.addEventListener('close', () => {
++      // Сам код закрывает диалог только без показанного запроса. Если показ ещё жив, диалог закрыл браузер:
++      // Esc без недавнего действия пользователя приходит без события cancel. Это тоже «Отклонить».
++      const dismissed = A.view && !A.sending.has(A.view.id) && A.queue.some((q) => q.id === A.view.id) ? A.view.id : null;
+       stopApprovalCountdown();
+       delete dlg.dataset.current;
++      A.viewSeq++;
++      A.view = null;
++      A.press = null;
++      A.gate = false;
++      setApprovalGateMode(false);
++      if (dismissed) answerById(dismissed, 'reject');
+       const back = A.returnFocus;
+       A.returnFocus = null;
+       if (back && back.isConnected && !back.disabled) back.focus();
+--- a/apps/jarvis-desktop/main.js
++++ b/apps/jarvis-desktop/main.js
+@@ -3537,9 +3537,20 @@
+ 
+ ipcMain.handle('approval:list', (event) => (fromWindow(event) ? approvals.list() : []));
+ 
+-ipcMain.handle('approval:respond', (event, id, decision) => {
++// Окно показало запрос владельцу: ядро выдаёт токен этого показа. Разрешить можно только с ним.
++ipcMain.handle('approval:shown', (event, id) => {
++  if (!fromWindow(event)) return { ok: false };
++  const token = approvals.markShown(id);
++  return token ? { ok: true, token } : { ok: false, reason: approvals.closedReason(id) || 'запрос уже неактуален' };
++});
++
++ipcMain.handle('approval:respond', (event, id, decision, shownToken) => {
+   if (!fromWindow(event)) return { ok: false };
+   try {
++    // «Разрешить» и «На сессию» — только на запрос, который сейчас показан в окне (R3-01). Отказ принимается всегда.
++    if (decision !== 'reject' && !approvals.isShown(id, shownToken)) {
++      return { ok: false, reason: approvals.closedReason(id) || 'этот запрос сейчас не показан в окне — откройте его заново' };
++    }
+     const pending = approvals.list().find((entry) => entry.id === id);
+     const ok = approvals.respond(id, decision);
+     // Ответ снимает статус «ждёт подтверждения»: задача снова выполняется (или отклонённый шаг остаётся в работе).
+--- a/apps/jarvis-desktop/preload.js
++++ b/apps/jarvis-desktop/preload.js
+@@ -27,7 +27,8 @@
+   tasksOpenReport: (taskId) => ipcRenderer.invoke('tasks:openReport', String(taskId)),
+   missionsBoard: () => ipcRenderer.invoke('missions:board'),
+   setMode: (mode) => ipcRenderer.invoke('mode:set', mode),
+-  respondApproval: (id, decision) => ipcRenderer.invoke('approval:respond', id, decision),
++  respondApproval: (id, decision, shownToken) => ipcRenderer.invoke('approval:respond', id, decision, shownToken),
++  markApprovalShown: (id) => ipcRenderer.invoke('approval:shown', id),
+   listApprovals: () => ipcRenderer.invoke('approval:list'),
+   getSettings: () => ipcRenderer.invoke('settings:get'),
+   setSetting: (key, value) => ipcRenderer.invoke('settings:set', key, value),
+--- a/apps/jarvis-desktop/renderer/dev-stub.js
++++ b/apps/jarvis-desktop/renderer/dev-stub.js
+@@ -365,6 +365,7 @@
+       state.mode = mode;
+       return { ok: true, mode };
+     },
++    markApprovalShown: async (id) => (pending.has(id) ? { ok: true, token: 'stub-' + id } : { ok: false }),
+     respondApproval: async (id, decision) => {
+       const resolve = pending.get(id);
+       if (!resolve || !['once', 'session', 'reject'].includes(decision)) return { ok: false };
+--- a/apps/jarvis-desktop/src/policy/approvals.js
++++ b/apps/jarvis-desktop/src/policy/approvals.js
+@@ -62,6 +62,7 @@
+     this._pending = new Map(); // id -> { resolve, timer, timerMs, payload }
+     this._usedIds = new Set();
+     this._closed = new Map(); // id -> причина отмены: отменённое подтверждение использовать нельзя
++    this._shown = null; // { id, token }: какой запрос окно показывает владельцу прямо сейчас
+   }
+ 
+   // Если id не передан, генерируем и записываем обратно в payload,
+@@ -119,6 +120,21 @@
+     return ids.length;
+   }
+ 
++  // Окно показало запрос владельцу: новый токен показа, прежний показ (любого запроса) больше не действует.
++  // null — запрос уже не ждёт ответа.
++  markShown(id) {
++    if (!this._pending.has(id)) return null;
++    const token = randomUUID();
++    this._shown = { id, token };
++    return token;
++  }
++
++  // Разрешение из окна принимается, только если окно отвечает на тот показ, что сейчас на экране (R3-01).
++  isShown(id, token) {
++    return Boolean(this._shown) && this._pending.has(id) && this._shown.id === id
++      && typeof token === 'string' && this._shown.token === token;
++  }
++
+   // Почему запрос больше не принимает ответ (он был отменён), или null.
+   closedReason(id) {
+     return this._closed.has(id) ? this._closed.get(id) : null;
+@@ -167,6 +183,7 @@
+     if (!entry) return false;
+     if (entry.timer) clearTimeout(entry.timer);
+     this._pending.delete(id);
++    if (this._shown && this._shown.id === id) this._shown = null;
+     entry.resolve(decision);
+     return true;
+   }

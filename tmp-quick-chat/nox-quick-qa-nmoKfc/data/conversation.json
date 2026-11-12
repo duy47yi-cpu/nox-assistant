@@ -1,0 +1,59 @@
+{
+  "activeId": "c4a8295c-4572-4d2f-ac68-674d4f333e96",
+  "chats": [
+    {
+      "id": "c4a8295c-4572-4d2f-ac68-674d4f333e96",
+      "history": [
+        {
+          "role": "user",
+          "content": "какая погода"
+        },
+        {
+          "role": "assistant",
+          "content": "Не вышло: Скажите город (ответ без модели)"
+        },
+        {
+          "role": "user",
+          "content": "проверка разрешения отклонить"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "qa-write",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"quick-qa.txt\",\"content\":\"Точный тестовый текст\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "qa-write",
+          "content": "{\"ok\":false,\"summary\":\"отклонено\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Тестовый ответ."
+        },
+        {
+          "role": "user",
+          "content": "проверка остановка"
+        },
+        {
+          "role": "user",
+          "content": "проверка остановка ещё раз"
+        }
+      ],
+      "updatedAt": 1794493035801
+    },
+    {
+      "id": "3818562a-c819-4bc9-8e0d-172076b4dc5c",
+      "history": [],
+      "updatedAt": 1794493034287
+    }
+  ]
+}

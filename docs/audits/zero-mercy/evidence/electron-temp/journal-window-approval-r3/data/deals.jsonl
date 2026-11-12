@@ -1,0 +1,2 @@
+{"seq":1,"ts":"2026-11-10T17:35:40.315Z","ref":"approval:audit-observe-collision","title":"audit_fixture_effect","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-10T17:35:40.315Z","cleared":false}
+{"seq":2,"ts":"2026-11-10T17:35:40.553Z","ref":"approval:audit-observe-collision","forget":true}

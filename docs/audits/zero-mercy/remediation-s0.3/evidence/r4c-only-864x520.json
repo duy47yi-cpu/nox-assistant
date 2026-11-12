@@ -1,0 +1,70 @@
+{
+  "root": "C:\\Users\\abdut\\AppData\\Local\\Temp\\zm-run3-win-vpXVty",
+  "size": [
+    864,
+    520
+  ],
+  "results": [
+    {
+      "id": "R4c",
+      "scenario": "A истёк, B (второй агент, тот же вид) занял диалог; клик «Разрешить», нацеленный на A",
+      "closedEventToClickMs": 72,
+      "dialogAtClick": null,
+      "elementUnderCursor": "DIALOG",
+      "ipcForB": [],
+      "bDecisionByClick": null,
+      "bDecisionFinal": null,
+      "aRan": false,
+      "bRanWouldBe": false,
+      "pass": true,
+      "ranNow": []
+    }
+  ],
+  "log": [
+    {
+      "t": 1794403697086,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794403697096,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794403697128,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794403697147,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "09c42efb-46d6-411d-93ea-6d4dcd7fa874",
+      "callId": "call_0",
+      "path": "R4-A.txt"
+    },
+    {
+      "t": 1794403727135,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "09c42efb-46d6-411d-93ea-6d4dcd7fa874",
+      "decision": "reject"
+    },
+    {
+      "t": 1794403727140,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794403727165,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    }
+  ]
+}

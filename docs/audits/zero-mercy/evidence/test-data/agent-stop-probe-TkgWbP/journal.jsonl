@@ -1,0 +1,1 @@
+{"ts":"2026-11-10T16:55:59.935Z","tool":"audit_fake_action","args":{"value":"safe fixture"},"risk":"T2","mode":"full","decision":"stop","ok":false,"summary":"остановлено: ответ инструмента пришёл после остановки хода","callId":"probe-call-1","runId":"29a992c7","step":1,"status":"failed","verified":null,"verifiedStatus":null,"evidence":null}

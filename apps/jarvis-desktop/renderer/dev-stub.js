@@ -48,6 +48,11 @@
   const listeners = new Set();
   const pending = new Map(); // id → resolve
   let seq = 0;
+  let stubClipPaused = false;
+  let stubClipTtlMs = 604_800_000;
+  let stubDlSeq = 0;
+  let stubDlSnap = null;
+  const stubDownloads = [{ path: 'setup-old.exe', size: 52_000_000, mtimeMs: 1000, reason: 'старый установщик' }, { path: 'video.tmp', size: 3_400_000, mtimeMs: 2000, reason: 'временный файл' }];
 
   const CATALOG = [
     { name: 'volume_set', risk: 'T0', description: 'Установить громкость системы в процентах (0–100).', parameters: { type: 'object', properties: { percent: { type: 'integer', minimum: 0, maximum: 100 } }, required: ['percent'] } },
@@ -75,6 +80,7 @@
     { id: 'cmd-1', name: 'Рабочее утро', phrases: ['доброе утро', 'начинаем работу'], steps: [{ tool: 'app_open', args: { name: 'code' } }, { tool: 'url_open', args: { url: 'https://github.com' } }, { tool: 'volume_set', args: { percent: 25 } }], enabled: true, lastRunAt: ago(70) },
     { id: 'cmd-2', name: 'Тишина', phrases: ['тишина'], steps: [{ tool: 'volume_set', args: { percent: 0 } }], enabled: false, lastRunAt: null },
   ];
+  let commandLaunchLog = [];
 
   const stubChats = { next: 2, activeId: 'c1', chats: [{ id: 'c1', title: 'Первый разговор' }, { id: 'c2', title: 'Новый чат' }] };
   const history = params.get('history') === '1' ? [
@@ -397,12 +403,25 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       s.drift = null;
       return { ok: true, servers: mcpStub.map((x) => ({ ...x })) };
     },
-    getSettings: async () => ({ ...settings, voiceVolume: 1, voiceRate: 1, voiceSpeaker: null, clipboardHistory: settings.clipboardHistory === true }),
+    getSettings: async () => ({
+      restEnabled: false, restInterval: 50,
+      notificationVoice: { enabled: false, categories: ['reminders', 'tasks', 'apps', 'files', 'budget'], volume: 0.7, quietEnabled: true, quietFrom: '23:00', quietTo: '08:00', importantAtNight: false },
+      ...settings, voiceVolume: 1, voiceRate: 1, voiceSpeaker: null, clipboardHistory: settings.clipboardHistory === true,
+    }),
     voiceState: async () => ({ ok: true, provider: 'local', available: true, reason: null, cloudAvailable: false, options: { speaker: settings.voiceSpeaker || null, volume: settings.voiceVolume ?? 1, rate: settings.voiceRate ?? 1 } }),
     voiceVoices: async () => ({ ok: true, voices: [{ id: 'baya', title: 'Бая' }, { id: 'aidar', title: 'Айдар' }] }),
     setSetting: async (key, value) => {
       await sleep(120);
       if (params.get('failset') === '1' || window.__jarvisStub.failSettings) return { ok: false };
+      if (key === 'notificationVoice') {
+        settings.notificationVoice = value;
+        return { ok: true, value };
+      }
+      if (key === 'restInterval') {
+        if (!Number.isInteger(value) || value < 5 || value > 120) return { ok: false };
+        settings.restInterval = value;
+        return { ok: true, value };
+      }
       if (key === 'voiceVolume') {
         const n = Number(value);
         if (!Number.isFinite(n) || n < 0 || n > 1) return { ok: false };
@@ -419,7 +438,7 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
         settings.voiceSpeaker = typeof value === 'string' && value.trim() ? value.trim() : null;
         return { ok: true, speaker: settings.voiceSpeaker };
       }
-      if (!['voice', 'alwaysOnTop', 'quiet', 'autoStart', 'screenAuto', 'memoryAuto', 'dictation', 'clipboardHistory'].includes(key) || typeof value !== 'boolean') return { ok: false };
+      if (!['voice', 'alwaysOnTop', 'quiet', 'autoStart', 'screenAuto', 'memoryAuto', 'dictation', 'clipboardHistory', 'restEnabled'].includes(key) || typeof value !== 'boolean') return { ok: false };
       settings[key] = value;
       return { ok: true };
     },
@@ -519,23 +538,31 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
     exportCommands: async () => ({ ok: true, canceled: true }),
     pickCommandsImport: async () => ({ ok: true, canceled: true }),
     applyCommandsImport: async () => ({ ok: false, error: 'в заглушке импорт недоступен' }),
-    downloadsAnalyze: async () => ({ ok: true, status: 'ok', scanned: 12, candidates: [
-      { path: 'setup-old.exe', size: 52_000_000, reason: 'старый установщик' },
-      { path: 'video.tmp', size: 3_400_000, reason: 'временный файл' },
-    ], candidateBytes: 55_400_000, groups: {} }),
-    downloadsRemove: async (payload, confirm) => (confirm === true
-      ? { ok: true, removed: (payload && payload.paths) || [], refused: [], failed: [], bytesFreed: 3_400_000, message: 'готово' }
-      : { ok: false, reason: 'confirm_required', message: 'удаление только по подтверждению' }),
-    clipboardHistoryState: async () => ({ ok: true, paused: false, ttlMs: 3_600_000, count: 2, chars: 40 }),
+    downloadsAnalyze: async () => {
+      const candidates = stubDownloads.map((item) => ({ ...item }));
+      stubDlSnap = 'snap-' + (++stubDlSeq);
+      return { ok: true, status: candidates.length ? 'ok' : 'empty', scanned: 12, candidates, candidatesTotal: candidates.length, candidateBytes: candidates.reduce((a, b) => a + b.size, 0), snapshotId: stubDlSnap, groups: {} };
+    },
+    downloadsRemove: async (payload, confirm) => {
+      if (confirm !== true) return { ok: false, reason: 'confirm_required', message: 'удаление только по подтверждению' };
+      const p = payload && typeof payload === 'object' ? payload : {};
+      if (!stubDlSnap || p.snapshotId !== stubDlSnap) { stubDlSnap = null; return { ok: false, reason: 'list_changed', needsReanalyze: true, message: 'Список устарел — нужна повторная проверка', removed: [], refused: [], failed: [], bytesFreed: 0 }; }
+      stubDlSnap = null;
+      const paths = Array.isArray(p.paths) ? p.paths : [];
+      let bytesFreed = 0; const removed = [];
+      for (const rel of paths) { const i = stubDownloads.findIndex((x) => x.path === rel); if (i >= 0) { bytesFreed += stubDownloads[i].size; stubDownloads.splice(i, 1); removed.push(rel); } }
+      return { ok: true, removed, refused: [], failed: [], bytesFreed, message: 'готово' };
+    },
+    clipboardHistoryState: async () => ({ ok: true, paused: stubClipPaused, ttlMs: stubClipTtlMs, count: 2, chars: 40 }),
     clipboardHistoryList: async () => ({ ok: true, items: [
       { id: 'c1', text: 'Короткая заметка из буфера', createdAt: new Date().toISOString() },
       { id: 'c2', text: 'https://example.com/страница', createdAt: new Date(Date.now() - 600e3).toISOString() },
     ] }),
     clipboardHistoryRemove: async () => ({ ok: true, removed: true }),
     clipboardHistoryClear: async () => ({ ok: true, removed: 2 }),
-    clipboardHistoryPause: async () => ({ ok: true, paused: true }),
-    clipboardHistoryResume: async () => ({ ok: true, paused: false }),
-    clipboardHistoryTtl: async () => ({ ok: true }),
+    clipboardHistoryPause: async () => { stubClipPaused = true; return { ok: true, paused: true }; },
+    clipboardHistoryResume: async () => { stubClipPaused = false; return { ok: true, paused: false }; },
+    clipboardHistoryTtl: async (ttlMs) => { stubClipTtlMs = ttlMs === null ? null : Number(ttlMs); return { ok: true, ttlMs: stubClipTtlMs }; },
     snippetsList: async () => ({ ok: true, items: [
       { id: 's1', trigger: 'подпись', text: 'С уважением, владелец Nox', updatedAt: new Date().toISOString() },
     ], state: { ok: true, count: 1 } }),
@@ -543,6 +570,14 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
     snippetsRemove: async () => ({ ok: true, removed: true }),
     snippetsPreview: async (id) => ({ ok: true, id, trigger: 'подпись', text: 'С уважением, владелец Nox' }),
     snippetsInsert: async () => ({ ok: true, inserted: true }),
+    calendarState: async () => ({
+      ok: true,
+      setting: { connected: false, type: null, label: null },
+      calendar: { connected: false, state: 'not_connected', stateLabel: 'Источник не подключён', source: null, sourceLabel: null, items: [], conflicts: [], total: 0 },
+      briefing: { calendarState: 'not_connected', source: null, events: [], conflicts: [], reminders: [], missions: [], text: 'Календарь: источник не подключён.' },
+    }),
+    calendarSetSource: async () => ({ ok: true, setting: { connected: false, type: null, label: null } }),
+    calendarPickFile: async () => ({ ok: true, canceled: true }),
     desksState: async () => ({
       ok: true,
       activeId: 'd1',
@@ -718,6 +753,9 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
         phrases: cmd.phrases.map((p) => String(p).trim()),
         steps: cmd.steps.map((s) => ({ tool: s.tool, args: { ...s.args } })),
         enabled: cmd.enabled !== false,
+        folder: cmd.folder || null,
+        triggers: cmd.triggers ? JSON.parse(JSON.stringify(cmd.triggers)) : undefined,
+        hotkey: cmd.triggers && cmd.triggers.hotkey && cmd.triggers.hotkey.enabled ? cmd.triggers.hotkey.key : (cmd.hotkey || null),
         lastRunAt: (commands.find((c) => c.id === cmd.id) || {}).lastRunAt || null,
       };
       const i = commands.findIndex((c) => c.id === clean.id);
@@ -748,14 +786,64 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       }
     },
     toolCatalog: async () => { await failCmd(); return JSON.parse(JSON.stringify(CATALOG)); },
+    updateCommandTriggers: async (id, triggers) => {
+      await failCmd();
+      const cmd = commands.find((c) => c.id === id);
+      if (!cmd) return { ok: false, error: 'команда не найдена' };
+      cmd.triggers = JSON.parse(JSON.stringify(triggers || {}));
+      const ht = cmd.triggers.hotkey;
+      cmd.hotkey = ht && ht.enabled && ht.key ? ht.key : null;
+      emit({ type: 'commands:changed' });
+      return { ok: true, command: JSON.parse(JSON.stringify(cmd)) };
+    },
+    getCommandLaunches: async () => {
+      await failCmd();
+      return {
+        ok: true,
+        commands: commands.map((c) => ({ ...JSON.parse(JSON.stringify(c)), stepsCount: (c.steps || []).length })),
+        log: JSON.parse(JSON.stringify(commandLaunchLog)),
+        stats: { total: commandLaunchLog.length },
+        events: (window.CmdSteps && window.CmdSteps.TRIGGER_EVENT_OPTIONS) || [],
+        hotkeyStatus: Object.fromEntries(commands.map((c) => [c.id, { key: c.triggers?.hotkey?.key || c.hotkey || null, enabled: Boolean(c.triggers?.hotkey?.enabled && (c.triggers?.hotkey?.key || c.hotkey)), registered: Boolean(c.triggers?.hotkey?.enabled && (c.triggers?.hotkey?.key || c.hotkey)), error: null }])),
+      };
+    },
+    triggerCommandLaunch: async ({ id, trigger = 'manual' } = {}) => {
+      await failCmd();
+      const cmd = commands.find((c) => c.id === id);
+      if (!cmd) return { ok: false, error: 'команда не найдена' };
+      if (trigger === 'hotkey' || trigger === 'manual') return api.runCommand(id);
+      const entry = { id: 'run-' + Date.now(), ts: new Date().toISOString(), commandId: cmd.id, commandName: cmd.name, trigger, triggerDetail: trigger === 'schedule' ? 'проверка расписания' : 'проверка события', status: cmd.enabled === false ? 'skipped' : 'succeeded', reason: cmd.enabled === false ? 'пропущено: команда выключена' : 'выполнена без ошибок', stepsOk: cmd.enabled === false ? 0 : (cmd.steps || []).length, stepsTotal: (cmd.steps || []).length };
+      commandLaunchLog.unshift(entry);
+      emit({ type: 'commands:changed' });
+      return { ok: entry.status === 'succeeded', status: entry.status, reason: entry.reason, results: [], logEntry: entry };
+    },
+    fireCommandEvent: async ({ eventType = 'user:custom', eventName = '' } = {}) => {
+      await failCmd();
+      const matched = commands.filter((c) => c.triggers && c.triggers.event && c.triggers.event.enabled && c.triggers.event.eventType === eventType && (!c.triggers.event.eventName || c.triggers.event.eventName === eventName));
+      for (const cmd of matched) {
+        commandLaunchLog.unshift({ id: 'run-' + Date.now(), ts: new Date().toISOString(), commandId: cmd.id, commandName: cmd.name, trigger: 'event', triggerDetail: eventName || eventType, status: cmd.enabled === false ? 'skipped' : 'succeeded', reason: cmd.enabled === false ? 'пропущено: команда выключена' : 'выполнена без ошибок', stepsOk: (cmd.steps || []).length, stepsTotal: (cmd.steps || []).length });
+      }
+      emit({ type: 'commands:changed' });
+      return { ok: true, matched: matched.length, ran: matched.filter((c) => c.enabled !== false).length, results: [] };
+    },
+    clearCommandLaunchLog: async ({ commandId = null } = {}) => {
+      commandLaunchLog = commandId ? commandLaunchLog.filter((x) => x.commandId !== commandId) : [];
+      emit({ type: 'commands:changed' });
+      return { ok: true };
+    },
 
     // Мини-режим: в браузере просто переходим между страницами.
     openMini: async () => { location.href = 'mini.html' + location.search; return { ok: true }; },
+    closeMini: async () => { location.href = 'index.html' + location.search; return { ok: true }; },
+    resizeQuick: async () => ({ ok: true }),
+    quickHotkey: async () => ({ configured: 'Control+Alt+Space', registered: true }),
+    setQuickHotkey: async () => ({ ok: true }),
+    onQuickShown: () => {},
     showMain: async () => { location.href = 'index.html' + location.search; return { ok: true }; },
   };
 
   if (params.get('oldcore') === '1') {
-    for (const k of ['installPack', 'listCommands', 'saveCommand', 'deleteCommand', 'runCommand', 'toolCatalog', 'openMini',
+    for (const k of ['installPack', 'listCommands', 'saveCommand', 'deleteCommand', 'runCommand', 'toolCatalog', 'updateCommandTriggers', 'getCommandLaunches', 'triggerCommandLaunch', 'fireCommandEvent', 'clearCommandLaunchLog', 'openMini',
       'chatHistory', 'clearChat', 'chatList', 'chatNew', 'chatSelect', 'chatClose', 'pickFiles', 'openWorkspace', 'addFolder', 'removeFolder', 'setModelTier', 'libraryList', 'libraryRun']) delete api[k];
   }
 

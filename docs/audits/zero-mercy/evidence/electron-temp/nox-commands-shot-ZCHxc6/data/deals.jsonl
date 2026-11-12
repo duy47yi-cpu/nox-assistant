@@ -1,0 +1,2 @@
+{"seq":1,"ts":"2026-11-10T16:43:27.701Z","ref":"turn:f0ec1fc2","title":"Команда: QA пауза","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-10T16:43:27.701Z","cleared":false}
+{"seq":2,"ts":"2026-11-10T16:43:27.846Z","ref":"turn:f0ec1fc2","forget":true}

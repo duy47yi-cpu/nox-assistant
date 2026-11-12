@@ -1,0 +1,84 @@
+
+Фоновые задачи с моделью выключены: включает владелец настройкой backgroundModelRuns
+[
+ {
+  "id": "R1",
+  "scenario": "перезагрузка окна с ожидающим запросом, затем «Разрешить» в восстановленной карточке",
+  "restoredSameId": true,
+  "expected": [
+   "R1-A.txt"
+  ],
+  "pass": false,
+  "ranNow": []
+ },
+ {
+  "id": "R2",
+  "scenario": "call_0 дважды в одном ходу: строки чата",
+  "rows": [],
+  "dialogB": null,
+  "expected": [
+   "R1-A.txt",
+   "R2-A.txt"
+  ],
+  "pass": false,
+  "ranNow": []
+ },
+ {
+  "id": "R3",
+  "scenario": "два запроса одновременно (чат A + задача B); A — «Разрешить» мышью; затем «Отклонить» мышью у B",
+  "dialogStayedOnA": true,
+  "bShownAfterA": false,
+  "bButtonsAfterA": [
+   "reject:false",
+   "session:false",
+   "once:false"
+  ],
+  "bDecisionAfterMouseReject": null,
+  "bDecisionFinal": null,
+  "expected": [
+   "R1-A.txt",
+   "R2-A.txt",
+   "R3-A.txt"
+  ],
+  "pass": false,
+  "ranNow": []
+ },
+ {
+  "id": "R4",
+  "scenario": "A истёк, B (задача, без «На сессию») занял диалог; клик «Разрешить», нацеленный на A",
+  "closedEventToClickMs": 7809,
+  "dialogAtClick": null,
+  "elementUnderCursor": "DIALOG",
+  "ipcForB": [],
+  "bDecisionByClick": null,
+  "bDecisionFinal": null,
+  "aRan": false,
+  "bRanWouldBe": false,
+  "pass": true,
+  "ranNow": []
+ },
+ {
+  "id": "R4c",
+  "scenario": "A истёк, B (второй агент, тот же вид) занял диалог; клик «Разрешить», нацеленный на A",
+  "closedEventToClickMs": 4290,
+  "dialogAtClick": null,
+  "elementUnderCursor": "DIALOG",
+  "ipcForB": [],
+  "bDecisionByClick": null,
+  "bDecisionFinal": null,
+  "aRan": false,
+  "bRanWouldBe": false,
+  "pass": true,
+  "ranNow": []
+ },
+ {
+  "id": "R5",
+  "scenario": "ядро сняло запрос задачи, событие approval_closed потеряно; «Разрешить», потом Escape",
+  "stillOpenAfterOnce": false,
+  "stillOpenAfterEsc": false,
+  "decision": "reject",
+  "pass": true,
+  "ranNow": [],
+  "clearedByReload": true
+ }
+]

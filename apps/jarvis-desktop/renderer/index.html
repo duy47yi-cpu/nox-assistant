@@ -364,6 +364,7 @@
                 <div class="nox-tabs" role="tablist" aria-label="Команды">
                   <button class="nox-tab" type="button" role="tab" id="tabMine" data-tab="mine" aria-controls="panelMine" aria-selected="true" tabindex="0">Мои <span class="nox-tab-count" aria-hidden="true">·</span> <span class="nox-tab-count" id="cmdCount">0</span></button>
                   <button class="nox-tab" type="button" role="tab" id="tabLib" data-tab="lib" aria-controls="panelLib" aria-selected="false" tabindex="-1">Библиотека <span class="nox-tab-count" aria-hidden="true">·</span> <span class="nox-tab-count" id="libCount">0</span></button>
+                  <button class="nox-tab" type="button" role="tab" id="tabLaunches" data-tab="launches" aria-controls="panelLaunches" aria-selected="false" tabindex="-1">Запуски <span class="nox-tab-count" aria-hidden="true">·</span> <span class="nox-tab-count" id="launchCount">0</span></button>
                 </div>
                 <div class="nox-search" id="cmdSearchWrap">
                   <span data-icon="search" aria-hidden="true"></span>
@@ -404,6 +405,59 @@
                   <div class="nox-lib-scroll" role="tabpanel" id="panelLib" aria-labelledby="tabLib" hidden>
                     <p class="nox-note note-warn" id="libNote" hidden></p>
                     <div class="lib-groups" id="libGroups"></div>
+                  </div>
+
+                  <div class="nox-launches-scroll" role="tabpanel" id="panelLaunches" aria-labelledby="tabLaunches" hidden>
+                    <div class="launch-top">
+                      <div class="launch-stats" id="launchStats" aria-live="polite"></div>
+                      <div class="launch-top-actions">
+                        <button class="nox-btn" type="button" id="launchReload" title="Обновить способы запуска и журнал">Обновить</button>
+                      </div>
+                    </div>
+
+                    <div class="launch-event-bar" id="launchEventBar">
+                      <span class="launch-event-label">Вызвать событие:</span>
+                      <select class="launch-select" id="launchEventType" aria-label="Тип события для запуска команд"></select>
+                      <input class="launch-input" id="launchEventName" type="text" maxlength="80" placeholder="Имя события (например, backup)" aria-label="Имя пользовательского события">
+                      <button class="nox-btn" type="button" id="launchFireEvent" title="Отправить событие сейчас">Вызвать событие</button>
+                    </div>
+
+                    <section class="launch-section" aria-labelledby="launchMatrixTitle">
+                      <div class="launch-sec-head">
+                        <h3 id="launchMatrixTitle">Способы запуска по командам</h3>
+                        <span class="launch-sec-sub">Клавиша, расписание и события — независимые выключатели; автозапуски не обходят подтверждения</span>
+                      </div>
+                      <ul class="launch-matrix" id="launchMatrix"></ul>
+                      <p class="nox-note" id="launchMatrixEmpty" hidden>Создайте команду, чтобы настроить горячую клавишу, расписание или реакцию на событие.</p>
+                    </section>
+
+                    <section class="launch-section" aria-labelledby="launchLogTitle">
+                      <div class="launch-sec-head">
+                        <h3 id="launchLogTitle">Журнал запусков</h3>
+                        <div class="launch-filters">
+                          <select class="launch-select" id="launchFilterCmd" aria-label="Фильтр по команде"></select>
+                          <select class="launch-select" id="launchFilterTrigger" aria-label="Фильтр по способу запуска">
+                            <option value="all">Все способы</option>
+                            <option value="hotkey">Горячая клавиша</option>
+                            <option value="schedule">Расписание</option>
+                            <option value="event">Событие</option>
+                            <option value="manual">Вручную / фраза</option>
+                          </select>
+                          <select class="launch-select" id="launchFilterStatus" aria-label="Фильтр по результату">
+                            <option value="all">Все результаты</option>
+                            <option value="succeeded">Выполнена</option>
+                            <option value="skipped">Пропущена</option>
+                            <option value="blocked">Заблокирована</option>
+                            <option value="cancelled">Отменена</option>
+                            <option value="failed">Ошибка</option>
+                            <option value="interrupted">Прервана</option>
+                          </select>
+                          <button class="nox-btn" type="button" id="launchClear" title="Очистить журнал запусков">Очистить</button>
+                        </div>
+                      </div>
+                      <ul class="launch-log" id="launchLogList"></ul>
+                      <p class="nox-note" id="launchLogEmpty" hidden>Запусков по выбранным фильтрам пока нет.</p>
+                    </section>
                   </div>
 
                   <div class="nox-recording" id="cmdRecordPanel" hidden aria-live="polite">
@@ -470,16 +524,80 @@
                     </div>
                   </div>
 
-                  <div class="field-row">
-                    <div class="field">
-                      <label class="field-label" for="cmdFolder">Где показывать</label>
-                      <input class="input" id="cmdFolder" type="text" maxlength="60" placeholder="Например, Браузер">
-                    </div>
-                    <div class="field">
-                      <label class="field-label" for="cmdHotkey">Горячая клавиша</label>
-                      <input class="input mono" id="cmdHotkey" type="text" maxlength="40" placeholder="Например, Ctrl+Alt+1">
-                    </div>
+                  <div class="field">
+                    <label class="field-label" for="cmdFolder">Где показывать</label>
+                    <input class="input" id="cmdFolder" type="text" maxlength="60" placeholder="Например, Браузер">
                   </div>
+
+                  <section class="triggers-box" id="cmdTriggersSection" aria-label="Способы запуска команды">
+                    <div class="triggers-head">
+                      <span class="field-label">Способы запуска</span>
+                      <span class="triggers-note">Каждый способ включается и отключается отдельно; автозапуск не обходит подтверждения</span>
+                    </div>
+
+                    <div class="trigger-card" data-kind="hotkey">
+                      <div class="trigger-row">
+                        <label class="trigger-toggle">
+                          <input type="checkbox" role="switch" class="switch" id="cmdTrHotkeyOn" aria-label="Включить запуск по горячей клавише">
+                          <span>Горячая клавиша</span>
+                        </label>
+                        <input class="input mono trigger-grow" id="cmdHotkey" type="text" maxlength="40" placeholder="Например, Ctrl+Alt+1" aria-label="Горячая клавиша">
+                      </div>
+                    </div>
+
+                    <div class="trigger-card" data-kind="schedule">
+                      <div class="trigger-row">
+                        <label class="trigger-toggle">
+                          <input type="checkbox" role="switch" class="switch" id="cmdTrSchedOn" aria-label="Включить запуск по расписанию">
+                          <span>По расписанию</span>
+                        </label>
+                        <select class="input trigger-select" id="cmdTrSchedType" aria-label="Вид расписания">
+                          <option value="daily">Каждый день</option>
+                          <option value="weekdays">По будням</option>
+                          <option value="weekly">Раз в неделю</option>
+                          <option value="interval">Каждые N минут</option>
+                        </select>
+                      </div>
+                      <div class="trigger-sub" id="cmdTrSchedParams">
+                        <label class="trigger-field" id="cmdTrSchedEveryWrap" hidden>
+                          <span>Раз в (мин)</span>
+                          <input class="input trigger-num" id="cmdTrSchedEvery" type="number" min="1" max="1440" value="30">
+                        </label>
+                        <label class="trigger-field" id="cmdTrSchedDayWrap" hidden>
+                          <span>День недели</span>
+                          <select class="input" id="cmdTrSchedDay"></select>
+                        </label>
+                        <label class="trigger-field" id="cmdTrSchedTimeWrap">
+                          <span>Время</span>
+                          <input class="input mono trigger-time" id="cmdTrSchedTime" type="time" value="09:00">
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="trigger-card" data-kind="event">
+                      <div class="trigger-row">
+                        <label class="trigger-toggle">
+                          <input type="checkbox" role="switch" class="switch" id="cmdTrEventOn" aria-label="Включить запуск по событию">
+                          <span>По событию</span>
+                        </label>
+                        <select class="input trigger-grow" id="cmdTrEventType" aria-label="Событие"></select>
+                      </div>
+                      <div class="trigger-sub" id="cmdTrEventParams">
+                        <label class="trigger-field" id="cmdTrEventNameWrap" hidden>
+                          <span>Имя события</span>
+                          <input class="input" id="cmdTrEventName" type="text" maxlength="80" placeholder="Например, backup">
+                        </label>
+                        <label class="trigger-field">
+                          <span>Фильтр текста</span>
+                          <input class="input" id="cmdTrEventMatch" type="text" maxlength="100" placeholder="Часть текста (если нужно)">
+                        </label>
+                        <label class="trigger-field">
+                          <span>Пауза, сек</span>
+                          <input class="input trigger-num" id="cmdTrEventCooldown" type="number" min="0" max="86400" value="30">
+                        </label>
+                      </div>
+                    </div>
+                  </section>
 
                   <p class="origin-line" id="cmdOrigin" hidden><span data-icon="help" aria-hidden="true"></span><span id="cmdOriginText"></span></p>
                   <p class="warn-line" id="cmdWarnings" hidden><span data-icon="alert" aria-hidden="true"></span><span id="cmdWarningsText"></span></p>
@@ -655,8 +773,12 @@
                   <span class="set-text"><span class="set-name">Авто-умный</span><span class="set-hint">Безопасное в рабочей папке сам, остальное спросит.</span></span>
                 </label>
               </div>
+              <div class="set-row">
+                <span class="set-text"><label class="set-name" for="quickHotkeyInput">Быстрый чат: сочетание клавиш</label><span class="set-hint" id="quickHotkeyStatus" role="status">Проверяю…</span></span>
+                <input class="input input-sm" id="quickHotkeyInput" type="text" aria-describedby="quickHotkeyStatus" placeholder="Ctrl+Alt+Space">
+                <button class="btn btn-secondary btn-sm" type="button" id="quickHotkeySave">Сохранить</button>
+              </div>
             </section>
-
             <section class="set-section" aria-labelledby="mailTitle" id="mailSettings" data-cat="security" hidden>
               <h2 class="set-title" id="mailTitle">Почта Gmail</h2>
               <div class="set-row">
@@ -722,6 +844,74 @@
               </label>
             </section>
 
+            <section class="set-section" data-cat="voice" id="notificationVoiceSettings" aria-labelledby="setNotificationVoiceTitle">
+              <h2 class="set-title" id="setNotificationVoiceTitle">Озвучка уведомлений</h2>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Озвучивать уведомления</span><span class="set-hint">Отдельно от ответов в чате</span></span>
+                <input type="checkbox" role="switch" class="switch" data-notice-option="enabled">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Напоминания</span></span>
+                <input type="checkbox" role="switch" class="switch" data-notice-category="reminders">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Сбои задач и фоновой работы</span></span>
+                <input type="checkbox" role="switch" class="switch" data-notice-category="tasks">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Зависшие программы</span></span>
+                <input type="checkbox" role="switch" class="switch" data-notice-category="apps">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Новые файлы во входящих</span></span>
+                <input type="checkbox" role="switch" class="switch" data-notice-category="files">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Дневной лимит</span></span>
+                <input type="checkbox" role="switch" class="switch" data-notice-category="budget">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Перерывы</span></span>
+                <input type="checkbox" role="switch" class="switch" data-notice-category="breaks">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Громкость уведомлений</span><span class="set-hint" id="noticeVolumeHint">70 %</span></span>
+                <input class="range" type="range" min="0" max="100" step="1" value="70" data-notice-option="volume" aria-describedby="noticeVolumeHint">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Тихие часы</span><span class="set-hint">По местному времени. Если начало и конец совпадают, тишина действует весь день.</span></span>
+                <input type="checkbox" role="switch" class="switch" data-notice-option="quietEnabled">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Начало тихих часов</span></span>
+                <input class="input input-sm" type="time" value="23:00" data-notice-option="quietFrom">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Конец тихих часов</span></span>
+                <input class="input input-sm" type="time" value="08:00" data-notice-option="quietTo">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Озвучивать важное в тихие часы</span><span class="set-hint">Сбои задач и зависшие программы. Только из включённых категорий.</span></span>
+                <input type="checkbox" role="switch" class="switch" data-notice-option="importantAtNight">
+              </label>
+              <div class="set-row">
+                <span class="set-hint">Во время чтения вслух, диктовки и общего тихого режима уведомления не озвучиваются.</span>
+                <button class="btn btn-secondary btn-sm" type="button" id="saveNotificationVoice" disabled>Сохранить</button>
+              </div>
+            </section>
+
+            <section class="set-section" data-cat="general" id="restSettings" aria-labelledby="restSettingsTitle">
+              <h2 class="set-title" id="restSettingsTitle">Режим отдыха</h2>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Предлагать перерывы</span><span class="set-hint">Напоминание можно закрыть или проигнорировать. Тихие часы действуют и здесь.</span></span>
+                <input type="checkbox" role="switch" class="switch" data-setting="restEnabled">
+              </label>
+              <label class="set-row">
+                <span class="set-text"><span class="set-name">Интервал, минут</span><span class="set-hint">От 5 до 120. После простоя или сна отсчёт начинается заново.</span></span>
+                <input class="input input-sm" id="restInterval" type="number" min="5" max="120" step="1" value="50">
+              </label>
+            </section>
+
             <section class="set-section" data-cat="general" aria-labelledby="setWindowTitle">
               <h2 class="set-title" id="setWindowTitle">Окно и уведомления</h2>
               <label class="set-row">
@@ -729,7 +919,7 @@
                 <input type="checkbox" role="switch" class="switch" data-setting="quiet">
               </label>
               <label class="set-row">
-                <span class="set-text"><span class="set-name">Анимации</span><span class="set-hint">Плавные переходы и живой шар, даже если эффекты выключены в Windows</span></span>
+                <span class="set-text"><span class="set-name">Анимации</span><span class="set-hint">Плавные переходы и движение эффектов. Включено — как в Windows («Уменьшение движения»); выключено — стоит всегда</span></span>
                 <input type="checkbox" role="switch" class="switch" data-setting="motion">
               </label>
               <label class="set-row">
@@ -800,7 +990,7 @@
                 <div class="set-title-row"><h3 class="set-subtitle">История буфера</h3><span class="counter" id="clipCount"></span></div>
                 <p class="set-hint">Сохраняется только на этом компьютере. Пароли, коды и номера карт не записываются.</p>
                 <label class="set-row">
-                  <span class="set-text"><span class="set-name">Сохранять скопированное</span><span class="set-hint">Выключено — история не ведётся</span></span>
+                  <span class="set-text"><span class="set-name">Сохранять скопированное</span><span class="set-hint" id="clipStatusHint">Выключено — история не ведётся</span></span>
                   <input type="checkbox" role="switch" class="switch" id="clipEnabled">
                 </label>
                 <div class="set-row">
@@ -810,6 +1000,7 @@
                       <option value="900000">15 минут</option>
                       <option value="3600000">1 час</option>
                       <option value="86400000">1 день</option>
+                      <option value="604800000">7 дней</option>
                       <option value="">Бессрочно</option>
                     </select>
                     <button class="btn btn-secondary btn-sm" type="button" id="clipPause">Пауза</button>
@@ -824,26 +1015,34 @@
 
               <div class="ext-card">
                 <div class="set-title-row"><h3 class="set-subtitle">Быстрые вставки</h3><span class="counter" id="snipCount"></span></div>
-                <p class="set-hint">Текст по короткой фразе. Вставка в буфер — только после подтверждения.</p>
+                <p class="set-hint">Текстовые заготовки для копирования в буфер по кнопке «В буфер» (после подтверждения). Автоподстановка по фразе-триггеру в этой версии не подключена.</p>
                 <form class="snip-form" id="snipForm" autocomplete="off">
-                  <input class="input input-sm" id="snipTrigger" type="text" maxlength="40" placeholder="Фраза-триггер" aria-label="Фраза-триггер">
-                  <textarea class="input input-sm" id="snipText" rows="2" maxlength="2000" placeholder="Текст вставки" aria-label="Текст вставки"></textarea>
+                  <input class="input input-sm" id="snipTrigger" type="text" maxlength="40" placeholder="Короткое название" aria-label="Короткое название">
+                  <textarea class="input input-sm" id="snipText" rows="2" maxlength="2000" placeholder="Текст заготовки" aria-label="Текст заготовки"></textarea>
                   <button class="btn btn-secondary btn-sm" type="submit" id="snipSave">Сохранить</button>
                 </form>
                 <p class="form-error" id="snipError" role="alert" hidden></p>
                 <ul class="memory-list" id="snipList"></ul>
-                <p class="note" id="snipEmpty" hidden>Вставок пока нет.</p>
+                <p class="note" id="snipEmpty" hidden>Заготовок пока нет.</p>
               </div>
 
               <div class="ext-card">
-                <div class="set-title-row"><h3 class="set-subtitle">Уборка загрузок</h3></div>
-                <p class="set-hint">Сначала только предпросмотр. Удаление — отдельной кнопкой после подтверждения; вне папки загрузок ничего не трогается.</p>
+                <div class="set-title-row"><h3 class="set-subtitle">Уборка загрузок</h3><span class="counter" id="dlCount"></span></div>
+                <p class="set-hint">Ищет временные файлы и файлы старше 30 дней в папке «Загрузки». Сначала только предпросмотр; удаление без корзины — только для отмеченных файлов после подтверждения.</p>
                 <div class="editor-foot">
                   <button class="btn btn-secondary btn-sm" type="button" id="dlAnalyze">Проверить загрузки</button>
                   <span class="editor-foot-gap"></span>
                   <button class="btn btn-danger btn-sm" type="button" id="dlRemove" disabled>Удалить выбранное</button>
                 </div>
+                <p class="note" id="dlResult" hidden></p>
                 <p class="note" id="dlNote" hidden></p>
+                <div class="ext-dl-bar" id="dlSelectBar" hidden>
+                  <span class="set-hint" id="dlSelection">Выбрано: 0</span>
+                  <span class="ext-inline">
+                    <button class="btn btn-ghost btn-sm" type="button" id="dlSelectAll">Выбрать все</button>
+                    <button class="btn btn-ghost btn-sm" type="button" id="dlSelectNone">Снять все</button>
+                  </span>
+                </div>
                 <ul class="memory-list" id="dlList"></ul>
               </div>
             </section>
@@ -1204,6 +1403,7 @@
     <form method="dialog" class="dialog-body">
       <h2 class="dialog-title" id="cfTitle"></h2>
       <p class="dialog-sub" id="cfText"></p>
+      <ul class="cf-list" id="cfList" hidden></ul>
       <div class="dialog-actions">
         <button class="btn btn-ghost" type="button" id="cfNo">Отмена</button>
         <button class="btn btn-primary" type="button" id="cfYes">Да</button>

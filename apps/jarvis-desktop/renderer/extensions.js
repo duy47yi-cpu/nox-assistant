@@ -1,6 +1,6 @@
 'use strict';
 
-// Расширения из видео: история буфера, быстрые вставки, уборка загрузок.
+// Расширения: история буфера, быстрые вставки (заготовки), уборка загрузок.
 // Здесь только окно: данные и проверки — src/extensions, доступ — main.js.
 (function () {
   const U = window.JarvisUI;
@@ -8,7 +8,16 @@
   const DEPS = { toast: () => {}, ask: async () => false };
   const $ = (sel, root = document) => (root || document).querySelector(sel);
   const el = (tag, attrs, ...children) => U.el(tag, attrs, ...children);
-  const EXT = { loaded: false, items: [], dl: null, dlError: null, paused: false };
+  const DEFAULT_CLIP_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  const EXT = {
+    loaded: false,
+    items: [],
+    dl: null,
+    dlError: null,
+    paused: false,
+    ttlMs: DEFAULT_CLIP_TTL_MS,
+    confirming: false,
+  };
 
   const fmtBytes = (n) => {
     if (!Number.isFinite(n)) return '';
@@ -21,20 +30,69 @@
 
   const W = {};
 
+  function formatCustomTtlLabel(ms) {
+    const day = 24 * 60 * 60 * 1000;
+    const hour = 60 * 60 * 1000;
+    const min = 60 * 1000;
+    if (ms >= day && ms % day === 0) return `${ms / day} дн.`;
+    if (ms >= hour && ms % hour === 0) return `${ms / hour} ч`;
+    if (ms >= min && ms % min === 0) return `${ms / min} мин`;
+    return `${Math.max(1, Math.round(ms / 1000))} с`;
+  }
+
+  function syncClipboardTtl(ttlMs) {
+    if (!W.clipTtl) return;
+    const options = [...(W.clipTtl.options || W.clipTtl.children || [])];
+    for (const opt of options) {
+      if (opt && opt.dataset && opt.dataset.customTtl === '1') opt.remove();
+    }
+    if (ttlMs === null) {
+      W.clipTtl.value = '';
+      return;
+    }
+    const num = Number(ttlMs);
+    if (!Number.isFinite(num) || num <= 0) return;
+    const key = String(num);
+    const currentOptions = [...(W.clipTtl.options || W.clipTtl.children || [])];
+    const hasMatch = currentOptions.some((opt) => opt && String(opt.value) === key);
+    if (!hasMatch) {
+      const custom = el('option', { value: key, text: formatCustomTtlLabel(num) });
+      custom.dataset.customTtl = '1';
+      W.clipTtl.append(custom);
+    }
+    W.clipTtl.value = key;
+  }
+
+  function updateClipboardStatus() {
+    const enabled = Boolean(W.clipEnabled && W.clipEnabled.checked);
+    if (W.clipStatusHint) {
+      if (!enabled) W.clipStatusHint.textContent = 'Выключено — история не ведётся';
+      else if (EXT.paused) W.clipStatusHint.textContent = 'Включено, но на паузе — новые копирования не сохраняются';
+      else W.clipStatusHint.textContent = 'Включено — история ведётся';
+    }
+    if (W.clipPause) {
+      W.clipPause.disabled = !enabled;
+      W.clipPause.textContent = EXT.paused ? 'Продолжить' : 'Пауза';
+    }
+  }
+
   async function loadClipboard() {
     const note = W.clipNote;
     if (!note) return;
     if (!U.has || !U.has('clipboardHistoryList')) {
-      note.textContent = 'Эта версия ядра не знает историю буфера.';
+      note.textContent = 'Эта версия Nox не поддерживает историю буфера.';
       note.hidden = false;
+      updateClipboardStatus();
       return;
     }
     let state = null;
     try { state = await U.call('clipboardHistoryState'); } catch { state = null; }
     if (state && state.ok) {
       EXT.paused = state.paused === true;
-      if (W.clipPause) W.clipPause.textContent = EXT.paused ? 'Продолжить' : 'Пауза';
+      EXT.ttlMs = state.ttlMs === undefined ? DEFAULT_CLIP_TTL_MS : state.ttlMs;
+      syncClipboardTtl(EXT.ttlMs);
     }
+    updateClipboardStatus();
     let r;
     try { r = await U.call('clipboardHistoryList', { limit: 20 }); } catch (err) { r = { ok: false, error: err.message }; }
     if (!r || r.ok === false) {
@@ -44,8 +102,10 @@
     }
     note.hidden = true;
     const items = Array.isArray(r.items) ? r.items : [];
-    if (W.clipCount) W.clipCount.textContent = String(items.length);
+    const totalCount = state && Number.isFinite(Number(state.count)) ? Number(state.count) : items.length;
+    if (W.clipCount) W.clipCount.textContent = String(totalCount);
     if (W.clipEmpty) W.clipEmpty.hidden = items.length > 0;
+    if (W.clipClear) W.clipClear.disabled = totalCount === 0 && items.length === 0;
     if (W.clipList) {
       W.clipList.replaceChildren(...items.map((item) => el('li', { class: 'memory-item' },
         el('div', { class: 'memory-text' },
@@ -94,22 +154,34 @@
   }
 
   async function setClipboardTtl(value) {
+    const prevTtl = EXT.ttlMs;
     try {
-      const r = await U.call('clipboardHistoryTtl', value === '' ? null : Number(value));
-      if (!r || r.ok === false) DEPS.toast((r && r.error) || 'Не сохранилось', 'error');
-    } catch (err) { DEPS.toast('Не удалось: ' + err.message, 'error'); }
+      const nextTtl = value === '' ? null : Number(value);
+      const r = await U.call('clipboardHistoryTtl', nextTtl);
+      if (!r || r.ok === false) {
+        syncClipboardTtl(prevTtl);
+        DEPS.toast((r && r.error) || 'Не сохранилось', 'error');
+        return;
+      }
+      EXT.ttlMs = r.ttlMs === undefined ? nextTtl : r.ttlMs;
+      await loadClipboard();
+      DEPS.toast('Срок хранения обновлён');
+    } catch (err) {
+      syncClipboardTtl(prevTtl);
+      DEPS.toast('Не удалось: ' + err.message, 'error');
+    }
   }
 
   async function loadSnippets() {
     const note = W.snipError;
     if (!U.has || !U.has('snippetsList')) {
-      if (note) { note.textContent = 'Эта версия ядра не знает быстрые вставки.'; note.hidden = false; }
+      if (note) { note.textContent = 'Эта версия Nox не поддерживает быстрые вставки.'; note.hidden = false; }
       return;
     }
     let r;
     try { r = await U.call('snippetsList'); } catch (err) { r = { ok: false, error: err.message }; }
     if (!r || r.ok === false) {
-      if (note) { note.textContent = 'Вставки не загрузились: ' + ((r && r.error) || 'причина неизвестна'); note.hidden = false; }
+      if (note) { note.textContent = 'Заготовки не загрузились: ' + ((r && r.error) || 'причина неизвестна'); note.hidden = false; }
       return;
     }
     if (note) note.hidden = true;
@@ -122,7 +194,7 @@
           el('span', { class: 'memory-body', text: '«' + item.trigger + '» · ' + U.cleanSummary(item.text || '').slice(0, 160) }),
           el('span', { class: 'memory-meta', text: item.updatedAt ? 'изменено ' + U.relTime(item.updatedAt) : '' })),
         el('div', { class: 'memory-tools' },
-          el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'В буфер', title: 'Скопировать текст после подтверждения', onclick: () => insertSnippet(item) }),
+          el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'В буфер', title: 'Скопировать текст в буфер после подтверждения', onclick: () => insertSnippet(item) }),
           el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Изменить', onclick: () => editSnippet(item) }),
           el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Удалить', onclick: () => removeSnippet(item) })))));
     }
@@ -133,8 +205,8 @@
     if (!ok) return;
     try {
       const r = await U.call('snippetsInsert', item.id, true);
-      if (!r || r.ok === false) { DEPS.toast((r && r.message) || (r && r.error) || 'Не получилось вставить', 'error'); return; }
-      DEPS.toast('Текст вставки в буфере обмена');
+      if (!r || r.ok === false) { DEPS.toast((r && r.message) || (r && r.error) || 'Не получилось скопировать', 'error'); return; }
+      DEPS.toast('Текст скопирован в буфер обмена');
       await loadClipboard();
     } catch (err) { DEPS.toast('Не удалось: ' + err.message, 'error'); }
   }
@@ -152,7 +224,7 @@
     const trigger = W.snipTrigger.value.trim();
     const text = W.snipText.value.trim();
     if (!trigger || !text) {
-      if (W.snipError) { W.snipError.textContent = 'Нужны и фраза-триггер, и текст.'; W.snipError.hidden = false; }
+      if (W.snipError) { W.snipError.textContent = 'Нужны и короткое название, и текст.'; W.snipError.hidden = false; }
       return;
     }
     const id = W.snipSave ? W.snipSave.dataset.editId : '';
@@ -166,7 +238,7 @@
       W.snipTrigger.value = '';
       W.snipText.value = '';
       if (W.snipSave) { delete W.snipSave.dataset.editId; W.snipSave.textContent = 'Сохранить'; }
-      DEPS.toast(id ? 'Вставка изменена' : 'Вставка сохранена');
+      DEPS.toast(id ? 'Заготовка изменена' : 'Заготовка сохранена');
       await loadSnippets();
     } catch (err) {
       if (W.snipError) { W.snipError.textContent = err.message; W.snipError.hidden = false; }
@@ -174,7 +246,7 @@
   }
 
   async function removeSnippet(item) {
-    const ok = await DEPS.ask('Удалить вставку?', '«' + item.trigger + '»', 'Удалить', 'Оставить');
+    const ok = await DEPS.ask('Удалить заготовку?', '«' + item.trigger + '»', 'Удалить', 'Оставить');
     if (!ok) return;
     try {
       const r = await U.call('snippetsRemove', item.id);
@@ -183,208 +255,242 @@
     } catch (err) { DEPS.toast('Не удалось: ' + err.message, 'error'); }
   }
 
-  async function analyzeDownloads() {
+  function setDownloadsNote(text, isError = false) {
     if (!W.dlNote) return;
+    W.dlNote.textContent = text;
+    if (W.dlNote.classList) W.dlNote.classList.toggle('note-err', Boolean(isError));
+    W.dlNote.hidden = !text;
+  }
+
+  function setDownloadsResult(text, isError = false) {
+    if (!W.dlResult) return;
+    W.dlResult.textContent = text;
+    if (W.dlResult.classList) W.dlResult.classList.toggle('note-err', Boolean(isError));
+    W.dlResult.hidden = !text;
+  }
+
+  function clearDownloadsResult() {
+    setDownloadsResult('', false);
+  }
+
+  function getCandidateMap() {
+    const map = new Map();
+    const list = EXT.dl && Array.isArray(EXT.dl.candidates) ? EXT.dl.candidates : [];
+    for (const item of list) {
+      if (item && typeof item.path === 'string') map.set(item.path, item);
+    }
+    return map;
+  }
+
+  function getSelectedItems() {
+    if (!W.dlList) return [];
+    const byPath = getCandidateMap();
+    const boxes = [...W.dlList.querySelectorAll('input[type="checkbox"]:checked')];
+    return boxes.map((box) => {
+      const path = box.dataset && box.dataset.path ? box.dataset.path : '';
+      if (!path) return null;
+      const item = byPath.get(path);
+      return item || { path, size: Number(box.dataset.size) || 0, mtimeMs: Number(box.dataset.mtimeMs) || 0 };
+    }).filter(Boolean);
+  }
+
+  function updateDownloadSelection() {
+    const total = W.dlList ? W.dlList.querySelectorAll('input[type="checkbox"]').length : 0;
+    const selected = getSelectedItems();
+    const selectedBytes = selected.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+    if (W.dlSelection) {
+      W.dlSelection.textContent = selected.length > 0
+        ? `Выбрано: ${selected.length} из ${total} (${fmtBytes(selectedBytes)})`
+        : `Выбрано: 0 из ${total}`;
+    }
+    if (W.dlRemove) W.dlRemove.disabled = EXT.confirming || selected.length === 0;
+    if (W.dlSelectAll) W.dlSelectAll.disabled = EXT.confirming || total === 0 || selected.length === total;
+    if (W.dlSelectNone) W.dlSelectNone.disabled = EXT.confirming || selected.length === 0;
+  }
+
+  function setDownloadsLocked(locked) {
+    EXT.confirming = Boolean(locked);
+    if (W.dlAnalyze) W.dlAnalyze.disabled = EXT.confirming;
+    if (W.dlList) {
+      for (const box of W.dlList.querySelectorAll('input[type="checkbox"]')) {
+        box.disabled = EXT.confirming;
+      }
+    }
+    updateDownloadSelection();
+  }
+
+  function selectAllDownloads(checked) {
+    if (EXT.confirming || !W.dlList) return;
+    for (const box of W.dlList.querySelectorAll('input[type="checkbox"]')) {
+      box.checked = Boolean(checked);
+    }
+    updateDownloadSelection();
+  }
+
+  async function readFreeSpaceSummary(folder) {
+    if (!U.has || !U.has('diskFree')) return '';
+    try {
+      const fr = await U.call('diskFree');
+      const drives = fr && fr.ok && fr.data && Array.isArray(fr.data.drives) ? fr.data.drives : [];
+      if (!drives.length) return '';
+      const driveLetter = /^[a-zA-Z]:/.exec(String(folder || ''))?.[0]?.toUpperCase();
+      const drive = (driveLetter && drives.find((d) => String(d && d.drive || '').toUpperCase().startsWith(driveLetter[0]))) || drives[0];
+      if (drive && Number.isFinite(Number(drive.freeGB))) {
+        return `Свободно на ${drive.drive}: ~${Math.round(Number(drive.freeGB))} ГБ · `;
+      }
+    } catch {
+      // Свободное место необязательно: основная сводка по папке загрузок остаётся.
+    }
+    return '';
+  }
+
+  async function analyzeDownloads(options = {}) {
+    if (!W.dlNote) return;
+    if (!options.keepResult) clearDownloadsResult();
     if (!U.has || !U.has('downloadsAnalyze')) {
       EXT.dl = null;
-      EXT.dlError = 'Эта версия ядра не умеет разбирать загрузки.';
-      W.dlNote.textContent = EXT.dlError;
-      W.dlNote.hidden = false;
-      renderDiskCard();
+      EXT.dlError = 'Эта версия Nox не поддерживает проверку загрузок.';
+      setDownloadsNote(EXT.dlError, true);
+      if (W.dlSelectBar) W.dlSelectBar.hidden = true;
+      if (W.dlCount) W.dlCount.textContent = '';
+      if (W.dlRemove) W.dlRemove.disabled = true;
       return;
     }
-    W.dlNote.textContent = 'Смотрю папку загрузок…';
-    W.dlNote.hidden = false;
-    if (W.diskNote) { W.diskNote.textContent = 'Смотрю папку загрузок…'; W.diskNote.hidden = false; }
+    setDownloadsNote('Смотрю папку загрузок…', false);
     let r;
     try { r = await U.call('downloadsAnalyze', {}); } catch (err) { r = { ok: false, message: err.message }; }
     if (!r || r.ok === false) {
       EXT.dl = null;
-      EXT.dlError = 'Не получилось: ' + ((r && r.message) || (r && r.reason) || 'причина неизвестна');
-      W.dlNote.textContent = EXT.dlError;
-      W.dlNote.hidden = false;
-      renderDiskCard();
+      EXT.dlError = 'Не удалось проверить загрузки: ' + ((r && r.message) || (r && r.reason) || 'причина неизвестна');
+      setDownloadsNote(EXT.dlError, true);
+      if (W.dlList) W.dlList.replaceChildren();
+      if (W.dlSelectBar) W.dlSelectBar.hidden = true;
+      if (W.dlCount) W.dlCount.textContent = '';
+      if (W.dlRemove) W.dlRemove.disabled = true;
       return;
     }
     EXT.dlError = null;
     EXT.dl = r;
     const candidates = Array.isArray(r.candidates) ? r.candidates : [];
     const scanned = typeof r.scanned === 'number' ? r.scanned : (r.scanned && Number.isFinite(r.scanned.files) ? r.scanned.files : 0);
-    W.dlNote.textContent = r.status === 'empty'
-      ? 'В загрузках нет файлов, которые можно убрать.'
-      : `Проверено ${scanned} файлов; кандидатов: ${candidates.length}${r.candidateBytes ? ' на ' + fmtBytes(r.candidateBytes) : ''}. Ничего не удалено.`;
+    const bytes = Number.isFinite(r.candidateBytes) && r.candidateBytes > 0
+      ? r.candidateBytes
+      : candidates.reduce((sum, item) => sum + (Number(item && item.size) || 0), 0);
+
+    if (W.dlCount) W.dlCount.textContent = String(candidates.length);
     if (W.dlList) {
-      W.dlList.replaceChildren(...candidates.slice(0, 30).map((item) => {
-        const box = el('input', { type: 'checkbox', class: 'switch', 'aria-label': 'Выбрать ' + (item.path || '') });
-        box.checked = true;
-        box.dataset.path = item.path;
+      W.dlList.replaceChildren(...candidates.map((item) => {
+        const box = el('input', {
+          type: 'checkbox',
+          class: 'ext-check',
+          'aria-label': 'Выбрать ' + (item.path || ''),
+        });
+        // По умолчанию ни один файл не отмечен: владелец явно выбирает, что удалять.
+        box.checked = false;
+        box.disabled = EXT.confirming;
+        box.dataset.path = item.path || '';
+        box.dataset.size = String(Number(item.size) || 0);
+        if (item.mtimeMs !== undefined) box.dataset.mtimeMs = String(item.mtimeMs);
+        box.addEventListener('change', updateDownloadSelection);
         return el('li', { class: 'memory-item' },
           el('div', { class: 'memory-text' },
             el('span', { class: 'memory-body', text: item.path || '' }),
-            el('span', { class: 'memory-meta', text: [fmtBytes(item.size), item.reason || ''].filter(Boolean).join(' · ') })),
+            el('span', { class: 'memory-meta', text: [fmtBytes(Number(item.size) || 0), item.reason || ''].filter(Boolean).join(' · ') })),
           box);
       }));
     }
-    if (W.dlRemove) W.dlRemove.disabled = candidates.length === 0;
-    renderDiskCard();
-  }
+    if (W.dlSelectBar) W.dlSelectBar.hidden = candidates.length === 0;
+    const baseNote = (candidates.length === 0 || r.status === 'empty')
+      ? 'В загрузках нет старых и временных файлов.'
+      : `Проверено файлов: ${scanned}; можно убрать: ${candidates.length}${bytes ? ' (' + fmtBytes(bytes) + ')' : ''}. Ничего не удалено — отметьте нужные файлы.${r.candidatesTruncated ? ` Показаны первые ${candidates.length} из ${r.candidatesTotal}.` : ''}`;
+    setDownloadsNote(baseNote, false);
+    updateDownloadSelection();
 
-  // Карточка «Освободить место»: крупная реальная цифра и уборка через тот же подтверждённый путь,
-  // что у «Уборки загрузок» (downloads:analyze / downloads:remove). Свободное место на диске ядро
-  // этой версии не сообщает — вместо выдуманных чисел честная строка об этом.
-  function renderDiskCard() {
-    if (!W.diskNote || !W.diskBig) return;
-    const r = EXT.dl;
-    if (!r) {
-      W.diskBig.hidden = true;
-      W.diskBig.textContent = '';
-      if (W.diskCount) W.diskCount.textContent = '';
-      if (W.diskList) W.diskList.replaceChildren();
-      if (W.diskFree) W.diskFree.disabled = true;
-      W.diskNote.textContent = EXT.dlError || 'Нажмите «Проверить»: покажу, сколько можно освободить в загрузках.';
-      W.diskNote.hidden = false;
-      return;
-    }
-    const candidates = Array.isArray(r.candidates) ? r.candidates : [];
-    const bytes = Number.isFinite(r.candidateBytes) && r.candidateBytes > 0
-      ? r.candidateBytes
-      : candidates.reduce((sum, item) => sum + (Number(item && item.size) || 0), 0);
-    if (candidates.length === 0 || r.status === 'empty') {
-      W.diskBig.hidden = true;
-      W.diskBig.textContent = '';
-      if (W.diskCount) W.diskCount.textContent = '0';
-      if (W.diskList) W.diskList.replaceChildren();
-      if (W.diskFree) W.diskFree.disabled = true;
-      W.diskNote.textContent = 'Освобождать нечего: в загрузках нет старых и временных файлов.';
-      W.diskNote.hidden = false;
-      return;
-    }
-    W.diskBig.textContent = `Можно освободить ~${fmtBytes(bytes)}`;
-    W.diskBig.hidden = false;
-    if (W.diskCount) W.diskCount.textContent = String(candidates.length);
-    // Крупные сверху: уборка должна быть видна по цифре.
-    const top = [...candidates]
-      .sort((a, b) => (Number(b && b.size) || 0) - (Number(a && a.size) || 0))
-      .slice(0, 5);
-    if (W.diskList) {
-      W.diskList.replaceChildren(...top.map((item) => el('li', { class: 'memory-item' },
-        el('div', { class: 'memory-text' },
-          el('span', { class: 'memory-body', text: item.path || '' }),
-          el('span', { class: 'memory-meta', text: [fmtBytes(Number(item.size) || 0), item.reason || ''].filter(Boolean).join(' · ') })))));
-    }
-    if (W.diskFree) W.diskFree.disabled = false;
-    W.diskNote.textContent = 'Это предпросмотр: ничего не удалено. Удаление — по кнопке, с подтверждением.';
-    W.diskNote.hidden = false;
-  }
-
-  async function analyzeDisk() {
-    await analyzeDownloads();
-    // Ошибку или пустое состояние уже показал общий разбор; здесь только уточняем цифру.
-    if (!W.diskNote || !EXT.dl) return;
-    const candidates = Array.isArray(EXT.dl.candidates) ? EXT.dl.candidates : [];
-    const bytes = Number.isFinite(EXT.dl.candidateBytes) && EXT.dl.candidateBytes > 0
-      ? EXT.dl.candidateBytes
-      : candidates.reduce((sum, item) => sum + (Number(item && item.size) || 0), 0);
-    if (candidates.length === 0 || EXT.dl.status === 'empty') {
-      W.diskNote.textContent = 'Освобождать нечего: в загрузках нет старых и временных файлов.';
-    } else {
-      // Свободное место — тот же инструмент ядра, что у агента; без него честно не показываем цифру.
-      let freeText = '';
-      if (U.has && U.has('diskFree')) {
-        try {
-          const fr = await U.call('diskFree');
-          const drive = fr && fr.ok && fr.data && Array.isArray(fr.data.drives) ? fr.data.drives[0] : null;
-          if (drive && Number.isFinite(Number(drive.freeGB))) freeText = `Свободно на ${drive.drive}: ~${Math.round(Number(drive.freeGB))} ГБ. `;
-        } catch { /* свободное место необязательно: цифра уборки остаётся */ }
-      }
-      W.diskNote.textContent = `${freeText}Можно освободить ~${fmtBytes(bytes)}; ничего не удалено.`;
-    }
-    W.diskNote.hidden = false;
-  }
-
-  async function freeDiskSpace() {
-    const r = EXT.dl;
-    if (!r) return;
-    const candidates = Array.isArray(r.candidates) ? r.candidates : [];
-    const paths = candidates.map((item) => (item && typeof item.path === 'string' ? item.path : '')).filter(Boolean);
-    if (paths.length === 0) { DEPS.toast('Нечего освобождать', 'error'); return; }
-    const bytes = Number.isFinite(r.candidateBytes) && r.candidateBytes > 0
-      ? r.candidateBytes
-      : candidates.reduce((sum, item) => sum + (Number(item && item.size) || 0), 0);
-    const ok = await DEPS.ask(
-      'Освободить место?',
-      `Файлов: ${paths.length}${bytes ? ' примерно на ' + fmtBytes(bytes) : ''}. Это удалит их из папки загрузок без корзины.`,
-      'Удалить',
-      'Отмена',
-    );
-    // Отказ: удаление не вызывается вовсе.
-    if (!ok) return;
-    try {
-      const res = await U.call('downloadsRemove', { paths }, true);
-      if (!res || res.ok === false) {
-        if (W.diskNote) {
-          W.diskNote.textContent = 'Не удалось: ' + ((res && res.message) || (res && res.reason) || 'причина неизвестна');
-          W.diskNote.hidden = false;
-        }
-        return;
-      }
-      const removed = Array.isArray(res.removed) ? res.removed.length : 0;
-      const freed = Number.isFinite(res.bytesFreed) ? fmtBytes(res.bytesFreed) : '';
-      const message = `Удалено ${removed}${freed ? ', освобождено ' + freed : ''}${res.refused && res.refused.length ? ', отклонено: ' + res.refused.length : ''}${res.failed && res.failed.length ? ', ошибок: ' + res.failed.length : ''}.`;
-      await analyzeDownloads();
-      if (W.diskNote) { W.diskNote.textContent = message; W.diskNote.hidden = false; }
-    } catch (err) {
-      if (W.diskNote) { W.diskNote.textContent = 'Не удалось: ' + err.message; W.diskNote.hidden = false; }
-    }
-  }
-
-  // Карточка строится здесь: index.html не меняем, стили — только существующие классы.
-  function buildDiskCard() {
-    const host = $('#extensionsSettings');
-    if (!host || $('#diskCard')) return;
-    const card = el('div', { class: 'ext-card', id: 'diskCard' },
-      el('div', { class: 'set-title-row' },
-        el('h3', { class: 'set-subtitle', text: 'Освободить место' }),
-        el('span', { class: 'counter', id: 'diskCount' })),
-      el('p', { class: 'set-hint', text: 'Реальная цифра по папке загрузок. Удаление — только после подтверждения. Свободное место на диске эта версия ядра не сообщает.' }),
-      el('p', { class: 'set-name', id: 'diskBig', hidden: true }),
-      el('ul', { class: 'memory-list', id: 'diskList' }),
-      el('p', { class: 'note', id: 'diskNote', text: 'Нажмите «Проверить»: покажу, сколько можно освободить в загрузках.' }),
-      el('div', { class: 'editor-foot' },
-        el('button', { type: 'button', class: 'btn btn-secondary btn-sm', id: 'diskAnalyze', text: 'Проверить' }),
-        el('span', { class: 'editor-foot-gap' }),
-        el('button', { type: 'button', class: 'btn btn-danger btn-sm', id: 'diskFree', text: 'Освободить', disabled: true })));
-    host.append(card);
-    W.diskBig = $('#diskBig');
-    W.diskList = $('#diskList');
-    W.diskNote = $('#diskNote');
-    W.diskCount = $('#diskCount');
-    W.diskFree = $('#diskFree');
-    W.diskAnalyze = $('#diskAnalyze');
-    if (W.diskAnalyze) W.diskAnalyze.addEventListener('click', analyzeDisk);
-    if (W.diskFree) W.diskFree.addEventListener('click', freeDiskSpace);
+    const snapId = r.snapshotId;
+    readFreeSpaceSummary(r.folder).then((freePrefix) => {
+      if (!freePrefix || !EXT.dl || EXT.dl.snapshotId !== snapId) return;
+      setDownloadsNote(freePrefix + baseNote, false);
+    });
   }
 
   async function removeDownloads() {
-    if (!EXT.dl || !W.dlList) return;
-    const boxes = [...W.dlList.querySelectorAll('input[type="checkbox"]:checked')];
-    if (!boxes.length) { DEPS.toast('Ничего не выбрано', 'error'); return; }
-    const paths = boxes.map((box) => box.dataset.path).filter(Boolean);
-    const ok = await DEPS.ask('Удалить выбранные файлы?', `Файлов: ${paths.length}. Это удалит их из папки загрузок без корзины.`, 'Удалить', 'Отмена');
-    if (!ok) return;
+    if (EXT.confirming || !EXT.dl || !W.dlList) return;
+    const selected = getSelectedItems();
+    if (!selected.length) {
+      DEPS.toast('Ничего не выбрано', 'error');
+      updateDownloadSelection();
+      return;
+    }
+
+    const confirmedSnapshotId = EXT.dl.snapshotId || null;
+    const confirmedItems = selected.map((item) => ({
+      path: item.path,
+      size: Number(item.size) || 0,
+      ...(item.mtimeMs !== undefined ? { mtimeMs: Number(item.mtimeMs) } : {}),
+    }));
+    const confirmedPaths = confirmedItems.map((item) => item.path);
+    const totalBytes = confirmedItems.reduce((sum, item) => sum + item.size, 0);
+    const summary = `Выбрано файлов: ${confirmedItems.length}${totalBytes ? ' (' + fmtBytes(totalBytes) + ')' : ''}. Это удалит их из папки загрузок без корзины. Проверьте точный список:`;
+    const listText = confirmedItems.map((item) => `• ${item.path} (${fmtBytes(item.size)})`).join('\n');
+    const dialogItems = confirmedItems.map((item) => ({ label: item.path, meta: fmtBytes(item.size) }));
+
+    setDownloadsLocked(true);
+    let ok = false;
     try {
-      const r = await U.call('downloadsRemove', { paths }, true);
+      ok = await DEPS.ask(
+        'Удалить выбранные файлы?',
+        `${summary}\n${listText}`,
+        'Удалить',
+        'Отмена',
+        { summary, items: dialogItems },
+      );
+    } catch {
+      ok = false;
+    }
+
+    if (!ok) {
+      setDownloadsLocked(false);
+      return;
+    }
+
+    // Повторная сверка после закрытия диалога: список не должен измениться между подтверждением и исполнением.
+    const currentSnapshotId = EXT.dl ? (EXT.dl.snapshotId || null) : null;
+    const currentPaths = getSelectedItems().map((item) => item.path);
+    const listDrifted = currentSnapshotId !== confirmedSnapshotId
+      || currentPaths.length !== confirmedPaths.length
+      || currentPaths.some((p, i) => p !== confirmedPaths[i]);
+    if (listDrifted) {
+      setDownloadsResult('Список файлов изменился во время подтверждения. Запущена повторная проверка — выберите файлы заново.', true);
+      setDownloadsLocked(false);
+      await analyzeDownloads({ keepResult: true });
+      return;
+    }
+
+    try {
+      const r = await U.call('downloadsRemove', {
+        snapshotId: confirmedSnapshotId,
+        items: confirmedItems,
+        paths: confirmedPaths,
+      }, true);
       if (!r || r.ok === false) {
-        W.dlNote.textContent = 'Не удалось: ' + ((r && r.message) || (r && r.reason) || 'причина неизвестна');
-        W.dlNote.hidden = false;
+        const msg = (r && r.needsReanalyze)
+          ? ((r && r.message) || 'Состояние файлов изменилось после проверки. Список обновлён — проверьте и подтвердите заново.')
+          : ('Не удалось удалить: ' + ((r && r.message) || (r && r.reason) || 'причина неизвестна'));
+        setDownloadsResult(msg, true);
+        setDownloadsLocked(false);
+        await analyzeDownloads({ keepResult: true });
         return;
       }
-      W.dlNote.textContent = `Удалено ${Array.isArray(r.removed) ? r.removed.length : 0}, освобождено ${fmtBytes(r.bytesFreed)}${r.refused && r.refused.length ? ', отклонено: ' + r.refused.length : ''}${r.failed && r.failed.length ? ', ошибок: ' + r.failed.length : ''}.`;
-      W.dlNote.hidden = false;
-      await analyzeDownloads();
+      const removedCount = Array.isArray(r.removed) ? r.removed.length : 0;
+      const freedText = fmtBytes(r.bytesFreed);
+      const resultText = `Удалено файлов: ${removedCount}, освобождено ${freedText}${r.refused && r.refused.length ? ', отклонено: ' + r.refused.length : ''}${r.failed && r.failed.length ? ', ошибок: ' + r.failed.length : ''}.`;
+      setDownloadsResult(resultText, false);
+      DEPS.toast(resultText);
+      setDownloadsLocked(false);
+      await analyzeDownloads({ keepResult: true });
     } catch (err) {
-      W.dlNote.textContent = 'Не удалось: ' + err.message;
-      W.dlNote.hidden = false;
+      setDownloadsResult('Не удалось: ' + err.message, true);
+      setDownloadsLocked(false);
     }
   }
 
@@ -403,6 +509,7 @@
     W.clipEmpty = $('#clipEmpty');
     W.clipNote = $('#clipNote');
     W.clipEnabled = $('#clipEnabled');
+    W.clipStatusHint = $('#clipStatusHint');
     W.clipTtl = $('#clipTtl');
     W.clipPause = $('#clipPause');
     W.clipClear = $('#clipClear');
@@ -415,7 +522,13 @@
     W.snipText = $('#snipText');
     W.snipSave = $('#snipSave');
     W.snipForm = $('#snipForm');
+    W.dlCount = $('#dlCount');
+    W.dlResult = $('#dlResult');
     W.dlNote = $('#dlNote');
+    W.dlSelectBar = $('#dlSelectBar');
+    W.dlSelection = $('#dlSelection');
+    W.dlSelectAll = $('#dlSelectAll');
+    W.dlSelectNone = $('#dlSelectNone');
     W.dlList = $('#dlList');
     W.dlAnalyze = $('#dlAnalyze');
     W.dlRemove = $('#dlRemove');
@@ -424,16 +537,18 @@
         const r = await U.call('setSetting', 'clipboardHistory', W.clipEnabled.checked);
         if (!r || r.ok === false) { W.clipEnabled.checked = !W.clipEnabled.checked; DEPS.toast('Не сохранилось', 'error'); }
       } catch (err) { W.clipEnabled.checked = !W.clipEnabled.checked; DEPS.toast('Не удалось: ' + err.message, 'error'); }
+      updateClipboardStatus();
     });
     if (W.clipTtl) W.clipTtl.addEventListener('change', () => setClipboardTtl(W.clipTtl.value));
     if (W.clipPause) W.clipPause.addEventListener('click', togglePause);
     if (W.clipClear) W.clipClear.addEventListener('click', clearClipboard);
     if (W.clipReload) W.clipReload.addEventListener('click', loadClipboard);
     if (W.snipForm) W.snipForm.addEventListener('submit', (e) => { e.preventDefault(); saveSnippet(); });
-    if (W.dlAnalyze) W.dlAnalyze.addEventListener('click', analyzeDownloads);
+    if (W.dlAnalyze) W.dlAnalyze.addEventListener('click', () => analyzeDownloads());
     if (W.dlRemove) W.dlRemove.addEventListener('click', removeDownloads);
-    buildDiskCard();
-    renderDiskCard();
+    if (W.dlSelectAll) W.dlSelectAll.addEventListener('click', () => selectAllDownloads(true));
+    if (W.dlSelectNone) W.dlSelectNone.addEventListener('click', () => selectAllDownloads(false));
+    updateClipboardStatus();
   }
 
   async function loadSettingsState() {
@@ -442,6 +557,7 @@
       const s = await U.call('getSettings');
       if (s) W.clipEnabled.checked = s.clipboardHistory === true;
     } catch { /* старая сборка: настройка останется выключенной */ }
+    updateClipboardStatus();
     await loadAll();
   }
 

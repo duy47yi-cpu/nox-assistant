@@ -24,9 +24,40 @@ const MAX_TOOL = 60;
 
 // Версия схемы команды. 1 — старые записи без поля schemaVersion; 2 — текущая (версия, дата изменения,
 // происхождение, папка и коллекции). Файл обмена — отдельный формат со своей версией.
+const { zonedFormatter, wallTime, resolveWallTime } = require('../schedule/store');
+
 const COMMAND_SCHEMA_VERSION = 2;
 const TRANSFER_FORMAT = 'nox.commands';
 const TRANSFER_VERSION = 1;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const STALE_SCHEDULE_MS = 12 * 60 * 60 * 1000;
+const MIN_SCHEDULE_MINUTES = 1;
+const MAX_SCHEDULE_MINUTES = 10080;
+const MAX_EVENT_NAME = 80;
+const MAX_EVENT_MATCH = 120;
+const MAX_COOLDOWN_SEC = 86400;
+const DEFAULT_EVENT_COOLDOWN_SEC = 5;
+const MAX_HOTKEY_COOLDOWN_MS = 60000;
+const MAX_RECENT_OCCURRENCES = 40;
+const MAX_RUN_LOG_ENTRIES = 500;
+const TIME_HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const CONTROL_CHARS_RE = /[\x00-\x1f\x7f]/;
+
+const SCHEDULE_TYPES = new Set(['interval', 'daily', 'weekdays', 'weekly']);
+const EVENT_CATALOG = Object.freeze([
+  Object.freeze({ type: 'app:startup', label: 'Запуск ассистента', description: 'Сразу после запуска Nox Assistant' }),
+  Object.freeze({ type: 'system:unlock', label: 'Разблокировка экрана', description: 'Когда владелец возвращается за компьютер' }),
+  Object.freeze({ type: 'system:lock', label: 'Блокировка экрана', description: 'Когда экран компьютера блокируется' }),
+  Object.freeze({ type: 'system:resume', label: 'Выход из сна', description: 'После пробуждения компьютера' }),
+  Object.freeze({ type: 'system:suspend', label: 'Перед уходом в сон', description: 'Когда система переходит в режим сна' }),
+  Object.freeze({ type: 'workspace:inbox_added', label: 'Новый файл во входящих', description: 'При появлении файла в подключённой папке' }),
+  Object.freeze({ type: 'app:hung', label: 'Зависшая программа', description: 'Если обнаружено не отвечающее окно' }),
+  Object.freeze({ type: 'user:custom', label: 'Пользовательское событие', description: 'Именованное событие сценария или внешней кнопки' }),
+]);
+const SYSTEM_EVENT_TYPES = new Set(EVENT_CATALOG.map((e) => e.type));
+const RUN_STATUSES = new Set(['started', 'succeeded', 'skipped', 'failed', 'cancelled', 'blocked', 'interrupted']);
+const TRIGGER_KINDS = new Set(['hotkey', 'schedule', 'event', 'manual', 'phrase']);
 
 // Происхождение команды: кто её составил. Используется подписями в окне и при переносе.
 const ORIGINS = new Set(['manual', 'recorded', 'ai', 'imported', 'sample']);
@@ -73,6 +104,7 @@ const CHANGE_LABELS = {
   steps: 'шаги',
   enabled: 'включённость',
   hotkey: 'горячая клавиша',
+  triggers: 'способы запуска',
   folder: 'папка',
   collections: 'коллекции',
   origin: 'происхождение',
@@ -329,6 +361,422 @@ function maskArgsForJournal(tool, args) {
   return mask(args, 0);
 }
 
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function sanitizeLogText(value, maxLen = 300) {
+  if (value === undefined || value === null) return null;
+  const raw = String(value).replace(/\r?\n/g, ' ').trim();
+  if (!raw) return null;
+  if (looksSecretEgress(raw)) return '[скрыто]';
+  const chars = Array.from(raw);
+  return chars.length > maxLen ? `${chars.slice(0, maxLen - 1).join('')}…` : raw;
+}
+
+function checkTimeZone(raw) {
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (typeof raw !== 'string') throw new Error('часовой пояс: нужна строка IANA');
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  zonedFormatter(trimmed);
+  return trimmed;
+}
+
+function defaultTriggers(hotkey = null) {
+  return {
+    hotkey: { enabled: Boolean(hotkey), key: hotkey || null, cooldownMs: 0 },
+    schedule: { enabled: false, type: 'interval', minutes: 60, at: null, weekday: null, timeZone: null },
+    event: { enabled: false, eventType: null, eventName: null, match: null, cooldownSec: DEFAULT_EVENT_COOLDOWN_SEC },
+  };
+}
+
+function defaultTriggerState() {
+  return {
+    status: 'idle',
+    runStartedAt: null,
+    activeTrigger: null,
+    activeOccurrenceKey: null,
+    nextRunAt: null,
+    lastScheduledSlot: null,
+    lastTrigger: null,
+    lastTriggeredAt: null,
+    lastFinishedAt: null,
+    lastStatus: null,
+    lastReason: null,
+    lastDurationMs: null,
+    lastAttemptAtByTrigger: {},
+    recentOccurrenceKeys: [],
+  };
+}
+
+function checkCooldownMs(raw, fallback = 0) {
+  if (raw === undefined || raw === null) return fallback;
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0 || raw > MAX_HOTKEY_COOLDOWN_MS) {
+    throw new Error(`горячая клавиша: задержка повтора от 0 до ${MAX_HOTKEY_COOLDOWN_MS} мс`);
+  }
+  return raw;
+}
+
+function checkScheduleTrigger(raw, existingSchedule = null) {
+  const base = existingSchedule ? { ...defaultTriggers().schedule, ...existingSchedule } : defaultTriggers().schedule;
+  if (raw === undefined) return { ...base };
+  if (raw === null) return defaultTriggers().schedule;
+  if (!isPlainObject(raw)) throw new Error('расписание: нужен объект');
+  const enabled = raw.enabled === undefined ? base.enabled : checkEnabled(raw.enabled, false);
+  const type = raw.type === undefined ? base.type : String(raw.type || '').trim();
+  if (!SCHEDULE_TYPES.has(type)) {
+    throw new Error('расписание: тип должен быть interval, daily, weekdays или weekly');
+  }
+  if (type === 'interval') {
+    const rawMin = raw.minutes === undefined || raw.minutes === null
+      ? (base.type === 'interval' && base.minutes ? base.minutes : 60)
+      : raw.minutes;
+    if (typeof rawMin !== 'number' || !Number.isInteger(rawMin) || rawMin < MIN_SCHEDULE_MINUTES || rawMin > MAX_SCHEDULE_MINUTES) {
+      throw new Error(`расписание: интервал должен быть целым числом от ${MIN_SCHEDULE_MINUTES} до ${MAX_SCHEDULE_MINUTES} мин`);
+    }
+    const timeZone = raw.timeZone !== undefined ? checkTimeZone(raw.timeZone) : base.timeZone;
+    return { enabled, type: 'interval', minutes: rawMin, at: null, weekday: null, timeZone };
+  }
+  const fallbackAt = base.at || (enabled ? null : '09:00');
+  const rawAt = raw.at === undefined || raw.at === null || raw.at === '' ? fallbackAt : String(raw.at).trim();
+  if (!rawAt || !TIME_HHMM_RE.test(rawAt)) {
+    throw new Error('расписание: укажите время запуска в формате ЧЧ:ММ');
+  }
+  let weekday = null;
+  if (type === 'weekly') {
+    const rawDay = raw.weekday === undefined || raw.weekday === null ? (base.weekday ?? 1) : raw.weekday;
+    if (typeof rawDay !== 'number' || !Number.isInteger(rawDay) || rawDay < 1 || rawDay > 7) {
+      throw new Error('расписание: день недели от 1 (пн) до 7 (вс)');
+    }
+    weekday = rawDay;
+  }
+  const timeZone = raw.timeZone !== undefined ? checkTimeZone(raw.timeZone) : base.timeZone;
+  return { enabled, type, minutes: null, at: rawAt, weekday, timeZone };
+}
+
+function parseEventTypeAndName(rawType, rawName) {
+  let eventType = rawType === undefined || rawType === null || rawType === '' ? null : String(rawType).trim();
+  let derivedName = null;
+  if (eventType && eventType.startsWith('user:') && eventType !== 'user:custom') {
+    derivedName = eventType.slice(5).trim();
+    eventType = 'user:custom';
+  }
+  const eventName = rawName !== undefined ? rawName : derivedName;
+  return { eventType, eventName };
+}
+
+function checkEventTrigger(raw, existingEvent = null) {
+  const base = existingEvent ? { ...defaultTriggers().event, ...existingEvent } : defaultTriggers().event;
+  if (raw === undefined) return { ...base };
+  if (raw === null) return defaultTriggers().event;
+  if (!isPlainObject(raw)) throw new Error('событие: нужен объект');
+  const enabled = raw.enabled === undefined ? base.enabled : checkEnabled(raw.enabled, false);
+  const hasType = raw.eventType !== undefined || raw.type !== undefined;
+  const rawTypeVal = raw.eventType !== undefined ? raw.eventType : raw.type;
+  const rawNameVal = raw.eventName !== undefined ? raw.eventName : raw.userEvent;
+  const parsed = hasType
+    ? parseEventTypeAndName(rawTypeVal, rawNameVal)
+    : { eventType: base.eventType, eventName: rawNameVal !== undefined ? rawNameVal : base.eventName };
+
+  if (parsed.eventType !== null && !SYSTEM_EVENT_TYPES.has(parsed.eventType)) {
+    throw new Error(`событие: неизвестный тип «${parsed.eventType}»`);
+  }
+  if (enabled && !parsed.eventType) {
+    throw new Error('событие: выберите системное или пользовательское событие');
+  }
+
+  let eventName = null;
+  if (parsed.eventType === 'user:custom') {
+    const candidate = parsed.eventName;
+    if (candidate !== undefined && candidate !== null && candidate !== '') {
+      if (typeof candidate !== 'string') throw new Error('событие: имя пользовательского события должно быть строкой');
+      const clean = candidate.trim().replace(/\s+/g, ' ');
+      if (CONTROL_CHARS_RE.test(clean)) throw new Error('событие: недопустимые символы в имени события');
+      if (len(clean) > MAX_EVENT_NAME) throw new Error(`событие: имя события длиннее ${MAX_EVENT_NAME} символов`);
+      eventName = clean || null;
+    }
+    if (enabled && !eventName) {
+      throw new Error('событие: укажите имя пользовательского события');
+    }
+  }
+
+  let match = base.match;
+  if (raw.match !== undefined) {
+    if (raw.match === null || raw.match === '') {
+      match = null;
+    } else if (typeof raw.match !== 'string') {
+      throw new Error('событие: фильтр должен быть строкой');
+    } else {
+      const cleanMatch = raw.match.trim();
+      if (CONTROL_CHARS_RE.test(cleanMatch)) throw new Error('событие: недопустимые символы в фильтре');
+      if (len(cleanMatch) > MAX_EVENT_MATCH) throw new Error(`событие: фильтр длиннее ${MAX_EVENT_MATCH} символов`);
+      match = cleanMatch || null;
+    }
+  }
+
+  let cooldownSec = base.cooldownSec;
+  if (raw.cooldownSec !== undefined && raw.cooldownSec !== null) {
+    if (typeof raw.cooldownSec !== 'number' || !Number.isInteger(raw.cooldownSec) || raw.cooldownSec < 0 || raw.cooldownSec > MAX_COOLDOWN_SEC) {
+      throw new Error(`событие: пауза должна быть целым числом от 0 до ${MAX_COOLDOWN_SEC} с`);
+    }
+    cooldownSec = raw.cooldownSec;
+  }
+  return {
+    enabled,
+    eventType: parsed.eventType,
+    eventName,
+    match,
+    cooldownSec,
+  };
+}
+
+function existingHotkeyConfig(existing) {
+  const existingHt = existing && existing.triggers && isPlainObject(existing.triggers.hotkey)
+    ? existing.triggers.hotkey
+    : null;
+  const existingTop = existing && existing.hotkey ? checkHotkey(existing.hotkey) : null;
+  if (!existingHt) {
+    return { enabled: Boolean(existingTop), key: existingTop, cooldownMs: 0 };
+  }
+  const key = existingHt.key ? checkHotkey(existingHt.key) : existingTop;
+  const enabled = existingHt.enabled === undefined ? Boolean(key) : Boolean(existingHt.enabled && key);
+  const cooldownMs = Number.isInteger(existingHt.cooldownMs) ? existingHt.cooldownMs : 0;
+  return { enabled, key, cooldownMs };
+}
+
+function sameHotkeyTriggerConfig(rawHt, baseHt) {
+  if (!isPlainObject(rawHt)) return false;
+  const normKey = rawHt.key === undefined ? baseHt.key : checkHotkey(rawHt.key);
+  const normEnabled = rawHt.enabled === undefined ? baseHt.enabled : Boolean(rawHt.enabled);
+  const normCooldown = checkCooldownMs(rawHt.cooldownMs, baseHt.cooldownMs);
+  return normEnabled === baseHt.enabled && normKey === baseHt.key && normCooldown === baseHt.cooldownMs;
+}
+
+function checkHotkeyTrigger(cmd, existing) {
+  const baseHt = existingHotkeyConfig(existing);
+  const existingTop = existing && existing.hotkey ? checkHotkey(existing.hotkey) : null;
+  const topProvided = cmd && cmd.hotkey !== undefined;
+  const normTop = topProvided ? checkHotkey(cmd.hotkey) : undefined;
+  const hasTriggersObj = cmd && isPlainObject(cmd.triggers);
+  if (cmd && cmd.triggers !== undefined && cmd.triggers !== null && !hasTriggersObj) {
+    throw new Error('triggers: нужен объект');
+  }
+  const rawHt = hasTriggersObj && cmd.triggers.hotkey !== undefined ? cmd.triggers.hotkey : undefined;
+
+  let enabled = baseHt.enabled;
+  let key = baseHt.key;
+  let cooldownMs = baseHt.cooldownMs;
+
+  const topMutatedOnly = Boolean(
+    existing
+    && topProvided
+    && normTop !== existingTop
+    && (rawHt === undefined || sameHotkeyTriggerConfig(rawHt, baseHt)),
+  );
+
+  if (topMutatedOnly) {
+    key = normTop;
+    enabled = Boolean(normTop);
+  } else if (rawHt !== undefined) {
+    if (rawHt === null) {
+      enabled = false;
+      key = null;
+      cooldownMs = 0;
+    } else {
+      if (!isPlainObject(rawHt)) throw new Error('горячая клавиша: нужен объект');
+      enabled = rawHt.enabled === undefined ? baseHt.enabled : checkEnabled(rawHt.enabled, false);
+      key = rawHt.key === undefined ? (topProvided ? normTop : baseHt.key) : checkHotkey(rawHt.key);
+      cooldownMs = checkCooldownMs(rawHt.cooldownMs, baseHt.cooldownMs);
+      if (enabled && !key) throw new Error('горячая клавиша: укажите сочетание клавиш для включения');
+    }
+  } else if (topProvided) {
+    key = normTop;
+    enabled = Boolean(normTop);
+  }
+
+  const hotkeyTrigger = { enabled, key, cooldownMs };
+  const hotkey = enabled && key ? key : null;
+  return { hotkeyTrigger, hotkey };
+}
+
+function normalizeTriggers(cmd, existing = null) {
+  const base = existing && isPlainObject(existing.triggers) ? existing.triggers : defaultTriggers(existing ? existing.hotkey : null);
+  const { hotkeyTrigger, hotkey } = checkHotkeyTrigger(cmd, existing);
+  const rawTriggers = cmd && isPlainObject(cmd.triggers) ? cmd.triggers : {};
+  const schedule = checkScheduleTrigger(rawTriggers.schedule, base.schedule);
+  const event = checkEventTrigger(rawTriggers.event, base.event);
+  return {
+    triggers: { hotkey: hotkeyTrigger, schedule, event },
+    hotkey,
+  };
+}
+
+function normalizeTriggersLenient(cmd) {
+  try {
+    return normalizeTriggers(cmd || {}, null).triggers;
+  } catch {
+    return defaultTriggers(cmd && typeof cmd.hotkey === 'string' ? cmd.hotkey : null);
+  }
+}
+
+function scheduleConfigEqual(a, b) {
+  if (!a || !b) return false;
+  return Boolean(a.enabled) === Boolean(b.enabled)
+    && a.type === b.type
+    && (a.minutes ?? null) === (b.minutes ?? null)
+    && (a.at ?? null) === (b.at ?? null)
+    && (a.weekday ?? null) === (b.weekday ?? null)
+    && (a.timeZone ?? null) === (b.timeZone ?? null);
+}
+
+function nextScheduleIso(schedule, afterDate = new Date()) {
+  if (!schedule || !schedule.enabled) return null;
+  const after = afterDate instanceof Date ? afterDate : new Date(afterDate);
+  const afterMs = Number.isNaN(after.getTime()) ? Date.now() : after.getTime();
+  if (schedule.type === 'interval') {
+    return new Date(afterMs + schedule.minutes * 60000).toISOString();
+  }
+  const [hh, mm] = String(schedule.at || '09:00').split(':').map(Number);
+  const formatter = zonedFormatter(schedule.timeZone || undefined);
+  const wallNow = wallTime(afterMs, formatter);
+  const wallDate = new Date(wallNow);
+  const baseY = wallDate.getUTCFullYear();
+  const baseM = wallDate.getUTCMonth();
+  const baseD = wallDate.getUTCDate();
+  for (let offset = 0; offset <= 14; offset += 1) {
+    const candidateWall = Date.UTC(baseY, baseM, baseD + offset, hh, mm, 0, 0);
+    const isoDay = ((new Date(candidateWall).getUTCDay() + 6) % 7) + 1;
+    const dayMatches = schedule.type === 'daily'
+      || (schedule.type === 'weekdays' && isoDay >= 1 && isoDay <= 5)
+      || (schedule.type === 'weekly' && isoDay === schedule.weekday);
+    if (!dayMatches) continue;
+    const { shifted } = resolveWallTime(candidateWall, formatter);
+    if (shifted !== undefined && shifted > afterMs) {
+      return new Date(shifted).toISOString();
+    }
+  }
+  return null;
+}
+
+function sanitizeTriggerState(raw) {
+  const base = defaultTriggerState();
+  if (!isPlainObject(raw)) return base;
+  base.status = raw.status === 'running' ? 'running' : 'idle';
+  base.runStartedAt = typeof raw.runStartedAt === 'string' ? raw.runStartedAt : null;
+  base.activeTrigger = TRIGGER_KINDS.has(raw.activeTrigger) ? raw.activeTrigger : null;
+  base.activeOccurrenceKey = typeof raw.activeOccurrenceKey === 'string' ? raw.activeOccurrenceKey.slice(0, 200) : null;
+  base.nextRunAt = typeof raw.nextRunAt === 'string' ? raw.nextRunAt : null;
+  base.lastScheduledSlot = typeof raw.lastScheduledSlot === 'string' ? raw.lastScheduledSlot : null;
+  base.lastTrigger = TRIGGER_KINDS.has(raw.lastTrigger) ? raw.lastTrigger : null;
+  base.lastTriggeredAt = typeof raw.lastTriggeredAt === 'string' ? raw.lastTriggeredAt : null;
+  base.lastFinishedAt = typeof raw.lastFinishedAt === 'string' ? raw.lastFinishedAt : null;
+  base.lastStatus = RUN_STATUSES.has(raw.lastStatus) ? raw.lastStatus : null;
+  base.lastReason = sanitizeLogText(raw.lastReason, 300);
+  base.lastDurationMs = typeof raw.lastDurationMs === 'number' && Number.isFinite(raw.lastDurationMs) ? raw.lastDurationMs : null;
+  if (isPlainObject(raw.lastAttemptAtByTrigger)) {
+    for (const [k, v] of Object.entries(raw.lastAttemptAtByTrigger)) {
+      if (TRIGGER_KINDS.has(k) && typeof v === 'string') base.lastAttemptAtByTrigger[k] = v;
+    }
+  }
+  if (Array.isArray(raw.recentOccurrenceKeys)) {
+    base.recentOccurrenceKeys = raw.recentOccurrenceKeys
+      .filter((item) => item && typeof item.key === 'string' && typeof item.ts === 'string')
+      .slice(-MAX_RECENT_OCCURRENCES)
+      .map((item) => ({ key: item.key.slice(0, 200), ts: item.ts }));
+  }
+  return base;
+}
+
+function withNormalizedTriggers(record) {
+  if (!record || typeof record !== 'object') return record;
+  const { triggers, hotkey } = isPlainObject(record.triggers)
+    ? { triggers: normalizeTriggersLenient(record), hotkey: record.hotkey ?? null }
+    : { triggers: defaultTriggers(record.hotkey ?? null), hotkey: record.hotkey ?? null };
+  const triggerState = sanitizeTriggerState(record.triggerState);
+  return {
+    ...record,
+    hotkey,
+    triggers,
+    triggerState,
+  };
+}
+
+function assertSafeFilePath(filePath, dirLabel = 'папка', fileLabel = 'файл') {
+  const dir = path.dirname(filePath);
+  try {
+    const parent = fs.lstatSync(dir);
+    if (!parent.isDirectory() || parent.isSymbolicLink()) throw new Error(`${dirLabel} должна быть настоящей папкой`);
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  try {
+    const file = fs.lstatSync(filePath);
+    if (!file.isFile() || file.isSymbolicLink()) throw new Error(`${fileLabel} не должен быть ссылкой`);
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+}
+
+function atomicWriteJson(filePath, data, dirLabel = 'папка', fileLabel = 'файл') {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  assertSafeFilePath(filePath, dirLabel, fileLabel);
+  const tmp = path.join(dir, `.${path.basename(filePath)}.${crypto.randomUUID()}.tmp`);
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+    fs.renameSync(tmp, filePath);
+  } catch (err) {
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      // Важна исходная ошибка записи, а не неудача уборки временного файла.
+    }
+    throw err;
+  }
+}
+
+function describeScheduleTrigger(schedule) {
+  if (!schedule) return 'выключено';
+  const stateLabel = schedule.enabled ? 'вкл' : 'выкл';
+  let when;
+  if (schedule.type === 'interval') {
+    when = `каждые ${schedule.minutes} мин`;
+  } else if (schedule.type === 'weekdays') {
+    when = `по будням в ${schedule.at}`;
+  } else if (schedule.type === 'weekly') {
+    const days = ['', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+    when = `каждую ${days[schedule.weekday] || schedule.weekday} в ${schedule.at}`;
+  } else {
+    when = `ежедневно в ${schedule.at}`;
+  }
+  const tz = schedule.timeZone ? ` (${schedule.timeZone})` : '';
+  return `${when}${tz} · ${stateLabel}`;
+}
+
+function eventLabel(event) {
+  if (!event || !event.eventType) return 'не выбрано';
+  if (event.eventType === 'user:custom') {
+    return event.eventName ? `своё «${event.eventName}»` : 'пользовательское событие';
+  }
+  const found = EVENT_CATALOG.find((item) => item.type === event.eventType);
+  return found ? found.label : event.eventType;
+}
+
+function formatTriggersSummary(rawTriggers) {
+  const triggers = normalizeTriggersLenient({ triggers: rawTriggers, hotkey: rawTriggers && rawTriggers.hotkey ? rawTriggers.hotkey.key : null });
+  const hk = triggers.hotkey.key
+    ? `клавиша ${triggers.hotkey.key} (${triggers.hotkey.enabled ? 'вкл' : 'выкл'})`
+    : 'клавиша —';
+  const sch = triggers.schedule.enabled || triggers.schedule.at || triggers.schedule.minutes !== 60 || triggers.schedule.type !== 'interval'
+    ? `время: ${describeScheduleTrigger(triggers.schedule)}`
+    : 'время —';
+  const ev = triggers.event.eventType
+    ? `событие: ${eventLabel(triggers.event)}${triggers.event.match ? ` [${triggers.event.match}]` : ''} (${triggers.event.enabled ? 'вкл' : 'выкл'}, пауза ${triggers.event.cooldownSec} с)`
+    : 'событие —';
+  return `${hk}; ${sch}; ${ev}`;
+}
+
 // Поле команды в виде, пригодном для показа в diff: аргументы показываем только в замаскированном виде
 // (в них может быть секрет), длинные значения обрезаем.
 function displayValue(field, value) {
@@ -346,6 +794,7 @@ function displayValue(field, value) {
       return `${tool} ${brief.length > 120 ? `${brief.slice(0, 117)}…` : brief}`;
     }).join(' → ') || '—';
   }
+  if (field === 'triggers') return formatTriggersSummary(value);
   if (field === 'phrases' || field === 'optionalPhrases') {
     return Array.isArray(value) && value.length ? value.join(' | ') : '—';
   }
@@ -356,10 +805,10 @@ function displayValue(field, value) {
   return String(value);
 }
 
-const STEP_FIELDS = ['name', 'phrases', 'optionalPhrases', 'steps', 'enabled', 'hotkey', 'folder', 'collections', 'origin', 'createdAt'];
+const STEP_FIELDS = ['name', 'phrases', 'optionalPhrases', 'steps', 'enabled', 'hotkey', 'triggers', 'folder', 'collections', 'origin', 'createdAt'];
 
 // Отпечаток содержания: по нему видно, изменится команда при импорте или нет.
-// Дата изменения (updatedAt) и последний запуск (lastRunAt) в содержание не входят: это не свойства команды.
+// Дата изменения (updatedAt), последний запуск (lastRunAt) и состояние расписания в содержание не входят.
 function contentKey(cmd) {
   const object = {
     schemaVersion: COMMAND_SCHEMA_VERSION,
@@ -369,6 +818,7 @@ function contentKey(cmd) {
     steps: Array.isArray(cmd.steps) ? cmd.steps.map((s) => ({ tool: String(s && s.tool), args: s && s.args ? s.args : {} })) : [],
     enabled: cmd.enabled !== false,
     hotkey: cmd.hotkey || null,
+    triggers: normalizeTriggersLenient(cmd),
     folder: cmd.folder || null,
     collections: Array.isArray(cmd.collections) ? cmd.collections.map((c) => String(c)) : [],
     origin: ORIGINS.has(cmd.origin) ? cmd.origin : 'manual',
@@ -419,9 +869,14 @@ function buildRecord(cmd, items, existing, { nowIso = new Date().toISOString(), 
   const createdAt = cmd.createdAt === undefined
     ? (existing && existing.createdAt ? existing.createdAt : nowIso)
     : checkIso(cmd.createdAt, 'createdAt');
-  const hotkey = cmd.hotkey === undefined
-    ? (existing && existing.hotkey ? existing.hotkey : null)
-    : checkHotkey(cmd.hotkey);
+  const { triggers, hotkey } = normalizeTriggers(cmd, existing);
+  const existingTriggers = existing ? normalizeTriggersLenient(existing) : null;
+  const triggerState = existing ? sanitizeTriggerState(existing.triggerState) : defaultTriggerState();
+  if (!triggers.schedule.enabled) {
+    triggerState.nextRunAt = null;
+  } else if (!existingTriggers || !scheduleConfigEqual(existingTriggers.schedule, triggers.schedule) || !triggerState.nextRunAt) {
+    triggerState.nextRunAt = nextScheduleIso(triggers.schedule, new Date(nowIso));
+  }
   const lastRunAt = cmd.lastRunAt === undefined
     ? (existing ? existing.lastRunAt ?? null : null)
     : checkNullableIso(cmd.lastRunAt, 'lastRunAt');
@@ -456,6 +911,8 @@ function buildRecord(cmd, items, existing, { nowIso = new Date().toISOString(), 
     updatedAt: nowIso,
     lastRunAt,
     hotkey,
+    triggers,
+    triggerState,
     folder,
     collections,
     origin,
@@ -478,39 +935,56 @@ class CommandStore {
   }
 
   _checkPath() {
-    const dir = path.dirname(this.filePath);
-    try {
-      const parent = fs.lstatSync(dir);
-      if (!parent.isDirectory() || parent.isSymbolicLink()) throw new Error('папка команд должна быть настоящей папкой');
-    } catch (err) { if (err.code !== 'ENOENT') throw err; }
-    try {
-      const file = fs.lstatSync(this.filePath);
-      if (!file.isFile() || file.isSymbolicLink()) throw new Error('файл команд не должен быть ссылкой');
-    } catch (err) { if (err.code !== 'ENOENT') throw err; }
+    assertSafeFilePath(this.filePath, 'папка команд', 'файл команд');
   }
 
   // Все команды по имени.
   list() {
-    return this._load().items.sort(byName);
+    return this._load().items.map(withNormalizedTriggers).sort(byName);
   }
 
   get(id) {
-    return this._load().items.find((item) => item.id === id) ?? null;
+    const found = this._load().items.find((item) => item.id === id);
+    return found ? withNormalizedTriggers(found) : null;
   }
 
   // Создаёт команду или обновляет существующую с тем же id. Возвращает сохранённую запись.
-  save(cmd) {
+  save(cmd, options = {}) {
     if (!cmd || typeof cmd !== 'object') throw new Error('команда: нужен объект');
     const data = this._load();
     const existing = typeof cmd.id === 'string'
       ? data.items.find((item) => item.id === cmd.id)
       : undefined;
-    const record = buildRecord(cmd, data.items, existing);
+    const nowAt = options && options.now !== undefined
+      ? (options.now instanceof Date ? options.now : new Date(options.now))
+      : new Date();
+    if (Number.isNaN(nowAt.getTime())) throw new Error('save: плохое время');
+    const record = buildRecord(cmd, data.items, existing, { nowIso: nowAt.toISOString() });
     const items = existing
       ? data.items.map((item) => (item.id === record.id ? record : item))
       : [...data.items, record];
     this._save({ items });
-    return record;
+    return withNormalizedTriggers(record);
+  }
+
+  // Точечно обновляет настройки способов запуска команды без сброса шагов или состояния.
+  updateTriggers(id, patch = {}, options = {}) {
+    if (!patch || !isPlainObject(patch)) throw new Error('способы запуска: нужен объект');
+    const existing = this.get(id);
+    if (!existing) throw new Error('команда не найдена');
+    const nextTriggers = {
+      hotkey: patch.hotkey !== undefined ? { ...existing.triggers.hotkey, ...patch.hotkey } : existing.triggers.hotkey,
+      schedule: patch.schedule !== undefined ? { ...existing.triggers.schedule, ...patch.schedule } : existing.triggers.schedule,
+      event: patch.event !== undefined ? { ...existing.triggers.event, ...patch.event } : existing.triggers.event,
+    };
+    const nextTopHotkey = patch.hotkey && patch.hotkey.key !== undefined
+      ? patch.hotkey.key
+      : existing.hotkey;
+    return this.save({
+      ...existing,
+      hotkey: nextTriggers.hotkey.enabled ? (nextTriggers.hotkey.key ?? nextTopHotkey) : null,
+      triggers: nextTriggers,
+    }, options);
   }
 
   // Импорт уже проверенных команд: одна загрузка файла, одна атомарная запись.
@@ -557,8 +1031,229 @@ class CommandStore {
     if (typeof text !== 'string') return null;
     const wanted = normalize(text);
     if (wanted === '') return null;
-    return this._load().items.find((item) => item.enabled
-      && (item.phrases || []).some((p) => normalize(p) === wanted)) ?? null;
+    const found = this._load().items.find((item) => item.enabled
+      && (item.phrases || []).some((p) => normalize(p) === wanted));
+    return found ? withNormalizedTriggers(found) : null;
+  }
+
+  // Находит команду по горячей клавише (приоритет у включённой; выключенную тоже возвращает, чтобы показать причину пропуска).
+  findByHotkey(hotkey) {
+    let canonical;
+    try {
+      canonical = checkHotkey(hotkey);
+    } catch {
+      return null;
+    }
+    if (!canonical) return null;
+    const wanted = canonical.toUpperCase();
+    const all = this._load().items.map(withNormalizedTriggers);
+    const active = all.find((item) => item.enabled !== false
+      && item.triggers.hotkey.enabled
+      && item.triggers.hotkey.key
+      && item.triggers.hotkey.key.toUpperCase() === wanted);
+    if (active) return active;
+    return all.find((item) => item.triggers.hotkey.key
+      && item.triggers.hotkey.key.toUpperCase() === wanted) ?? null;
+  }
+
+  // Все команды, подписанные на событие (включённые и выключенные — чтобы журнал фиксировал понятный пропуск).
+  findByEvent(eventType, payload = {}) {
+    if (typeof eventType !== 'string' || !eventType.trim()) return [];
+    const parsed = parseEventTypeAndName(eventType, payload && (payload.eventName ?? payload.userEvent));
+    if (!parsed.eventType) return [];
+    const textFields = [];
+    if (payload && typeof payload === 'object') {
+      for (const key of ['target', 'detail', 'name', 'label', 'path', 'app', 'text', 'window', 'title']) {
+        if (typeof payload[key] === 'string' && payload[key].trim()) textFields.push(payload[key].toLowerCase());
+      }
+    }
+    const haystack = textFields.join(' ');
+    return this._load().items
+      .map(withNormalizedTriggers)
+      .filter((item) => {
+        const ev = item.triggers.event;
+        if (!ev || ev.eventType !== parsed.eventType) return false;
+        if (ev.eventType === 'user:custom') {
+          if (normalize(ev.eventName || '') !== normalize(parsed.eventName || '')) return false;
+        }
+        if (ev.match && !haystack.includes(ev.match.toLowerCase())) return false;
+        return true;
+      })
+      .sort(byName);
+  }
+
+  // Только чтение: команды с включённым расписанием, срок которых наступил (включая отложенные на <=12 ч).
+  dueScheduledCommands(now = new Date()) {
+    const at = now instanceof Date ? now : new Date(now);
+    const nowMs = at.getTime();
+    if (Number.isNaN(nowMs)) throw new Error('dueScheduledCommands: плохое время');
+    return this._load().items
+      .map(withNormalizedTriggers)
+      .filter((item) => item.enabled !== false
+        && item.triggers.schedule.enabled === true
+        && item.triggerState.status !== 'running'
+        && item.triggerState.nextRunAt !== null
+        && new Date(item.triggerState.nextRunAt).getTime() <= nowMs)
+      .sort((a, b) => new Date(a.triggerState.nextRunAt).getTime() - new Date(b.triggerState.nextRunAt).getTime());
+  }
+
+  // Календарные расписания, просроченные более чем на 12 ч (компьютер был выключен), переводим в будущее без запуска.
+  skipStaleSchedules(now = new Date()) {
+    const at = now instanceof Date ? now : new Date(now);
+    const nowMs = at.getTime();
+    if (Number.isNaN(nowMs)) throw new Error('skipStaleSchedules: плохое время');
+    const data = this._load();
+    const skipped = [];
+    let dirty = false;
+    const nextItems = data.items.map((rawItem) => {
+      const item = withNormalizedTriggers(rawItem);
+      const sch = item.triggers.schedule;
+      const st = item.triggerState;
+      if (item.enabled === false || !sch.enabled || sch.type === 'interval' || st.status === 'running' || !st.nextRunAt) {
+        return rawItem;
+      }
+      const dueMs = new Date(st.nextRunAt).getTime();
+      if (!Number.isFinite(dueMs) || nowMs - dueMs <= STALE_SCHEDULE_MS) return rawItem;
+
+      const scheduledFor = st.nextRunAt;
+      const occurrenceKey = `schedule:${item.id}:${scheduledFor}`;
+      const nextRunAt = nextScheduleIso(sch, at);
+      const reason = 'пропущено: компьютер был выключен или окно запуска прошло';
+      const nowIso = at.toISOString();
+      const recent = Array.isArray(st.recentOccurrenceKeys) ? st.recentOccurrenceKeys.slice() : [];
+      if (!recent.some((entry) => entry.key === occurrenceKey)) {
+        recent.push({ key: occurrenceKey, ts: nowIso });
+      }
+      item.triggerState = {
+        ...st,
+        nextRunAt,
+        lastScheduledSlot: scheduledFor,
+        lastTrigger: 'schedule',
+        lastTriggeredAt: nowIso,
+        lastFinishedAt: nowIso,
+        lastStatus: 'skipped',
+        lastReason: reason,
+        recentOccurrenceKeys: recent.slice(-MAX_RECENT_OCCURRENCES),
+      };
+      dirty = true;
+      skipped.push({ command: item, scheduledFor, nextRunAt, occurrenceKey, reason });
+      return item;
+    });
+    if (dirty) this._save({ items: nextItems });
+    return skipped;
+  }
+
+  // Фиксирует старт запуска на диске ДО выполнения шагов (и сдвигает расписание, чтобы падение не дало слепой повтор).
+  markTriggerStart(id, { trigger = 'manual', scheduledFor = null, occurrenceKey = null, now = new Date() } = {}) {
+    const at = now instanceof Date ? now : new Date(now);
+    if (Number.isNaN(at.getTime())) throw new Error('markTriggerStart: плохое время');
+    if (!TRIGGER_KINDS.has(trigger)) throw new Error(`markTriggerStart: неизвестный способ запуска «${trigger}»`);
+    const data = this._load();
+    const idx = data.items.findIndex((entry) => entry.id === id);
+    if (idx < 0) return null;
+    const item = withNormalizedTriggers(data.items[idx]);
+    if (item.triggerState.status === 'running') return null;
+
+    const nowIso = at.toISOString();
+    const st = item.triggerState;
+    const recent = Array.isArray(st.recentOccurrenceKeys) ? st.recentOccurrenceKeys.slice() : [];
+    if (occurrenceKey && !recent.some((entry) => entry.key === occurrenceKey)) {
+      recent.push({ key: occurrenceKey.slice(0, 200), ts: nowIso });
+    }
+    const attempts = { ...(st.lastAttemptAtByTrigger || {}), [trigger]: nowIso };
+    let nextRunAt = st.nextRunAt;
+    let lastScheduledSlot = st.lastScheduledSlot;
+    if (trigger === 'schedule' && item.triggers.schedule.enabled) {
+      const slotIso = scheduledFor || st.nextRunAt;
+      const slotMs = slotIso ? Date.parse(slotIso) : 0;
+      const anchor = new Date(Math.max(at.getTime(), Number.isFinite(slotMs) ? slotMs : 0));
+      nextRunAt = nextScheduleIso(item.triggers.schedule, anchor);
+      lastScheduledSlot = slotIso || lastScheduledSlot;
+    }
+
+    item.triggerState = {
+      ...st,
+      status: 'running',
+      runStartedAt: nowIso,
+      activeTrigger: trigger,
+      activeOccurrenceKey: occurrenceKey ? occurrenceKey.slice(0, 200) : null,
+      nextRunAt,
+      lastScheduledSlot,
+      lastTrigger: trigger,
+      lastTriggeredAt: nowIso,
+      lastAttemptAtByTrigger: attempts,
+      recentOccurrenceKeys: recent.slice(-MAX_RECENT_OCCURRENCES),
+    };
+    const nextItems = data.items.slice();
+    nextItems[idx] = item;
+    this._save({ items: nextItems });
+    return withNormalizedTriggers(item);
+  }
+
+  // Завершает запуск, снимает блокировку выполнения и сохраняет итог и понятную причину.
+  markTriggerFinish(id, { trigger = null, status = 'succeeded', reason = null, durationMs = null, now = new Date() } = {}) {
+    const at = now instanceof Date ? now : new Date(now);
+    if (Number.isNaN(at.getTime())) throw new Error('markTriggerFinish: плохое время');
+    const safeStatus = RUN_STATUSES.has(status) ? status : 'failed';
+    const data = this._load();
+    const idx = data.items.findIndex((entry) => entry.id === id);
+    if (idx < 0) return null;
+    const item = withNormalizedTriggers(data.items[idx]);
+    const st = item.triggerState;
+    const nowIso = at.toISOString();
+    const usedTrigger = TRIGGER_KINDS.has(trigger) ? trigger : st.activeTrigger || st.lastTrigger;
+    item.triggerState = {
+      ...st,
+      status: 'idle',
+      runStartedAt: null,
+      activeTrigger: null,
+      activeOccurrenceKey: null,
+      lastTrigger: usedTrigger,
+      lastTriggeredAt: st.lastTriggeredAt || nowIso,
+      lastFinishedAt: nowIso,
+      lastStatus: safeStatus,
+      lastReason: sanitizeLogText(reason, 300),
+      lastDurationMs: typeof durationMs === 'number' && Number.isFinite(durationMs) ? Math.max(0, Math.round(durationMs)) : null,
+    };
+    if (safeStatus === 'succeeded') item.lastRunAt = nowIso;
+    const nextItems = data.items.slice();
+    nextItems[idx] = item;
+    this._save({ items: nextItems });
+    return withNormalizedTriggers(item);
+  }
+
+  // Восстановление после падения/перезапуска: незавершённые запуски закрываются без слепого повтора.
+  reconcileInterrupted(now = new Date()) {
+    const at = now instanceof Date ? now : new Date(now);
+    if (Number.isNaN(at.getTime())) throw new Error('reconcileInterrupted: плохое время');
+    const data = this._load();
+    const reconciled = [];
+    let dirty = false;
+    const nowIso = at.toISOString();
+    const reason = 'прервано при перезапуске: повторного запуска не было';
+    const nextItems = data.items.map((rawItem) => {
+      const item = withNormalizedTriggers(rawItem);
+      if (item.triggerState.status !== 'running') return rawItem;
+      const interruptedTrigger = item.triggerState.activeTrigger || item.triggerState.lastTrigger || 'manual';
+      const interruptedOccurrence = item.triggerState.activeOccurrenceKey || null;
+      item.triggerState = {
+        ...item.triggerState,
+        status: 'idle',
+        runStartedAt: null,
+        activeTrigger: null,
+        activeOccurrenceKey: null,
+        lastTrigger: interruptedTrigger,
+        lastFinishedAt: nowIso,
+        lastStatus: 'interrupted',
+        lastReason: reason,
+        lastDurationMs: null,
+      };
+      dirty = true;
+      reconciled.push({ command: item, trigger: interruptedTrigger, occurrenceKey: interruptedOccurrence, reason });
+      return item;
+    });
+    if (dirty) this._save({ items: nextItems });
+    return reconciled;
   }
 
   // Запоминает время последнего запуска. Возвращает команду или null, если id нет.
@@ -598,21 +1293,103 @@ class CommandStore {
 
   // Атомарная запись: во временный файл рядом, затем переименование поверх основного.
   _save(data) {
-    const dir = path.dirname(this.filePath);
-    fs.mkdirSync(dir, { recursive: true });
+    atomicWriteJson(this.filePath, data, 'папка команд', 'файл команд');
+  }
+}
+
+class CommandRunLog {
+  constructor(filePath, { maxEntries = MAX_RUN_LOG_ENTRIES } = {}) {
+    if (!filePath) throw new Error('CommandRunLog: нужен путь к файлу');
+    this.filePath = filePath;
+    this.maxEntries = Number.isInteger(maxEntries) && maxEntries > 0 ? maxEntries : MAX_RUN_LOG_ENTRIES;
+  }
+
+  _checkPath() {
+    assertSafeFilePath(this.filePath, 'папка журнала запусков', 'журнал запусков');
+  }
+
+  _load() {
     this._checkPath();
-    const tmp = path.join(dir, `.${path.basename(this.filePath)}.${crypto.randomUUID()}.tmp`);
+    let raw;
     try {
-      fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
-      fs.renameSync(tmp, this.filePath);
+      raw = fs.readFileSync(this.filePath, 'utf8');
     } catch (err) {
-      try {
-        fs.rmSync(tmp, { force: true });
-      } catch {
-        // Важна исходная ошибка записи, а не неудача уборки временного файла.
-      }
+      if (err.code === 'ENOENT') return { entries: [] };
       throw err;
     }
+    if (raw.trim() === '') return { entries: [] };
+    let data = null;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+    if (!data || !Array.isArray(data.entries)) {
+      throw new Error('журнал запусков команд повреждён');
+    }
+    return data;
+  }
+
+  append(entry = {}) {
+    if (!entry || typeof entry !== 'object') throw new Error('запись журнала: нужен объект');
+    const at = entry.ts instanceof Date
+      ? entry.ts
+      : (typeof entry.ts === 'string' && !Number.isNaN(Date.parse(entry.ts)) ? new Date(entry.ts) : new Date());
+    const status = RUN_STATUSES.has(entry.status) ? entry.status : 'failed';
+    const trigger = TRIGGER_KINDS.has(entry.trigger) ? entry.trigger : 'manual';
+    const clean = {
+      id: typeof entry.id === 'string' && entry.id ? entry.id : crypto.randomUUID(),
+      ts: at.toISOString(),
+      commandId: typeof entry.commandId === 'string' ? entry.commandId : null,
+      commandName: sanitizeLogText(entry.commandName, 100) || 'без имени',
+      trigger,
+      triggerDetail: sanitizeLogText(entry.triggerDetail, 160),
+      status,
+      reason: sanitizeLogText(entry.reason, 300),
+      error: sanitizeLogText(entry.error, 300),
+      durationMs: typeof entry.durationMs === 'number' && Number.isFinite(entry.durationMs)
+        ? Math.max(0, Math.round(entry.durationMs))
+        : null,
+      stepsOk: Number.isInteger(entry.stepsOk) ? entry.stepsOk : 0,
+      stepsTotal: Number.isInteger(entry.stepsTotal) ? entry.stepsTotal : 0,
+      occurrenceKey: typeof entry.occurrenceKey === 'string' ? entry.occurrenceKey.slice(0, 200) : null,
+      workspaceId: typeof entry.workspaceId === 'string' && entry.workspaceId ? entry.workspaceId : 'default',
+    };
+    const data = this._load();
+    const next = [...data.entries, clean];
+    const trimmed = next.length > this.maxEntries ? next.slice(-this.maxEntries) : next;
+    atomicWriteJson(this.filePath, { entries: trimmed }, 'папка журнала запусков', 'журнал запусков');
+    return clean;
+  }
+
+  list({ limit = 100, commandId = null, trigger = null, status = null } = {}) {
+    const entries = this._load().entries.filter((item) => {
+      if (commandId && item.commandId !== commandId) return false;
+      if (trigger && item.trigger !== trigger) return false;
+      if (status && item.status !== status) return false;
+      return true;
+    });
+    const newestFirst = entries.slice().reverse();
+    const max = Number.isInteger(limit) && limit > 0 ? limit : newestFirst.length;
+    return newestFirst.slice(0, max);
+  }
+
+  stats() {
+    const entries = this._load().entries;
+    const byStatus = {};
+    const byTrigger = {};
+    for (const item of entries) {
+      byStatus[item.status] = (byStatus[item.status] || 0) + 1;
+      byTrigger[item.trigger] = (byTrigger[item.trigger] || 0) + 1;
+    }
+    return { total: entries.length, byStatus, byTrigger };
+  }
+
+  clear({ commandId = null } = {}) {
+    const data = this._load();
+    const kept = commandId ? data.entries.filter((item) => item.commandId !== commandId) : [];
+    atomicWriteJson(this.filePath, { entries: kept }, 'папка журнала запусков', 'журнал запусков');
+    return data.entries.length - kept.length;
   }
 }
 
@@ -642,7 +1419,7 @@ function sanitizeImportedCommand(raw, label, warnings) {
   const optionalPhrases = checkOptionalPhrases(raw.optionalPhrases);
   const steps = checkSteps(raw.steps, { strictArgs: true, warnings, prefix: `${label}, ` });
   const enabled = checkEnabled(raw.enabled, true);
-  const hotkey = raw.hotkey === undefined ? null : checkHotkey(raw.hotkey);
+  const { triggers, hotkey } = normalizeTriggers({ hotkey: raw.hotkey, triggers: raw.triggers }, null);
   const folder = checkFolder(raw.folder);
   const collections = checkCollections(raw.collections);
   const origin = raw.origin === undefined
@@ -652,7 +1429,7 @@ function sanitizeImportedCommand(raw, label, warnings) {
     ? raw.id.trim()
     : undefined;
   const createdAt = raw.createdAt === undefined || raw.createdAt === null ? undefined : checkIso(raw.createdAt, 'createdAt');
-  const command = { schemaVersion, name, phrases, optionalPhrases, steps, enabled, hotkey, folder, collections, origin };
+  const command = { schemaVersion, name, phrases, optionalPhrases, steps, enabled, hotkey, triggers, folder, collections, origin };
   if (id) command.id = id;
   if (createdAt) command.createdAt = createdAt;
   return command;
@@ -758,7 +1535,7 @@ function exportCommandPack(commands, { now = new Date() } = {}) {
       const rawSteps = Array.isArray(cmd.steps) ? cmd.steps : [];
       const steps = checkSteps(rawSteps, { strictArgs: true, warnings, prefix: `${label}, ` });
       const enabled = checkEnabled(cmd.enabled, true);
-      const hotkey = cmd.hotkey === undefined || cmd.hotkey === null ? null : checkHotkey(cmd.hotkey);
+      const { triggers, hotkey } = normalizeTriggers({ hotkey: cmd.hotkey, triggers: cmd.triggers }, null);
       const folder = checkFolder(cmd.folder);
       const collections = checkCollections(cmd.collections);
       const origin = checkOrigin(cmd.origin, 'manual');
@@ -773,6 +1550,7 @@ function exportCommandPack(commands, { now = new Date() } = {}) {
         steps,
         enabled,
         hotkey,
+        triggers,
         folder,
         collections,
         origin,
@@ -916,6 +1694,7 @@ function applyCommandImport(input, store, { confirm = false } = {}) {
 
 module.exports = {
   CommandStore,
+  CommandRunLog,
   normalize,
   checkHotkey,
   checkName,
@@ -925,9 +1704,26 @@ module.exports = {
   checkFolder,
   checkCollections,
   checkSchemaVersion,
+  normalizeTriggers,
+  checkScheduleTrigger,
+  checkEventTrigger,
+  nextScheduleIso,
+  describeScheduleTrigger,
+  eventLabel,
+  sanitizeLogText,
   RESERVED_HOTKEYS,
   EDITOR_STEP_TOOLS,
   DANGEROUS_TOOLS,
+  EVENT_CATALOG,
+  SYSTEM_EVENT_TYPES,
+  SCHEDULE_TYPES,
+  RUN_STATUSES,
+  TRIGGER_KINDS,
+  STALE_SCHEDULE_MS,
+  MIN_SCHEDULE_MINUTES,
+  MAX_SCHEDULE_MINUTES,
+  DEFAULT_EVENT_COOLDOWN_SEC,
+  MAX_COOLDOWN_SEC,
   MAX_STEPS,
   MAX_NAME,
   MAX_PHRASES,

@@ -1,0 +1,340 @@
+{
+  "mode": "approval-ipc",
+  "pid": 28932,
+  "readyMs": 2811.2358,
+  "electron": "44.9.3",
+  "chromium": "152.0.7977.167",
+  "initialTheme": {
+    "theme": null,
+    "accent": null,
+    "look": null,
+    "resolved": "dark",
+    "systemLight": false,
+    "bg": "#14120E",
+    "appBg": "rgb(15, 15, 16)"
+  },
+  "approval": {
+    "failed": {
+      "pending": [
+        "audit-ipc-fail"
+      ],
+      "dialog": {
+        "open": true,
+        "text": "Действие: audit-failed-bridge?",
+        "arguments": "{\n  \"text\": \"audit-failed-bridge\"\n}",
+        "focus": "",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 192,
+        "right": 672,
+        "top": 122,
+        "bottom": 398
+      },
+      "messages": [
+        "Джарвис не подключён к модели — пока отвечает заглушкой.\n\nКак подключить",
+        "▸\nХод работы · Выполняется · 0.3 с",
+        "Без ответа отменится через 30 секунд",
+        "Запрос уже неактуален.",
+        "Сбой интерфейса (промис): Cannot read properties of null (reading 'setAttribute')\n"
+      ],
+      "afterReopen": {
+        "pending": [
+          "audit-ipc-fail"
+        ],
+        "dialog": {
+          "open": false,
+          "text": "Действие: audit-failed-bridge?",
+          "arguments": "{\n  \"text\": \"audit-failed-bridge\"\n}",
+          "focus": "chatInput",
+          "countdown": "Без ответа отменится через 30 секунд",
+          "width": 864,
+          "height": 520,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "bottom": 0
+        },
+        "messages": [
+          "Джарвис не подключён к модели — пока отвечает заглушкой.\n\nКак подключить",
+          "▸\nХод работы · Выполняется · 0.4 с",
+          "Запрос уже неактуален.",
+          "Запрос уже неактуален.",
+          "Сбой интерфейса (промис): Cannot read properties of null (reading 'setAttribute')\n"
+        ]
+      }
+    },
+    "stalled": {
+      "afterClick": {
+        "pending": [
+          "audit-ipc-stall"
+        ],
+        "dialog": {
+          "open": true,
+          "text": "Действие: audit-stalled-bridge?",
+          "arguments": "{\n  \"text\": \"audit-stalled-bridge\"\n}",
+          "focus": "",
+          "countdown": "Без ответа отменится через 30 секунд",
+          "width": 864,
+          "height": 520,
+          "left": 192,
+          "right": 672,
+          "top": 122,
+          "bottom": 398
+        },
+        "buttons": [
+          true,
+          true,
+          true
+        ]
+      },
+      "afterExpiry": {
+        "pending": [],
+        "dialog": {
+          "open": true,
+          "text": "Действие: audit-stalled-bridge?",
+          "arguments": "{\n  \"text\": \"audit-stalled-bridge\"\n}",
+          "focus": "",
+          "countdown": "Без ответа отменится через 1 секунду",
+          "width": 864,
+          "height": 520,
+          "left": 192,
+          "right": 672,
+          "top": 122,
+          "bottom": 398
+        },
+        "buttons": [
+          true,
+          true,
+          true
+        ],
+        "reason": "время на подтверждение вышло"
+      },
+      "next": {
+        "pending": [
+          "audit-ipc-next"
+        ],
+        "dialog": {
+          "open": true,
+          "text": "Действие: audit-next-after-stall?",
+          "arguments": "{\n  \"text\": \"audit-next-after-stall\"\n}",
+          "focus": "reject",
+          "countdown": "Без ответа отменится через 30 секунд",
+          "width": 864,
+          "height": 520,
+          "left": 192,
+          "right": 672,
+          "top": 122,
+          "bottom": 398
+        },
+        "buttons": [
+          false,
+          false,
+          false
+        ],
+        "calls": [
+          {
+            "id": "audit-ipc-fail",
+            "decision": "once"
+          },
+          {
+            "id": "audit-ipc-stall",
+            "decision": "once"
+          }
+        ],
+        "effects": []
+      }
+    },
+    "effects": [
+      {
+        "id": "audit-ipc-next",
+        "text": "audit-next-after-stall"
+      }
+    ],
+    "calls": [
+      {
+        "id": "audit-ipc-fail",
+        "decision": "once"
+      },
+      {
+        "id": "audit-ipc-stall",
+        "decision": "once"
+      },
+      {
+        "id": "audit-ipc-next",
+        "decision": "once"
+      }
+    ],
+    "events": [
+      {
+        "marker": "audit-failed-bridge",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "tool_start",
+        "id": "audit-ipc-fail"
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "approval_request",
+        "id": "audit-ipc-fail"
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "tool_result",
+        "id": "audit-ipc-fail"
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "text",
+        "id": null
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "done",
+        "id": null
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "tool_start",
+        "id": "audit-ipc-stall"
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "approval_request",
+        "id": "audit-ipc-stall"
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "tool_result",
+        "id": "audit-ipc-stall"
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "text",
+        "id": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "done",
+        "id": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "tool_start",
+        "id": "audit-ipc-next"
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "approval_request",
+        "id": "audit-ipc-next"
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "tool_result",
+        "id": "audit-ipc-next"
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "text",
+        "id": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "done",
+        "id": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "status",
+        "id": null
+      }
+    ],
+    "consoleErrors": [
+      "[jarvis] событие не обработано approval_request TypeError: Cannot read properties of null (reading 'setAttribute')",
+      "Uncaught (in promise) TypeError: Cannot read properties of null (reading 'setAttribute')",
+      "[jarvis] событие не обработано approval_request TypeError: Cannot read properties of null (reading 'setAttribute')",
+      "[jarvis] событие не обработано approval_closed TypeError: Cannot read properties of null (reading 'setAttribute')",
+      "[jarvis] событие не обработано approval_request TypeError: Cannot read properties of null (reading 'setAttribute')"
+    ]
+  },
+  "processes": [
+    {
+      "type": "Browser",
+      "cpuPercent": 0,
+      "workingSetKiB": 149696
+    },
+    {
+      "type": "GPU",
+      "cpuPercent": 0,
+      "workingSetKiB": 173496
+    },
+    {
+      "type": "Utility",
+      "cpuPercent": 0,
+      "workingSetKiB": 101724
+    },
+    {
+      "type": "Tab",
+      "cpuPercent": 0,
+      "workingSetKiB": 201216
+    }
+  ]
+}

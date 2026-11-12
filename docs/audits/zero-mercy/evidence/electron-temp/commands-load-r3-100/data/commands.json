@@ -1,0 +1,1973 @@
+{
+  "items": [
+    {
+      "id": "audit-00000",
+      "name": "Audit command 00000",
+      "phrases": [
+        "audit phrase 00000"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00001",
+      "name": "Audit command 00001",
+      "phrases": [
+        "audit phrase 00001"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00002",
+      "name": "Audit command 00002",
+      "phrases": [
+        "audit phrase 00002"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00003",
+      "name": "Audit command 00003",
+      "phrases": [
+        "audit phrase 00003"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00004",
+      "name": "Audit command 00004",
+      "phrases": [
+        "audit phrase 00004"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00005",
+      "name": "Audit command 00005",
+      "phrases": [
+        "audit phrase 00005"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00006",
+      "name": "Audit command 00006",
+      "phrases": [
+        "audit phrase 00006"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00007",
+      "name": "Audit command 00007",
+      "phrases": [
+        "audit phrase 00007"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00008",
+      "name": "Audit command 00008",
+      "phrases": [
+        "audit phrase 00008"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00009",
+      "name": "Audit command 00009",
+      "phrases": [
+        "audit phrase 00009"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00010",
+      "name": "Audit command 00010",
+      "phrases": [
+        "audit phrase 00010"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00011",
+      "name": "Audit command 00011",
+      "phrases": [
+        "audit phrase 00011"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00012",
+      "name": "Audit command 00012",
+      "phrases": [
+        "audit phrase 00012"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00013",
+      "name": "Audit command 00013",
+      "phrases": [
+        "audit phrase 00013"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00014",
+      "name": "Audit command 00014",
+      "phrases": [
+        "audit phrase 00014"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00015",
+      "name": "Audit command 00015",
+      "phrases": [
+        "audit phrase 00015"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00016",
+      "name": "Audit command 00016",
+      "phrases": [
+        "audit phrase 00016"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00017",
+      "name": "Audit command 00017",
+      "phrases": [
+        "audit phrase 00017"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00018",
+      "name": "Audit command 00018",
+      "phrases": [
+        "audit phrase 00018"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00019",
+      "name": "Audit command 00019",
+      "phrases": [
+        "audit phrase 00019"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00020",
+      "name": "Audit command 00020",
+      "phrases": [
+        "audit phrase 00020"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00021",
+      "name": "Audit command 00021",
+      "phrases": [
+        "audit phrase 00021"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00022",
+      "name": "Audit command 00022",
+      "phrases": [
+        "audit phrase 00022"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00023",
+      "name": "Audit command 00023",
+      "phrases": [
+        "audit phrase 00023"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00024",
+      "name": "Audit command 00024",
+      "phrases": [
+        "audit phrase 00024"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00025",
+      "name": "Audit command 00025",
+      "phrases": [
+        "audit phrase 00025"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00026",
+      "name": "Audit command 00026",
+      "phrases": [
+        "audit phrase 00026"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00027",
+      "name": "Audit command 00027",
+      "phrases": [
+        "audit phrase 00027"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00028",
+      "name": "Audit command 00028",
+      "phrases": [
+        "audit phrase 00028"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00029",
+      "name": "Audit command 00029",
+      "phrases": [
+        "audit phrase 00029"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00030",
+      "name": "Audit command 00030",
+      "phrases": [
+        "audit phrase 00030"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00031",
+      "name": "Audit command 00031",
+      "phrases": [
+        "audit phrase 00031"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00032",
+      "name": "Audit command 00032",
+      "phrases": [
+        "audit phrase 00032"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00033",
+      "name": "Audit command 00033",
+      "phrases": [
+        "audit phrase 00033"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00034",
+      "name": "Audit command 00034",
+      "phrases": [
+        "audit phrase 00034"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00035",
+      "name": "Audit command 00035",
+      "phrases": [
+        "audit phrase 00035"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00036",
+      "name": "Audit command 00036",
+      "phrases": [
+        "audit phrase 00036"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00037",
+      "name": "Audit command 00037",
+      "phrases": [
+        "audit phrase 00037"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00038",
+      "name": "Audit command 00038",
+      "phrases": [
+        "audit phrase 00038"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00039",
+      "name": "Audit command 00039",
+      "phrases": [
+        "audit phrase 00039"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00040",
+      "name": "Audit command 00040",
+      "phrases": [
+        "audit phrase 00040"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00041",
+      "name": "Audit command 00041",
+      "phrases": [
+        "audit phrase 00041"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00042",
+      "name": "Audit command 00042",
+      "phrases": [
+        "audit phrase 00042"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00043",
+      "name": "Audit command 00043",
+      "phrases": [
+        "audit phrase 00043"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00044",
+      "name": "Audit command 00044",
+      "phrases": [
+        "audit phrase 00044"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00045",
+      "name": "Audit command 00045",
+      "phrases": [
+        "audit phrase 00045"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00046",
+      "name": "Audit command 00046",
+      "phrases": [
+        "audit phrase 00046"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00047",
+      "name": "Audit command 00047",
+      "phrases": [
+        "audit phrase 00047"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00048",
+      "name": "Audit command 00048",
+      "phrases": [
+        "audit phrase 00048"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00049",
+      "name": "Audit command 00049",
+      "phrases": [
+        "audit phrase 00049"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00050",
+      "name": "Audit command 00050",
+      "phrases": [
+        "audit phrase 00050"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00051",
+      "name": "Audit command 00051",
+      "phrases": [
+        "audit phrase 00051"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00052",
+      "name": "Audit command 00052",
+      "phrases": [
+        "audit phrase 00052"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00053",
+      "name": "Audit command 00053",
+      "phrases": [
+        "audit phrase 00053"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00054",
+      "name": "Audit command 00054",
+      "phrases": [
+        "audit phrase 00054"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00055",
+      "name": "Audit command 00055",
+      "phrases": [
+        "audit phrase 00055"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00056",
+      "name": "Audit command 00056",
+      "phrases": [
+        "audit phrase 00056"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00057",
+      "name": "Audit command 00057",
+      "phrases": [
+        "audit phrase 00057"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00058",
+      "name": "Audit command 00058",
+      "phrases": [
+        "audit phrase 00058"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00059",
+      "name": "Audit command 00059",
+      "phrases": [
+        "audit phrase 00059"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00060",
+      "name": "Audit command 00060",
+      "phrases": [
+        "audit phrase 00060"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00061",
+      "name": "Audit command 00061",
+      "phrases": [
+        "audit phrase 00061"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00062",
+      "name": "Audit command 00062",
+      "phrases": [
+        "audit phrase 00062"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00063",
+      "name": "Audit command 00063",
+      "phrases": [
+        "audit phrase 00063"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00064",
+      "name": "Audit command 00064",
+      "phrases": [
+        "audit phrase 00064"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00065",
+      "name": "Audit command 00065",
+      "phrases": [
+        "audit phrase 00065"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00066",
+      "name": "Audit command 00066",
+      "phrases": [
+        "audit phrase 00066"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00067",
+      "name": "Audit command 00067",
+      "phrases": [
+        "audit phrase 00067"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00068",
+      "name": "Audit command 00068",
+      "phrases": [
+        "audit phrase 00068"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00069",
+      "name": "Audit command 00069",
+      "phrases": [
+        "audit phrase 00069"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00070",
+      "name": "Audit command 00070",
+      "phrases": [
+        "audit phrase 00070"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00071",
+      "name": "Audit command 00071",
+      "phrases": [
+        "audit phrase 00071"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00072",
+      "name": "Audit command 00072",
+      "phrases": [
+        "audit phrase 00072"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00073",
+      "name": "Audit command 00073",
+      "phrases": [
+        "audit phrase 00073"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00074",
+      "name": "Audit command 00074",
+      "phrases": [
+        "audit phrase 00074"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00075",
+      "name": "Audit command 00075",
+      "phrases": [
+        "audit phrase 00075"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00076",
+      "name": "Audit command 00076",
+      "phrases": [
+        "audit phrase 00076"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00077",
+      "name": "Audit command 00077",
+      "phrases": [
+        "audit phrase 00077"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00078",
+      "name": "Audit command 00078",
+      "phrases": [
+        "audit phrase 00078"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00079",
+      "name": "Audit command 00079",
+      "phrases": [
+        "audit phrase 00079"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00080",
+      "name": "Audit command 00080",
+      "phrases": [
+        "audit phrase 00080"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00081",
+      "name": "Audit command 00081",
+      "phrases": [
+        "audit phrase 00081"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00082",
+      "name": "Audit command 00082",
+      "phrases": [
+        "audit phrase 00082"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00083",
+      "name": "Audit command 00083",
+      "phrases": [
+        "audit phrase 00083"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00084",
+      "name": "Audit command 00084",
+      "phrases": [
+        "audit phrase 00084"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00085",
+      "name": "Audit command 00085",
+      "phrases": [
+        "audit phrase 00085"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00086",
+      "name": "Audit command 00086",
+      "phrases": [
+        "audit phrase 00086"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00087",
+      "name": "Audit command 00087",
+      "phrases": [
+        "audit phrase 00087"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00088",
+      "name": "Audit command 00088",
+      "phrases": [
+        "audit phrase 00088"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00089",
+      "name": "Audit command 00089",
+      "phrases": [
+        "audit phrase 00089"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00090",
+      "name": "Audit command 00090",
+      "phrases": [
+        "audit phrase 00090"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00091",
+      "name": "Audit command 00091",
+      "phrases": [
+        "audit phrase 00091"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00092",
+      "name": "Audit command 00092",
+      "phrases": [
+        "audit phrase 00092"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00093",
+      "name": "Audit command 00093",
+      "phrases": [
+        "audit phrase 00093"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00094",
+      "name": "Audit command 00094",
+      "phrases": [
+        "audit phrase 00094"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00095",
+      "name": "Audit command 00095",
+      "phrases": [
+        "audit phrase 00095"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00096",
+      "name": "Audit command 00096",
+      "phrases": [
+        "audit phrase 00096"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00097",
+      "name": "Audit command 00097",
+      "phrases": [
+        "audit phrase 00097"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00098",
+      "name": "Audit command 00098",
+      "phrases": [
+        "audit phrase 00098"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "audit-00099",
+      "name": "Audit command 00099",
+      "phrases": [
+        "audit phrase 00099"
+      ],
+      "enabled": true,
+      "steps": [
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "e5e2e07e-ea10-46e9-b314-1c5d42a39e18",
+      "schemaVersion": 2,
+      "name": "Работа",
+      "phrases": [
+        "работа",
+        "начинаем работу",
+        "режим работы"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "windows_minimize_all",
+          "args": {}
+        },
+        {
+          "tool": "url_open",
+          "args": {
+            "url": "https://ya.ru"
+          }
+        },
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 30
+          }
+        },
+        {
+          "tool": "speak",
+          "args": {
+            "text": "Режим работы"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-10T18:04:25.380Z",
+      "updatedAt": "2026-11-10T18:04:25.380Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": null,
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "9efdad8a-d738-4f79-b529-d8d7980ff700",
+      "schemaVersion": 2,
+      "name": "Игра",
+      "phrases": [
+        "игра",
+        "начинаем игру",
+        "игровой режим"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "windows_minimize_all",
+          "args": {}
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 800
+          }
+        },
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 70
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-10T18:04:25.388Z",
+      "updatedAt": "2026-11-10T18:04:25.388Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": null,
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "21cc417b-87be-44a7-bcdb-b7b736f4ec1e",
+      "schemaVersion": 2,
+      "name": "Рабочий режим",
+      "phrases": [
+        "рабочий режим"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "windows_minimize_all",
+          "args": {}
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1500
+          }
+        },
+        {
+          "tool": "url_open",
+          "args": {
+            "url": "https://ya.ru"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 2000
+          }
+        },
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "code"
+          }
+        },
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 30
+          }
+        },
+        {
+          "tool": "speak",
+          "args": {
+            "text": "Рабочий режим включён"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-10T18:04:25.397Z",
+      "updatedAt": "2026-11-10T18:04:25.397Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": null,
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "d013a489-98c4-4943-89d6-2159e830133e",
+      "schemaVersion": 2,
+      "name": "Отбой",
+      "phrases": [
+        "отбой",
+        "спокойной ночи"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "speak",
+          "args": {
+            "text": "Спокойной ночи, владелец"
+          }
+        },
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 0
+          }
+        },
+        {
+          "tool": "monitor_off",
+          "args": {}
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-10T18:04:25.421Z",
+      "updatedAt": "2026-11-10T18:04:25.421Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": null,
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "5df84461-a7e0-493e-870e-6b146b04b2d4",
+      "schemaVersion": 2,
+      "name": "Новый рабочий стол",
+      "phrases": [
+        "новый рабочий стол",
+        "создай новый рабочий стол"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+ctrl+d"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-10T18:04:25.433Z",
+      "updatedAt": "2026-11-10T18:04:25.433Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "fe535b5b-4c39-46e9-b7c6-4d8cf9ce61ad",
+      "schemaVersion": 2,
+      "name": "Панель эмодзи",
+      "phrases": [
+        "панель эмодзи",
+        "вставь эмодзи"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+."
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-10T18:04:25.441Z",
+      "updatedAt": "2026-11-10T18:04:25.441Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "fe82eadd-4aa1-45d9-bd40-5252b0ee9366",
+      "schemaVersion": 2,
+      "name": "Буфер обмена",
+      "phrases": [
+        "буфер обмена",
+        "история буфера обмена"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+v"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-10T18:04:25.448Z",
+      "updatedAt": "2026-11-10T18:04:25.448Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "e3d6d74d-d697-4393-a63a-8483bd4a79e1",
+      "schemaVersion": 2,
+      "name": "Экранная лупа",
+      "phrases": [
+        "экранная лупа",
+        "включи лупу"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+plus"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-10T18:04:25.456Z",
+      "updatedAt": "2026-11-10T18:04:25.456Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "134436c3-a759-4c92-9e12-7291093e5590",
+      "schemaVersion": 2,
+      "name": "Блокировка экрана",
+      "phrases": [
+        "блокировка экрана",
+        "заблокируй экран",
+        "заблокируй компьютер"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+l"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-10T18:04:25.464Z",
+      "updatedAt": "2026-11-10T18:04:25.464Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "f0292b68-f33e-4038-8734-ae0ccb67dff9",
+      "schemaVersion": 2,
+      "name": "Свернуть все окна",
+      "phrases": [
+        "свернуть все окна",
+        "сверни все окна",
+        "покажи рабочий стол"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "windows_minimize_all",
+          "args": {}
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-10T18:04:25.472Z",
+      "updatedAt": "2026-11-10T18:04:25.472Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    },
+    {
+      "id": "24cdd97f-4c1c-4880-9491-ea1b8ce589d3",
+      "schemaVersion": 2,
+      "name": "Проводник и диспетчер задач",
+      "phrases": [
+        "проводник и диспетчер задач",
+        "открой проводник и диспетчер"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "explorer"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1000
+          }
+        },
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "taskmgr"
+          }
+        }
+      ],
+      "enabled": true,
+      "createdAt": "2026-11-10T18:04:25.481Z",
+      "updatedAt": "2026-11-10T18:04:25.481Z",
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Windows",
+      "collections": [],
+      "origin": "sample"
+    }
+  ]
+}

@@ -1,0 +1,239 @@
+{
+  "checks": [],
+  "metrics": {
+    "empty": {
+      "ttlValue": "900000",
+      "ttlSelectedText": "15 минут",
+      "ttlOptions": [
+        {
+          "value": "900000",
+          "text": "15 минут"
+        },
+        {
+          "value": "3600000",
+          "text": "1 час"
+        },
+        {
+          "value": "86400000",
+          "text": "1 день"
+        },
+        {
+          "value": "",
+          "text": "Бессрочно"
+        }
+      ],
+      "clipEnabled": false,
+      "pauseText": "Пауза",
+      "pauseDisabled": false,
+      "clearDisabled": false,
+      "diskHint": "Реальная цифра по папке загрузок. Удаление — только после подтверждения. Свободное место на диске эта версия ядра не сообщает.",
+      "dlRemoveDisabled": true,
+      "diskFreeDisabled": true,
+      "chips": [
+        "Все",
+        "ИИ",
+        "Вид",
+        "Голос"
+      ],
+      "navItems": [
+        {
+          "cat": "general",
+          "text": "Общие"
+        },
+        {
+          "cat": "ai",
+          "text": "ИИ и провайдеры"
+        },
+        {
+          "cat": "voice",
+          "text": "Голос и память"
+        },
+        {
+          "cat": "look",
+          "text": "Внешний вид"
+        },
+        {
+          "cat": "sphere",
+          "text": "Сфера Nox"
+        },
+        {
+          "cat": "security",
+          "text": "Безопасность"
+        }
+      ],
+      "scrollWidth": 1200,
+      "innerWidth": 1200
+    },
+    "populatedAfterReload": {
+      "backendState": {
+        "ok": true,
+        "paused": false,
+        "ttlMs": 604800000,
+        "count": 4,
+        "chars": 1697,
+        "maxItems": 200
+      },
+      "ttlSelectValue": "900000",
+      "ttlSelectText": "15 минут",
+      "clipCount": "4",
+      "snipCount": "2",
+      "clipItemsCount": 4,
+      "snipItemsCount": 2
+    },
+    "afterPutInChat": {
+      "currentView": "settings",
+      "chatInputValue": "Ты — Senior UX Auditor проекта Nox Assistant.\n\nРабочая директория: `D:\\nox-release`.\n\n**Выполни задачу Л6 из приложенного MASTER-PLAN.md.**\n\n### Цель\nПровести подробный аудит раздела «Расширения», включая буфер обмена, вставку и загрузки.\n\n### Что проверить\n1. Понятность названий и назначений функций.\n2. Удобство навигации.\n3. Отображение статусов и ошибок.\n4. Различимость включённых и выключенных возможностей.\n5. Понятность разрешений и доступа к данным.\n6. Пустые состояния.\n7. Сообщения об успешных и неуспешных действиях.\n8. Поведение интерфейса при размерах 1200×720 и 864×520.\n9. Наличие лишних элементов, перегрузки и непонятного технического жаргона.\n\n### Требования\n- Прочитай `AGENTS.md`, изучи соответствующие файлы интерфейса.\n- Проведи проверки в настоящем Electron.\n- Сделай снимки найденных проблем.\n- Для каждой проблемы укажи серьёзность, причину и конкретное предложение по улучшению.\n- Раздели проблемы на P0/P1/P2.\n- Предложи решения в существующем минималистичном стиле Nox.\n\n### Ограничения\n**Это исключительно аудит. Код не изменять.**\n\nСоздай отчёт `docs/reconstruction/extensions-ux-review.md` и папку со снимками.\n\nНе трогай файлы Argon, Terra и Haiku. Не устанавливай пакеты, не читай `.env` и настоящую `data/`, не делай коммиты.\n\n**Результат:** отчёт с конкретными дефектами, приоритетами и рекомендациями на согласование владельцу.\n\nНе реализовывай рекомендации самостоятельно.",
+      "toastText": "Текст из истории буфера в поле ввода"
+    },
+    "snippetEditAndErrors": {
+      "validationError": "Нужны и фраза-триггер, и текст.",
+      "duplicateError": "триггер «реквизиты для оплаты с длинным названием» уже занят",
+      "saveButtonText": "Сохранить изменения",
+      "hasCancelEditButton": false,
+      "triggerInputValue": "реквизиты для оплаты с длинным названием",
+      "textInputMaxLength": "2000"
+    },
+    "afterPause": {
+      "pauseBtnText": "Продолжить",
+      "clipNoteHidden": true,
+      "clipNoteText": ""
+    },
+    "downloadsAnalyzed": {
+      "dlNote": "Проверено 38 файлов; кандидатов: 36 на 299.1 МБ. Ничего не удалено.",
+      "dlListCount": 30,
+      "dlCheckedCount": 30,
+      "dlRemoveDisabled": false,
+      "diskCount": "36",
+      "diskBig": "Можно освободить ~299.1 МБ",
+      "diskNote": "Свободно на C: ~19 ГБ. Можно освободить ~299.1 МБ; ничего не удалено.",
+      "diskListCount": 5,
+      "diskFreeDisabled": false,
+      "diskCardHint": "Реальная цифра по папке загрузок. Удаление — только после подтверждения. Свободное место на диске эта версия ядра не сообщает."
+    },
+    "compact864": {
+      "inner": [
+        864,
+        520
+      ],
+      "docScrollWidth": 864,
+      "mainClientHeight": 264,
+      "extHeight": 1947,
+      "overflows": [],
+      "clipListHeight": 239,
+      "dlListHeight": 239
+    },
+    "searchChecks": [
+      {
+        "q": "буфер",
+        "sectionHidden": false,
+        "cards": [
+          {
+            "title": "История буфера",
+            "hidden": false
+          },
+          {
+            "title": "Быстрые вставки",
+            "hidden": false
+          },
+          {
+            "title": "Уборка загрузок",
+            "hidden": true
+          },
+          {
+            "title": "Освободить место",
+            "hidden": true
+          }
+        ]
+      },
+      {
+        "q": "вставки",
+        "sectionHidden": false,
+        "cards": [
+          {
+            "title": "История буфера",
+            "hidden": true
+          },
+          {
+            "title": "Быстрые вставки",
+            "hidden": false
+          },
+          {
+            "title": "Уборка загрузок",
+            "hidden": true
+          },
+          {
+            "title": "Освободить место",
+            "hidden": true
+          }
+        ]
+      },
+      {
+        "q": "загрузки",
+        "sectionHidden": false,
+        "cards": [
+          {
+            "title": "История буфера",
+            "hidden": false
+          },
+          {
+            "title": "Быстрые вставки",
+            "hidden": false
+          },
+          {
+            "title": "Уборка загрузок",
+            "hidden": false
+          },
+          {
+            "title": "Освободить место",
+            "hidden": false
+          }
+        ]
+      },
+      {
+        "q": "место",
+        "sectionHidden": false,
+        "cards": [
+          {
+            "title": "История буфера",
+            "hidden": true
+          },
+          {
+            "title": "Быстрые вставки",
+            "hidden": true
+          },
+          {
+            "title": "Уборка загрузок",
+            "hidden": true
+          },
+          {
+            "title": "Освободить место",
+            "hidden": false
+          }
+        ]
+      },
+      {
+        "q": "расширения",
+        "sectionHidden": false,
+        "cards": [
+          {
+            "title": "История буфера",
+            "hidden": false
+          },
+          {
+            "title": "Быстрые вставки",
+            "hidden": false
+          },
+          {
+            "title": "Уборка загрузок",
+            "hidden": false
+          },
+          {
+            "title": "Освободить место",
+            "hidden": false
+          }
+        ]
+      }
+    ]
+  },
+  "consoleErrors": []
+}

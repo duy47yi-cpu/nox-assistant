@@ -1660,4 +1660,6 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
   return [uiWindows, uiElements, uiClick, uiType, uiKeys, uiFocus, uiCloseWindow, uiSetToggle, uiWait];
 }
 
-module.exports = { uiTools, clickVerdict, typeVerdict, keysVerdict, focusVerdict, escapeSendKeys, parseKeys, keysToVk, parseWindows, parseJsonOutput, sanitizeUiElementValue, rankElements, KEY_MAP, SCRIPTS };
+module.exports = { uiTools, clickVerdict, typeVerdict, keysVerdict, focusVerdict, escapeSendKeys, parseKeys, keysToVk, parseWindows, parseJsonOutput, sanitizeUiElementValue, rankElements, KEY_MAP, SCRIPTS,
+  // Части скриптов и признак поля пароля — для диктовки в поле (src/voice/field-dictation.js): тот же ввод, без второго механизма.
+  PS: { HEAD: PS_HEAD, USER32: PS_USER32, UIA: PS_UIA, FOREGROUND: PS_FOREGROUND, CHECK: PS_CHECK, TAIL: PS_TAIL }, PASSWORD_LABEL_RE };

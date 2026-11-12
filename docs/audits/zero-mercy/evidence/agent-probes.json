@@ -1,0 +1,56 @@
+{
+  "statuses": [
+    {
+      "label": "risk-T2 success without verification",
+      "storedStatus": "unverified",
+      "rendererStatus": "done",
+      "searchStatus": "done"
+    },
+    {
+      "label": "stopped tool with long stop summary",
+      "storedStatus": "failed",
+      "rendererStatus": "error",
+      "searchStatus": "error"
+    },
+    {
+      "label": "stop marker with ok true",
+      "storedStatus": "failed",
+      "rendererStatus": "done",
+      "searchStatus": "done"
+    }
+  ],
+  "stopRace": {
+    "stopRequestedAt": 1794329759806,
+    "toolStartedAt": 1794329759806,
+    "doneAt": 1794329759806,
+    "toolFinishedAt": 1794329759935,
+    "doneBeforeToolFinished": true,
+    "toolResultEmitted": false,
+    "runResult": {
+      "ok": false,
+      "outcome": "stopped"
+    },
+    "journalEntry": {
+      "ok": false,
+      "status": "failed",
+      "decision": "stop",
+      "summary": "остановлено: ответ инструмента пришёл после остановки хода"
+    },
+    "events": [
+      "status",
+      "tool_start",
+      "status",
+      "done",
+      "status"
+    ],
+    "journalPath": "D:\\nox-release\\docs\\audits\\zero-mercy\\evidence\\test-data\\agent-stop-probe-TkgWbP\\journal.jsonl"
+  },
+  "duplicateApprovalId": {
+    "firstDecision": "reject",
+    "pendingAfterDuplicate": [
+      "second_fake_action"
+    ],
+    "responded": true,
+    "secondDecision": "once"
+  }
+}

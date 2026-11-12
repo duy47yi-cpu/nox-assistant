@@ -50,6 +50,23 @@ test('ночная тишина: с 23:00 до 08:00 по местным час�
   assert.equal(isNight(at(8, 0)), false);
 });
 
+test('озвучка получает один блок на вид повода независимо от доставки окна и Telegram', async () => {
+  const { watch, state, sent } = makeWatch({ settings: { watchWindow: false, watchTelegram: false } });
+  const spoken = [];
+  watch.speak = (items) => spoken.push(...items);
+  await watch.tick(at(10));
+  state.inbox = ['один.txt', 'два.txt'];
+  state.tasks = [{ id: 'task', status: 'blocked', title: 'Сверка', updatedAt: '2026-11-02T10:00:00' }];
+  watch.add({ kind: 'reminder', key: 'reminder:one', detail: 'Позвонить', channels: ['telegram'] });
+  await watch.tick(at(10, 1));
+  await watch.tick(at(10, 2));
+  assert.deepEqual(spoken.map(({ category, important }) => [category, important]), [
+    ['files', false], ['tasks', true], ['reminders', false],
+  ]);
+  assert.match(spoken[0].text, /один\.txt; два\.txt/);
+  assert.deepEqual(sent, { window: [], telegram: [] });
+});
+
 test('ночью Telegram молчит, окно показывает; очередь Telegram уходит утром', async () => {
   const { watch, state, sent } = makeWatch();
   await watch.tick(at(22, 0)); // первый проход запоминает пустую папку

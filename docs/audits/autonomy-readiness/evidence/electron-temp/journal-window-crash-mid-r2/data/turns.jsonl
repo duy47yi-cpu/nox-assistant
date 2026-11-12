@@ -1,0 +1,5 @@
+{"ts":"2026-11-11T15:33:30.881Z","kind":"model","turn":"50cf7ee2","round":1,"messages":2,"tools":126,"ms":22,"ok":true,"requestChars":74940,"promptTokens":null,"cachedTokens":null,"completionTokens":null,"reasoningTokens":null,"reasoningChars":0,"reasoning":null,"toolCalls":["workspace_write"],"answerChars":0}
+{"ts":"2026-11-11T15:33:30.886Z","kind":"tool_start","turn":"50cf7ee2","round":1,"callId":"audit-restart-unapproved","name":"workspace_write","risk":"T1"}
+{"ts":"2026-11-11T15:33:30.893Z","kind":"tool","turn":"50cf7ee2","round":1,"callId":"audit-restart-unapproved","name":"workspace_write","ms":5,"waitMs":0,"totalMs":9,"decision":"allow","ok":true,"verified":"confirmed"}
+{"ts":"2026-11-11T15:33:30.914Z","kind":"model","turn":"50cf7ee2","round":2,"messages":4,"tools":126,"ms":18,"ok":true,"requestChars":75501,"promptTokens":null,"cachedTokens":null,"completionTokens":null,"reasoningTokens":null,"reasoningChars":0,"reasoning":null,"toolCalls":["wait"],"answerChars":0}
+{"ts":"2026-11-11T15:33:30.914Z","kind":"tool_start","turn":"50cf7ee2","round":2,"callId":"audit-crash-wait","name":"wait","risk":"T0"}

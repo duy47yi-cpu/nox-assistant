@@ -1,0 +1,6 @@
+{"seq":1,"ts":"2026-11-10T17:35:50.057Z","ref":"turn:a24a7b32","title":"Проверка интерфейса Nox: ответь, пожалуйста, одной короткой строкой.","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-10T17:35:50.056Z","cleared":false}
+{"seq":2,"ts":"2026-11-10T17:35:50.084Z","ref":"turn:a24a7b32","forget":true}
+{"seq":3,"ts":"2026-11-10T17:35:50.215Z","ref":"turn:fe6a58f1","title":"Проверка отмены хода Nox.","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-10T17:35:50.215Z","cleared":false}
+{"seq":4,"ts":"2026-11-10T17:35:50.578Z","ref":"turn:fe6a58f1","title":"Проверка отмены хода Nox.","state":"failed","reason":"ход остановлен, часть действий могла выполниться: This operation was aborted","due":null,"since":"2026-11-10T17:35:50.578Z","cleared":false}
+{"seq":5,"ts":"2026-11-10T17:35:56.093Z","ref":"turn:18f59cce","title":"Проверка автопрокрутки Nox.","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-10T17:35:56.093Z","cleared":false}
+{"seq":6,"ts":"2026-11-10T17:35:56.113Z","ref":"turn:18f59cce","forget":true}

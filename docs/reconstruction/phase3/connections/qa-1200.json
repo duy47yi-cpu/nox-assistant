@@ -1,0 +1,222 @@
+{
+  "ok": true,
+  "mode": "qa",
+  "qa": {
+    "passed": 18,
+    "failed": 0,
+    "checks": [
+      {
+        "name": "1. Раскладка 1200: рейка 52, панель ~1122×702, шапка 72, поиск 360, панель популярных 348, без переполнения",
+        "ok": true,
+        "detail": "rail={\"x\":9,\"y\":9,\"w\":52,\"h\":702,\"right\":61,\"bottom\":711} panel={\"x\":69,\"y\":9,\"w\":1122,\"h\":702,\"right\":1191,\"bottom\":711} head={\"x\":70,\"y\":10,\"w\":1120,\"h\":72,\"right\":1190,\"bottom\":82} search={\"x\":90,\"y\":94,\"w\":360,\"h\":40,\"right\":450,\"bottom\":134} popular={\"x\":822,\"y\":148,\"w\":348,\"h\":544,\"right\":1170,\"bottom\":692} scrollWidth=1200"
+      },
+      {
+        "name": "3. Четыре состояния: пилюли, строки и действия у всех временных сервисов",
+        "ok": true,
+        "detail": "echo-check: status=connected pill=\"Подключён\" line=\"Подключён · 2 действия\" action=\"Детали\" || drift-check: status=drift pill=\"Изменения инструментов\" line=\"Набор действий изменился — нужно ваше подтверждение\" action=\"Подтвердить изменения\" || bad-path: status=error pill=\"Ошибка\" line=\"Ошибка: программа не найдена: сервис не запустился: spawn no\" action=\"Повторить\" || off-service: status=disabled pill=\"Выключен\" line=\"Выключен\" action=\"Включить\""
+      },
+      {
+        "name": "4. Поиск «echo» сужает карточки и популярные, сброс возвращает",
+        "ok": true,
+        "detail": "карточек 4→2 популярных 10→0 сброс карточек=true сброс популярных=true (популярные обновляет опрос до 3 с)"
+      },
+      {
+        "name": "5. Фильтры: каждый чип сужает правильно, счётчики обновляются, «Все» возвращает",
+        "ok": true,
+        "detail": "connected=2/2 disabled=1/1 error=1/1 all=4"
+      },
+      {
+        "name": "17. Поиск не теряется при переключении фильтра",
+        "ok": true,
+        "detail": "до фильтра=\"echo\" после=\"echo\" карточек при поиске+фильтре=2"
+      },
+      {
+        "name": "6. Детали: клик по карточке открывает диалог, «Действия сервиса (2)», разрешения, переключатель отражает состояние, Escape закрывает и возвращает фокус",
+        "ok": true,
+        "detail": "имя=true цель=true действия(2)=true разрешения=true switch=true фокусНаКарточке=true"
+      },
+      {
+        "name": "7. Переключатель в деталях: выключение отражается в пилюле/строке/действии, включение возвращает",
+        "ok": true,
+        "detail": "выкл: pill=\"Выключен\" line=\"Выключен\" action=\"Включить\"; вернули action=\"Детали\""
+      },
+      {
+        "name": "8. Добавление: #mcpAddSubmit заблокирован до валидных данных, затем реальный qa-service подключается и удаляется через детали",
+        "ok": true,
+        "detail": "пусто=true невалид=true connected=true удалён из DOM=true из ядра=true toast=\"Сервис подключён. Его действия спрашиваются, пока вы не разрешите их в настройках | Сервис удалён, е\""
+      },
+      {
+        "name": "9. Удаление: подтверждение заблокировано до точного имени, Escape закрывает без удаления",
+        "ok": true,
+        "detail": "чужое имя блокирует=true своё разрешает=true после Escape сервис на месте=true"
+      },
+      {
+        "name": "10. Изменения набора действий: чипы +/− в карточке и диалоге, подтверждение переводит в connected с toast",
+        "ok": true,
+        "detail": "kinds=[\"added\",\"added\",\"removed\"] чипов в диалоге=3 закрыт=true toast=true"
+      },
+      {
+        "name": "11. Ошибка: «Повторить» у bad-path остаётся ошибкой и показывает честную причину в #mcpErrorDialog",
+        "ok": true,
+        "detail": "статус=error причина=\"программа не найдена: сервис не запустился: spawn nox-no-such-command ENOENT\" фокус=.mcp-card-action.mcp-card-action-err вернулся=true"
+      },
+      {
+        "name": "12. Популярные: 10 строк, 7 доступны с «+ Добавить», 3 требуют настройки (не нажимаем)",
+        "ok": true,
+        "detail": "строк=10 доступны=7 не настроены=3 (кликов не было)"
+      },
+      {
+        "name": "13. Escape в диалоге добавления: закрывает и возвращает фокус на #mcpAddBtn",
+        "ok": true,
+        "detail": "фокус на #mcpAddBtn=true (до открытия=true)"
+      },
+      {
+        "name": "15. Чат и «Команды» целы, возврат в «Подключения» без ошибок",
+        "ok": true,
+        "detail": ".nox-grid=true #noxChat=true #feed=true #composer=true #cmdCatalog=true назад=true"
+      },
+      {
+        "name": "2. 864×520: scrollWidth=864, популярные под списком, нет переполнения",
+        "ok": true,
+        "detail": "inner=864x520 scrollWidth=864 listBottom=592 popularY=606 popularW=752 образцы=[{\"sel\":\"#mcpPage\",\"rect\":{\"x\":63,\"y\":9,\"w\":792,\"h\":502,\"right\":855,\"bottom\":511}},{\"sel\":\"#mcpPanel\",\"rect\":{\"x\":63,\"y\":9,\"w\":792,\"h\":502,\"right\":855,\"bottom\":511}},{\"sel\":\"#mcpToolbar\",\"rect\":{\"x\":64,\"y\":74,\"w\":790,\"h\":56,\"right\":854,\"bottom\":130}},{\"sel\":\"#mcpList\",\"rect\":{\"x\":78,\"y\":136,\"w\":748,\"h\":454,\"right\":826,\"bottom\":590}}]"
+      },
+      {
+        "name": "2b. 864×520: диалог деталей 480×520 внутри окна",
+        "ok": true,
+        "detail": "диалог={\"x\":192,\"y\":16,\"w\":480,\"h\":488,\"right\":672,\"bottom\":504}"
+      },
+      {
+        "name": "16. Пустое состояние: #mcpEmpty виден, 0 карточек, популярные с «+ Добавить»",
+        "ok": true,
+        "detail": "заглушка=true карточек=0 популярных=10 доступны=7 не настроены=3"
+      },
+      {
+        "name": "18. Ошибки консоли",
+        "ok": true,
+        "detail": "нет"
+      }
+    ]
+  },
+  "width": 1200,
+  "height": 720,
+  "contentSize": {
+    "width": 1200,
+    "height": 720
+  },
+  "view": "mcp",
+  "page": {
+    "innerWidth": 1200,
+    "innerHeight": 720,
+    "dpr": 1,
+    "title": "Nox — Джарвис"
+  },
+  "cleaned": {
+    "banner": true,
+    "blurred": true
+  },
+  "ready": {
+    "rows": 4,
+    "servers": 4
+  },
+  "state": {
+    "servers": [
+      {
+        "name": "echo-check",
+        "transport": "stdio",
+        "target": "C:\\Program Files\\nodejs\\node.exe",
+        "disabled": false,
+        "status": "connected",
+        "error": null,
+        "protocolVersion": "2025-06-18",
+        "serverInfo": {
+          "name": "echo-fixture",
+          "version": "1.0.0"
+        },
+        "capabilities": {
+          "tools": true
+        },
+        "tools": [
+          {
+            "name": "echo_check_repeat",
+            "title": "Повтор",
+            "description": "Повторить текст"
+          },
+          {
+            "name": "echo_check_sum",
+            "title": "Сложить",
+            "description": "Сложить два числа"
+          }
+        ],
+        "toolCount": 2
+      },
+      {
+        "name": "bad-path",
+        "transport": "stdio",
+        "target": "nox-no-such-command",
+        "disabled": false,
+        "status": "error",
+        "error": "программа не найдена: сервис не запустился: spawn nox-no-such-command ENOENT",
+        "protocolVersion": null,
+        "serverInfo": null,
+        "capabilities": null,
+        "tools": [],
+        "toolCount": 0
+      },
+      {
+        "name": "off-service",
+        "transport": "http",
+        "target": "https://example.com/mcp",
+        "disabled": true,
+        "status": "disabled",
+        "error": null,
+        "protocolVersion": null,
+        "serverInfo": null,
+        "capabilities": null,
+        "tools": [],
+        "toolCount": 0
+      },
+      {
+        "name": "drift-check",
+        "transport": "stdio",
+        "target": "C:\\Program Files\\nodejs\\node.exe",
+        "disabled": false,
+        "status": "drift",
+        "error": "набор инструментов изменился: нужно ваше подтверждение",
+        "protocolVersion": "2025-06-18",
+        "serverInfo": {
+          "name": "echo-fixture",
+          "version": "1.0.0"
+        },
+        "capabilities": {
+          "tools": true
+        },
+        "tools": [
+          {
+            "name": "drift_check_repeat",
+            "title": "Повтор",
+            "description": "Повторить текст"
+          },
+          {
+            "name": "drift_check_sum",
+            "title": "Сложить",
+            "description": "Сложить два числа"
+          }
+        ],
+        "toolCount": 2,
+        "drift": {
+          "added": [
+            "repeat",
+            "sum"
+          ],
+          "removed": [
+            "old_action"
+          ],
+          "changed": []
+        }
+      }
+    ]
+  },
+  "consoleErrors": [],
+  "windowsCount": 1,
+  "elapsedMs": 17818
+}

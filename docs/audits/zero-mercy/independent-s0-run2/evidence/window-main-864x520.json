@@ -1,0 +1,872 @@
+{
+  "root": "C:\\Users\\abdut\\AppData\\Local\\Temp\\zm-run2-win-yy4mPf",
+  "size": [
+    864,
+    520
+  ],
+  "results": [
+    {
+      "id": "W1",
+      "scenario": "ZM-001: тот же callId=call_0, A разрешено, B — Escape",
+      "shown": "A: 210b2712-1391-4f06-bcff-a6c650ff85b5; B: f2ebf6a4-f0ae-42d8-91d8-54a47699fa5e; callId A/B: call_0/call_0",
+      "permissionId": "210b2712-1391-4f06-bcff-a6c650ff85b5 ≠ f2ebf6a4-f0ae-42d8-91d8-54a47699fa5e: true",
+      "decision": "A=once, B=Escape(reject)",
+      "ran": [
+        "W1-A.txt"
+      ],
+      "expectedRan": [
+        "W1-A.txt"
+      ],
+      "match": true,
+      "dialogClosedAfterEsc": true
+    },
+    {
+      "id": "W2",
+      "scenario": "двойной клик «Разрешить» на C, затем показан D",
+      "shown": "C 3285a1b8-9d28-4025-9e42-9102de665aa5, D 5e1a79f5-c8e9-4474-a532-ef5e16c7f15b",
+      "permissionId": "3285a1b8-9d28-4025-9e42-9102de665aa5",
+      "decision": "C=once×2 (один дошёл), D=reject",
+      "ran": [
+        "W1-A.txt",
+        "W2-C.txt"
+      ],
+      "expectedRan": [
+        "W1-A.txt",
+        "W2-C.txt"
+      ],
+      "match": true,
+      "dWrittenBeforeDecision": false,
+      "ipcCallsForC": 1
+    },
+    {
+      "id": "W3",
+      "scenario": "IPC упал до решения, затем повтор «Разрешить»",
+      "shown": "079932e2-0be6-48b7-96b0-5d7677f96e98",
+      "permissionId": "079932e2-0be6-48b7-96b0-5d7677f96e98",
+      "decision": "once (сбой) → once",
+      "ran": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt"
+      ],
+      "expectedRan": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt"
+      ],
+      "match": true,
+      "stillShownAfterFail": true,
+      "ranAfterFail": false
+    },
+    {
+      "id": "W4",
+      "scenario": "ядро приняло решение, ответ IPC пришёл через 8 с",
+      "shown": "1889c23f-a68b-4d1f-9f50-c7ab24631ff4",
+      "permissionId": "1889c23f-a68b-4d1f-9f50-c7ab24631ff4",
+      "decision": "once",
+      "ran": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ],
+      "expectedRan": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ],
+      "match": true,
+      "closedBeforeIpcReply": true,
+      "ghostAfterLateReply": false
+    },
+    {
+      "id": "W5",
+      "scenario": "once завис 8 с, через 5 с владелец передумал — reject",
+      "shown": "069e13b5-1b54-404a-b759-ad5258a06a30",
+      "permissionId": "069e13b5-1b54-404a-b759-ad5258a06a30",
+      "decision": "once (завис) → reject",
+      "ran": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ],
+      "expectedRan": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ],
+      "match": true,
+      "reenabledAfter5s": true,
+      "ipc": [
+        "ipc-in:once:",
+        "ipc-in:reject:",
+        "ipc-core:reject:{\"ok\":true}",
+        "ipc-core:once:{\"ok\":false,\"reason\":\"запрос уже неактуален\"}"
+      ]
+    },
+    {
+      "id": "W6",
+      "scenario": "стоп хода во время подтверждения, потом поздний once",
+      "shown": "41e1d5b7-5554-4809-9621-2237d0af294b",
+      "permissionId": "41e1d5b7-5554-4809-9621-2237d0af294b",
+      "decision": "stop → once (поздний)",
+      "ran": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ],
+      "expectedRan": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ],
+      "match": true,
+      "dialogClosed": true,
+      "lateAnswer": {
+        "ok": false,
+        "reason": "запрос уже неактуален"
+      }
+    },
+    {
+      "id": "W7",
+      "scenario": "окно закрыто (в трей) во время подтверждения, 32 с",
+      "shown": "ae6f4861-898b-4624-9037-808a17f6c306",
+      "permissionId": "ae6f4861-898b-4624-9037-808a17f6c306",
+      "decision": "нет ответа → автоотмена",
+      "ran": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ],
+      "expectedRan": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ],
+      "match": true,
+      "dialogOpenAfterReopen": false,
+      "closedEvent": true
+    },
+    {
+      "id": "W8",
+      "scenario": "перезагрузка окна во время подтверждения",
+      "shown": "b6ff0757-e3cd-4b9b-b275-3ea09ad67e77",
+      "permissionId": "b6ff0757-e3cd-4b9b-b275-3ea09ad67e77",
+      "decision": "нет кнопок после перезагрузки → автоотмена → поздний once",
+      "ran": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ],
+      "expectedRan": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ],
+      "match": true,
+      "cardRestoredAfterReload": false,
+      "lateAnswer": {
+        "ok": false,
+        "reason": "время на подтверждение вышло"
+      }
+    },
+    {
+      "id": "W9-pre",
+      "scenario": "выход с ожидающим подтверждением",
+      "shown": "73969c92-d89d-45cb-8462-9cb93563901b",
+      "ran": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ]
+    }
+  ],
+  "log": [
+    {
+      "t": 1794388010877,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388010887,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388010921,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794388010944,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "210b2712-1391-4f06-bcff-a6c650ff85b5",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "path": "W1-A.txt"
+    },
+    {
+      "t": 1794388011113,
+      "kind": "ipc-in",
+      "id": "210b2712-1391-4f06-bcff-a6c650ff85b5",
+      "decision": "once",
+      "fault": null
+    },
+    {
+      "t": 1794388011113,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "210b2712-1391-4f06-bcff-a6c650ff85b5",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "decision": "once"
+    },
+    {
+      "t": 1794388011113,
+      "kind": "ipc-core",
+      "id": "210b2712-1391-4f06-bcff-a6c650ff85b5",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794388011113,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794388011119,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794388011123,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388011149,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794388011164,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "f2ebf6a4-f0ae-42d8-91d8-54a47699fa5e",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "path": "W1-B.txt"
+    },
+    {
+      "t": 1794388011308,
+      "kind": "ipc-in",
+      "id": "f2ebf6a4-f0ae-42d8-91d8-54a47699fa5e",
+      "decision": "reject",
+      "fault": null
+    },
+    {
+      "t": 1794388011308,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "f2ebf6a4-f0ae-42d8-91d8-54a47699fa5e",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "decision": "reject"
+    },
+    {
+      "t": 1794388011308,
+      "kind": "ipc-core",
+      "id": "f2ebf6a4-f0ae-42d8-91d8-54a47699fa5e",
+      "decision": "reject",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794388011310,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388011335,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794388011453,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388011455,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388011481,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794388011493,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "3285a1b8-9d28-4025-9e42-9102de665aa5",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "path": "W2-C.txt"
+    },
+    {
+      "t": 1794388011610,
+      "kind": "ipc-in",
+      "id": "3285a1b8-9d28-4025-9e42-9102de665aa5",
+      "decision": "once",
+      "fault": null
+    },
+    {
+      "t": 1794388011610,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "3285a1b8-9d28-4025-9e42-9102de665aa5",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "decision": "once"
+    },
+    {
+      "t": 1794388011611,
+      "kind": "ipc-core",
+      "id": "3285a1b8-9d28-4025-9e42-9102de665aa5",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794388011611,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794388011617,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794388011620,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388011653,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794388011668,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "5e1a79f5-c8e9-4474-a532-ef5e16c7f15b",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "path": "W2-D.txt"
+    },
+    {
+      "t": 1794388011802,
+      "kind": "ipc-in",
+      "id": "5e1a79f5-c8e9-4474-a532-ef5e16c7f15b",
+      "decision": "reject",
+      "fault": null
+    },
+    {
+      "t": 1794388011802,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "5e1a79f5-c8e9-4474-a532-ef5e16c7f15b",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "decision": "reject"
+    },
+    {
+      "t": 1794388011802,
+      "kind": "ipc-core",
+      "id": "5e1a79f5-c8e9-4474-a532-ef5e16c7f15b",
+      "decision": "reject",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794388011803,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388011830,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794388011971,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388011974,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388012001,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794388012015,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "079932e2-0be6-48b7-96b0-5d7677f96e98",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "path": "W3-E.txt"
+    },
+    {
+      "t": 1794388012122,
+      "kind": "ipc-in",
+      "id": "079932e2-0be6-48b7-96b0-5d7677f96e98",
+      "decision": "once",
+      "fault": "throw-before"
+    },
+    {
+      "t": 1794388012172,
+      "kind": "ipc-in",
+      "id": "079932e2-0be6-48b7-96b0-5d7677f96e98",
+      "decision": "once",
+      "fault": null
+    },
+    {
+      "t": 1794388012172,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "079932e2-0be6-48b7-96b0-5d7677f96e98",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "decision": "once"
+    },
+    {
+      "t": 1794388012172,
+      "kind": "ipc-core",
+      "id": "079932e2-0be6-48b7-96b0-5d7677f96e98",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794388012172,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794388012176,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794388012178,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388012201,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794388012350,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388012353,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388012378,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794388012389,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "1889c23f-a68b-4d1f-9f50-c7ab24631ff4",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "path": "W4-F.txt"
+    },
+    {
+      "t": 1794388012505,
+      "kind": "ipc-in",
+      "id": "1889c23f-a68b-4d1f-9f50-c7ab24631ff4",
+      "decision": "once",
+      "fault": "hang-after"
+    },
+    {
+      "t": 1794388012505,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "1889c23f-a68b-4d1f-9f50-c7ab24631ff4",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "decision": "once"
+    },
+    {
+      "t": 1794388012505,
+      "kind": "ipc-core",
+      "id": "1889c23f-a68b-4d1f-9f50-c7ab24631ff4",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794388012505,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794388012510,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794388012512,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388012534,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794388021576,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388021580,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388021604,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794388021617,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "069e13b5-1b54-404a-b759-ad5258a06a30",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "path": "W5-G.txt"
+    },
+    {
+      "t": 1794388021733,
+      "kind": "ipc-in",
+      "id": "069e13b5-1b54-404a-b759-ad5258a06a30",
+      "decision": "once",
+      "fault": "hang-before"
+    },
+    {
+      "t": 1794388026764,
+      "kind": "ipc-in",
+      "id": "069e13b5-1b54-404a-b759-ad5258a06a30",
+      "decision": "reject",
+      "fault": null
+    },
+    {
+      "t": 1794388026764,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "069e13b5-1b54-404a-b759-ad5258a06a30",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "decision": "reject"
+    },
+    {
+      "t": 1794388026764,
+      "kind": "ipc-core",
+      "id": "069e13b5-1b54-404a-b759-ad5258a06a30",
+      "decision": "reject",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794388026765,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388026784,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794388029747,
+      "kind": "ipc-core",
+      "id": "069e13b5-1b54-404a-b759-ad5258a06a30",
+      "decision": "once",
+      "result": {
+        "ok": false,
+        "reason": "запрос уже неактуален"
+      }
+    },
+    {
+      "t": 1794388030945,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388030959,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388030986,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794388031004,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "41e1d5b7-5554-4809-9621-2237d0af294b",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "path": "W6-H.txt"
+    },
+    {
+      "t": 1794388031114,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794388031140,
+      "kind": "ipc-in",
+      "id": "41e1d5b7-5554-4809-9621-2237d0af294b",
+      "decision": "once",
+      "fault": null
+    },
+    {
+      "t": 1794388031140,
+      "kind": "ipc-core",
+      "id": "41e1d5b7-5554-4809-9621-2237d0af294b",
+      "decision": "once",
+      "result": {
+        "ok": false,
+        "reason": "запрос уже неактуален"
+      }
+    },
+    {
+      "t": 1794388031144,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388031147,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388031172,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794388031188,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "ae6f4861-898b-4624-9037-808a17f6c306",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "path": "W7-I.txt"
+    },
+    {
+      "t": 1794388061177,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "ae6f4861-898b-4624-9037-808a17f6c306",
+      "decision": "reject"
+    },
+    {
+      "t": 1794388061178,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388061205,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794388063349,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388063362,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388063386,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794388063402,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "b6ff0757-e3cd-4b9b-b275-3ea09ad67e77",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "path": "W8-J.txt"
+    },
+    {
+      "t": 1794388093388,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "b6ff0757-e3cd-4b9b-b275-3ea09ad67e77",
+      "decision": "reject"
+    },
+    {
+      "t": 1794388093389,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388093415,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794388097538,
+      "kind": "ipc-in",
+      "id": "b6ff0757-e3cd-4b9b-b275-3ea09ad67e77",
+      "decision": "once",
+      "fault": null
+    },
+    {
+      "t": 1794388097538,
+      "kind": "ipc-core",
+      "id": "b6ff0757-e3cd-4b9b-b275-3ea09ad67e77",
+      "decision": "once",
+      "result": {
+        "ok": false,
+        "reason": "время на подтверждение вышло"
+      }
+    },
+    {
+      "t": 1794388099061,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388099071,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794388099093,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794388099110,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "73969c92-d89d-45cb-8462-9cb93563901b",
+      "callId": "call_0",
+      "agentId": "22ac86b7-bf0b-4ace-bb6a-06f45b1d05a6",
+      "path": "W9-K.txt"
+    },
+    {
+      "t": 1794388099230,
+      "kind": "shot-error",
+      "name": "W9-pending-before-quit",
+      "e": "Error: UnknownVizError"
+    }
+  ]
+}

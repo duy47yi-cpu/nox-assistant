@@ -1,0 +1,351 @@
+{
+  "root": "C:\\Users\\abdut\\AppData\\Local\\Temp\\zm-run3-win-uIvbXH",
+  "size": [
+    1200,
+    720
+  ],
+  "results": [
+    {
+      "id": "R1",
+      "scenario": "перезагрузка окна с ожидающим запросом, затем «Разрешить» в восстановленной карточке",
+      "restoredSameId": true,
+      "expected": [
+        "R1-A.txt"
+      ],
+      "pass": false,
+      "ranNow": []
+    },
+    {
+      "id": "R2",
+      "scenario": "call_0 дважды в одном ходу: строки чата",
+      "rows": [],
+      "dialogB": null,
+      "expected": [
+        "R1-A.txt",
+        "R2-A.txt"
+      ],
+      "pass": false,
+      "ranNow": []
+    },
+    {
+      "id": "R3",
+      "scenario": "два запроса одновременно (чат A + задача B); A — «Разрешить» мышью; затем «Отклонить» мышью у B",
+      "dialogStayedOnA": true,
+      "bShownAfterA": false,
+      "bButtonsAfterA": [
+        "reject:false",
+        "session:false",
+        "once:false"
+      ],
+      "bDecisionAfterMouseReject": null,
+      "bDecisionFinal": null,
+      "expected": [
+        "R1-A.txt",
+        "R2-A.txt",
+        "R3-A.txt"
+      ],
+      "pass": false,
+      "ranNow": []
+    },
+    {
+      "id": "R4",
+      "scenario": "A истёк, B (задача, без «На сессию») занял диалог; клик «Разрешить», нацеленный на A",
+      "closedEventToClickMs": 7809,
+      "dialogAtClick": null,
+      "elementUnderCursor": "DIALOG",
+      "ipcForB": [],
+      "bDecisionByClick": null,
+      "bDecisionFinal": null,
+      "aRan": false,
+      "bRanWouldBe": false,
+      "pass": true,
+      "ranNow": []
+    },
+    {
+      "id": "R4c",
+      "scenario": "A истёк, B (второй агент, тот же вид) занял диалог; клик «Разрешить», нацеленный на A",
+      "closedEventToClickMs": 4290,
+      "dialogAtClick": null,
+      "elementUnderCursor": "DIALOG",
+      "ipcForB": [],
+      "bDecisionByClick": null,
+      "bDecisionFinal": null,
+      "aRan": false,
+      "bRanWouldBe": false,
+      "pass": true,
+      "ranNow": []
+    },
+    {
+      "id": "R5",
+      "scenario": "ядро сняло запрос задачи, событие approval_closed потеряно; «Разрешить», потом Escape",
+      "stillOpenAfterOnce": false,
+      "stillOpenAfterEsc": false,
+      "decision": "reject",
+      "pass": true,
+      "ranNow": [],
+      "clearedByReload": true
+    }
+  ],
+  "log": [
+    {
+      "t": 1794400635325,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400635355,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400635579,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794400635610,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "7823a88f-3925-4ffa-9f80-dbad94499351",
+      "callId": "call_0",
+      "path": "R1-A.txt"
+    },
+    {
+      "t": 1794400665579,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "7823a88f-3925-4ffa-9f80-dbad94499351",
+      "decision": "reject"
+    },
+    {
+      "t": 1794400665642,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400665667,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794400692531,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400692544,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400692588,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794400692597,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "6fb5f6f9-5f39-46e2-8fd6-4214dcfe24a3",
+      "callId": "call_0",
+      "path": "R3-A.txt"
+    },
+    {
+      "t": 1794400699336,
+      "kind": "ipc-in",
+      "id": "6fb5f6f9-5f39-46e2-8fd6-4214dcfe24a3",
+      "decision": "reject"
+    },
+    {
+      "t": 1794400699336,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "6fb5f6f9-5f39-46e2-8fd6-4214dcfe24a3",
+      "callId": "call_0",
+      "decision": "reject"
+    },
+    {
+      "t": 1794400699336,
+      "kind": "ipc-core",
+      "id": "6fb5f6f9-5f39-46e2-8fd6-4214dcfe24a3",
+      "decision": "reject",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794400699338,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400699364,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794400702331,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400702355,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400702381,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794400702394,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "b26c710a-b22e-4595-b8d3-6b7d302939f0",
+      "callId": "call_0",
+      "path": "R4-A.txt"
+    },
+    {
+      "t": 1794400722692,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "mtest:a93e1381-8c41-4890-b07c-9bae953d40a0",
+      "decision": "reject"
+    },
+    {
+      "t": 1794400722692,
+      "kind": "synthetic-resolved",
+      "id": "mtest:a93e1381-8c41-4890-b07c-9bae953d40a0",
+      "label": "R3-B",
+      "decision": "reject"
+    },
+    {
+      "t": 1794400732385,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "b26c710a-b22e-4595-b8d3-6b7d302939f0",
+      "decision": "reject"
+    },
+    {
+      "t": 1794400732387,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400732406,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794400733580,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400733586,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400733611,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794400733622,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "4b814f8a-b04f-49b5-b324-7906131a55c8",
+      "callId": "call_0",
+      "path": "R4-A.txt"
+    },
+    {
+      "t": 1794400757412,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "mtest:14ab826d-c5b7-4429-b1be-4071503aca59",
+      "decision": "reject"
+    },
+    {
+      "t": 1794400757412,
+      "kind": "synthetic-resolved",
+      "id": "mtest:14ab826d-c5b7-4429-b1be-4071503aca59",
+      "label": "R4-B",
+      "decision": "reject"
+    },
+    {
+      "t": 1794400763621,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "4b814f8a-b04f-49b5-b324-7906131a55c8",
+      "decision": "reject"
+    },
+    {
+      "t": 1794400763623,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794400763645,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794400769812,
+      "kind": "synthetic-resolved",
+      "id": "mtest:ffa72f45-a5eb-4ddd-8868-6f97f99b9288",
+      "label": "R5-B",
+      "decision": "reject"
+    },
+    {
+      "t": 1794400769816,
+      "kind": "ipc-in",
+      "id": "7b241bc5-4321-46a3-8a3c-7fa69feb6729",
+      "decision": "once"
+    },
+    {
+      "t": 1794400769816,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "7b241bc5-4321-46a3-8a3c-7fa69feb6729",
+      "callId": "call_0",
+      "decision": "once"
+    },
+    {
+      "t": 1794400769816,
+      "kind": "synthetic-resolved",
+      "id": "7b241bc5-4321-46a3-8a3c-7fa69feb6729",
+      "decision": "once"
+    },
+    {
+      "t": 1794400769816,
+      "kind": "ipc-core",
+      "id": "7b241bc5-4321-46a3-8a3c-7fa69feb6729",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    }
+  ]
+}

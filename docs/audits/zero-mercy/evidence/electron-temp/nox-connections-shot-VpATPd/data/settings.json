@@ -1,0 +1,13 @@
+{
+  "voice": false,
+  "backgroundModelRuns": false,
+  "alwaysListen": false,
+  "dictation": false,
+  "desktopOverlay": false,
+  "alwaysOnTop": false,
+  "motion": true,
+  "seededBrief": true,
+  "mcpServers": {},
+  "mcpToolSnapshots": {},
+  "windowBg": "#14120E"
+}

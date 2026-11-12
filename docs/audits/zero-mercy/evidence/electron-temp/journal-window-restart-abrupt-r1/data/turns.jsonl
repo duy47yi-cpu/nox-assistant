@@ -1,0 +1,2 @@
+{"ts":"2026-11-10T17:59:52.725Z","kind":"model","turn":"0d0ff4d8","round":1,"messages":2,"tools":126,"ms":18,"ok":true,"requestChars":73420,"promptTokens":null,"cachedTokens":null,"completionTokens":null,"reasoningTokens":null,"reasoningChars":0,"reasoning":null,"toolCalls":["workspace_write"],"answerChars":0}
+{"ts":"2026-11-10T17:59:52.728Z","kind":"tool_start","turn":"0d0ff4d8","round":1,"callId":"audit-restart-unapproved","name":"workspace_write","risk":"T1"}

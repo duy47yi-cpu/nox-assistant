@@ -1,0 +1,14 @@
+{
+  "name": "replica-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/selftest.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.64.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -33,8 +33,10 @@ const PLAY_SCRIPT = '(New-Object System.Media.SoundPlayer $env:JARVIS_WAV).PlayS
 const PLAY_WPF_SCRIPT = [
   'Add-Type -AssemblyName PresentationCore,WindowsBase',
   '$p = New-Object System.Windows.Media.MediaPlayer',
-  '$ppVolume = 1.0; [void][double]::TryParse([string]$env:JARVIS_WAV_VOLUME, [ref]$ppVolume)',
-  '$ppRate = 1.0; [void][double]::TryParse([string]$env:JARVIS_WAV_RATE, [ref]$ppRate)',
+  '$culture = [System.Globalization.CultureInfo]::InvariantCulture',
+  '$number = [System.Globalization.NumberStyles]::Float',
+  '$ppVolume = 1.0; [void][double]::TryParse([string]$env:JARVIS_WAV_VOLUME, $number, $culture, [ref]$ppVolume)',
+  '$ppRate = 1.0; [void][double]::TryParse([string]$env:JARVIS_WAV_RATE, $number, $culture, [ref]$ppRate)',
   'if ($ppVolume -lt 0) { $ppVolume = 0 }',
   'if ($ppVolume -gt 1) { $ppVolume = 1 }',
   'if ($ppRate -lt 0.5) { $ppRate = 0.5 }',

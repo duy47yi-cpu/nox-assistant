@@ -448,14 +448,89 @@ body[data-view="nox"]:has(.nox-grid.is-empty) .nox-chat {
 
 /* Строка «Ход работы»: живой счётчик реального хода, вставляется в ленту. */
 .view-nox .nox-working {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 12px; line-height: 20px;
+  --work-tone: var(--nox-accent);
+  flex: none;
+  min-width: 0;
+  margin: 0 16px 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--nox-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--nox-text-1) 4%, transparent);
+  font-size: 12px;
+  line-height: 18px;
   color: var(--nox-text-2);
-  font-variant-numeric: tabular-nums;
-  animation: nox-rise var(--dur-normal) var(--ease-out) both;
 }
-.view-nox .nox-working .nox-tri { font-size: 10px; line-height: 1; color: var(--nox-text-3); }
-.view-nox .nox-working[data-tone="error"] { color: var(--nox-err); }
+.view-nox .nox-working[data-phase="awaiting_approval"],
+.view-nox .nox-working[data-phase="needs_human"],
+.view-nox .nox-working[data-phase="unverified"],
+.view-nox .nox-working[data-phase="incomplete"] { --work-tone: var(--nox-warn); }
+.view-nox .nox-working[data-phase="succeeded"] { --work-tone: var(--nox-ok); }
+.view-nox .nox-working[data-phase="failed"] { --work-tone: var(--nox-err); }
+.view-nox .nox-working[data-phase="cancelled"] { --work-tone: var(--nox-text-2); }
+.view-nox .nox-work-head { display: flex; align-items: center; gap: 10px; min-height: 26px; }
+.view-nox .nox-work-head h2 { margin: 0; color: var(--nox-text-1); font: 600 13px/18px var(--font); }
+.view-nox .nox-work-count,
+.view-nox .nox-work-number { font-variant-numeric: tabular-nums; }
+.view-nox .nox-work-button {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--nox-text-2);
+  padding: 4px 2px;
+  font: inherit;
+  text-underline-offset: 3px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.view-nox .nox-work-head .nox-work-button { margin-inline-start: auto; }
+.view-nox .nox-work-button:hover { color: var(--nox-text-1); }
+.view-nox .nox-work-status,
+.view-nox .nox-work-step-text,
+.view-nox .nox-work-proof,
+.view-nox .nox-work-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.view-nox .nox-work-status {
+  padding-inline: 8px;
+  border-inline-start: 2px solid var(--work-tone);
+  background: color-mix(in srgb, var(--work-tone) 9%, transparent);
+  color: var(--nox-text-1);
+  font-weight: 550;
+  line-height: 23px;
+}
+.view-nox .nox-work-plan { list-style: none; padding: 0; margin: 4px 0 0; }
+.view-nox .nox-work-step {
+  display: grid;
+  grid-template-columns: 2.1ch minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  padding-inline: 2px;
+  line-height: 20px;
+}
+.view-nox .nox-work-step[data-step-state="next"] .nox-work-step-text { color: var(--nox-text-1); }
+.view-nox .nox-work-step-state { font-size: 11px; }
+.view-nox .nox-work-note, .view-nox .nox-work-proof { margin: 4px 0 0; }
+.view-nox .nox-work-proof {
+  border-top: 1px solid var(--nox-border);
+  padding-top: 4px;
+}
+.view-nox .nox-work-proof b { font-weight: 600; color: var(--nox-ok); }
+.view-nox .nox-work-dialog {
+  width: min(520px, calc(100% - 32px));
+  max-height: calc(100% - 80px);
+  padding: 20px;
+  border: 1px solid var(--nox-border);
+  border-radius: 16px;
+  background: var(--nox-surface-3);
+  color: var(--nox-text-1);
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.view-nox .nox-work-dialog::backdrop { background: rgb(0 0 0 / 48%); }
+.view-nox .nox-work-dialog h2 { margin: 0 0 12px; font-size: 16px; }
+.view-nox .nox-work-dialog .nox-work-step-text { white-space: normal; }
+@media (max-height: 560px) {
+  .view-nox .nox-working { margin-inline: 12px; padding-block: 4px 6px; }
+  .view-nox .nox-work-step { line-height: 18px; }
+}
 
 /* Пустое состояние: только «С чего начнём?» по центру панели. */
 .view-nox .chat-empty {
@@ -507,6 +582,7 @@ body[data-view="nox"]:has(.nox-grid.is-empty) .nox-chat {
   box-shadow: 0 0 0 2px var(--nox-bg), 0 0 0 4px color-mix(in srgb, var(--nox-accent) 30%, transparent);
 }
 .view-nox #composer .composer-row {
+  position: relative;
   display: flex; flex-wrap: wrap; align-items: center;
   gap: 8px; min-width: 0;
 }
@@ -529,6 +605,7 @@ body[data-view="nox"]:has(.nox-grid.is-empty) .nox-chat {
 .view-nox #composer #regionBtn { order: 0; }
 /* В референсе выбор режима — в правой группе, перед микрофоном и отправкой. */
 .view-nox #composer .composer-picks {
+  position: static;
   order: 2;
   margin: 0 0 0 auto;
   display: flex; align-items: center; gap: 8px;
@@ -592,7 +669,16 @@ body[data-view="nox"]:has(.nox-grid.is-empty) .nox-chat {
 .view-nox #composer .pick-trigger-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .view-nox #composer .pick-chev svg { width: 12px; height: 12px; }
 .view-nox #composer .pick-cost { display: none; }
-.view-nox #composer .pick-panel { z-index: 30; }
+/* В Nox строка целиком задаёт границы меню: кнопка стоит у правого края. */
+.view-nox #composer .pick-panel {
+  left: auto;
+  right: 0;
+  max-width: 100%;
+  max-height: 45dvh;
+  overflow: auto;
+  z-index: 30;
+}
+.view-nox #composer .pick-panel > * { flex-shrink: 0; }
 .view-nox #composer .pick-trigger[aria-expanded="true"] { border-radius: 999px; }
 
 /* Осциллограмма: только во время настоящей диктовки (не украшение). */

@@ -1,0 +1,1165 @@
+{
+  "scannedAt": "2026-11-12T13:56:34.042Z",
+  "items": [
+    {
+      "name": "ZCode 3.17.2",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Git",
+      "path": "C:\\Program Files\\Git\\",
+      "source": "uninstall"
+    },
+    {
+      "name": "Mem Reduct",
+      "path": "\"C:\\Program Files\\Mem Reduct\"",
+      "source": "uninstall"
+    },
+    {
+      "name": "Mozilla Firefox (x64 en-US)",
+      "path": "C:\\Program Files\\Mozilla Firefox",
+      "source": "uninstall"
+    },
+    {
+      "name": "Mozilla Maintenance Service",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Proton VPN",
+      "path": "C:\\Program Files\\Proton\\VPN\\",
+      "source": "uninstall"
+    },
+    {
+      "name": "Go Programming Language amd64 go1.27.3",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Microsoft Windows Application Compatibility Fix Database",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "7-Zip 26.05 (x64 edition)",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Python 3.13.15 Standard Library (64-bit)",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Xbox Service",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Python 3.13.15 Core Interpreter (64-bit)",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Python 3.13.15 Development Libraries (64-bit)",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Microsoft Visual C++ 2022 X64 Additional Runtime - 14.51.36247",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Python 3.13.15 Documentation (64-bit)",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Python 3.13.15 Test Suite (64-bit)",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Windows Subsystem for Linux",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "LibreOffice 26.8.2.2",
+      "path": "C:\\Program Files\\LibreOffice\\",
+      "source": "uninstall"
+    },
+    {
+      "name": "Microsoft Visual C++ 2022 X64 Minimum Runtime - 14.51.36247",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Tailscale",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA Графический драйвер 621.01",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\Display.Driver.{F41E83D1-83FC-4897-B29E-F1F79245095A}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA App 11.0.9.565",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\Display.NvApp.{1131EEB5-66D4-41AD-85F7-5CB2C2B211A5}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA MessageBus 3 for NvApp",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\Display.NvApp.MessageBus.{A0F20070-393F-411C-A7BE-B13F05DDFC34}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA Backend",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\Display.NvApp.NvBackend.{C1A76173-8A37-46E6-87C4-DAFD62F61B40}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA App driver settings",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\Display.NvApp.NvCPL.{793EE678-C5E0-4338-A90D-BF3A624C5DB3}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA Системное программное обеспечение PhysX 9.26.0904",
+      "path": "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA FrameView SDK 1.9.12728.38614306",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\FrameViewSDK",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA Аудиодрайвер HD 1.4.6.6",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\HDAudio.Driver.{5ED1985A-3015-4877-BE56-235F8E0D1BB9}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA Install Application",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\InstallerCore",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA Container",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\NvContainer",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA AIUser Container",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\NvContainer.AIUser.{A8F3F7F1-9A07-414A-B0C3-4FE9C63736DC}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA LocalSystem Container",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\NvContainer.LocalSystem.{97D570A4-23B1-4E71-B5A9-1C5FFAC355F2}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA Session Container",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\NvContainer.Session.{2FA4FC6B-0FDB-43C5-BE30-924B12A4E712}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA User Container",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\NvContainer.User.{5FD44B6C-2459-4CE1-AA61-E666CCC6D261}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA NvDLISR",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\NvDLISR.{1B243772-5616-4710-8B20-94E91A040E7F}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA Watchdog Plugin for NvContainer",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\NvPlugin.Watchdog.{38AC2846-6627-46A6-A735-6D76B3D88484}",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA Telemetry Client",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\NvTelemetry",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA ShadowPlay 11.0.9.0",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\ShadowPlay",
+      "source": "uninstall"
+    },
+    {
+      "name": "NVIDIA Virtual Audio 4.92.0.0",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\Installer2\\VirtualAudio.Driver.{91AD7749-E69C-49CF-A91A-11037BD11AF4}",
+      "source": "uninstall"
+    },
+    {
+      "name": "Python 3.13.15 Executables (64-bit)",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Cloudflare One Client",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Node.js",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Python 3.13.15 Add to Path (64-bit)",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Cursor",
+      "path": "C:\\Program Files\\cursor\\",
+      "source": "uninstall"
+    },
+    {
+      "name": "Microsoft GameInput",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Python 3.13.15 Tcl/Tk Support (64-bit)",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Blender",
+      "path": "C:\\Program Files\\Blender Foundation\\Blender 5.2\\",
+      "source": "uninstall"
+    },
+    {
+      "name": "Python 3.13.15 pip Bootstrap (64-bit)",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Google Chrome",
+      "path": "C:\\Program Files\\Google\\Chrome\\Application",
+      "source": "uninstall"
+    },
+    {
+      "name": "LibreWolf",
+      "path": "\"C:\\Program Files\\LibreWolf\"",
+      "source": "uninstall"
+    },
+    {
+      "name": "Mafia II Definitive Edition",
+      "path": "D:\\Games\\Mafia II Definitive Edition\\",
+      "source": "uninstall"
+    },
+    {
+      "name": "Microsoft Edge",
+      "path": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application",
+      "source": "uninstall"
+    },
+    {
+      "name": "Среда выполнения Microsoft Edge WebView2 Runtime",
+      "path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application",
+      "source": "uninstall"
+    },
+    {
+      "name": "qBittorrent",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Windhawk v1.7.3",
+      "path": "C:\\Program Files\\Windhawk",
+      "source": "uninstall"
+    },
+    {
+      "name": "Python Launcher",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Microsoft Visual C++ v14 Redistributable (x64) - 14.51.36247",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Microsoft Visual C++ 2022 X86 Minimum Runtime - 14.42.34438",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "cloudflared",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Microsoft Visual C++ 2022 X86 Additional Runtime - 14.42.34438",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Microsoft Visual C++ 2015-2022 Redistributable (x86) - 14.42.34438",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Antigravity 2.29.0",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Qoder 0.4.11",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "DeepSeek Harness",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\DeepSeek Harness",
+      "source": "uninstall"
+    },
+    {
+      "name": "Perch Terminal 2.5.7",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Bionic 1.2.0+2",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "CodingFleet 1.3.3",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "uv",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Microsoft\\WinGet\\Packages\\astral-sh.uv_Microsoft.Winget.Source_8wekyb3d8bbwe",
+      "source": "uninstall"
+    },
+    {
+      "name": "RipGrep MSVC",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BurntSushi.ripgrep.MSVC_Microsoft.Winget.Source_8wekyb3d8bbwe",
+      "source": "uninstall"
+    },
+    {
+      "name": "WorkBuddy AI 5.9.4",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Chromium",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Chromium\\Application",
+      "source": "uninstall"
+    },
+    {
+      "name": "OpenCode 2.2.5",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "FFmpeg",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe",
+      "source": "uninstall"
+    },
+    {
+      "name": "Horizon Launcher",
+      "path": "D:\\Games\\Horizon Launcher",
+      "source": "uninstall"
+    },
+    {
+      "name": "jq",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Microsoft\\WinGet\\Packages\\jqlang.jq_Microsoft.Winget.Source_8wekyb3d8bbwe",
+      "source": "uninstall"
+    },
+    {
+      "name": "Lune",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Lune.Lune_Microsoft.Winget.Source_8wekyb3d8bbwe",
+      "source": "uninstall"
+    },
+    {
+      "name": "Mullvad Browser",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Mullvad\\MullvadBrowser\\Release",
+      "source": "uninstall"
+    },
+    {
+      "name": "Microsoft OneDrive",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Speedtest CLI",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Ookla.Speedtest.CLI_Microsoft.Winget.Source_8wekyb3d8bbwe",
+      "source": "uninstall"
+    },
+    {
+      "name": "Poppler",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Microsoft\\WinGet\\Packages\\oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe",
+      "source": "uninstall"
+    },
+    {
+      "name": "Roblox Player for abdut\u0000",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Roblox\\Versions\\version-9ac8595712b447a7",
+      "source": "uninstall"
+    },
+    {
+      "name": "Roblox Studio for abdut\u0000",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Roblox\\Versions\\version-67c8b1dedbb74fed",
+      "source": "uninstall"
+    },
+    {
+      "name": "Rojo",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Rojo.Rojo_Microsoft.Winget.Source_8wekyb3d8bbwe",
+      "source": "uninstall"
+    },
+    {
+      "name": "Microsoft Visual Studio Code (User)",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\Microsoft VS Code\\",
+      "source": "uninstall"
+    },
+    {
+      "name": "Python 3.13.15 (64-bit)",
+      "path": null,
+      "source": "uninstall"
+    },
+    {
+      "name": "Firefox Private Browsing",
+      "path": "C:\\Program Files\\Mozilla Firefox\\private_browsing.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Firefox",
+      "path": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Google Chrome",
+      "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Tailscale",
+      "path": "C:\\Program Files\\Tailscale\\tailscale-ipn.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Windhawk",
+      "path": "C:\\Program Files\\Windhawk\\windhawk.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "WSL Settings",
+      "path": "C:\\Program Files\\WSL\\wslsettings\\wslsettings.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "WSL",
+      "path": "C:\\Program Files\\WSL\\wsl.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "ZCode",
+      "path": "C:\\Program Files\\ZCode\\ZCode.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "7-Zip File Manager",
+      "path": "C:\\Program Files\\7-Zip\\7zFM.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "7-Zip Help",
+      "path": "C:\\Program Files\\7-Zip\\7-zip.chm",
+      "source": "startmenu"
+    },
+    {
+      "name": "Remote Desktop Connection",
+      "path": "C:\\Windows\\system32\\mstsc.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Steps Recorder",
+      "path": "C:\\Windows\\system32\\psr.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Windows Media Player Legacy",
+      "path": "C:\\Program Files (x86)\\Windows Media Player\\wmplayer.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Character Map",
+      "path": "C:\\Windows\\system32\\charmap.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Component Services",
+      "path": "C:\\Windows\\system32\\comexp.msc",
+      "source": "startmenu"
+    },
+    {
+      "name": "Computer Management",
+      "path": "C:\\Windows\\system32\\compmgmt.msc",
+      "source": "startmenu"
+    },
+    {
+      "name": "dfrgui",
+      "path": "C:\\Windows\\system32\\dfrgui.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Disk Cleanup",
+      "path": "C:\\Windows\\system32\\cleanmgr.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Event Viewer",
+      "path": "C:\\Windows\\system32\\eventvwr.msc",
+      "source": "startmenu"
+    },
+    {
+      "name": "Hyper-V Manager",
+      "path": "C:\\Windows\\System32\\mmc.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "iSCSI Initiator",
+      "path": "C:\\Windows\\system32\\iscsicpl.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Memory Diagnostics Tool",
+      "path": "C:\\Windows\\system32\\MdSched.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "ODBC Data Sources (32-bit)",
+      "path": "C:\\Windows\\syswow64\\odbcad32.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "ODBC Data Sources (64-bit)",
+      "path": "C:\\Windows\\system32\\odbcad32.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Performance Monitor",
+      "path": "C:\\Windows\\system32\\perfmon.msc",
+      "source": "startmenu"
+    },
+    {
+      "name": "Print Management",
+      "path": "C:\\Windows\\system32\\printmanagement.msc",
+      "source": "startmenu"
+    },
+    {
+      "name": "RecoveryDrive",
+      "path": "C:\\Windows\\system32\\RecoveryDrive.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Registry Editor",
+      "path": "C:\\Windows\\regedit.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Resource Monitor",
+      "path": "C:\\Windows\\system32\\perfmon.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Security Configuration Management",
+      "path": "C:\\Windows\\system32\\secpol.msc",
+      "source": "startmenu"
+    },
+    {
+      "name": "services",
+      "path": "C:\\Windows\\system32\\services.msc",
+      "source": "startmenu"
+    },
+    {
+      "name": "System Configuration",
+      "path": "C:\\Windows\\system32\\msconfig.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "System Information",
+      "path": "C:\\Windows\\system32\\msinfo32.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Task Scheduler",
+      "path": "C:\\Windows\\system32\\taskschd.msc",
+      "source": "startmenu"
+    },
+    {
+      "name": "VMCreate",
+      "path": "C:\\Program Files\\Hyper-V\\VMCreate.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Windows Defender Firewall with Advanced Security",
+      "path": "C:\\Windows\\system32\\WF.msc",
+      "source": "startmenu"
+    },
+    {
+      "name": "Cloudflare One Client",
+      "path": "C:\\Program Files\\Cloudflare\\Cloudflare WARP\\Cloudflare WARP.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Cursor",
+      "path": "C:\\Program Files\\cursor\\Cursor.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Git Bash",
+      "path": "C:\\Program Files\\Git\\git-bash.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Git CMD",
+      "path": "C:\\Program Files\\Git\\git-cmd.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Git GUI",
+      "path": "C:\\Program Files\\Git\\cmd\\git-gui.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Git Release Notes",
+      "path": "C:\\Program Files\\Git\\ReleaseNotes.html",
+      "source": "startmenu"
+    },
+    {
+      "name": "Uninstall Go",
+      "path": "C:\\Windows\\System32\\msiexec.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "LibreOffice (Безопасный режим)",
+      "path": "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "LibreOffice Base",
+      "path": "C:\\Program Files\\LibreOffice\\program\\sbase.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "LibreOffice Calc",
+      "path": "C:\\Program Files\\LibreOffice\\program\\scalc.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "LibreOffice Draw",
+      "path": "C:\\Program Files\\LibreOffice\\program\\sdraw.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "LibreOffice Impress",
+      "path": "C:\\Program Files\\LibreOffice\\program\\simpress.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "LibreOffice Math",
+      "path": "C:\\Program Files\\LibreOffice\\program\\smath.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "LibreOffice Writer",
+      "path": "C:\\Program Files\\LibreOffice\\program\\swriter.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "LibreOffice",
+      "path": "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "LibreWolf WinUpdater",
+      "path": "C:\\Program Files\\LibreWolf\\LibreWolf-WinUpdater.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "LibreWolf",
+      "path": "C:\\Program Files\\LibreWolf\\librewolf.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Uninstall",
+      "path": "C:\\Program Files\\LibreWolf\\uninstall.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Install Additional Tools for Node.js",
+      "path": "C:\\Windows\\System32\\cmd.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Node.js command prompt",
+      "path": "C:\\Windows\\System32\\cmd.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Node.js",
+      "path": "C:\\Program Files\\nodejs\\node.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Uninstall Node.js",
+      "path": "C:\\Windows\\SysWOW64\\msiexec.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "NVIDIA App",
+      "path": "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\CEF\\NVIDIA App.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Proton VPN",
+      "path": "C:\\Program Files\\Proton\\VPN\\ProtonVPN.Launcher.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Task Manager",
+      "path": "C:\\Windows\\system32\\taskmgr.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Windows PowerShell ISE 5.1 (x86)",
+      "path": "C:\\Windows\\syswow64\\WindowsPowerShell\\v1.0\\PowerShell_ISE.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Windows PowerShell ISE 5.1",
+      "path": "C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\PowerShell_ISE.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Administrative Tools",
+      "path": "C:\\Windows\\system32\\control.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Antigravity",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\antigravity\\Antigravity.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "AyuGram",
+      "path": "C:\\Users\\abdut\\OneDrive\\Desktop\\Новая папка\\AyuGram.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Bionic",
+      "path": "D:\\LM Studio\\Bionic\\Bionic.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Chromium",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Chromium\\Application\\chrome.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "CodingFleet",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\codingfleet-desktop\\CodingFleet.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "DeepSeek Harness",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\DeepSeek Harness\\DeepSeek Harness.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Electron",
+      "path": "D:\\nox-release\\apps\\jarvis-desktop\\node_modules\\electron\\dist\\electron.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "File Explorer",
+      "path": null,
+      "source": "startmenu"
+    },
+    {
+      "name": "Firefox Private Browsing",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\KitBrowser\\Firefox\\private_browsing.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Firefox",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\KitBrowser\\Firefox\\firefox.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "HACKER CONTROL",
+      "path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Hermes",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\hermes\\hermes-agent\\apps\\desktop\\release\\win-unpacked\\Hermes.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Horizon Launcher",
+      "path": "D:\\Games\\Horizon Launcher\\horizon-launcher.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Kali Linux Desktop",
+      "path": "C:\\Windows\\System32\\wsl.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Kali Linux Terminal",
+      "path": "C:\\Windows\\System32\\wsl.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Mullvad Browser",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Mullvad\\MullvadBrowser\\Release\\mullvadbrowser.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Mullvad VPN",
+      "path": "C:\\Program Files\\Mullvad VPN\\Mullvad VPN.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "OneDrive",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Microsoft\\OneDrive\\OneDrive.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "OpenCode IP only",
+      "path": "C:\\Windows\\System32\\cmd.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "OpenCode",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\ai.opencode.desktop\\OpenCode.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Perch Terminal",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\Perch Terminal\\Perch Terminal.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Qoder",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Qoder\\Qoder Launcher\\Qoder Launcher.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "WorkBuddy AI",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\WorkBuddyAI\\WorkBuddyAI.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "yaprostoabu",
+      "path": "C:\\Windows\\System32\\wscript.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Приватный просмотр LibreWolf",
+      "path": "C:\\Program Files\\LibreWolf\\private_browsing.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "LiveCaptions",
+      "path": "C:\\Windows\\system32\\LiveCaptions.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Magnify",
+      "path": "C:\\Windows\\system32\\magnify.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Narrator",
+      "path": "C:\\Windows\\system32\\narrator.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "On-Screen Keyboard",
+      "path": "C:\\Windows\\system32\\osk.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "VoiceAccess",
+      "path": "C:\\Windows\\system32\\voiceaccess.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Blender 5.2",
+      "path": "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender-launcher.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Advanced Network Configuration (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Application Finder (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Atril Document Viewer (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Bulk Rename (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Disks (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Engrampa Archive Manager (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "ettercap-pkexec (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Exploit Database (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Firefox ESR (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "GtkHash (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Hardware Locality lstopo (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Kali Bugs (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Kali Docs (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Kali Forums (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Kali Linux (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Kali Tools (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Kali Tweaks (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "KWalletManager (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "MATE Calculator (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Mousepad (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "NetHunter (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "OffSec Training (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Parole Media Player (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Qt5 Settings (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Qt6 Settings (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "QTerminal (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "QTerminal Drop-down (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Removable Drives and Media (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Ristretto Image Viewer (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Root Terminal Emulator (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Screenshot (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Sensor Viewer (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Task Manager (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Thunar File Manager (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Thunar Preferences (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Time and Date (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Users and Groups (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Volume Control (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "VulnHub (kali-linux)",
+      "path": "C:\\Program Files\\WSL\\wslg.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "IDLE (Python 3.13 64-bit)",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\Python\\Python313\\pythonw.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Python 3.13 (64-bit)",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Python 3.13 Manuals (64-bit)",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\Python\\Python313\\Doc\\html\\index.html",
+      "source": "startmenu"
+    },
+    {
+      "name": "Python 3.13 Module Docs (64-bit)",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Roblox Studio",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Roblox\\Versions\\version-67c8b1dedbb74fed\\RobloxStudioBeta.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "DSH Telegram Bot",
+      "path": "C:\\Windows\\System32\\wscript.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "TranslucentTB",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\MacBlackGlass\\TranslucentTB\\TranslucentTB.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Command Prompt",
+      "path": "C:\\Windows\\system32\\cmd.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Control Panel",
+      "path": null,
+      "source": "startmenu"
+    },
+    {
+      "name": "Run",
+      "path": null,
+      "source": "startmenu"
+    },
+    {
+      "name": "Visual Studio Code",
+      "path": "C:\\Users\\abdut\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Windows PowerShell (x86)",
+      "path": "C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "source": "startmenu"
+    },
+    {
+      "name": "Windows PowerShell",
+      "path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "source": "startmenu"
+    }
+  ]
+}

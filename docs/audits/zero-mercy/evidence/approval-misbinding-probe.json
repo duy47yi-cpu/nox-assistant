@@ -1,0 +1,52 @@
+{
+  "requests": [
+    {
+      "id": "shared-provider-call-id",
+      "name": "visible_fake_action",
+      "args": {
+        "value": "visible arguments"
+      }
+    },
+    {
+      "id": "shared-provider-call-id",
+      "name": "unshown_fake_action",
+      "args": {
+        "value": "different arguments"
+      }
+    }
+  ],
+  "visibleRequest": {
+    "id": "shared-provider-call-id",
+    "name": "visible_fake_action",
+    "args": {
+      "value": "visible arguments"
+    }
+  },
+  "brokerPendingBeforeClick": [
+    {
+      "id": "shared-provider-call-id",
+      "name": "unshown_fake_action",
+      "args": {
+        "value": "different arguments"
+      }
+    }
+  ],
+  "userClickedVisibleId": "shared-provider-call-id",
+  "brokerResponded": true,
+  "executed": [
+    {
+      "tool": "unshown_fake_action",
+      "value": "different arguments"
+    }
+  ],
+  "runResults": [
+    {
+      "ok": true,
+      "outcome": "answer"
+    },
+    {
+      "ok": true,
+      "outcome": "answer"
+    }
+  ]
+}

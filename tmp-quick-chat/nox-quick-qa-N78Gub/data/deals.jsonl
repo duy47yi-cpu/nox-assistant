@@ -1,0 +1,11 @@
+{"seq":1,"ts":"2026-11-12T14:18:26.794Z","ref":"mission:82ca5b10-9af7-44b3-9ce7-b7dae6f608f1","title":"Утренний брифинг","source":"mission","state":"promised","reason":"","due":"2026-11-13T04:00:00.000Z","since":"2026-11-12T14:18:26.794Z","cleared":false}
+{"seq":2,"ts":"2026-11-12T14:18:31.427Z","ref":"turn:f7905cf7","title":"погода","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-12T14:18:31.427Z","cleared":false}
+{"seq":3,"ts":"2026-11-12T14:18:31.438Z","ref":"turn:f7905cf7","title":"погода","state":"failed","reason":"ход упал с ошибкой: weather_now: Скажите город","due":null,"since":"2026-11-12T14:18:31.438Z","cleared":false}
+{"seq":4,"ts":"2026-11-12T14:18:32.387Z","ref":"turn:29c06e93","title":"проверка разрешения отклонить","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-12T14:18:32.387Z","cleared":false}
+{"seq":5,"ts":"2026-11-12T14:18:33.597Z","ref":"turn:29c06e93","forget":true}
+{"seq":6,"ts":"2026-11-12T14:18:33.971Z","ref":"turn:b0bb6191","title":"проверка разрешения разрешить","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-12T14:18:33.970Z","cleared":false}
+{"seq":7,"ts":"2026-11-12T14:18:34.951Z","ref":"turn:b0bb6191","forget":true}
+{"seq":8,"ts":"2026-11-12T14:18:35.275Z","ref":"turn:c52b193c","title":"проверка остановка","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-12T14:18:35.275Z","cleared":false}
+{"seq":9,"ts":"2026-11-12T14:18:35.588Z","ref":"turn:c52b193c","title":"проверка остановка","state":"failed","reason":"ход остановлен, часть действий могла выполниться: This operation was aborted","due":null,"since":"2026-11-12T14:18:35.588Z","cleared":false}
+{"seq":10,"ts":"2026-11-12T14:18:36.497Z","ref":"turn:3a393b6f","title":"проверка остановка ещё раз","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-12T14:18:36.497Z","cleared":false}
+{"seq":11,"ts":"2026-11-12T14:18:37.709Z","ref":"turn:3a393b6f","title":"проверка остановка ещё раз","state":"failed","reason":"ход остановлен, часть действий могла выполниться: This operation was aborted","due":null,"since":"2026-11-12T14:18:37.709Z","cleared":false}

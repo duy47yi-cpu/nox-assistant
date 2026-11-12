@@ -1,0 +1,369 @@
+{
+  "mode": "restart-read",
+  "pid": 18132,
+  "readyMs": 2515.1461999999997,
+  "electron": "44.9.3",
+  "chromium": "152.0.7977.167",
+  "initialTheme": {
+    "theme": null,
+    "accent": null,
+    "look": null,
+    "resolved": "dark",
+    "systemLight": false,
+    "bg": "#14120E",
+    "appBg": "rgb(15, 15, 16)"
+  },
+  "restart": {
+    "modelCalls": 0,
+    "ui": {
+      "dialog": false,
+      "pendingRows": 0,
+      "lastChat": "Подготовь пробную запись для проверки перезапуска.\n\nНе получилось довести дело до конца: инструмент возвращал один и тот же результат. Скажите, как поступить."
+    },
+    "fileExists": true,
+    "journal": [
+      {
+        "ts": "2026-11-11T15:32:55.732Z",
+        "tool": "workspace_write",
+        "args": {
+          "path": "reports/audit-restart-unapproved.txt",
+          "content": "Действие требует согласия.\n"
+        },
+        "risk": "T1",
+        "mode": "auto",
+        "decision": "allow",
+        "ok": true,
+        "summary": "записал",
+        "callId": "audit-restart-unapproved",
+        "runId": "240897f9",
+        "step": 1,
+        "status": "succeeded",
+        "verified": "confirmed",
+        "verifiedStatus": "confirmed",
+        "evidence": "файл reports/audit-restart-unapproved.txt совпадает с записью"
+      },
+      {
+        "ts": "2026-11-11T15:32:55.756Z",
+        "tool": "wait",
+        "args": {
+          "ms": 30000
+        },
+        "risk": "T0",
+        "mode": "auto",
+        "decision": "allow",
+        "ok": false,
+        "summary": "пауза от 0 до 10000 мс",
+        "callId": "audit-crash-wait",
+        "runId": "240897f9",
+        "step": 2,
+        "status": "failed",
+        "verified": null,
+        "verifiedStatus": null,
+        "evidence": null
+      },
+      {
+        "ts": "2026-11-11T15:32:55.780Z",
+        "tool": "wait",
+        "args": {
+          "ms": 30000
+        },
+        "risk": "T0",
+        "mode": "auto",
+        "decision": "allow",
+        "ok": false,
+        "summary": "пауза от 0 до 10000 мс",
+        "callId": "audit-crash-wait",
+        "runId": "240897f9",
+        "step": 3,
+        "status": "failed",
+        "verified": null,
+        "verifiedStatus": null,
+        "evidence": null
+      },
+      {
+        "ts": "2026-11-11T15:32:55.798Z",
+        "tool": "wait",
+        "args": {
+          "ms": 30000
+        },
+        "risk": "T0",
+        "mode": "auto",
+        "decision": "deny",
+        "ok": false,
+        "summary": "повтор: этот вызов уже выполнялся, его результат выше. Ответь по нему или скажи владельцу, что не получилось",
+        "callId": "audit-crash-wait",
+        "runId": "240897f9",
+        "step": 4,
+        "status": "failed",
+        "verified": null,
+        "verifiedStatus": null,
+        "evidence": null
+      }
+    ],
+    "turns": [
+      {
+        "ts": "2026-11-11T15:32:55.715Z",
+        "kind": "model",
+        "turn": "240897f9",
+        "round": 1,
+        "messages": 2,
+        "tools": 126,
+        "ms": 21,
+        "ok": true,
+        "requestChars": 74937,
+        "promptTokens": null,
+        "cachedTokens": null,
+        "completionTokens": null,
+        "reasoningTokens": null,
+        "reasoningChars": 0,
+        "reasoning": null,
+        "toolCalls": [
+          "workspace_write"
+        ],
+        "answerChars": 0
+      },
+      {
+        "ts": "2026-11-11T15:32:55.721Z",
+        "kind": "tool_start",
+        "turn": "240897f9",
+        "round": 1,
+        "callId": "audit-restart-unapproved",
+        "name": "workspace_write",
+        "risk": "T1"
+      },
+      {
+        "ts": "2026-11-11T15:32:55.732Z",
+        "kind": "tool",
+        "turn": "240897f9",
+        "round": 1,
+        "callId": "audit-restart-unapproved",
+        "name": "workspace_write",
+        "ms": 10,
+        "waitMs": 0,
+        "totalMs": 15,
+        "decision": "allow",
+        "ok": true,
+        "verified": "confirmed"
+      },
+      {
+        "ts": "2026-11-11T15:32:55.754Z",
+        "kind": "model",
+        "turn": "240897f9",
+        "round": 2,
+        "messages": 4,
+        "tools": 126,
+        "ms": 13,
+        "ok": true,
+        "requestChars": 75498,
+        "promptTokens": null,
+        "cachedTokens": null,
+        "completionTokens": null,
+        "reasoningTokens": null,
+        "reasoningChars": 0,
+        "reasoning": null,
+        "toolCalls": [
+          "wait"
+        ],
+        "answerChars": 0
+      },
+      {
+        "ts": "2026-11-11T15:32:55.755Z",
+        "kind": "tool_start",
+        "turn": "240897f9",
+        "round": 2,
+        "callId": "audit-crash-wait",
+        "name": "wait",
+        "risk": "T0"
+      },
+      {
+        "ts": "2026-11-11T15:32:55.765Z",
+        "kind": "tool",
+        "turn": "240897f9",
+        "round": 2,
+        "callId": "audit-crash-wait",
+        "name": "wait",
+        "ms": 0,
+        "waitMs": 0,
+        "totalMs": 10,
+        "decision": "allow",
+        "ok": false,
+        "verified": null
+      },
+      {
+        "ts": "2026-11-11T15:32:55.779Z",
+        "kind": "model",
+        "turn": "240897f9",
+        "round": 3,
+        "messages": 6,
+        "tools": 126,
+        "ms": 12,
+        "ok": true,
+        "requestChars": 75777,
+        "promptTokens": null,
+        "cachedTokens": null,
+        "completionTokens": null,
+        "reasoningTokens": null,
+        "reasoningChars": 0,
+        "reasoning": null,
+        "toolCalls": [
+          "wait"
+        ],
+        "answerChars": 0
+      },
+      {
+        "ts": "2026-11-11T15:32:55.779Z",
+        "kind": "tool_start",
+        "turn": "240897f9",
+        "round": 3,
+        "callId": "audit-crash-wait",
+        "name": "wait",
+        "risk": "T0"
+      },
+      {
+        "ts": "2026-11-11T15:32:55.780Z",
+        "kind": "tool",
+        "turn": "240897f9",
+        "round": 3,
+        "callId": "audit-crash-wait",
+        "name": "wait",
+        "ms": 1,
+        "waitMs": 0,
+        "totalMs": 1,
+        "decision": "allow",
+        "ok": false,
+        "verified": null
+      },
+      {
+        "ts": "2026-11-11T15:32:55.797Z",
+        "kind": "model",
+        "turn": "240897f9",
+        "round": 4,
+        "messages": 8,
+        "tools": 126,
+        "ms": 15,
+        "ok": true,
+        "requestChars": 76263,
+        "promptTokens": null,
+        "cachedTokens": null,
+        "completionTokens": null,
+        "reasoningTokens": null,
+        "reasoningChars": 0,
+        "reasoning": null,
+        "toolCalls": [
+          "wait"
+        ],
+        "answerChars": 0
+      },
+      {
+        "ts": "2026-11-11T15:32:55.798Z",
+        "kind": "tool_start",
+        "turn": "240897f9",
+        "round": 4,
+        "callId": "audit-crash-wait",
+        "name": "wait",
+        "risk": "T0"
+      },
+      {
+        "ts": "2026-11-11T15:32:55.798Z",
+        "kind": "tool",
+        "turn": "240897f9",
+        "round": 4,
+        "callId": "audit-crash-wait",
+        "name": "wait",
+        "ms": 0,
+        "waitMs": 0,
+        "totalMs": 1,
+        "decision": "deny",
+        "ok": false,
+        "verified": null,
+        "repeat": true
+      },
+      {
+        "ts": "2026-11-11T15:32:55.814Z",
+        "kind": "model",
+        "turn": "240897f9",
+        "round": 5,
+        "messages": 10,
+        "tools": 126,
+        "toolChoice": "none",
+        "ms": 13,
+        "ok": true,
+        "requestChars": 76616,
+        "promptTokens": null,
+        "cachedTokens": null,
+        "completionTokens": null,
+        "reasoningTokens": null,
+        "reasoningChars": 0,
+        "reasoning": null,
+        "toolCalls": [
+          "wait"
+        ],
+        "answerChars": 0
+      },
+      {
+        "ts": "2026-11-11T15:32:55.815Z",
+        "kind": "turn",
+        "turn": "240897f9",
+        "ms": 127,
+        "outcome": "loop",
+        "modelCalls": 5,
+        "modelMs": 74,
+        "toolCalls": 4,
+        "toolWallMs": 37,
+        "waitMs": 0,
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "reasoningTokens": 0,
+        "reasoningChars": 0,
+        "userChars": 50,
+        "answerChars": 106,
+        "firstTextMs": null,
+        "historyMessages": 10,
+        "mode": "auto"
+      }
+    ],
+    "deals": {
+      "waiting": [],
+      "failed": [
+        {
+          "ts": "2026-11-11T15:32:55.815Z",
+          "ref": "turn:5a7592d4",
+          "title": "Подготовь пробную запись для проверки перезапуска.",
+          "source": "turn",
+          "state": "failed",
+          "reason": "инструмент возвращал одно и то же, дело не доведено",
+          "due": null,
+          "since": "2026-11-11T15:32:55.815Z",
+          "cleared": false
+        }
+      ],
+      "overdue": [],
+      "stale": [],
+      "unverified": [],
+      "started": [],
+      "promised": []
+    }
+  },
+  "processes": [
+    {
+      "type": "Browser",
+      "cpuPercent": 0,
+      "workingSetKiB": 155740
+    },
+    {
+      "type": "GPU",
+      "cpuPercent": 0,
+      "workingSetKiB": 159692
+    },
+    {
+      "type": "Utility",
+      "cpuPercent": 0,
+      "workingSetKiB": 102384
+    },
+    {
+      "type": "Tab",
+      "cpuPercent": 0,
+      "workingSetKiB": 153132
+    }
+  ]
+}

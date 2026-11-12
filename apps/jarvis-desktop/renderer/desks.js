@@ -7,7 +7,7 @@
   if (!U) return;
 
   const DEPS = { toast: () => {}, ask: async () => false };
-  const DESK = { open: false, desks: [], activeId: null, templates: [], types: [], data: {}, now: 0, busy: false, timer: 0, dragId: null, dialogMode: 'create', editId: null, petTimers: [] };
+  const DESK = { open: false, loaded: false, loading: false, desks: [], activeId: null, templates: [], types: [], data: {}, now: 0, busy: false, timer: 0, dragId: null, dialogMode: 'create', editId: null, petTimers: [] };
 
   const $ = (sel, root = document) => (root || document).querySelector(sel);
   const el = (tag, attrs, ...children) => U.el(tag, attrs, ...children);
@@ -35,6 +35,21 @@
     bad_xml: 'источник вернул неверный формат',
     bad_response: 'источник ответил непонятно',
     bad_input: 'источник прислал пустой ответ',
+    bad_ics: 'файл календаря не удалось разобрать (.ics)',
+    bad_json: 'данные календаря в неверном формате',
+    bad_url: 'неверный адрес календарной ленты',
+    too_large: 'данные календаря слишком большие',
+    bad_redirect: 'небезопасная переадресация источника',
+    mcp_error: 'подключённый сервис календаря вернул ошибку',
+    source_error: 'источник календаря недоступен',
+    calendar_error: 'ошибка чтения календаря',
+  };
+
+  const calendarErrorWords = {
+    not_found: 'файл календаря не найден',
+    network: 'нет связи с источником календаря',
+    timeout: 'источник календаря не ответил вовремя',
+    bad_source: 'источник календаря недоступен',
   };
 
   // Питомец — только украшение: фиксированные настроения, никаких «показаний».
@@ -45,11 +60,21 @@
     disabled: 'выключен', idle: 'не подключён',
   };
 
-  function errorText(code) {
+  function errorText(code, isCalendar = false) {
     if (!code) return 'причина неизвестна';
-    if (errorWords[code]) return errorWords[code];
-    const http = /^http_(\d+)$/.exec(String(code));
+    const raw = String(code);
+    if (isCalendar && calendarErrorWords[raw]) return calendarErrorWords[raw];
+    if (errorWords[raw]) return errorWords[raw];
+    const http = /(?:^|\b)http_(\d+)/i.exec(raw);
     if (http) return `источник ответил ошибкой ${http[1]}`;
+    if (isCalendar) {
+      if (/\bENOENT\b|no such file/i.test(raw)) return calendarErrorWords.not_found;
+      if (/\b(EACCES|EPERM)\b/i.test(raw)) return 'нет доступа к файлу календаря';
+      if (/timed out|timeout|aborted|\bETIMEDOUT\b/i.test(raw)) return calendarErrorWords.timeout;
+      if (/\b(ECONNREFUSED|ENOTFOUND|ECONNRESET|EAI_AGAIN)\b/i.test(raw)) return calendarErrorWords.network;
+      if (/JSON|SyntaxError|Unexpected token/i.test(raw)) return errorWords.bad_json;
+      if (/VCALENDAR|ICS/i.test(raw)) return errorWords.bad_ics;
+    }
     return 'причина неизвестна';
   }
 
@@ -93,8 +118,346 @@
       entry.note ? el('span', { class: 'desk-list-note', text: entry.note }) : null)));
   }
 
+  function formatDateKeyLabel(dateKey, todayKey, tomorrowKey) {
+    if (!dateKey || typeof dateKey !== 'string') return '';
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+    let short = dateKey;
+    if (m) {
+      const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+      short = dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    }
+    if (todayKey && dateKey === todayKey) return `Сегодня · ${short}`;
+    if (tomorrowKey && dateKey === tomorrowKey) return `Завтра · ${short}`;
+    if (m) {
+      const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+      const wd = dt.toLocaleDateString('ru-RU', { weekday: 'short', timeZone: 'UTC' });
+      return `${wd}, ${short}`;
+    }
+    return short;
+  }
+
+  function formatFetchedNote(fetchedAt) {
+    if (!fetchedAt) return '';
+    const ms = typeof fetchedAt === 'number' ? fetchedAt : Date.parse(fetchedAt);
+    if (!Number.isFinite(ms)) return '';
+    return `обновлено ${shortDate(ms)}, ${shortTime(ms)}`;
+  }
+
+  function formatStartsIn(mins) {
+    if (!Number.isFinite(mins) || mins <= 0) return '';
+    if (mins < 60) return `через ${mins} мин`;
+    const h = Math.floor(mins / 60);
+    const rem = mins % 60;
+    return rem ? `через ${h} ч ${rem} мин` : `через ${h} ч`;
+  }
+
+  function appendCalendarConnectControls(container, calState, options = {}) {
+    if (!U.has) return container;
+    const connected = Boolean(calState && calState !== 'not_connected');
+    const actions = el('div', { class: 'desk-cal-actions' });
+
+    const pickBtn = el('button', {
+      type: 'button',
+      class: 'btn btn-secondary btn-sm desk-cal-pick',
+      text: connected ? (options.compact ? 'Сменить' : 'Сменить календарь') : 'Подключить .ics/.json',
+    });
+    pickBtn.addEventListener('click', async () => {
+      try {
+        const r = await U.call('calendarPickFile');
+        if (r && r.ok === false) { toastError(r); return; }
+        if (r && !r.canceled) await refresh();
+      } catch (err) { toastError({ error: err.message }); }
+    });
+    actions.appendChild(pickBtn);
+
+    let urlWrap = null;
+    if (U.has('calendarSetSource')) {
+      const urlToggle = el('button', {
+        type: 'button',
+        class: 'btn btn-secondary btn-sm desk-cal-url-btn',
+        'aria-expanded': 'false',
+        text: 'По ссылке',
+      });
+      const urlErr = el('p', { class: 'desk-cal-url-err', hidden: true });
+      const urlInput = el('input', {
+        type: 'url',
+        class: 'input desk-cal-url-input',
+        placeholder: 'https://…/calendar.ics',
+        'aria-label': 'Адрес календарной ленты (.ics или .json)',
+      });
+      const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary btn-sm', text: 'Подключить' });
+      const cancelBtn = el('button', { type: 'button', class: 'btn btn-ghost btn-sm desk-cal-url-cancel', text: 'Отмена' });
+      const urlForm = el('form', { class: 'desk-cal-url-form', hidden: true },
+        urlInput,
+        el('span', { class: 'desk-cal-url-btns' }, submitBtn, cancelBtn),
+        urlErr);
+
+      urlToggle.addEventListener('click', () => {
+        const open = urlForm.hidden;
+        urlForm.hidden = !open;
+        urlToggle.setAttribute('aria-expanded', String(open));
+        if (open) urlInput.focus();
+      });
+      cancelBtn.addEventListener('click', () => {
+        urlForm.hidden = true;
+        urlToggle.setAttribute('aria-expanded', 'false');
+        urlErr.hidden = true;
+        urlErr.textContent = '';
+      });
+      urlForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const url = urlInput.value.trim();
+        if (!url) {
+          urlErr.textContent = 'Укажите адрес ленты (http:// или https://).';
+          urlErr.hidden = false;
+          return;
+        }
+        submitBtn.disabled = true;
+        urlErr.hidden = true;
+        try {
+          const r = await U.call('calendarSetSource', { type: 'url', url });
+          if (r && r.ok === false) {
+            urlErr.textContent = r.error || 'Не удалось подключить ссылку';
+            urlErr.hidden = false;
+            return;
+          }
+          await refresh();
+        } catch (err) {
+          urlErr.textContent = (err && err.message) || 'Не удалось подключить ссылку';
+          urlErr.hidden = false;
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+      actions.appendChild(urlToggle);
+      urlWrap = urlForm;
+    }
+
+    if (connected) {
+      const clearBtn = el('button', {
+        type: 'button',
+        class: 'btn btn-ghost btn-sm desk-cal-clear',
+        text: 'Отключить',
+      });
+      clearBtn.addEventListener('click', async () => {
+        try {
+          const r = await U.call('calendarSetSource', null);
+          if (r && r.ok === false) { toastError(r); return; }
+          await refresh();
+        } catch (err) { toastError({ error: err.message }); }
+      });
+      actions.appendChild(clearBtn);
+    }
+
+    container.appendChild(actions);
+    if (urlWrap) container.appendChild(urlWrap);
+    return container;
+  }
+
+  function calendarFooter(calState, sourceLabel) {
+    const statusText = calState === 'not_connected'
+      ? 'Календарь не подключён'
+      : calState === 'error'
+        ? (sourceLabel ? `Ошибка календаря (${sourceLabel})` : 'Ошибка календаря')
+        : calState === 'stale'
+          ? (sourceLabel ? `Устаревшие данные · ${sourceLabel}` : 'Устаревшие данные календаря')
+          : calState === 'empty'
+            ? (sourceLabel ? `Встреч нет · ${sourceLabel}` : 'Встреч на сегодня нет')
+            : (sourceLabel || 'Календарь подключён');
+    const row = el('div', { class: 'desk-cal-bar' },
+      el('span', { class: 'desk-widget-note desk-cal-status', 'data-cal-state': calState || 'not_connected', text: statusText }));
+    return appendCalendarConnectControls(row, calState, { compact: false });
+  }
+
+  function calendarMetaStrip(value, state, extraParts = []) {
+    const parts = [];
+    if (state === 'stale') {
+      const age = formatFetchedNote(value && value.fetchedAt);
+      parts.push(el('span', { class: 'tag desk-stale', text: age ? `устарело · ${age}` : 'устарело' }));
+    }
+    const sourceText = value && (value.sourceLabel || (value.source ? `Источник: ${value.source}` : ''));
+    if (sourceText) parts.push(el('span', { class: 'desk-cal-source-tag', text: sourceText }));
+    if (value && value.timeZone) parts.push(el('span', { class: 'desk-cal-tz', text: value.timeZone }));
+    for (const extra of extraParts) {
+      if (extra) parts.push(el('span', { class: 'desk-cal-extra', text: extra }));
+    }
+    if (!parts.length) return null;
+    return el('div', { class: 'desk-cal-meta' }, ...parts);
+  }
+
+  function calendarConflictsBanner(conflicts) {
+    if (!Array.isArray(conflicts) || conflicts.length === 0) return null;
+    const shown = conflicts.slice(0, 2).map((c) => {
+      const a = c && Array.isArray(c.titles) ? c.titles[0] : 'Встреча';
+      const b = c && Array.isArray(c.titles) ? c.titles[1] : 'Встреча';
+      const mins = c && Number.isFinite(c.overlapMinutes) ? ` (${c.overlapMinutes} мин)` : '';
+      return `«${a}» и «${b}»${mins}`;
+    });
+    if (conflicts.length > 2) shown.push(`и ещё ${conflicts.length - 2}`);
+    return el('div', { class: 'desk-cal-conflicts-box', role: 'status' },
+      el('span', { class: 'desk-pill desk-pill-conflict', text: `Пересечения: ${conflicts.length}` }),
+      el('span', { class: 'desk-cal-conflicts-text', text: shown.join('; ') }));
+  }
+
+  function renderCalendarLoading(type) {
+    return el('div', { class: 'desk-widget-body-inner desk-cal-loading', role: 'status', 'data-state': 'loading' },
+      el('p', { class: 'desk-widget-state', text: type === 'meetings' ? 'Загружаем ближайшие встречи…' : 'Загружаем события календаря…' }),
+      el('div', { class: 'desk-skeleton', 'aria-hidden': 'true' },
+        el('span', { class: 'desk-skeleton-line' }),
+        el('span', { class: 'desk-skeleton-line desk-skeleton-line-short' })));
+  }
+
+  function renderCalendarDisconnected(type) {
+    const title = type === 'meetings' ? 'Источник встреч не подключён' : 'Календарь не подключён';
+    const desc = type === 'meetings'
+      ? 'Подключите файл .ics/.json или ссылку на календарь — покажем ближайшие встречи, локальное время и пересечения.'
+      : 'Подключите файл .ics/.json или ссылку на ленту, чтобы видеть расписание в локальном времени.';
+    const box = el('div', { class: 'desk-widget-body-inner desk-cal-connect', 'data-state': 'not_connected' },
+      el('p', { class: 'desk-widget-state', 'data-state': 'not_connected', text: title }),
+      el('p', { class: 'desk-widget-note', text: desc }));
+    appendCalendarConnectControls(box, 'not_connected', { compact: false });
+    box.appendChild(el('p', { class: 'desk-widget-note desk-cal-mcp-hint', text: 'Календарь из внешнего сервиса можно добавить в разделе «Подключения».' }));
+    return box;
+  }
+
+  function renderCalendarEmpty(type, value, state) {
+    const isMeetings = type === 'meetings';
+    const wrap = el('div', { class: 'desk-widget-body-inner desk-cal-empty', 'data-state': state || 'empty' });
+    const meta = calendarMetaStrip(value, state, isMeetings && value && value.windowDays ? [`Окно: ${value.windowDays} дн.`] : []);
+    if (meta) wrap.appendChild(meta);
+    let mainText = isMeetings ? 'Предстоящих встреч нет' : 'Событий в календаре нет';
+    let subText = 'Источник подключён, но подходящих событий не найдено.';
+    if (isMeetings && value && value.hasOtherEvents) {
+      const days = value.windowDays || 7;
+      mainText = `На ближайшие ${days} дн. встреч нет`;
+      subText = `В календаре есть ещё ${value.totalInCalendar} прошедших или более поздних событий.`;
+    }
+    wrap.appendChild(el('p', { class: 'desk-widget-state', 'data-state': 'empty', text: mainText }));
+    wrap.appendChild(el('p', { class: 'desk-widget-note', text: subText }));
+    wrap.appendChild(appendCalendarConnectControls(el('div', { class: 'desk-cal-foot' }), 'empty', { compact: true }));
+    return wrap;
+  }
+
+  function renderCalendarError(datum) {
+    const value = datum && datum.value;
+    const msg = errorText(datum && datum.error, true);
+    const wrap = el('div', { class: 'desk-widget-body-inner desk-cal-error', 'data-state': 'error' });
+    const meta = calendarMetaStrip(value, 'error');
+    if (meta) wrap.appendChild(meta);
+    wrap.appendChild(el('p', { class: 'desk-widget-state', 'data-state': 'error', text: `Не получилось: ${msg}` }));
+    const calState = value && value.connected === false ? 'not_connected' : 'error';
+    wrap.appendChild(appendCalendarConnectControls(el('div', { class: 'desk-cal-foot' }), calState, { compact: true }));
+    return wrap;
+  }
+
+  function renderCalendarWidgetBody(datum) {
+    const state = datum.state;
+    const value = datum.value || {};
+    const items = Array.isArray(value.items) ? value.items : [];
+    const wrap = el('div', { class: 'desk-widget-body-inner desk-cal-widget', 'data-state': state });
+    const countNote = value.total > items.length ? `Показано ${items.length} из ${value.total}` : (items.length ? `Событий: ${value.total || items.length}` : '');
+    const meta = calendarMetaStrip(value, state, countNote ? [countNote] : []);
+    if (meta) wrap.appendChild(meta);
+    const conflictBanner = calendarConflictsBanner(value.conflicts);
+    if (conflictBanner) wrap.appendChild(conflictBanner);
+
+    const groups = new Map();
+    for (const ev of items) {
+      const key = ev.dateLocal || '';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(ev);
+    }
+
+    const daysWrap = el('div', { class: 'desk-cal-days' });
+    for (const [dateKey, dayEvents] of groups.entries()) {
+      const dayLabel = dateKey ? formatDateKeyLabel(dateKey, value.todayDateKey, value.tomorrowDateKey) : 'Расписание';
+      const listEl = el('ul', { class: 'desk-cal-list' }, ...dayEvents.map((ev) => {
+        const badges = [];
+        if (ev.ongoing) badges.push(el('span', { class: 'desk-pill desk-pill-live', text: 'сейчас' }));
+        if (ev.conflict) badges.push(el('span', { class: 'desk-pill desk-pill-conflict', text: 'пересечение' }));
+        const subParts = [ev.source || value.source || 'Календарь'];
+        if (ev.location) subParts.push(ev.location);
+        return el('li', { class: 'desk-cal-row' + (ev.conflict ? ' is-conflict' : '') + (ev.ongoing ? ' is-ongoing' : '') },
+          el('span', { class: 'desk-cal-time', text: ev.timeLabel || ev.startLocal || '' }),
+          el('div', { class: 'desk-cal-main' },
+            el('div', { class: 'desk-cal-row-head' },
+              el('span', { class: 'desk-cal-title', text: ev.title || 'Событие' }),
+              ...badges),
+            el('span', { class: 'desk-cal-sub', text: subParts.join(' · ') })));
+      }));
+      daysWrap.appendChild(el('div', { class: 'desk-cal-day' },
+        el('div', { class: 'desk-cal-day-head', text: dayLabel }),
+        listEl));
+    }
+    wrap.appendChild(daysWrap);
+
+    if (typeof value.briefing === 'string' && value.briefing.trim()) {
+      wrap.appendChild(el('details', { class: 'desk-cal-briefing' },
+        el('summary', { class: 'desk-widget-note desk-cal-briefing-sum', text: 'Утренняя сводка' }),
+        el('pre', { class: 'desk-widget-note desk-cal-briefing-text', text: value.briefing })));
+    }
+    wrap.appendChild(appendCalendarConnectControls(el('div', { class: 'desk-cal-foot' }), state, { compact: true }));
+    return wrap;
+  }
+
+  function renderMeetingsWidgetBody(datum) {
+    const state = datum.state;
+    const value = datum.value || {};
+    const items = Array.isArray(value.items) ? value.items : [];
+    if (!items.length) return renderCalendarEmpty('meetings', value, state);
+
+    const wrap = el('div', { class: 'desk-widget-body-inner desk-meet-widget', 'data-state': state });
+    const conflicts = Array.isArray(value.conflicts) ? value.conflicts : [];
+    const extras = [];
+    if (value.windowDays) extras.push(`На ${value.windowDays} дн.`);
+    extras.push(`Встреч: ${Number.isFinite(value.total) ? value.total : items.length}`);
+    if (conflicts.length > 0) extras.push(`Пересечений: ${conflicts.length}`);
+    const meta = calendarMetaStrip(value, state, extras);
+    if (meta) wrap.appendChild(meta);
+
+    const conflictBanner = calendarConflictsBanner(conflicts);
+    if (conflictBanner) wrap.appendChild(conflictBanner);
+
+    const listEl = el('ul', { class: 'desk-meet-list' }, ...items.map((ev) => {
+      const badges = [];
+      if (ev.ongoing) badges.push(el('span', { class: 'desk-pill desk-pill-live', text: 'идёт сейчас' }));
+      else if (ev.isToday && Number.isFinite(ev.startsInMinutes) && ev.startsInMinutes > 0 && ev.startsInMinutes <= 240) {
+        badges.push(el('span', { class: 'desk-pill desk-pill-soon', text: formatStartsIn(ev.startsInMinutes) }));
+      }
+      if (ev.conflict) badges.push(el('span', { class: 'desk-pill desk-pill-conflict', text: 'пересечение' }));
+
+      const whenParts = [];
+      if (ev.dateLocal) whenParts.push(formatDateKeyLabel(ev.dateLocal, value.todayDateKey, value.tomorrowDateKey));
+      if (ev.timeLabel) whenParts.push(ev.timeLabel);
+      const whenLine = whenParts.join(', ');
+      const sourceText = `Источник: ${ev.source || value.source || 'Календарь'}`;
+      const subParts = [sourceText];
+      if (ev.location) subParts.push(ev.location);
+
+      return el('li', { class: 'desk-meet-row' + (ev.conflict ? ' is-conflict' : '') + (ev.ongoing ? ' is-ongoing' : '') },
+        el('div', { class: 'desk-cal-row-head' },
+          el('span', { class: 'desk-cal-title', text: ev.title || 'Встреча' }),
+          ...badges),
+        whenLine ? el('span', { class: 'desk-meet-when', text: whenLine }) : null,
+        el('span', { class: 'desk-cal-sub', text: subParts.join(' · ') }));
+    }));
+    wrap.appendChild(listEl);
+
+    if (value.total > items.length) {
+      wrap.appendChild(el('p', { class: 'desk-widget-note', text: `Показано ${items.length} из ${value.total}` }));
+    }
+    wrap.appendChild(appendCalendarConnectControls(el('div', { class: 'desk-cal-foot' }), state, { compact: true }));
+    return wrap;
+  }
+
   function renderBody(widget, datum) {
     const type = widget.type;
+    const isCalType = type === 'calendar' || type === 'meetings';
+    if ((DESK.loading && !datum) || (datum && datum.state === 'loading')) {
+      if (isCalType) return renderCalendarLoading(type);
+      return el('div', { class: 'desk-widget-body-inner', 'data-state': 'loading' },
+        el('p', { class: 'desk-widget-state', text: 'Загружаем данные…' }));
+    }
     const state = datum && datum.state ? datum.state : 'empty';
     const value = datum ? datum.value : null;
     // Питомец не зависит от состояния источника: это украшение, а не показатель.
@@ -110,10 +473,21 @@
           el('span', { class: 'desk-pet-word', text: PET_WORDS[mood] })),
         el('p', { class: 'desk-widget-note', text: 'декоративная анимация — без данных и показаний' }));
     }
+    if (state === 'not_connected') {
+      if (isCalType) return renderCalendarDisconnected(type);
+      return el('p', { class: 'desk-widget-state', 'data-state': 'not_connected', text: 'Источник не подключён' });
+    }
     if (state === 'error') {
+      if (isCalType) return renderCalendarError(datum);
+      if (type === 'today') {
+        return el('div', { class: 'desk-widget-body-inner' },
+          el('p', { class: 'desk-widget-state', 'data-state': 'error', text: 'Не получилось: ' + errorText(datum && datum.error, true) }),
+          calendarFooter('error', value && value.sourceLabel));
+      }
       return el('p', { class: 'desk-widget-state', 'data-state': 'error', text: 'Не получилось: ' + errorText(datum && datum.error) });
     }
     if (state === 'empty') {
+      if (isCalType) return renderCalendarEmpty(type, value, 'empty');
       const words = {
         tasks: 'Незавершённых задач нет',
         today: 'На сегодня ничего не ждёт',
@@ -131,10 +505,19 @@
         downloads: 'Папка загрузок пуста или ещё не передана',
         mcp: 'MCP-сервисы не подключены',
         news: 'Новостей нет',
+        calendar: 'Событий в календаре нет',
+        meetings: 'Предстоящих встреч нет',
         pet: 'Питомец',
       };
+      if (type === 'today') {
+        return el('div', { class: 'desk-widget-body-inner' },
+          el('p', { class: 'desk-widget-state', 'data-state': 'empty', text: words.today }),
+          calendarFooter(value && value.calendarState ? value.calendarState : 'not_connected', value && value.sourceLabel));
+      }
       return el('p', { class: 'desk-widget-state', 'data-state': 'empty', text: words[type] || stateWords.empty });
     }
+    if (type === 'calendar') return renderCalendarWidgetBody(datum || { state: 'empty', value: null });
+    if (type === 'meetings') return renderMeetingsWidgetBody(datum || { state: 'empty', value: null });
     const parts = [];
     if (state === 'stale') parts.push(el('span', { class: 'tag desk-stale', text: 'устарело' }));
     if (type === 'tasks') {
@@ -142,6 +525,13 @@
       parts.push(widgetList(items.map((item) => ({ text: item.title, note: taskStatusWords[item.status] || item.status }))));
     } else if (type === 'today') {
       const rows = [];
+      for (const ev of (value && Array.isArray(value.events)) ? value.events : []) {
+        const conflictMark = ev.conflict ? ' [Конфликт]' : '';
+        rows.push({
+          text: `${ev.title || 'Встреча'}${conflictMark}`,
+          note: [ev.timeLabel || '', ev.source || ''].filter(Boolean).join(' · '),
+        });
+      }
       for (const rem of (value && Array.isArray(value.reminders)) ? value.reminders : []) {
         rows.push({ text: rem.text || 'Напоминание', note: rem.dueAt ? shortTime(new Date(rem.dueAt).getTime()) : '' });
       }
@@ -149,6 +539,17 @@
         rows.push({ text: String(mission.goal || mission.title || 'Миссия').slice(0, 120), note: mission.nextRun ? shortTime(new Date(mission.nextRun).getTime()) : 'миссия' });
       }
       parts.push(rows.length ? widgetList(rows) : el('p', { class: 'desk-widget-state', text: 'Пусто' }));
+      if (value && Array.isArray(value.conflicts) && value.conflicts.length > 0) {
+        const conflictText = value.conflicts.map((c) => `«${c.titles[0]}» и «${c.titles[1]}» (${c.overlapMinutes} мин)`).join('; ');
+        parts.push(el('p', { class: 'desk-widget-note desk-cal-conflicts', text: `Пересечения встреч (${value.conflicts.length}): ${conflictText}` }));
+      }
+      if (value && typeof value.briefing === 'string' && value.briefing.trim()) {
+        const details = el('details', { class: 'desk-cal-briefing' },
+          el('summary', { class: 'desk-widget-note desk-cal-briefing-sum', text: 'Утренняя сводка' }),
+          el('pre', { class: 'desk-widget-note desk-cal-briefing-text', text: value.briefing }));
+        parts.push(details);
+      }
+      parts.push(calendarFooter(value && value.calendarState ? value.calendarState : 'not_connected', value && value.sourceLabel));
     } else if (type === 'music') {
       if (value && value.last && value.last.query) {
         parts.push(el('p', { class: 'desk-big', text: '«' + value.last.query + '»' }));
@@ -550,9 +951,28 @@
       return;
     }
     DESK.busy = true;
+    DESK.loading = true;
+    if (W.grid) W.grid.setAttribute('aria-busy', 'true');
+    if (W.refreshBtn) {
+      W.refreshBtn.disabled = true;
+      W.refreshBtn.textContent = 'Обновляем…';
+    }
+    if (!DESK.loaded && W.grid) {
+      if (W.empty) W.empty.hidden = true;
+      W.grid.replaceChildren(el('div', { class: 'desk-loading', role: 'status' },
+        el('span', { class: 'desk-loading-dot', 'aria-hidden': 'true' }),
+        el('span', { text: 'Загружаем виджеты и календарь…' })));
+    }
     try {
       const r = await U.call('desksState');
-      if (!r || r.ok === false) { setNote('Столы не загрузились: ' + ((r && r.error) || 'причина неизвестна')); return; }
+      if (!r || r.ok === false) {
+        DESK.loading = false;
+        setNote('Столы не загрузились: ' + ((r && r.error) || 'причина неизвестна'));
+        if (!DESK.loaded && W.grid) W.grid.replaceChildren();
+        return;
+      }
+      DESK.loading = false;
+      DESK.loaded = true;
       DESK.desks = Array.isArray(r.desks) ? r.desks : [];
       DESK.activeId = r.activeId || null;
       DESK.templates = Array.isArray(r.templates) ? r.templates : [];
@@ -568,11 +988,18 @@
       renderTabs();
       renderGrid();
       renderAddRow();
-      if (W.grid) W.grid.setAttribute('aria-busy', 'false');
     } catch (err) {
+      DESK.loading = false;
       setNote('Столы не загрузились: ' + (err.message || err));
+      if (!DESK.loaded && W.grid) W.grid.replaceChildren();
     } finally {
+      DESK.loading = false;
       DESK.busy = false;
+      if (W.grid) W.grid.setAttribute('aria-busy', 'false');
+      if (W.refreshBtn) {
+        W.refreshBtn.disabled = false;
+        W.refreshBtn.textContent = 'Обновить';
+      }
     }
   }
 

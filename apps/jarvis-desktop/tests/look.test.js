@@ -18,11 +18,12 @@ function boot(saved = {}) {
   const store = new Map(Object.entries(saved));
   const props = {};
   const attrs = {};
+  const attr = (key) => 'data-' + String(key).replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
   const root = {
     dataset: new Proxy({}, {
-      get: (_, key) => attrs['data-' + String(key)],
-      set: (_, key, value) => { attrs['data-' + String(key)] = String(value); return true; },
-      deleteProperty: (_, key) => { delete attrs['data-' + String(key)]; return true; },
+      get: (_, key) => attrs[attr(key)],
+      set: (_, key, value) => { attrs[attr(key)] = String(value); return true; },
+      deleteProperty: (_, key) => { delete attrs[attr(key)]; return true; },
     }),
     style: {
       setProperty(name, value) { props[name] = String(value); },
@@ -203,6 +204,144 @@ test('backdrop.js: принимает только картинки до 25 МБ
   assert.match(B.reject({ type: 'image/png', size: 0 }), /пустой/);
   for (const type of ['image/svg+xml', 'video/mp4', 'text/html', '']) assert.match(B.reject({ type, size: 10 }), /Нужна картинка/, type);
   assert.match(B.reject(null), /Нужна картинка/);
+});
+
+// Хранилище окна и проверка чтения картинки для set(): быстрые очереди вместо IndexedDB.
+function fakeBackdrop(options = {}) {
+  const data = new Map();
+  const puts = [];
+  const plan = { failNextPut: false, throwTransaction: false };
+  const indexedDB = {
+    open() {
+      const req = {};
+      queueMicrotask(() => {
+        const db = {
+          createObjectStore() {},
+          close() {},
+          transaction() {
+            if (plan.throwTransaction) throw new Error('транзакция недоступна');
+            const tx = {};
+            const store = {
+              put(value, key) {
+                const r = {};
+                if (plan.failNextPut) {
+                  plan.failNextPut = false;
+                  queueMicrotask(() => {
+                    tx.error = new Error('Хранилище переполнено');
+                    if (tx.onerror) tx.onerror();
+                  });
+                } else {
+                  data.set(key, value);
+                  puts.push(key);
+                  r.result = key;
+                  setTimeout(() => { if (tx.oncomplete) tx.oncomplete(); }, 5);
+                }
+                return r;
+              },
+              get(key) {
+                const r = {};
+                queueMicrotask(() => { r.result = data.get(key); if (r.onsuccess) r.onsuccess(); });
+                return r;
+              },
+              delete(key) {
+                const r = {};
+                queueMicrotask(() => {
+                  data.delete(key);
+                  setTimeout(() => { if (tx.oncomplete) tx.oncomplete(); }, 5);
+                });
+                return r;
+              },
+            };
+            tx.objectStore = () => store;
+            return tx;
+          },
+        };
+        req.result = db;
+        if (req.onupgradeneeded) req.onupgradeneeded();
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    },
+  };
+  const props = {};
+  const attrs = {};
+  const attr = (key) => 'data-' + String(key).replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
+  const root = {
+    dataset: new Proxy({}, {
+      get: (_, key) => attrs[attr(key)],
+      set: (_, key, value) => { attrs[attr(key)] = String(value); return true; },
+      deleteProperty: (_, key) => { delete attrs[attr(key)]; return true; },
+    }),
+    style: {
+      setProperty(name, value) { props[name] = String(value); },
+      removeProperty(name) { delete props[name]; },
+      getPropertyValue(name) { return props[name] || ''; },
+    },
+  };
+  let seq = 0;
+  const events = [];
+  const sandbox = {
+    window: {},
+    document: { documentElement: root, dispatchEvent: (e) => events.push(e.type) },
+    indexedDB,
+    URL: { createObjectURL: () => `blob:qa-${seq += 1}`, revokeObjectURL() {} },
+    Event: class { constructor(type) { this.type = type; } },
+    console,
+  };
+  sandbox.createImageBitmap = options.noDecode
+    ? undefined
+    : (file) => (options.decode ? options.decode(file) : Promise.resolve({ width: 16, height: 9, close() {} }));
+  vm.runInNewContext(fs.readFileSync(path.join(RENDERER, 'backdrop.js'), 'utf8'), sandbox);
+  return { B: sandbox.window.NoxBackdrop, data, puts, plan, props, attrs, events };
+}
+
+test('backdrop.js: файл с картинкой только в названии не принимается и не затирает прежний фон', async () => {
+  const env = fakeBackdrop({
+    decode: (file) => (file.name === 'good.png'
+      ? Promise.resolve({ width: 32, height: 18, close() {} })
+      : Promise.reject(new Error('The source image could not be decoded.'))),
+  });
+  const good = { name: 'good.png', type: 'image/png', size: 1200 };
+  await env.B.set(good);
+  assert.equal(env.B.has(), true);
+  const url = env.props['--own-bg'];
+  assert.match(url, /^url\("blob:qa-\d+"\)$/);
+  assert.equal(env.attrs['data-own-bg'], 'on');
+  assert.equal(env.events.filter((e) => e === 'nox:backdrop').length, 1);
+
+  for (const [name, size] of [['fake.png', 78], ['truncated.png', 34833]]) {
+    const bad = { name, type: 'image/png', size };
+    await assert.rejects(env.B.set(bad), /не читается как картинка/, name);
+    assert.equal(env.B.has(), true, `${name}: прежняя картинка на месте`);
+    assert.equal(env.props['--own-bg'], url, `${name}: адрес не сменился`);
+    assert.equal(env.attrs['data-own-bg'], 'on');
+    assert.equal(env.data.get('own-bg'), good, `${name}: в хранилище прежний файл`);
+  }
+  assert.equal(env.puts.length, 1, 'битые файлы не доходят до записи');
+});
+
+test('backdrop.js: сбой записи возвращает ошибку и не трогает показанную картинку', async () => {
+  const env = fakeBackdrop();
+  const good = { name: 'one.png', type: 'image/png', size: 10 };
+  await env.B.set(good);
+  const url = env.props['--own-bg'];
+  env.plan.failNextPut = true;
+  await assert.rejects(env.B.set({ name: 'two.png', type: 'image/png', size: 11 }), /переполнено/);
+  assert.equal(env.B.has(), true);
+  assert.equal(env.props['--own-bg'], url);
+  assert.equal(env.data.get('own-bg'), good);
+});
+
+test('backdrop.js: недоступное хранилище не оставляет выбор висеть без ответа', async () => {
+  const env = fakeBackdrop();
+  env.plan.throwTransaction = true;
+  await assert.rejects(env.B.set({ name: 'x.png', type: 'image/png', size: 5 }), /транзакция недоступна/);
+});
+
+test('backdrop.js: без createImageBitmap остаётся проверка по типу (старый движок)', async () => {
+  const env = fakeBackdrop({ noDecode: true });
+  await env.B.set({ name: 'fake.png', type: 'image/png', size: 10 });
+  assert.equal(env.B.has(), true);
 });
 
 test('фон в разделах Nox: слои под панелями, панели полупрозрачны только с картинкой или эффектом', () => {

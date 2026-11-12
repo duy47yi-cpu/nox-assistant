@@ -1,0 +1,461 @@
+{
+  "mode": "approval",
+  "pid": 13896,
+  "readyMs": 2064.13,
+  "electron": "44.9.3",
+  "chromium": "152.0.7977.167",
+  "initialTheme": {
+    "theme": null,
+    "accent": null,
+    "look": null,
+    "resolved": "dark",
+    "systemLight": false,
+    "bg": "#14120E",
+    "appBg": "rgb(15, 15, 16)"
+  },
+  "approval": {
+    "baseline": {
+      "dialog": {
+        "open": false,
+        "text": "",
+        "arguments": "",
+        "focus": "chatInput",
+        "width": 864,
+        "height": 520,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "bottom": 0
+      },
+      "legacyNavExists": false,
+      "pending": [
+        {
+          "id": "audit-baseline",
+          "args": {
+            "text": "audit-baseline-approval"
+          },
+          "autoCancelAt": 1794332065978
+        }
+      ],
+      "rendererErrors": [],
+      "expired": {
+        "ms": 30013.8705,
+        "reason": "время на подтверждение вышло",
+        "pending": 0,
+        "dialog": {
+          "open": false,
+          "text": "",
+          "arguments": "",
+          "focus": "chatInput",
+          "width": 864,
+          "height": 520,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "bottom": 0
+        },
+        "effects": []
+      }
+    },
+    "diagnosticShim": true,
+    "keyboard": {
+      "initial": {
+        "open": true,
+        "text": "Действие: audit-fake-secret-for-display-only?",
+        "arguments": "{\n  \"text\": \"audit-fake-secret-for-display-only\"\n}",
+        "focus": "reject",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 192,
+        "right": 672,
+        "top": 78,
+        "bottom": 442
+      },
+      "Tab": {
+        "open": true,
+        "text": "Действие: audit-fake-secret-for-display-only?",
+        "arguments": "{\n  \"text\": \"audit-fake-secret-for-display-only\"\n}",
+        "focus": "session",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 192,
+        "right": 672,
+        "top": 78,
+        "bottom": 442
+      },
+      "Tabshift": {
+        "open": true,
+        "text": "Действие: audit-fake-secret-for-display-only?",
+        "arguments": "{\n  \"text\": \"audit-fake-secret-for-display-only\"\n}",
+        "focus": "reject",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 192,
+        "right": 672,
+        "top": 78,
+        "bottom": 442
+      },
+      "Escape": {
+        "open": false,
+        "text": "Действие: audit-fake-secret-for-display-only?",
+        "arguments": "{\n  \"text\": \"audit-fake-secret-for-display-only\"\n}",
+        "focus": "chatInput",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "bottom": 0
+      },
+      "effects": []
+    },
+    "observedFirst": {
+      "open": true,
+      "text": "Действие: audit-visible-first?",
+      "arguments": "{\n  \"text\": \"audit-visible-first\"\n}",
+      "focus": "reject",
+      "countdown": "Без ответа отменится через 30 секунд",
+      "width": 864,
+      "height": 520,
+      "left": 192,
+      "right": 672,
+      "top": 122,
+      "bottom": 398
+    },
+    "afterSettling": {
+      "open": false,
+      "text": "Действие: audit-visible-first?",
+      "arguments": "{\n  \"text\": \"audit-visible-first\"\n}",
+      "focus": "chatInput",
+      "countdown": "Без ответа отменится через 30 секунд",
+      "width": 864,
+      "height": 520,
+      "left": 0,
+      "right": 0,
+      "top": 0,
+      "bottom": 0
+    },
+    "pendingAfterSettling": [
+      {
+        "id": "audit-observe-collision",
+        "args": {
+          "text": "audit-hidden-second"
+        }
+      }
+    ],
+    "click": {
+      "open": true,
+      "text": "Действие: audit-visible-race-first?"
+    },
+    "collisionEffects": [
+      {
+        "id": "audit-race-collision",
+        "text": "audit-hidden-race-second"
+      }
+    ],
+    "events": [
+      {
+        "marker": "audit-baseline-approval",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "tool_start",
+        "id": "audit-baseline"
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "approval_request",
+        "id": "audit-baseline"
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "tool_result",
+        "id": "audit-baseline"
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "text",
+        "id": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "done",
+        "id": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "tool_start",
+        "id": "audit-keyboard"
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "approval_request",
+        "id": "audit-keyboard"
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "tool_result",
+        "id": "audit-keyboard"
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "text",
+        "id": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "done",
+        "id": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "tool_start",
+        "id": "audit-observe-collision"
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "approval_request",
+        "id": "audit-observe-collision"
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "tool_start",
+        "id": "audit-observe-collision"
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "approval_request",
+        "id": "audit-observe-collision"
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "tool_result",
+        "id": "audit-observe-collision"
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "text",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "done",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "tool_result",
+        "id": "audit-observe-collision"
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "text",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "done",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "tool_start",
+        "id": "audit-race-collision"
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "approval_request",
+        "id": "audit-race-collision"
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "tool_start",
+        "id": "audit-race-collision"
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "approval_request",
+        "id": "audit-race-collision"
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "tool_result",
+        "id": "audit-race-collision"
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "text",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "done",
+        "id": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "tool_result",
+        "id": "audit-race-collision"
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "status",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "text",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "done",
+        "id": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "status",
+        "id": null
+      }
+    ],
+    "consoleErrors": []
+  },
+  "processes": [
+    {
+      "type": "Browser",
+      "cpuPercent": 0,
+      "workingSetKiB": 161660
+    },
+    {
+      "type": "GPU",
+      "cpuPercent": 0,
+      "workingSetKiB": 134004
+    },
+    {
+      "type": "Utility",
+      "cpuPercent": 0,
+      "workingSetKiB": 53476
+    },
+    {
+      "type": "Tab",
+      "cpuPercent": 0,
+      "workingSetKiB": 138316
+    }
+  ]
+}

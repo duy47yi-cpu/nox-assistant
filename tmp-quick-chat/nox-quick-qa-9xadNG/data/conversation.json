@@ -1,0 +1,104 @@
+{
+  "activeId": "c805baf7-d3ca-430b-8fd1-760422dd818c",
+  "chats": [
+    {
+      "id": "c805baf7-d3ca-430b-8fd1-760422dd818c",
+      "history": [
+        {
+          "role": "user",
+          "content": "какая погода"
+        },
+        {
+          "role": "assistant",
+          "content": "Не вышло: Скажите город (ответ без модели)"
+        },
+        {
+          "role": "user",
+          "content": "проверка разрешения отклонить"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "qa-write",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"quick-qa.txt\",\"content\":\"Точный тестовый текст\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "qa-write",
+          "content": "{\"ok\":false,\"summary\":\"отклонено\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Тестовый ответ."
+        },
+        {
+          "role": "user",
+          "content": "проверка разрешения разрешить"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "qa-write",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"quick-qa.txt\",\"content\":\"Точный тестовый текст\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "qa-write",
+          "content": "{\"ok\":true,\"summary\":\"записал\",\"data\":{\"path\":\"quick-qa.txt\",\"created\":true,\"backup\":null},\"verified\":\"confirmed\",\"evidence\":\"файл quick-qa.txt совпадает с записью\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Тестовый ответ."
+        },
+        {
+          "role": "user",
+          "content": "проверка разрешения ожидание"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "qa-write",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"quick-timeout.txt\",\"content\":\"Точный тестовый текст\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "qa-write",
+          "content": "{\"ok\":false,\"summary\":\"отклонено\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Тестовый ответ."
+        },
+        {
+          "role": "user",
+          "content": "проверка остановка"
+        }
+      ],
+      "updatedAt": 1794492363165
+    }
+  ]
+}

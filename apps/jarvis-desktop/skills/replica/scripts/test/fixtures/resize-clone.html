@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Section under a header that reacts to resize</title>
+<style>
+  /* The same page without the resize handler, a placeholder where the artwork was, and a dark chip:
+     the chip paints in front of the placeholder, so its pixels still count. */
+  body { margin: 0; font-family: Arial, sans-serif; color: #0b0b0f; }
+  header { height: 120px; background: #e4e4ea; }
+  .box { position: relative; height: 300px; padding: 40px; }
+  .chip { position: absolute; left: 60px; top: 108px; padding: 4px 10px; font-size: 16px; line-height: 22px; background: #0b0b0f; color: #fff; }
+  .box p { margin: 0 0 16px; font-size: 24px; line-height: 32px; }
+  .after { height: 3000px; }
+</style>
+</head>
+<body>
+  <header></header>
+  <section class="box">
+    <p>Measured where it sits</p>
+    <svg data-replica="placeholder" width="320" height="160"><rect width="320" height="160" fill="#d0d0d8"/></svg>
+    <b class="chip">New</b>
+  </section>
+  <div class="after"></div>
+</body>
+</html>

@@ -124,10 +124,29 @@
 }
 
 /* ── Рабочий стол: вкладки, сетка, виджеты ───────────────────── */
+.view-dialog.desk-open {
+  display: flex;
+  flex-direction: column;
+}
+
 .view-dialog.desk-open .stage,
 .view-dialog.desk-open .convo,
+.view-dialog.desk-open .convo:has(.feed-list > *),
+.view-dialog.desk-open .convo:not(:has(.feed-list > *)):not(:has(.wait-tray:not([hidden]))),
 .view-dialog.desk-open .scene-toggle {
-  display: none;
+  display: none !important;
+}
+
+.view-dialog.desk-open .desk-page {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+.desk-head,
+.desk-grid,
+.desk-add-row {
+  flex: none;
 }
 
 .desk-page {
@@ -347,6 +366,335 @@
   gap: 6px;
 }
 
+/* ── Рабочий стол: календарь, встречи и состояния ────────────── */
+.desk-loading {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg, 12px);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  color: var(--text-2);
+  font-size: var(--fs-sm, 13px);
+}
+
+.desk-loading-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hue);
+  flex: none;
+}
+
+.desk-cal-widget,
+.desk-meet-widget,
+.desk-cal-connect,
+.desk-cal-empty,
+.desk-cal-error,
+.desk-cal-loading {
+  flex: 1;
+}
+
+.desk-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.desk-skeleton-line {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  animation: desk-pulse 1.6s ease-in-out infinite;
+}
+
+.desk-skeleton-line-short {
+  width: 64%;
+}
+
+@keyframes desk-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desk-skeleton-line { animation: none; opacity: 0.65; }
+}
+
+.desk-cal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: var(--fs-xs, 12px);
+  color: var(--text-3);
+  min-width: 0;
+}
+
+.desk-cal-source-tag {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.desk-cal-tz,
+.desk-cal-extra {
+  color: var(--text-3);
+}
+
+.desk-cal-conflicts-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--r-md, 8px);
+  border: 1px solid color-mix(in srgb, var(--warn, #e5a93c) 45%, var(--border));
+  background: color-mix(in srgb, var(--warn, #e5a93c) 9%, transparent);
+  font-size: var(--fs-xs, 12px);
+  line-height: 1.35;
+}
+
+.desk-cal-conflicts-text {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.desk-cal-days {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.desk-cal-day {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.desk-cal-day-head {
+  font-size: var(--fs-xs, 12px);
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 0.01em;
+}
+
+.desk-cal-list,
+.desk-meet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.desk-cal-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  align-items: start;
+  padding: 5px 6px;
+  border-radius: var(--r-md, 8px);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  background: color-mix(in srgb, var(--text) 2%, transparent);
+  min-width: 0;
+}
+
+.desk-meet-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: var(--r-md, 8px);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  background: color-mix(in srgb, var(--text) 2%, transparent);
+  min-width: 0;
+}
+
+.desk-cal-row.is-conflict,
+.desk-meet-row.is-conflict {
+  border-color: color-mix(in srgb, var(--warn, #e5a93c) 50%, var(--border));
+  border-left: 2px solid var(--warn, #e5a93c);
+  background: color-mix(in srgb, var(--warn, #e5a93c) 7%, transparent);
+}
+
+.desk-cal-row.is-ongoing,
+.desk-meet-row.is-ongoing {
+  border-color: color-mix(in srgb, var(--hue) 45%, var(--border));
+}
+
+.desk-cal-time {
+  font-size: var(--fs-xs, 12px);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.desk-cal-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.desk-cal-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+
+.desk-cal-title {
+  font-size: var(--fs-sm, 13px);
+  font-weight: 500;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.desk-meet-when {
+  font-size: var(--fs-xs, 12px);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.desk-cal-sub {
+  font-size: var(--fs-xs, 12px);
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+.desk-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--r-pill, 999px);
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.desk-pill-conflict {
+  border-color: color-mix(in srgb, var(--warn, #e5a93c) 55%, var(--border));
+  color: var(--warn, #e5a93c);
+  background: color-mix(in srgb, var(--warn, #e5a93c) 12%, transparent);
+}
+
+.desk-pill-live {
+  border-color: color-mix(in srgb, var(--ok, #46a758) 50%, var(--border));
+  color: var(--ok, #46a758);
+  background: color-mix(in srgb, var(--ok, #46a758) 10%, transparent);
+}
+
+.desk-pill-soon {
+  border-color: color-mix(in srgb, var(--hue) 45%, var(--border));
+  color: var(--text-2);
+}
+
+.desk-cal-briefing {
+  margin-top: 2px;
+}
+
+.desk-cal-briefing-sum {
+  cursor: pointer;
+}
+
+.desk-cal-briefing-text {
+  white-space: pre-wrap;
+  margin: 4px 0 0;
+  font-family: inherit;
+  overflow-wrap: anywhere;
+}
+
+.desk-cal-bar,
+.desk-cal-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.desk-cal-connect .desk-cal-actions {
+  margin-top: 2px;
+}
+
+.desk-cal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.desk-cal-pick,
+.desk-cal-url-btn,
+.desk-cal-url-cancel,
+.desk-cal-clear {
+  min-height: 26px;
+  height: auto;
+  font-size: var(--fs-xs, 12px);
+  padding: 3px 8px;
+}
+
+.desk-cal-url-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.desk-cal-url-form[hidden] {
+  display: none;
+}
+
+.desk-cal-url-input {
+  flex: 1 1 170px;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: var(--fs-xs, 12px);
+}
+
+.desk-cal-url-btns {
+  display: inline-flex;
+  gap: 4px;
+  flex: none;
+}
+
+.desk-cal-url-err {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--err, #e5484d);
+  font-size: var(--fs-xs, 12px);
+}
+
+@media (max-width: 920px) {
+  .desk-page {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .desk-cal-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}
+
 /* ── Настройки: расширения ──────────────────────────────────── */
 .ext-card {
   border: 1px solid var(--border);
@@ -405,9 +753,30 @@
 .desk-pet-face { display: inline-block; font-size: 34px; line-height: 1; transition: transform .9s ease-in-out; will-change: transform; }
 .desk-pet-word { color: var(--text-2); font-size: var(--fs-sm); }
 
-/* Кнопки карточки «Освободить место»: общий низ диалога (.editor-foot) с отрицательными
+/* Кнопки карточки загрузок: общий низ диалога (.editor-foot) с отрицательными
  * полями и фоном .bg выходил за карточку тёмной полосой — внутри карточки он не нужен. */
 .ext-card .editor-foot { position: static; margin: 8px 0 0; padding: 0; background: none; border-top: 0; }
+.ext-dl-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.ext-dl-bar[hidden] { display: none; }
+.ext-check { width: 18px; height: 18px; margin: 2px 0 0; flex: none; accent-color: var(--nox-accent, var(--hue)); cursor: pointer; }
+.ext-check:disabled { opacity: 0.5; cursor: default; }
+.cf-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 6px 8px;
+  max-height: 220px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 8px);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.cf-list[hidden] { display: none; }
+.cf-item { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: var(--fs-sm, 13px); color: var(--text); }
+.cf-item-name { min-width: 0; overflow-wrap: anywhere; }
+.cf-item-meta { flex: none; color: var(--text-3); font-size: var(--fs-xs, 12px); }
 
 /* Готовые паки: карточки в «Командах». Цвета только из токенов темы. */
 .pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--sp-3); margin-top: var(--sp-3); }

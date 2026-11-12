@@ -1,0 +1,38 @@
+ M AGENTS.md
+ M apps/jarvis-desktop/main.js
+ M apps/jarvis-desktop/preload.js
+ M apps/jarvis-desktop/renderer/app.js
+ M apps/jarvis-desktop/renderer/connections.js
+ M apps/jarvis-desktop/renderer/index.html
+ M apps/jarvis-desktop/renderer/model-pick.js
+ M apps/jarvis-desktop/renderer/settings-nav.js
+ M apps/jarvis-desktop/src/agent/loop.js
+ M apps/jarvis-desktop/src/chats/book.js
+ M apps/jarvis-desktop/src/screen/agent.js
+ M apps/jarvis-desktop/tests/approvals.test.js
+ M apps/jarvis-desktop/tests/chats.test.js
+ M apps/jarvis-desktop/tests/connections-view.test.js
+ M apps/jarvis-desktop/tests/loop.test.js
+ M apps/jarvis-desktop/tests/screen-agent.test.js
+?? apps/jarvis-desktop/docs/audits/
+?? apps/jarvis-desktop/renderer/nox-commands.css
+?? apps/jarvis-desktop/renderer/nox-commands.js
+?? apps/jarvis-desktop/renderer/nox-connections.css
+?? apps/jarvis-desktop/renderer/nox-connections.js
+?? apps/jarvis-desktop/renderer/nox-screen.css
+?? apps/jarvis-desktop/renderer/nox-screen.js
+?? apps/jarvis-desktop/renderer/nox-settings.css
+?? apps/jarvis-desktop/renderer/nox-settings.js
+?? apps/jarvis-desktop/renderer/orb-nox.js
+?? apps/jarvis-desktop/scripts/nox-commands-shot.js
+?? apps/jarvis-desktop/scripts/nox-compare.js
+?? apps/jarvis-desktop/scripts/nox-connections-shot.js
+?? apps/jarvis-desktop/scripts/nox-qa-verify.js
+?? apps/jarvis-desktop/scripts/nox-settings-shot.js
+?? apps/jarvis-desktop/scripts/nox-shot.js
+?? apps/jarvis-desktop/skills/replica/
+?? apps/jarvis-desktop/tests/settings-view.test.js
+?? docs/audits/
+?? docs/reconstruction/
+?? replica/
+?? scripts/

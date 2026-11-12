@@ -1,0 +1,317 @@
+{
+  "size": 100,
+  "bridgeCount": 111,
+  "sizes": {
+    "width": 1200,
+    "height": 720,
+    "dpr": 1
+  },
+  "bootMs": 1178.1582,
+  "firstRows": true,
+  "listReadyMs": 74.33429999999998,
+  "first": {
+    "noMatch": {
+      "syncMs": 1.8000000044703484,
+      "twoFramesMs": 99.70000000298023,
+      "rows": 0
+    },
+    "oneMatch": {
+      "syncMs": 0.3999999985098839,
+      "twoFramesMs": 27.700000002980232,
+      "rows": 1
+    },
+    "all": {
+      "syncMs": 6.299999997019768,
+      "twoFramesMs": 28.799999997019768,
+      "rows": 100
+    },
+    "reset": {
+      "syncMs": 6.399999998509884,
+      "twoFramesMs": 32.899999998509884,
+      "rows": 111
+    }
+  },
+  "openEditor": {
+    "syncMs": 0.09999999403953552,
+    "twoFramesMs": 19.599999994039536,
+    "rows": 111,
+    "visible": true
+  },
+  "cycles": [
+    {
+      "chat": {
+        "syncMs": 5.200000002980232,
+        "twoFramesMs": 24.799999997019768,
+        "rows": 111
+      },
+      "commandsMs": 75.99340000000007
+    },
+    {
+      "chat": {
+        "syncMs": 5.300000004470348,
+        "twoFramesMs": 19.100000001490116,
+        "rows": 111
+      },
+      "commandsMs": 76.03379999999993
+    },
+    {
+      "chat": {
+        "syncMs": 6,
+        "twoFramesMs": 17.400000005960464,
+        "rows": 111
+      },
+      "commandsMs": 76.24620000000004
+    },
+    {
+      "chat": {
+        "syncMs": 4.5999999940395355,
+        "twoFramesMs": 15.5,
+        "rows": 111
+      },
+      "commandsMs": 78.09720000000016
+    },
+    {
+      "chat": {
+        "syncMs": 5.699999995529652,
+        "twoFramesMs": 18,
+        "rows": 111
+      },
+      "commandsMs": 68.18970000000013
+    },
+    {
+      "chat": {
+        "syncMs": 4.699999995529652,
+        "twoFramesMs": 14.699999995529652,
+        "rows": 111
+      },
+      "commandsMs": 73.58909999999992
+    },
+    {
+      "chat": {
+        "syncMs": 5.199999995529652,
+        "twoFramesMs": 16.099999994039536,
+        "rows": 111
+      },
+      "commandsMs": 68.6223
+    },
+    {
+      "chat": {
+        "syncMs": 5.700000002980232,
+        "twoFramesMs": 16.200000002980232,
+        "rows": 111
+      },
+      "commandsMs": 70.85840000000007
+    },
+    {
+      "chat": {
+        "syncMs": 5.800000004470348,
+        "twoFramesMs": 16.700000002980232,
+        "rows": 111
+      },
+      "commandsMs": 67.47460000000001
+    },
+    {
+      "chat": {
+        "syncMs": 5.600000001490116,
+        "twoFramesMs": 16,
+        "rows": 111
+      },
+      "commandsMs": 64.26999999999998
+    },
+    {
+      "chat": {
+        "syncMs": 4.5,
+        "twoFramesMs": 15.199999995529652,
+        "rows": 111
+      },
+      "commandsMs": 68.67129999999997
+    },
+    {
+      "chat": {
+        "syncMs": 7.299999997019768,
+        "twoFramesMs": 20.69999999552965,
+        "rows": 111
+      },
+      "commandsMs": 79.1923999999999
+    },
+    {
+      "chat": {
+        "syncMs": 4.4000000059604645,
+        "twoFramesMs": 14.400000005960464,
+        "rows": 111
+      },
+      "commandsMs": 89.98030000000017
+    },
+    {
+      "chat": {
+        "syncMs": 6.5,
+        "twoFramesMs": 20.200000002980232,
+        "rows": 111
+      },
+      "commandsMs": 68.17329999999993
+    },
+    {
+      "chat": {
+        "syncMs": 4.600000001490116,
+        "twoFramesMs": 14.5,
+        "rows": 111
+      },
+      "commandsMs": 65.04390000000012
+    },
+    {
+      "chat": {
+        "syncMs": 5.800000004470348,
+        "twoFramesMs": 17,
+        "rows": 111
+      },
+      "commandsMs": 66.83320000000003
+    },
+    {
+      "chat": {
+        "syncMs": 4.300000004470348,
+        "twoFramesMs": 19.399999998509884,
+        "rows": 111
+      },
+      "commandsMs": 61.03600000000006
+    },
+    {
+      "chat": {
+        "syncMs": 4.100000001490116,
+        "twoFramesMs": 13.899999998509884,
+        "rows": 111
+      },
+      "commandsMs": 63.49070000000029
+    },
+    {
+      "chat": {
+        "syncMs": 7.200000002980232,
+        "twoFramesMs": 17.80000000447035,
+        "rows": 111
+      },
+      "commandsMs": 66.05109999999968
+    },
+    {
+      "chat": {
+        "syncMs": 3.8000000044703484,
+        "twoFramesMs": 13.600000001490116,
+        "rows": 111
+      },
+      "commandsMs": 63.11200000000008
+    }
+  ],
+  "transfer": {
+    "exported": {
+      "ok": true,
+      "saved": true,
+      "path": "D:\\nox-release\\docs\\audits\\zero-mercy\\evidence\\electron-temp\\commands-load-r3-100\\exported-commands.json",
+      "fileName": "commands-2026-11-10.json",
+      "warnings": []
+    },
+    "bytes": 53693,
+    "fileKeys": [
+      "format",
+      "version",
+      "schemaVersion",
+      "exportedAt",
+      "commands",
+      "warnings"
+    ],
+    "commandCount": 111,
+    "preview": {
+      "ok": true,
+      "error": null,
+      "canceled": false,
+      "tokenIssued": true,
+      "preview": {
+        "counts": {
+          "add": 0,
+          "update": 0,
+          "unchanged": 111,
+          "conflict": 0
+        },
+        "applicable": true
+      }
+    }
+  },
+  "electron": "44.9.3",
+  "os": "10.0.26300",
+  "errors": [],
+  "gcCycles": [
+    {
+      "completed": 0,
+      "before": {
+        "Documents": 1,
+        "Frames": 1,
+        "JSEventListeners": 2786,
+        "Nodes": 18042,
+        "JSHeapUsedSize": 6051236,
+        "JSHeapTotalSize": 13107200
+      },
+      "after": {
+        "Documents": 1,
+        "Frames": 1,
+        "JSEventListeners": 1048,
+        "Nodes": 7383,
+        "JSHeapUsedSize": 3619644,
+        "JSHeapTotalSize": 5505024
+      }
+    },
+    {
+      "completed": 20,
+      "before": {
+        "Documents": 1,
+        "Frames": 1,
+        "JSEventListeners": 1634,
+        "Nodes": 11158,
+        "JSHeapUsedSize": 6199552,
+        "JSHeapTotalSize": 10747904
+      },
+      "after": {
+        "Documents": 1,
+        "Frames": 1,
+        "JSEventListeners": 1048,
+        "Nodes": 7383,
+        "JSHeapUsedSize": 3389632,
+        "JSHeapTotalSize": 4980736
+      }
+    },
+    {
+      "completed": 40,
+      "before": {
+        "Documents": 1,
+        "Frames": 1,
+        "JSEventListeners": 1048,
+        "Nodes": 7383,
+        "JSHeapUsedSize": 3370804,
+        "JSHeapTotalSize": 12058624
+      },
+      "after": {
+        "Documents": 1,
+        "Frames": 1,
+        "JSEventListeners": 1048,
+        "Nodes": 7383,
+        "JSHeapUsedSize": 3536904,
+        "JSHeapTotalSize": 5242880
+      }
+    },
+    {
+      "completed": 60,
+      "before": {
+        "Documents": 1,
+        "Frames": 1,
+        "JSEventListeners": 1619,
+        "Nodes": 10821,
+        "JSHeapUsedSize": 6106244,
+        "JSHeapTotalSize": 10223616
+      },
+      "after": {
+        "Documents": 1,
+        "Frames": 1,
+        "JSEventListeners": 1048,
+        "Nodes": 7383,
+        "JSHeapUsedSize": 3494184,
+        "JSHeapTotalSize": 5242880
+      }
+    }
+  ]
+}

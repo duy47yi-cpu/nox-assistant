@@ -1,0 +1,139 @@
+{
+  "size": 100,
+  "bridgeCount": 111,
+  "sizes": {
+    "width": 1200,
+    "height": 720,
+    "dpr": 1
+  },
+  "bootMs": 1752.3784,
+  "firstRows": true,
+  "listReadyMs": 82.9661000000001,
+  "first": {
+    "noMatch": {
+      "syncMs": 2.2000000029802322,
+      "twoFramesMs": 107.5,
+      "rows": 0
+    },
+    "oneMatch": {
+      "syncMs": 0.3999999985098839,
+      "twoFramesMs": 25.600000001490116,
+      "rows": 1
+    },
+    "all": {
+      "syncMs": 3.7000000029802322,
+      "twoFramesMs": 23.600000001490116,
+      "rows": 100
+    },
+    "reset": {
+      "syncMs": 5.5,
+      "twoFramesMs": 28.100000001490116,
+      "rows": 111
+    }
+  },
+  "openEditor": {
+    "syncMs": 0.10000000149011612,
+    "twoFramesMs": 25.299999997019768,
+    "rows": 111,
+    "visible": true
+  },
+  "cycles": [
+    {
+      "chat": {
+        "syncMs": 6.200000002980232,
+        "twoFramesMs": 24.700000002980232,
+        "rows": 111
+      },
+      "commandsMs": 88.26779999999962
+    },
+    {
+      "chat": {
+        "syncMs": 5.200000002980232,
+        "twoFramesMs": 17.30000000447035,
+        "rows": 111
+      },
+      "commandsMs": 69.91170000000011
+    },
+    {
+      "chat": {
+        "syncMs": 5.799999997019768,
+        "twoFramesMs": 18.799999997019768,
+        "rows": 111
+      },
+      "commandsMs": 76.51939999999968
+    }
+  ],
+  "transfer": {
+    "exported": {
+      "ok": true,
+      "saved": true,
+      "path": "D:\\nox-release\\docs\\audits\\zero-mercy\\evidence\\electron-temp\\commands-load-ui-transfer-r1\\exported-commands.json",
+      "fileName": "commands-2026-11-10.json",
+      "warnings": []
+    },
+    "bytes": 53693,
+    "fileKeys": [
+      "format",
+      "version",
+      "schemaVersion",
+      "exportedAt",
+      "commands",
+      "warnings"
+    ],
+    "commandCount": 111,
+    "preview": {
+      "ok": true,
+      "error": null,
+      "canceled": false,
+      "tokenIssued": true,
+      "preview": {
+        "counts": {
+          "add": 0,
+          "update": 0,
+          "unchanged": 111,
+          "conflict": 0
+        },
+        "applicable": true
+      }
+    },
+    "ui": {
+      "baseline": 111,
+      "uiExportCount": 111,
+      "canceledPicker": {
+        "open": false,
+        "focused": "",
+        "summary": "",
+        "invoked": true,
+        "storedCount": 111
+      },
+      "preview": {
+        "open": true,
+        "focused": "ciCancel",
+        "summary": "добавить 1 · обновить 0 · без изменений 0 · конфликтов 0"
+      },
+      "canceledPreview": {
+        "open": false,
+        "focused": "cmdImport",
+        "summary": "добавить 1 · обновить 0 · без изменений 0 · конфликтов 0",
+        "storedCount": 111
+      },
+      "applied": {
+        "open": false,
+        "focused": "cmdImport",
+        "summary": "добавить 1 · обновить 0 · без изменений 0 · конфликтов 0",
+        "storedCount": 112,
+        "matchingNames": 1
+      },
+      "malformedInput": {
+        "open": false,
+        "focused": "cmdImport",
+        "summary": "добавить 1 · обновить 0 · без изменений 0 · конфликтов 0",
+        "storedCount": 112,
+        "toast": "Команды сохранены в файл\nИмпорт: добавлено 1, обновлено 0, без изменений 0\nФайл не подошёл: файл импорта не читается как JSON"
+      }
+    }
+  },
+  "electron": "44.9.3",
+  "os": "10.0.26300",
+  "errors": []
+}

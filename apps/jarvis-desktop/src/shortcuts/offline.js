@@ -53,10 +53,15 @@ const closeAll = { title: 'закрыть окна', steps: [{ tool: 'windows_cl
 const brighter = { title: 'ярче', steps: [{ tool: 'screen_brightness', args: { change: 20 } }] };
 const darker = { title: 'темнее', steps: [{ tool: 'screen_brightness', args: { change: -20 } }] };
 const readAloud = { title: 'прочитать вслух', steps: [{ tool: 'read_clipboard_aloud', args: {} }] };
+// Выделенное читаем без Ctrl+C: буфер обмена не трогаем, он остаётся за владельцем.
 const readSelection = {
   title: 'прочитать выделенное',
-  steps: [{ tool: 'ui_keys', args: { keys: 'ctrl+c' } }, { tool: 'wait', args: { ms: 400 } }, { tool: 'read_clipboard_aloud', args: {} }],
+  steps: [{ tool: 'read_clipboard_aloud', args: { source: 'selection' } }],
 };
+// Управление чтением: пауза, продолжение с того же места, остановка.
+const readPause = { title: 'пауза чтения', steps: [{ tool: 'read_clipboard_aloud', args: { action: 'pause' } }] };
+const readResume = { title: 'продолжить чтение', steps: [{ tool: 'read_clipboard_aloud', args: { action: 'resume' } }] };
+const readStop = { title: 'остановить чтение', steps: [{ tool: 'read_clipboard_aloud', args: { action: 'stop' } }] };
 const screenOff = { title: 'выключить экран', steps: [{ tool: 'monitor_off', args: {} }] };
 const weather = { title: 'погода', steps: [{ tool: 'weather_now', args: {} }] };
 const FREQUENT = {
@@ -74,6 +79,15 @@ const FREQUENT = {
   'прочитай вслух': readAloud,
   'прочитай буфер вслух': readAloud,
   'прочитай выделенное': readSelection,
+  'пауза': readPause,
+  'поставь на паузу': readPause,
+  'пауза чтения': readPause,
+  'продолжай читать': readResume,
+  'продолжи чтение': readResume,
+  'продолжай чтение': readResume,
+  'стоп читать': readStop,
+  'хватит читать': readStop,
+  'останови чтение': readStop,
   'заблокируй экран': { title: 'блокировка экрана', steps: [{ tool: 'ui_keys', args: { keys: 'win+l' } }] },
   'выключи монитор': screenOff,
   'выключи экран': screenOff,

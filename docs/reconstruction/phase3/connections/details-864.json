@@ -1,0 +1,831 @@
+{
+  "inner": [
+    864,
+    520
+  ],
+  "dpr": 1,
+  "view": "mcp",
+  "title": "Nox — Джарвис",
+  "crumb": "Подключения",
+  "railCurrent": "mcp",
+  "scroll": {
+    "viewMcp": {
+      "top": 0,
+      "height": 502,
+      "client": 502
+    }
+  },
+  "elements": {
+    ".app": {
+      "x": 0,
+      "y": 0,
+      "w": 864,
+      "h": 520,
+      "hidden": false,
+      "display": "grid",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".rail": {
+      "x": 9,
+      "y": 9,
+      "w": 46,
+      "h": 502,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".topbar": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".main": {
+      "x": 63,
+      "y": 9,
+      "w": 792,
+      "h": 502,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".views": {
+      "x": 63,
+      "y": 9,
+      "w": 792,
+      "h": 502,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".view-mcp": {
+      "x": 63,
+      "y": 9,
+      "w": 792,
+      "h": 502,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "absolute"
+    },
+    "#mcpPage": {
+      "x": 63,
+      "y": 9,
+      "w": 792,
+      "h": 502,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpPanel": {
+      "x": 63,
+      "y": 9,
+      "w": 792,
+      "h": 502,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpHead": {
+      "x": 64,
+      "y": 10,
+      "w": 790,
+      "h": 64,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpToolbar": {
+      "x": 64,
+      "y": 74,
+      "w": 790,
+      "h": 56,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpFilters": {
+      "x": 322,
+      "y": 86,
+      "w": 476,
+      "h": 32,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpSearchWrap": {
+      "x": 78,
+      "y": 82,
+      "w": 234,
+      "h": 40,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpSearch": {
+      "x": 114,
+      "y": 83,
+      "w": 185,
+      "h": 38,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpReload": {
+      "x": 808,
+      "y": 86,
+      "w": 32,
+      "h": 32,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpListWrap": {
+      "x": 78,
+      "y": 134,
+      "w": 752,
+      "h": 484,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpList": {
+      "x": 78,
+      "y": 136,
+      "w": 748,
+      "h": 480,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpList > *": {
+      "x": 78,
+      "y": 136,
+      "w": 748,
+      "h": 109,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    "#mcpEmpty": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": true,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpNoResults": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": true,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpLoading": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": true,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpPopular": {
+      "x": 78,
+      "y": 632,
+      "w": 752,
+      "h": 766,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpPopularList": {
+      "x": 95,
+      "y": 723,
+      "w": 718,
+      "h": 612,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpPopularCats": {
+      "x": 95,
+      "y": 683,
+      "w": 718,
+      "h": 28,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpAddBtn": {
+      "x": 544,
+      "y": 22,
+      "w": 184,
+      "h": 40,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpEmptyAdd": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "inline-flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpForm": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpAddDialog": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "fixed"
+    },
+    "#mcpAddTitle": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpAddError": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": true,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpFormNote": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpName": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpTarget": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpArgs": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpAddSubmit": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDetailsDialog": {
+      "x": 192,
+      "y": 16,
+      "w": 480,
+      "h": 488,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "fixed"
+    },
+    "#mcpDetailsBody": {
+      "x": 193,
+      "y": 89,
+      "w": 478,
+      "h": 330,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDetailsDelete": {
+      "x": 479,
+      "y": 454,
+      "w": 83,
+      "h": 36,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDetailsClose": {
+      "x": 571,
+      "y": 454,
+      "w": 84,
+      "h": 36,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDetailsToggle": {
+      "x": 596,
+      "y": 448,
+      "w": 32,
+      "h": 20,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    "#mcpDeleteDialog": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "fixed"
+    },
+    "#mcpDeleteText": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDeleteInput": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDeleteConfirm": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDeleteCancel": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDriftDialog": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "fixed"
+    },
+    "#mcpDriftBody": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDriftConfirm": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDriftCancel": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpErrorDialog": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "fixed"
+    },
+    "#mcpConnErrReason": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpConnErrClose": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpFilters button": {
+      "x": 322,
+      "y": 86,
+      "w": 60,
+      "h": 32,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpResetFilters": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "inline-block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#toasts": {
+      "x": 848,
+      "y": 504,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "fixed"
+    },
+    ".mcp-card": {
+      "x": 78,
+      "y": 136,
+      "w": 748,
+      "h": 109,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".mcp-card .mcp-name": {
+      "x": 137,
+      "y": 151,
+      "w": 81,
+      "h": 20,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".mcp-card .mcp-pill": {
+      "x": 226,
+      "y": 151,
+      "w": 93,
+      "h": 20,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".mcp-card .mcp-target": {
+      "x": 137,
+      "y": 175,
+      "w": 589,
+      "h": 16,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".mcp-card .mcp-line": {
+      "x": 137,
+      "y": 195,
+      "w": 589,
+      "h": 16,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".mcp-card .mcp-caps": {
+      "x": 137,
+      "y": 215,
+      "w": 589,
+      "h": 15,
+      "hidden": false,
+      "display": "flow-root",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".mcp-card .mcp-card-action": {
+      "x": 738,
+      "y": 175,
+      "w": 74,
+      "h": 32,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpPopularCats .nox-chip-filter": {
+      "x": 95,
+      "y": 683,
+      "w": 42,
+      "h": 28,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".mcp-popular-row": {
+      "x": 95,
+      "y": 723,
+      "w": 718,
+      "h": 54,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".mcp-popular-row .mcp-popular-name": {
+      "x": 144,
+      "y": 733,
+      "w": 557,
+      "h": 17,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".mcp-popular-row .mcp-popular-add": {
+      "x": 711,
+      "y": 736,
+      "w": 91,
+      "h": 28,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpPopularNote": {
+      "x": 95,
+      "y": 1347,
+      "w": 718,
+      "h": 34,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDetailsDialog .dialog-body": {
+      "x": 193,
+      "y": 17,
+      "w": 478,
+      "h": 486,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDetailsBody input.switch": {
+      "x": 596,
+      "y": 448,
+      "w": 32,
+      "h": 20,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    "#mcpAddDialog .dialog-body": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDeleteDialog .dialog-body": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mcpDriftDialog .dialog-body": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    }
+  },
+  "rows": [
+    {
+      "i": 0,
+      "name": "echo-check",
+      "status": "connected",
+      "pill": "Подключён",
+      "tone": "ok",
+      "line": "Подключён · 2 действия",
+      "action": "Детали",
+      "rect": {
+        "x": 78,
+        "y": 136,
+        "w": 748,
+        "h": 109,
+        "hidden": false,
+        "display": "flex",
+        "visibility": "visible",
+        "position": "relative"
+      }
+    },
+    {
+      "i": 1,
+      "name": "bad-path",
+      "status": "error",
+      "pill": "Ошибка",
+      "tone": "err",
+      "line": "Ошибка: программа не найдена: сервис не запустился: spawn nox-no-such-command ENOENT",
+      "action": "Повторить",
+      "rect": {
+        "x": 78,
+        "y": 257,
+        "w": 748,
+        "h": 100,
+        "hidden": false,
+        "display": "flex",
+        "visibility": "visible",
+        "position": "relative"
+      }
+    },
+    {
+      "i": 2,
+      "name": "off-service",
+      "status": "disabled",
+      "pill": "Выключен",
+      "tone": "ghost",
+      "line": "Выключен",
+      "action": "Включить",
+      "rect": {
+        "x": 78,
+        "y": 369,
+        "w": 748,
+        "h": 100,
+        "hidden": false,
+        "display": "flex",
+        "visibility": "visible",
+        "position": "relative"
+      }
+    },
+    {
+      "i": 3,
+      "name": "drift-check",
+      "status": "drift",
+      "pill": "Изменения инструментов",
+      "tone": "warn",
+      "line": "Набор действий изменился — нужно ваше подтверждение",
+      "action": "Подтвердить изменения",
+      "rect": {
+        "x": 78,
+        "y": 481,
+        "w": 748,
+        "h": 135,
+        "hidden": false,
+        "display": "flex",
+        "visibility": "visible",
+        "position": "relative"
+      }
+    }
+  ],
+  "filters": [
+    {
+      "text": "Все 4",
+      "pressed": "true"
+    },
+    {
+      "text": "Подключённые 2",
+      "pressed": "false"
+    },
+    {
+      "text": "Выключенные 1",
+      "pressed": "false"
+    },
+    {
+      "text": "Ошибка 1",
+      "pressed": "false"
+    }
+  ],
+  "mode": "details",
+  "extra": {
+    "mode": "details",
+    "connected": true
+  }
+}

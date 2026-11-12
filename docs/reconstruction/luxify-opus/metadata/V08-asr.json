@@ -1,0 +1,9 @@
+{
+ "video": "video_2026-11-10_22-12-47",
+ "model": "faster-whisper small int8 cpu",
+ "language_forced": "ru",
+ "vad_filter": true,
+ "duration": 60.975625,
+ "duration_after_vad": 0.0,
+ "segments": []
+}

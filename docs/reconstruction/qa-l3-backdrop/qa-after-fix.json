@@ -1,0 +1,619 @@
+{
+  "ok": true,
+  "passed": 16,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "1. Исходно: строка выбора на месте, картинки нет, фон темы",
+      "ok": true,
+      "detail": "{\"pick\":\"Выбрать картинку\",\"has\":false,\"bg\":\"theme\",\"dropHidden\":true,\"note\":\"\",\"stored\":{\"empty\":true}}"
+    },
+    {
+      "name": "2. Маленькая картинка: сохранена, показана, «Убрать» появилась, фон image",
+      "ok": true,
+      "detail": "{\"set\":{\"ok\":true,\"ms\":152,\"size\":1559,\"name\":\"small.png\",\"type\":\"image/png\"},\"has\":true,\"url\":\"url(\\\"blob:file:///ea67ba77-a5c2-422d-93c5-13036da5706a\\\")\",\"note\":\"\",\"dropHidden\":false,\"stored\":{\"size\":1559,\"type\":\"image/png\",\"name\":\"small.png\"},\"decode\":{\"ok\":true,\"width\":320,\"height\":200,\"size\":1559},\"frames\":{\"maxGap\":80,\"frames\":58}}"
+    },
+    {
+      "name": "2б. Повторное сохранение подряд: без заметного зависания (обычная работа)",
+      "ok": true,
+      "detail": "{\"set\":{\"ok\":true,\"ms\":118,\"size\":1559,\"name\":\"small.png\",\"type\":\"image/png\"},\"frames\":{\"maxGap\":30,\"frames\":79}}"
+    },
+    {
+      "name": "3. Большой файл 24,94 МБ (у лимита): принят, сохранён целиком, показан, интерфейс жив",
+      "ok": true,
+      "detail": "{\"res\":{\"ok\":true,\"ms\":248,\"size\":26148864,\"name\":\"big-near-limit.png\",\"type\":\"image/png\"},\"frames\":{\"maxGap\":26,\"frames\":74},\"stored\":{\"size\":26148864,\"type\":\"image/png\",\"name\":\"big-near-limit.png\"},\"decode\":{\"ok\":true,\"width\":2550,\"height\":2550,\"size\":26148864}}"
+    },
+    {
+      "name": "4. Ровно 25 МБ: граница включительная (не больше — значит можно)",
+      "ok": true,
+      "detail": "{\"res\":{\"ok\":true,\"ms\":325,\"size\":26214400,\"name\":\"big-exact-limit.png\",\"type\":\"image/png\"},\"stored\":{\"size\":26214400,\"type\":\"image/png\",\"name\":\"big-exact-limit.png\"},\"decode\":{\"ok\":true,\"width\":2550,\"height\":2550,\"size\":26214400},\"frames\":{\"maxGap\":24,\"frames\":78}}"
+    },
+    {
+      "name": "5. Файл выше 25 МБ: ясный отказ, прежняя картинка и настройки целы",
+      "ok": true,
+      "detail": "{\"oneByte\":{\"ok\":false,\"ms\":1,\"size\":26214401,\"name\":\"big-over-limit.png\",\"type\":\"image/png\",\"error\":\"Картинка больше 25 МБ\"},\"fiveMb\":{\"ok\":false,\"ms\":0,\"size\":31457280,\"name\":\"big-over-limit-5mb.png\",\"type\":\"image/png\",\"error\":\"Картинка больше 25 МБ\"},\"urlKept\":true,\"note\":\"Картинка больше 25 МБ\",\"storedKept\":true}"
+    },
+    {
+      "name": "6. Текстовый файл: отказ словами, прежняя картинка цела, поле выбора очищено",
+      "ok": true,
+      "detail": "{\"set\":{\"ok\":false,\"ms\":0,\"size\":60,\"name\":\"note.txt\",\"type\":\"text/plain\",\"error\":\"Нужна картинка: PNG, JPG, WebP или GIF\"},\"note\":\"Нужна картинка: PNG, JPG, WebP или GIF\",\"urlKept\":true,\"storedKept\":true,\"inputFiles\":0}"
+    },
+    {
+      "name": "7. Пустой файл: отказ «Файл пустой», прежняя картинка цела",
+      "ok": true,
+      "detail": "{\"empty\":{\"ok\":false,\"ms\":0,\"size\":0,\"name\":\"empty.png\",\"type\":\"image/png\",\"error\":\"Файл пустой\"},\"urlKept\":true}"
+    },
+    {
+      "name": "7б. Обрезанная картинка (битый PNG): не должна приниматься молча",
+      "ok": true,
+      "detail": "{\"truncated\":{\"ok\":false,\"ms\":1,\"size\":519,\"name\":\"truncated.png\",\"type\":\"image/png\",\"error\":\"Файл не читается как картинка\"},\"urlKept\":true,\"note\":\"Файл не читается как картинка\"}"
+    },
+    {
+      "name": "8. «Картинка» с текстом внутри: отказ, а не тихий успех с пустым фоном",
+      "ok": true,
+      "detail": "{\"set\":{\"ok\":false,\"ms\":1,\"size\":78,\"name\":\"fake-image.png\",\"type\":\"image/png\",\"error\":\"Файл не читается как картинка\"},\"urlKept\":true,\"note\":\"Файл не читается как картинка\",\"decodeStored\":{\"ok\":true,\"width\":2550,\"height\":2550,\"size\":26214400}}"
+    },
+    {
+      "name": "9. Повторный выбор после ошибки: принимается, сообщение об ошибке уходит",
+      "ok": true,
+      "detail": "{\"set\":{\"ok\":true,\"ms\":35,\"size\":1559,\"name\":\"small.png\",\"type\":\"image/png\"},\"note\":\"\",\"noteErr\":null,\"stored\":{\"size\":1559,\"type\":\"image/png\",\"name\":\"small.png\"},\"decode\":{\"ok\":true,\"width\":320,\"height\":200,\"size\":1559}}"
+    },
+    {
+      "name": "10. Отмена выбора: кнопка открывает поле, пустой выбор ничего не ломает",
+      "ok": true,
+      "detail": "{\"clicked\":1,\"urlKept\":true,\"note\":\"\",\"inputFiles\":0,\"setCalls\":0}"
+    },
+    {
+      "name": "11. Перезагрузка: картинка и фон «image» вернулись, настройка не потеряна",
+      "ok": true,
+      "detail": "{\"has\":true,\"dataBg\":\"image\",\"lookBg\":\"image\",\"savedBg\":\"image\",\"note\":\"\",\"stored\":{\"size\":1559,\"type\":\"image/png\",\"name\":\"small.png\"},\"decode\":{\"ok\":true,\"width\":320,\"height\":200,\"size\":1559}}"
+    },
+    {
+      "name": "11б. Первый выбор после перезапуска: укладывается в разумное время, окно отвечает",
+      "ok": true,
+      "detail": "{\"set\":{\"ok\":true,\"ms\":179,\"size\":1559,\"name\":\"small.png\",\"type\":\"image/png\"},\"frames\":{\"maxGap\":23,\"frames\":80}}"
+    },
+    {
+      "name": "12. «Убрать»: картинка удалена, фон снова тема, хранилище пустое",
+      "ok": true,
+      "detail": "{\"has\":false,\"url\":\"\",\"dataOwn\":null,\"lookBg\":\"theme\",\"note\":\"\",\"stored\":{\"empty\":true}}"
+    },
+    {
+      "name": "13. Итог: окно отвечает, не упало, ошибок консоли и страницы нет",
+      "ok": true,
+      "detail": "{\"crashed\":false,\"responsiveMs\":0,\"pageErrors\":[],\"consoleErrors\":[]}"
+    }
+  ],
+  "metrics": {
+    "small": {
+      "set": {
+        "ok": true,
+        "ms": 152,
+        "size": 1559,
+        "name": "small.png",
+        "type": "image/png"
+      },
+      "frames": {
+        "maxGap": 80,
+        "frames": 58
+      },
+      "stored": {
+        "size": 1559,
+        "type": "image/png",
+        "name": "small.png"
+      },
+      "decode": {
+        "ok": true,
+        "width": 320,
+        "height": 200,
+        "size": 1559
+      }
+    },
+    "smallAgain": {
+      "set": {
+        "ok": true,
+        "ms": 118,
+        "size": 1559,
+        "name": "small.png",
+        "type": "image/png"
+      },
+      "frames": {
+        "maxGap": 30,
+        "frames": 79
+      },
+      "decode": {
+        "ok": true,
+        "width": 320,
+        "height": 200,
+        "size": 1559
+      }
+    },
+    "bigNear": {
+      "set": {
+        "ok": true,
+        "ms": 248,
+        "size": 26148864,
+        "name": "big-near-limit.png",
+        "type": "image/png"
+      },
+      "frames": {
+        "maxGap": 26,
+        "frames": 74
+      },
+      "roundtripMs": 471,
+      "stored": {
+        "size": 26148864,
+        "type": "image/png",
+        "name": "big-near-limit.png"
+      },
+      "decode": {
+        "ok": true,
+        "width": 2550,
+        "height": 2550,
+        "size": 26148864
+      }
+    },
+    "bigExact": {
+      "set": {
+        "ok": true,
+        "ms": 325,
+        "size": 26214400,
+        "name": "big-exact-limit.png",
+        "type": "image/png"
+      },
+      "frames": {
+        "maxGap": 24,
+        "frames": 78
+      },
+      "stored": {
+        "size": 26214400,
+        "type": "image/png",
+        "name": "big-exact-limit.png"
+      },
+      "decode": {
+        "ok": true,
+        "width": 2550,
+        "height": 2550,
+        "size": 26214400
+      }
+    },
+    "over": {
+      "oneByte": {
+        "ok": false,
+        "ms": 1,
+        "size": 26214401,
+        "name": "big-over-limit.png",
+        "type": "image/png",
+        "error": "Картинка больше 25 МБ"
+      },
+      "fiveMb": {
+        "ok": false,
+        "ms": 0,
+        "size": 31457280,
+        "name": "big-over-limit-5mb.png",
+        "type": "image/png",
+        "error": "Картинка больше 25 МБ"
+      },
+      "before": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "",
+        "noteErr": null,
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dimVar": "40%",
+        "errs": []
+      },
+      "after": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "Картинка больше 25 МБ",
+        "noteErr": "1",
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dimVar": "40%",
+        "errs": []
+      },
+      "after5": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "Картинка больше 25 МБ",
+        "noteErr": "1",
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dimVar": "40%",
+        "errs": []
+      }
+    },
+    "text": {
+      "set": {
+        "ok": false,
+        "ms": 0,
+        "size": 60,
+        "name": "note.txt",
+        "type": "text/plain",
+        "error": "Нужна картинка: PNG, JPG, WebP или GIF"
+      },
+      "after": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "Нужна картинка: PNG, JPG, WebP или GIF",
+        "noteErr": "1",
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dimVar": "40%",
+        "errs": []
+      }
+    },
+    "empty": {
+      "empty": {
+        "ok": false,
+        "ms": 0,
+        "size": 0,
+        "name": "empty.png",
+        "type": "image/png",
+        "error": "Файл пустой"
+      },
+      "truncated": {
+        "ok": false,
+        "ms": 1,
+        "size": 519,
+        "name": "truncated.png",
+        "type": "image/png",
+        "error": "Файл не читается как картинка"
+      },
+      "afterEmpty": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "Файл пустой",
+        "noteErr": "1",
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dimVar": "40%",
+        "errs": []
+      },
+      "afterTruncated": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "Файл не читается как картинка",
+        "noteErr": "1",
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dimVar": "40%",
+        "errs": []
+      }
+    },
+    "fake": {
+      "set": {
+        "ok": false,
+        "ms": 1,
+        "size": 78,
+        "name": "fake-image.png",
+        "type": "image/png",
+        "error": "Файл не читается как картинка"
+      },
+      "before": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "Файл не читается как картинка",
+        "noteErr": "1",
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dimVar": "40%",
+        "errs": []
+      },
+      "after": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "Файл не читается как картинка",
+        "noteErr": "1",
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///7d3574b2-bb3d-4079-8b5c-4cb79a639877\")",
+        "dimVar": "40%",
+        "errs": []
+      },
+      "decodeStored": {
+        "ok": true,
+        "width": 2550,
+        "height": 2550,
+        "size": 26214400
+      }
+    },
+    "reselect": {
+      "set": {
+        "ok": true,
+        "ms": 35,
+        "size": 1559,
+        "name": "small.png",
+        "type": "image/png"
+      },
+      "after": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///c559f079-95ad-4f6b-8c22-954c08774bdb\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "",
+        "noteErr": null,
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///c559f079-95ad-4f6b-8c22-954c08774bdb\")",
+        "dimVar": "40%",
+        "errs": []
+      },
+      "stored": {
+        "size": 1559,
+        "type": "image/png",
+        "name": "small.png"
+      },
+      "decode": {
+        "ok": true,
+        "width": 320,
+        "height": 200,
+        "size": 1559
+      }
+    },
+    "cancel": {
+      "clicked": 1,
+      "before": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///c559f079-95ad-4f6b-8c22-954c08774bdb\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "",
+        "noteErr": null,
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///c559f079-95ad-4f6b-8c22-954c08774bdb\")",
+        "dimVar": "40%",
+        "errs": []
+      },
+      "after": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///c559f079-95ad-4f6b-8c22-954c08774bdb\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "",
+        "noteErr": null,
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///c559f079-95ad-4f6b-8c22-954c08774bdb\")",
+        "dimVar": "40%",
+        "errs": []
+      },
+      "setBefore": 11,
+      "setAfter": 11
+    },
+    "reload": {
+      "before": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///c559f079-95ad-4f6b-8c22-954c08774bdb\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "",
+        "noteErr": null,
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///c559f079-95ad-4f6b-8c22-954c08774bdb\")",
+        "dimVar": "40%",
+        "errs": []
+      },
+      "after": {
+        "view": "settings",
+        "has": true,
+        "url": "url(\"blob:file:///45a1ecce-ed7f-4b03-b70b-ec42ef05a471\")",
+        "dataOwn": "on",
+        "dataBg": "image",
+        "lookBg": "image",
+        "savedBg": "image",
+        "savedDim": "40",
+        "bgSelect": "image",
+        "note": "",
+        "noteErr": null,
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": false,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "block",
+        "bgImage": "url(\"blob:file:///45a1ecce-ed7f-4b03-b70b-ec42ef05a471\")",
+        "dimVar": "40%",
+        "errs": []
+      },
+      "stored": {
+        "size": 1559,
+        "type": "image/png",
+        "name": "small.png"
+      },
+      "decode": {
+        "ok": true,
+        "width": 320,
+        "height": 200,
+        "size": 1559
+      }
+    },
+    "firstSaveAfterReload": {
+      "set": {
+        "ok": true,
+        "ms": 179,
+        "size": 1559,
+        "name": "small.png",
+        "type": "image/png"
+      },
+      "frames": {
+        "maxGap": 23,
+        "frames": 80
+      },
+      "decode": {
+        "ok": true,
+        "width": 320,
+        "height": 200,
+        "size": 1559
+      }
+    },
+    "drop": {
+      "after": {
+        "view": "settings",
+        "has": false,
+        "url": "",
+        "dataOwn": null,
+        "dataBg": null,
+        "lookBg": "theme",
+        "savedBg": "theme",
+        "savedDim": "40",
+        "bgSelect": "theme",
+        "note": "",
+        "noteErr": null,
+        "pickVisible": true,
+        "pickText": "Выбрать картинку",
+        "dropHidden": true,
+        "inputFiles": 0,
+        "inputAccept": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp",
+        "bgDisplay": "none",
+        "bgImage": "none",
+        "dimVar": "40%",
+        "errs": []
+      },
+      "stored": {
+        "empty": true
+      }
+    },
+    "final": {
+      "responsiveMs": 0,
+      "all": 15
+    }
+  },
+  "consoleErrors": [],
+  "elapsedMs": 16564
+}

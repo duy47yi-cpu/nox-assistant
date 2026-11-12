@@ -223,19 +223,27 @@ test('девять шаблонов: шесть прежних и ночь, ра
   }
 });
 
-test('каталог: 17 типов, у каждого настоящий источник или честная пометка', () => {
+test('каталог: 19 типов, у каждого настоящий источник или честная пометка', () => {
   const ids = WIDGET_TYPES.map((w) => w.id).sort();
   assert.deepEqual(ids, [
-    'apps', 'commands', 'currency', 'downloads', 'goals', 'mcp', 'missions',
+    'apps', 'calendar', 'commands', 'currency', 'downloads', 'goals', 'mcp', 'meetings', 'missions',
     'music', 'news', 'notes', 'orb', 'pet', 'reminders', 'system', 'tasks', 'today', 'weather',
   ]);
-  assert.equal(WIDGET_TYPES.length, 17);
+  assert.equal(WIDGET_TYPES.length, 19);
+  const calType = WIDGET_TYPES.find((w) => w.id === 'calendar');
+  assert.equal(calType.title, 'Календарь');
+  assert.equal(calType.defaultW, 6);
+  assert.equal(calType.defaultH, 5);
+  const meetType = WIDGET_TYPES.find((w) => w.id === 'meetings');
+  assert.equal(meetType.title, 'Встречи');
+  assert.equal(meetType.defaultW, 6);
+  assert.equal(meetType.defaultH, 5);
   const newsType = WIDGET_TYPES.find((w) => w.id === 'news');
   assert.equal(newsType.title, 'Новости');
   assert.equal(newsType.defaultW, 4);
   assert.equal(newsType.defaultH, 3);
   for (const id of WIDGET_TYPES.map((w) => w.id)) assert.ok(isWidgetType(id));
-  for (const banned of ['finance', 'home', 'calendar', 'files', 'holodeck']) assert.equal(isWidgetType(banned), false);
+  for (const banned of ['finance', 'home', 'files', 'holodeck']) assert.equal(isWidgetType(banned), false);
   // Каждый шаблон использует только типы из каталога — поймает опечатку в шаблоне.
   for (const id of TEMPLATE_IDS) {
     for (const widget of template(id).widgets) assert.ok(isWidgetType(widget.type), `${id}: ${widget.type}`);
@@ -277,6 +285,11 @@ test('config виджета: только известные ключи и пр�
   assert.deepEqual(normalizeWidget(money).config, { codes: ['USD', 'EUR'] });
   assert.throws(() => normalizeWidget({ ...money, config: { codes: ['US'] } }), /латинских букв/);
   assert.throws(() => normalizeWidget({ ...money, config: { codes: ['USD', 'EUR', 'CNY', 'GBP', 'JPY', 'CHF'] } }), /от 1 до 5/);
+  const calW = normalizeWidget({ id: uuid(3), type: 'calendar', x: 1, y: 1, w: 6, h: 4, config: { limit: 12, days: 7 } });
+  assert.deepEqual(calW.config, { limit: 12, days: 7 });
+  const meetW = normalizeWidget({ id: uuid(4), type: 'meetings', x: 7, y: 1, w: 6, h: 4, config: { limit: 8, days: 14 } });
+  assert.deepEqual(meetW.config, { limit: 8, days: 14 });
+  assert.throws(() => normalizeWidget({ id: uuid(5), type: 'meetings', x: 1, y: 1, w: 6, h: 4, config: { days: 90 } }), /days/);
 });
 
 test('виджеты не накладываются; первое свободное место ищется сверху вниз', () => {
@@ -860,4 +873,132 @@ test('buildDeskData: данные по id виджетов, ошибка одн�
   assert.equal(JSON.stringify(sources), snapshot, 'источники не изменены');
   assert.equal(desk.widgets.length, 4, 'стол не изменён');
   assert.throws(() => data.buildDeskData(null, sources), /нужен объект с виджетами/);
+});
+
+test('calendar и meetings: все 5 состояний через С3, локальное время, источник события и пересечения', () => {
+  const now = Date.parse('2026-11-12T07:30:00Z'); // 10:30 Europe/Moscow
+  const calEmpty = data.meetings(null, { now, timeZone: 'Europe/Moscow' });
+  assert.equal(calEmpty.state, 'not_connected');
+  assert.equal(calEmpty.value.connected, false);
+  assert.equal(calEmpty.value.items.length, 0);
+
+  const errRes = data.meetings({ connected: true, ok: false, source: 'Лента', reason: 'bad_ics' }, { now, timeZone: 'Europe/Moscow' });
+  assert.equal(errRes.state, 'error');
+  assert.equal(errRes.error, 'bad_ics');
+
+  const icsErrRes = data.calendar({ connected: true, source: 'Файл', icsText: 'не-ics' }, { now, timeZone: 'Europe/Moscow' });
+  assert.equal(icsErrRes.state, 'error');
+  assert.equal(icsErrRes.error, 'bad_ics');
+
+  const connectedEmpty = data.meetings({ connected: true, source: 'Яндекс', items: [] }, { now, timeZone: 'Europe/Moscow' });
+  assert.equal(connectedEmpty.state, 'empty');
+  assert.equal(connectedEmpty.value.connected, true);
+  assert.equal(connectedEmpty.value.hasOtherEvents, false);
+
+  const onlyPast = data.meetings({
+    connected: true,
+    source: 'Google Calendar',
+    items: [
+      { id: 'past-1', title: 'Утренняя синхронизация', startAt: '2026-11-12T05:00:00Z', endAt: '2026-11-12T06:00:00Z' },
+    ],
+  }, { now, timeZone: 'Europe/Moscow' });
+  assert.equal(onlyPast.state, 'empty');
+  assert.equal(onlyPast.error, 'no_upcoming');
+  assert.equal(onlyPast.value.hasOtherEvents, true);
+  assert.equal(onlyPast.value.totalInCalendar, 1);
+
+  const snapshot = {
+    connected: true,
+    source: 'Основной календарь',
+    fetchedAt: now - 5 * 60 * 1000,
+    items: [
+      {
+        id: 'ev-past',
+        title: 'Ранний статус',
+        startAt: '2026-11-12T05:00:00Z',
+        endAt: '2026-11-12T06:00:00Z',
+        source: 'Локальный ICS',
+      },
+      {
+        id: 'ev-now',
+        title: 'Планирование продукта',
+        startAt: '2026-11-12T07:00:00Z', // 10:00-11:30 MSK (идёт сейчас)
+        endAt: '2026-11-12T08:30:00Z',
+        location: 'Переговорная А',
+        source: 'Яндекс Календарь',
+      },
+      {
+        id: 'ev-overlap',
+        title: 'Созвон с клиентом',
+        startAt: '2026-11-12T08:00:00Z', // 11:00-12:00 MSK (пересекается 30 мин)
+        endAt: '2026-11-12T09:00:00Z',
+        source: 'Google Calendar',
+      },
+      {
+        id: 'ev-far',
+        title: 'Квартальный обзор',
+        startAt: '2026-11-18T09:00:00Z', // через 6 дней
+        endAt: '2026-11-18T10:00:00Z',
+        source: 'Яндекс Календарь',
+      },
+    ],
+  };
+
+  const calOk = data.calendar(snapshot, {
+    now,
+    timeZone: 'Europe/Moscow',
+    reminders: [{ id: 'r1', text: 'Подготовить повестку', dueAt: '2026-11-12T10:00:00Z', done: false }],
+  });
+  assert.equal(calOk.state, 'ok');
+  assert.equal(calOk.value.timeZone, 'Europe/Moscow');
+  assert.equal(calOk.value.todayDateKey, '2026-11-12');
+  assert.equal(calOk.value.tomorrowDateKey, '2026-11-13');
+  assert.equal(calOk.value.items.length, 4);
+  assert.equal(calOk.value.conflicts.length, 1);
+  assert.match(calOk.value.briefing, /Подготовить повестку/);
+
+  const meetOk = data.meetings(snapshot, { now, timeZone: 'Europe/Moscow', days: 3 });
+  assert.equal(meetOk.state, 'ok');
+  assert.equal(meetOk.value.windowDays, 3);
+  assert.equal(meetOk.value.items.length, 2, 'прошлые и >3 дн. не входят во Встречи при окне 3 дн.');
+  assert.equal(meetOk.value.items[0].ongoing, true);
+  assert.equal(meetOk.value.items[0].timeLabel, '10:00–11:30');
+  assert.equal(meetOk.value.items[0].source, 'Яндекс Календарь');
+  assert.equal(meetOk.value.items[0].conflict, true);
+  assert.equal(meetOk.value.items[1].source, 'Google Calendar');
+  assert.equal(meetOk.value.items[1].conflict, true);
+  assert.equal(meetOk.value.conflicts.length, 1);
+  assert.equal(meetOk.value.conflicts[0].overlapMinutes, 30);
+
+  const staleMeet = data.meetings({ ...snapshot, fetchedAt: now - 3 * 60 * 60 * 1000 }, { now, timeZone: 'Europe/Moscow' });
+  assert.equal(staleMeet.state, 'stale');
+  assert.equal(staleMeet.value.stale, true);
+  assert.equal(staleMeet.value.items.length, 3);
+
+  const desk = {
+    id: uuid(10),
+    name: 'Календарный',
+    template: 'empty',
+    version: 1,
+    widgets: [
+      { id: uuid(11), type: 'calendar', version: 1, x: 1, y: 1, w: 6, h: 4, config: { limit: 2 } },
+      { id: uuid(12), type: 'meetings', version: 1, x: 7, y: 1, w: 6, h: 4, config: { days: 2, limit: 5 } },
+    ],
+  };
+  const deskData = data.buildDeskData(desk, {
+    calendar: snapshot,
+    reminders: [{ id: 'r2', text: 'Отправить слайды', dueAt: '2026-11-12T12:00:00Z', done: false }],
+  }, { now, timeZone: 'Europe/Moscow' });
+  assert.equal(deskData[uuid(11)].value.items.length, 2);
+  assert.match(deskData[uuid(11)].value.briefing, /Отправить слайды/);
+  assert.equal(deskData[uuid(12)].value.windowDays, 2);
+  assert.equal(deskData[uuid(12)].value.items.length, 2);
+
+  // Пояс из снимка источника сохраняется, если options.timeZone явно не передан (как в buildDeskData ядра)
+  const tzDesk = data.buildDeskData(desk, {
+    calendar: { ...snapshot, timeZone: 'Europe/Moscow' },
+  }, { now });
+  assert.equal(tzDesk[uuid(11)].value.timeZone, 'Europe/Moscow');
+  assert.equal(tzDesk[uuid(12)].value.timeZone, 'Europe/Moscow');
+  assert.equal(tzDesk[uuid(12)].value.items[0].timeLabel, '10:00–11:30');
 });

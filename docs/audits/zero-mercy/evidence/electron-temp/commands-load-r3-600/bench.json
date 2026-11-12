@@ -1,0 +1,231 @@
+{
+  "size": 600,
+  "bridgeCount": 611,
+  "sizes": {
+    "width": 1200,
+    "height": 720,
+    "dpr": 1
+  },
+  "bootMs": 905.2641000000001,
+  "firstRows": true,
+  "listReadyMs": 197.16830000000004,
+  "first": {
+    "noMatch": {
+      "syncMs": 9.399999998509884,
+      "twoFramesMs": 17.299999997019768,
+      "rows": 0
+    },
+    "oneMatch": {
+      "syncMs": 0.5,
+      "twoFramesMs": 10.5,
+      "rows": 1
+    },
+    "all": {
+      "syncMs": 25.5,
+      "twoFramesMs": 150.30000000447035,
+      "rows": 600
+    },
+    "reset": {
+      "syncMs": 31.899999998509884,
+      "twoFramesMs": 134.79999999701977,
+      "rows": 611
+    }
+  },
+  "openEditor": {
+    "syncMs": 0.10000000149011612,
+    "twoFramesMs": 55.19999999552965,
+    "rows": 611,
+    "visible": true
+  },
+  "cycles": [
+    {
+      "chat": {
+        "syncMs": 15.399999998509884,
+        "twoFramesMs": 30,
+        "rows": 611
+      },
+      "commandsMs": 286.7286999999999
+    },
+    {
+      "chat": {
+        "syncMs": 13.800000004470348,
+        "twoFramesMs": 31.30000000447035,
+        "rows": 611
+      },
+      "commandsMs": 250.41719999999987
+    },
+    {
+      "chat": {
+        "syncMs": 13.300000004470348,
+        "twoFramesMs": 25.900000005960464,
+        "rows": 611
+      },
+      "commandsMs": 300.03999999999996
+    },
+    {
+      "chat": {
+        "syncMs": 13,
+        "twoFramesMs": 27.5,
+        "rows": 611
+      },
+      "commandsMs": 227.8802999999998
+    },
+    {
+      "chat": {
+        "syncMs": 15.399999998509884,
+        "twoFramesMs": 30,
+        "rows": 611
+      },
+      "commandsMs": 225.54379999999992
+    },
+    {
+      "chat": {
+        "syncMs": 11,
+        "twoFramesMs": 22.399999998509884,
+        "rows": 611
+      },
+      "commandsMs": 230.67020000000002
+    },
+    {
+      "chat": {
+        "syncMs": 12.399999998509884,
+        "twoFramesMs": 26.5,
+        "rows": 611
+      },
+      "commandsMs": 225.15059999999994
+    },
+    {
+      "chat": {
+        "syncMs": 15,
+        "twoFramesMs": 27.799999997019768,
+        "rows": 611
+      },
+      "commandsMs": 232.4942000000001
+    },
+    {
+      "chat": {
+        "syncMs": 10.900000005960464,
+        "twoFramesMs": 28.80000000447035,
+        "rows": 611
+      },
+      "commandsMs": 235.27949999999964
+    },
+    {
+      "chat": {
+        "syncMs": 12.799999997019768,
+        "twoFramesMs": 24.5,
+        "rows": 611
+      },
+      "commandsMs": 245.2471999999998
+    },
+    {
+      "chat": {
+        "syncMs": 13,
+        "twoFramesMs": 27.200000002980232,
+        "rows": 611
+      },
+      "commandsMs": 232.07719999999972
+    },
+    {
+      "chat": {
+        "syncMs": 13.700000002980232,
+        "twoFramesMs": 31.5,
+        "rows": 611
+      },
+      "commandsMs": 259.02890000000025
+    },
+    {
+      "chat": {
+        "syncMs": 15.800000004470348,
+        "twoFramesMs": 32,
+        "rows": 611
+      },
+      "commandsMs": 218.32720000000063
+    },
+    {
+      "chat": {
+        "syncMs": 12.599999994039536,
+        "twoFramesMs": 26.69999999552965,
+        "rows": 611
+      },
+      "commandsMs": 223.1943000000001
+    },
+    {
+      "chat": {
+        "syncMs": 12.800000004470348,
+        "twoFramesMs": 24.5,
+        "rows": 611
+      },
+      "commandsMs": 214.0598
+    },
+    {
+      "chat": {
+        "syncMs": 12,
+        "twoFramesMs": 26.5,
+        "rows": 611
+      },
+      "commandsMs": 272.58190000000013
+    },
+    {
+      "chat": {
+        "syncMs": 19.200000002980232,
+        "twoFramesMs": 36.70000000298023,
+        "rows": 611
+      },
+      "commandsMs": 296.47379999999976
+    },
+    {
+      "chat": {
+        "syncMs": 12.799999997019768,
+        "twoFramesMs": 35.899999998509884,
+        "rows": 611
+      },
+      "commandsMs": 265.2514000000001
+    },
+    {
+      "chat": {
+        "syncMs": 13.299999997019768,
+        "twoFramesMs": 25,
+        "rows": 611
+      },
+      "commandsMs": 263.4380999999994
+    },
+    {
+      "chat": {
+        "syncMs": 11.399999998509884,
+        "twoFramesMs": 23.100000001490116,
+        "rows": 611
+      },
+      "commandsMs": 229.03560000000016
+    }
+  ],
+  "transfer": {
+    "exported": {
+      "ok": true,
+      "saved": true,
+      "path": "D:\\nox-release\\docs\\audits\\zero-mercy\\evidence\\electron-temp\\commands-load-r3-600\\exported-commands.json",
+      "fileName": "commands-2026-11-10.json",
+      "warnings": []
+    },
+    "bytes": 281193,
+    "fileKeys": [
+      "format",
+      "version",
+      "schemaVersion",
+      "exportedAt",
+      "commands",
+      "warnings"
+    ],
+    "commandCount": 611,
+    "preview": {
+      "ok": false,
+      "error": "в файле импорта больше 500 команд",
+      "canceled": false,
+      "tokenIssued": false,
+      "preview": null
+    }
+  },
+  "electron": "44.9.3",
+  "os": "10.0.26300",
+  "errors": []
+}

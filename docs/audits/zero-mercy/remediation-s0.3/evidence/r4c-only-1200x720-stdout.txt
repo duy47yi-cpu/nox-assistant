@@ -1,0 +1,18 @@
+
+Фоновые задачи с моделью выключены: включает владелец настройкой backgroundModelRuns
+[
+ {
+  "id": "R4c",
+  "scenario": "A истёк, B (второй агент, тот же вид) занял диалог; клик «Разрешить», нацеленный на A",
+  "closedEventToClickMs": 64,
+  "dialogAtClick": null,
+  "elementUnderCursor": "DIALOG",
+  "ipcForB": [],
+  "bDecisionByClick": null,
+  "bDecisionFinal": null,
+  "aRan": false,
+  "bRanWouldBe": false,
+  "pass": true,
+  "ranNow": []
+ }
+]

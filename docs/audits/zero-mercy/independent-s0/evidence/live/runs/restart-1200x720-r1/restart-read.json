@@ -1,0 +1,12 @@
+{
+  "mode": "restart-read",
+  "pendingAfterRestart": 0,
+  "dialog": {
+    "open": false,
+    "q": "",
+    "badge": 0
+  },
+  "fileExists": false,
+  "restartModelCalls": 0,
+  "log": []
+}

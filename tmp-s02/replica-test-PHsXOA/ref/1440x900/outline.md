@@ -1,0 +1,16 @@
+- section.hero layout [0,0 1440×450] · pad 96 64 72 64 · flex column gap 24 ai center #14
+  - h1 heading "Ship interfaces that feel exactly right" [340,96 760×128] · 700 56/64 Arial ls -1 · #0b0b0f · center #0
+  - p text "Replica measures your rebuild against the reference and tells you what to chang…" [460,248 520×56] · 400 18/28 Arial · #5b5b66 · center #1
+  - div.actions layout [576,328 288×50] · flex row gap 12 #2
+    - a.btn.primary link "Get started" [576,328 125×50] · 700 16/24 Arial · #ffffff · center · bg #5b4bff · radius 8px · pad 12 20 12 20 #3
+    - a.btn.ghost link "Read the docs" [713,328 151×50] · 700 16/24 Arial · #0b0b0f · center · radius 8px · border 1 #e6e6ea · pad 12 20 12 20 #4
+- section.cards layout [0,450 1440×206] · pad 0 64 96 64 · grid cols[421.328px 421.328px 421.344px] gap 24 #15
+  - div.card box [64,450 421×110] · radius 12px · border 1 #e6e6ea · shadow #0000000f 0px 1px 2px 0px · pad 24 24 24 24 #5
+    - h3 heading "Measure" [89,475 371×28] · 700 20/28 Arial · #0b0b0f #6
+    - p text "Boxes, styles, pixels and motion from both pages." [89,511 371×24] · 400 15/24 Arial · #5b5b66 #7
+  - div.card box [509,450 421×110] · radius 12px · border 1 #e6e6ea · shadow #0000000f 0px 1px 2px 0px · pad 24 24 24 24 #8
+    - h3 heading "Compare" [534,475 371×28] · 700 20/28 Arial · #0b0b0f #9
+    - p text "Every difference ranked by what fixing it is worth." [534,511 371×24] · 400 15/24 Arial · #5b5b66 #10
+  - div.card box [955,450 421×110] · radius 12px · border 1 #e6e6ea · shadow #0000000f 0px 1px 2px 0px · pad 24 24 24 24 #11
+    - h3 heading "Converge" [980,475 371×28] · 700 20/28 Arial · #0b0b0f #12
+    - p text "Fix the top of the list, run it again, repeat." [980,511 371×24] · 400 15/24 Arial · #5b5b66 #13

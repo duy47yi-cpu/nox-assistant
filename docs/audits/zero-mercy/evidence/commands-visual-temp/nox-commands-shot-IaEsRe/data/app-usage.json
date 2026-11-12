@@ -1,0 +1,106 @@
+{
+  "apps": {
+    "Google Chrome": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Tailscale": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Windhawk": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Cloudflare One Client": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Install Additional Tools for Node.js": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Node.js command prompt": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Node.js": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "AyuGram": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Chromium": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "CodingFleet": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "DeepSeek Harness": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Electron": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "HACKER CONTROL": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "OpenCode IP only": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "OpenCode": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Python 3.13 (64-bit)": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Python 3.13 Module Docs (64-bit)": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Command Prompt": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Windows PowerShell (x86)": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    },
+    "Windows PowerShell": {
+      "launches": 0,
+      "seenRunning": 1,
+      "last": null
+    }
+  },
+  "services": {},
+  "lastSnapshot": "2026-11-10T17:03:04.575Z"
+}

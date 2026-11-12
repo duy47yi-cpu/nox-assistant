@@ -1,0 +1,115 @@
+
+Фоновые задачи с моделью выключены: включает владелец настройкой backgroundModelRuns
+[
+ {
+  "id": "R1",
+  "scenario": "перезагрузка окна с ожидающим запросом, затем «Разрешить» в восстановленной карточке",
+  "restoredSameId": true,
+  "expected": [
+   "R1-A.txt"
+  ],
+  "pass": true,
+  "ranNow": [
+   "R1-A.txt"
+  ]
+ },
+ {
+  "id": "R2",
+  "scenario": "call_0 дважды в одном ходу: строки чата",
+  "rows": [
+   {
+    "text": "подтвержденоЗапись файлаR2-A.txt, R2-Aзаписал · файл R2-A.txt совпадает с записью",
+    "pending": false
+   },
+   {
+    "text": "ждёт решенияЗапись файлаR2-B.txt, R2-BРешить",
+    "pending": true
+   }
+  ],
+  "dialogB": "77a95ab0-9596-4fab-8805-e6a9ad983929",
+  "expected": [
+   "R1-A.txt",
+   "R2-A.txt"
+  ],
+  "pass": true,
+  "ranNow": [
+   "R1-A.txt",
+   "R2-A.txt"
+  ]
+ },
+ {
+  "id": "R3",
+  "scenario": "два запроса одновременно (чат A + задача B); A — «Разрешить» мышью; затем «Отклонить» мышью у B",
+  "dialogStayedOnA": true,
+  "bShownAfterA": true,
+  "bButtonsAfterA": [
+   "reject:true",
+   "once:true"
+  ],
+  "bDecisionAfterMouseReject": null,
+  "bDecisionFinal": "reject",
+  "expected": [
+   "R1-A.txt",
+   "R2-A.txt",
+   "R3-A.txt"
+  ],
+  "pass": true,
+  "ranNow": [
+   "R1-A.txt",
+   "R2-A.txt",
+   "R3-A.txt"
+  ]
+ },
+ {
+  "id": "R4",
+  "scenario": "A истёк, B (задача, без «На сессию») занял диалог; клик «Разрешить», нацеленный на A",
+  "closedEventToClickMs": 62,
+  "dialogAtClick": "B",
+  "elementUnderCursor": "DIALOG",
+  "ipcForB": [],
+  "bDecisionByClick": null,
+  "bDecisionFinal": "reject",
+  "aRan": false,
+  "bRanWouldBe": false,
+  "pass": true,
+  "ranNow": [
+   "R1-A.txt",
+   "R2-A.txt",
+   "R3-A.txt"
+  ]
+ },
+ {
+  "id": "R4c",
+  "scenario": "A истёк, B (второй агент, тот же вид) занял диалог; клик «Разрешить», нацеленный на A",
+  "closedEventToClickMs": 53,
+  "dialogAtClick": "B",
+  "elementUnderCursor": "once",
+  "ipcForB": [
+   "once"
+  ],
+  "bDecisionByClick": "once",
+  "bDecisionFinal": "once",
+  "aRan": false,
+  "bRanWouldBe": true,
+  "pass": false,
+  "ranNow": [
+   "R1-A.txt",
+   "R2-A.txt",
+   "R3-A.txt"
+  ]
+ },
+ {
+  "id": "R5",
+  "scenario": "ядро сняло запрос задачи, событие approval_closed потеряно; «Разрешить», потом Escape",
+  "stillOpenAfterOnce": true,
+  "stillOpenAfterEsc": true,
+  "decision": "reject",
+  "pass": true,
+  "ranNow": [
+   "R1-A.txt",
+   "R2-A.txt",
+   "R3-A.txt"
+  ],
+  "clearedByReload": true
+ }
+]

@@ -1,0 +1,14 @@
+{
+  "voice": false,
+  "backgroundModelRuns": false,
+  "alwaysListen": false,
+  "dictation": false,
+  "desktopOverlay": false,
+  "alwaysOnTop": false,
+  "motion": false,
+  "seededBrief": true,
+  "modelTier": "fast",
+  "thinking": "low",
+  "keepAwake": "off",
+  "windowBg": "#F4F1EB"
+}

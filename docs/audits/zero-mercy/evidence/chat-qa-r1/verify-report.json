@@ -1,0 +1,1078 @@
+{
+  "startedAt": 1794332144184,
+  "finishedAt": 1794332170417,
+  "elapsedMs": 23535,
+  "appDir": "D:\\nox-release\\apps\\jarvis-desktop",
+  "outDir": "D:\\nox-release\\docs\\audits\\zero-mercy\\evidence\\chat-qa-r1",
+  "environment": {
+    "title": "Nox — Джарвис",
+    "bodyView": "nox",
+    "dpr": 1,
+    "inner": [
+      1200,
+      720
+    ],
+    "visibility": "visible",
+    "banner": {
+      "visible": false,
+      "text": "",
+      "kind": "key"
+    },
+    "typography": {
+      "historyTitle": {
+        "fontFamily": "Inter, \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, -apple-system, sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "600"
+      },
+      "historyRow": {
+        "fontFamily": "Inter, \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, -apple-system, sans-serif",
+        "fontSize": "13px",
+        "fontWeight": "400"
+      },
+      "message": {
+        "fontFamily": "Inter, \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, -apple-system, sans-serif",
+        "fontSize": "13.5px",
+        "fontWeight": "400"
+      },
+      "userMessage": {
+        "fontFamily": "Inter, \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, -apple-system, sans-serif",
+        "fontSize": "13.5px",
+        "fontWeight": "400"
+      },
+      "input": {
+        "fontFamily": "Inter, \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, -apple-system, sans-serif",
+        "fontSize": "13.5px",
+        "fontWeight": "400"
+      },
+      "composerPick": {
+        "fontFamily": "Inter, \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, -apple-system, sans-serif",
+        "fontSize": "12px",
+        "fontWeight": "500"
+      }
+    },
+    "fonts": {
+      "installedInterCyrillic": true,
+      "status": "loaded"
+    },
+    "tokens": {
+      "font": "\"Inter\", \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, -apple-system, sans-serif",
+      "rail": "52px",
+      "history": "244px",
+      "sphere": "360px",
+      "orb": "332px"
+    },
+    "api": {
+      "NoxScreen": true,
+      "NoxOrb": "function",
+      "JarvisNox": true,
+      "jarvis": true
+    },
+    "initialVariant": "nox",
+    "chatEmptyHidden": true,
+    "runtime": {
+      "electron": "44.9.3",
+      "chrome": "152.0.7977.167",
+      "node": "24.22.0",
+      "pid": 30148,
+      "appDir": "D:\\nox-release\\apps\\jarvis-desktop",
+      "tempProfile": "D:\\nox-release\\docs\\audits\\zero-mercy\\evidence\\chat-qa-r1\\nox-qa-verify-yOpaYn\\profile",
+      "tempData": "D:\\nox-release\\docs\\audits\\zero-mercy\\evidence\\chat-qa-r1\\nox-qa-verify-yOpaYn\\data",
+      "repoRoot": "D:\\nox-release",
+      "outDir": "D:\\nox-release\\docs\\audits\\zero-mercy\\evidence\\chat-qa-r1"
+    },
+    "layoutPrep": {
+      "bannerVisibleAtLoad": false,
+      "bannerHiddenForLayout": {
+        "hidden": true
+      }
+    }
+  },
+  "checks": [
+    {
+      "check": "new-chat",
+      "ok": true,
+      "evidence": {
+        "before": {
+          "chats": 3,
+          "activeId": "qa-long",
+          "activeTitle": "Длинный разговор для проверки п…",
+          "feedChildren": 60,
+          "activeHistory": 60
+        },
+        "nav": {
+          "ok": true
+        },
+        "after": {
+          "chats": 4,
+          "activeId": "479d10d6-b1bb-43c5-9a03-1797d0ab85e2",
+          "activeTitle": "Новый чат",
+          "feedChildren": 0,
+          "activeHistory": 0,
+          "empty": {
+            "feedChildren": 0,
+            "chatEmptyHidden": false,
+            "gridIsEmpty": false,
+            "histRows": 4,
+            "historyDisplay": "flex"
+          },
+          "geometry": {
+            "window": {
+              "w": 1200,
+              "h": 720,
+              "dpr": 1
+            },
+            "rail": {
+              "x": 9,
+              "y": 9,
+              "w": 52,
+              "h": 702
+            },
+            "history": {
+              "x": 61,
+              "y": 9,
+              "w": 244,
+              "h": 702
+            },
+            "chat": {
+              "x": 313,
+              "y": 9,
+              "w": 510,
+              "h": 702
+            },
+            "sphere": {
+              "x": 831,
+              "y": 9,
+              "w": 360,
+              "h": 702
+            },
+            "orb": {
+              "x": 845,
+              "y": 200,
+              "w": 332,
+              "h": 332
+            },
+            "variant": "nox"
+          }
+        },
+        "grew": true,
+        "emptyChatActive": true,
+        "note": "Фактический пустой чат: 0 сообщений в ленте; is-empty не включается, пока в истории больше одного чата (S.chatCount)."
+      },
+      "screenshot": "verify-new-chat-1.png",
+      "screenshots": [
+        "verify-new-chat-1.png"
+      ]
+    },
+    {
+      "check": "switch-chat",
+      "ok": true,
+      "evidence": {
+        "before": {
+          "activeId": "479d10d6-b1bb-43c5-9a03-1797d0ab85e2",
+          "feedChildren": 0,
+          "lastUser": null
+        },
+        "clicked": {
+          "clicked": true,
+          "title": "Планы на сегодня"
+        },
+        "after": {
+          "activeId": "qa-plans",
+          "activeTitle": "Планы на сегодня",
+          "feedChildren": 2,
+          "historyMessages": 2,
+          "lastUser": "Планы на сегодня",
+          "lastAnswer": "Сегодня: разобрать почту и подготовить отчёт.",
+          "geometry": {
+            "window": {
+              "w": 1200,
+              "h": 720,
+              "dpr": 1
+            },
+            "rail": {
+              "x": 9,
+              "y": 9,
+              "w": 52,
+              "h": 702
+            },
+            "history": {
+              "x": 61,
+              "y": 9,
+              "w": 244,
+              "h": 702
+            },
+            "chat": {
+              "x": 313,
+              "y": 9,
+              "w": 510,
+              "h": 702
+            },
+            "sphere": {
+              "x": 831,
+              "y": 9,
+              "w": 360,
+              "h": 702
+            },
+            "orb": {
+              "x": 845,
+              "y": 200,
+              "w": 332,
+              "h": 332
+            },
+            "variant": "nox"
+          }
+        },
+        "contentChanged": true
+      },
+      "screenshot": "verify-switch-chat-1.png",
+      "screenshots": [
+        "verify-switch-chat-1.png"
+      ]
+    },
+    {
+      "check": "send-message",
+      "ok": true,
+      "evidence": {
+        "text": "Проверка интерфейса Nox: ответь, пожалуйста, одной короткой строкой.",
+        "submitted": {
+          "enabled": true,
+          "value": ""
+        },
+        "elapsedMs": 100,
+        "pollMs": 55,
+        "timeout": false,
+        "userBubble": "Проверка интерфейса Nox: ответь, пожалуйста, одной короткой строкой.",
+        "assistantTurn": "Ответ локального тестового сервера.",
+        "feedBeforeChildren": 2,
+        "feedAfterChildren": 5,
+        "stateAfter": {
+          "header": "success",
+          "headerText": "Готово",
+          "stage": "success",
+          "busy": false,
+          "stopVisible": false,
+          "working": "▸Ход работы · Готово · 0.1 с"
+        },
+        "done": {
+          "status": "succeeded",
+          "outcome": "answer",
+          "cancelled": false
+        },
+        "lastEvents": [
+          {
+            "type": "status",
+            "state": "thinking",
+            "status": null,
+            "cancelled": false
+          },
+          {
+            "type": "status",
+            "state": "thinking",
+            "status": "planning",
+            "cancelled": false
+          },
+          {
+            "type": "text",
+            "state": null,
+            "status": null,
+            "cancelled": false
+          },
+          {
+            "type": "done",
+            "state": null,
+            "status": "succeeded",
+            "cancelled": false
+          },
+          {
+            "type": "status",
+            "state": "idle",
+            "status": null,
+            "cancelled": false
+          }
+        ]
+      },
+      "screenshot": "verify-send-1.png",
+      "screenshots": [
+        "verify-send-1.png"
+      ]
+    },
+    {
+      "check": "cancel-generation",
+      "ok": true,
+      "evidence": {
+        "text": "Проверка отмены хода Nox.",
+        "brain": {
+          "url": "http://127.0.0.1:58057/v1",
+          "slowChunks": 26
+        },
+        "busySeen": true,
+        "busyAtMs": 44,
+        "firstTextAtMs": 6,
+        "stopAtMs": 358,
+        "stopVia": "click #chatStop",
+        "stopResultOk": true,
+        "doneEvent": {
+          "type": "done",
+          "status": "cancelled",
+          "outcome": "stopped",
+          "cancelled": true
+        },
+        "doneCancelled": true,
+        "cancelledPhaseSeen": false,
+        "cancelNotice": "Ход остановлен. Действия после остановки не выполнялись.",
+        "workingRows": [
+          "▸Ход работы · Готово · 0.1 с",
+          "▸Ход работы · Остановлено · 0.3 с"
+        ],
+        "workingStopped": true,
+        "stillStreaming": false,
+        "stateAfter": {
+          "header": "idle",
+          "headerText": "Готов",
+          "stage": "idle",
+          "busy": false,
+          "stopVisible": false,
+          "working": "▸Ход работы · Готово · 0.1 с"
+        },
+        "doneLive": "Ход остановлен",
+        "noFalseReady": true,
+        "visibleAnswerChars": 83,
+        "fullAnswerApproxChars": 2028,
+        "visibleAnswerTruncated": true,
+        "noticesInFeed": [
+          "Ход остановлен. Действия после остановки не выполнялись."
+        ],
+        "feedAfter": {
+          "children": 9,
+          "turns": 3,
+          "users": 3,
+          "notices": 1,
+          "copies": 3,
+          "scrollTop": 82,
+          "scrollHeight": 680,
+          "clientHeight": 568,
+          "atBottom": false,
+          "gapToBottom": 30,
+          "lastUser": "Проверка отмены хода Nox.",
+          "lastAnswer": "Часть 1: длинный потоковый ответ локального сервера для проверки отмены хода в Nox."
+        },
+        "note": "Настоящий поток локального OpenAI-совместимого сервера (~4 с); стоп нажат по видимому тексту. «Остановлено» держится 2.6 с, затем StatusTracker возвращает idle."
+      },
+      "screenshot": "verify-cancel-1.png",
+      "screenshots": [
+        "verify-cancel-1.png"
+      ]
+    },
+    {
+      "check": "long-scroll",
+      "ok": false,
+      "evidence": {
+        "switched": {
+          "ok": true
+        },
+        "initial": {
+          "feed": {
+            "children": 60,
+            "turns": 30,
+            "users": 30,
+            "notices": 0,
+            "copies": 30,
+            "scrollTop": 6338,
+            "scrollHeight": 6906,
+            "clientHeight": 568,
+            "atBottom": true,
+            "gapToBottom": 0,
+            "lastUser": "Реплика 30 длинной истории: проверка прокрутки ленты Nox.",
+            "lastAnswer": "Ответ 30: строка длинной истории для проверки прокрутки и плотности ленты первого экрана. Финальный ответ этой истории — последний в чате."
+          },
+          "atBottom": true,
+          "hasOverflow": true,
+          "scrollHeight": 6906,
+          "clientHeight": 568,
+          "toBottomHidden": true,
+          "toBottomLabel": "Вниз ↓",
+          "histRows": 4,
+          "geom": {
+            "window": {
+              "w": 1200,
+              "h": 720,
+              "dpr": 1
+            },
+            "rail": {
+              "x": 9,
+              "y": 9,
+              "w": 52,
+              "h": 702
+            },
+            "history": {
+              "x": 61,
+              "y": 9,
+              "w": 244,
+              "h": 702
+            },
+            "chat": {
+              "x": 313,
+              "y": 9,
+              "w": 510,
+              "h": 702
+            },
+            "sphere": {
+              "x": 831,
+              "y": 9,
+              "w": 360,
+              "h": 702
+            },
+            "orb": {
+              "x": 845,
+              "y": 200,
+              "w": 332,
+              "h": 332
+            },
+            "variant": "nox"
+          }
+        },
+        "atTop": {
+          "scrollTop": 0,
+          "atTop": true,
+          "scrollHeight": 6906,
+          "clientHeight": 568,
+          "toBottomHidden": true,
+          "geom": {
+            "window": {
+              "w": 1200,
+              "h": 720,
+              "dpr": 1
+            },
+            "rail": {
+              "x": 9,
+              "y": 9,
+              "w": 52,
+              "h": 702
+            },
+            "history": {
+              "x": 61,
+              "y": 9,
+              "w": 244,
+              "h": 702
+            },
+            "chat": {
+              "x": 313,
+              "y": 9,
+              "w": 510,
+              "h": 702
+            },
+            "sphere": {
+              "x": 831,
+              "y": 9,
+              "w": 360,
+              "h": 702
+            },
+            "orb": {
+              "x": 845,
+              "y": 200,
+              "w": 332,
+              "h": 332
+            },
+            "variant": "nox"
+          }
+        },
+        "atBottom": {
+          "scrollTop": 6338,
+          "atBottom": true,
+          "gapToBottom": 0,
+          "scrollHeight": 6906,
+          "clientHeight": 568,
+          "toBottomHidden": true,
+          "geom": {
+            "window": {
+              "w": 1200,
+              "h": 720,
+              "dpr": 1
+            },
+            "rail": {
+              "x": 9,
+              "y": 9,
+              "w": 52,
+              "h": 702
+            },
+            "history": {
+              "x": 61,
+              "y": 9,
+              "w": 244,
+              "h": 702
+            },
+            "chat": {
+              "x": 313,
+              "y": 9,
+              "w": 510,
+              "h": 702
+            },
+            "sphere": {
+              "x": 831,
+              "y": 9,
+              "w": 360,
+              "h": 702
+            },
+            "orb": {
+              "x": 845,
+              "y": 200,
+              "w": 332,
+              "h": 332
+            },
+            "variant": "nox"
+          }
+        },
+        "toBottom": {
+          "label": "Вниз ↓",
+          "initialHidden": true,
+          "atTopHidden": true,
+          "atBottomHidden": true
+        },
+        "autoScroll": {
+          "sent": {
+            "ok": true,
+            "elapsedMs": 78
+          },
+          "after": {
+            "atBottom": false,
+            "scrollTop": 6522,
+            "scrollHeight": 7120,
+            "toBottomHidden": true,
+            "feed": {
+              "children": 63,
+              "turns": 31,
+              "users": 31,
+              "notices": 0,
+              "copies": 31,
+              "scrollTop": 6522,
+              "scrollHeight": 7120,
+              "clientHeight": 568,
+              "atBottom": false,
+              "gapToBottom": 30,
+              "lastUser": "Проверка автопрокрутки Nox.",
+              "lastAnswer": "Ответ локального тестового сервера."
+            }
+          },
+          "gapToBottomPx": 30,
+          "toBottomHidden": true
+        },
+        "initialGapToBottomPx": 0,
+        "finding": "Лента не прижата к низу там, где ожидается (старт чата/после ответа), или «Вниз ↓» видна у самого низа.",
+        "noLayoutJump": true
+      },
+      "screenshot": "verify-scroll-1.png",
+      "screenshots": [
+        "verify-scroll-1.png",
+        "verify-scroll-2.png",
+        "verify-scroll-3.png"
+      ]
+    },
+    {
+      "check": "resize",
+      "ok": true,
+      "evidence": {
+        "sizes": [
+          {
+            "size": "864x520",
+            "inner": [
+              864,
+              520
+            ],
+            "dpr": 1,
+            "overflowX": false,
+            "bodyScrollWidth": 864,
+            "rail": {
+              "x": 9,
+              "y": 9,
+              "w": 46,
+              "h": 502
+            },
+            "history": {
+              "x": 55,
+              "y": 9,
+              "w": 176,
+              "h": 502
+            },
+            "chat": {
+              "x": 239,
+              "y": 9,
+              "w": 330,
+              "h": 502
+            },
+            "sphere": {
+              "x": 577,
+              "y": 9,
+              "w": 278,
+              "h": 502
+            },
+            "orb": {
+              "x": 596,
+              "y": 146,
+              "w": 240,
+              "h": 240
+            },
+            "orbRect": {
+              "x": 596,
+              "y": 146,
+              "w": 240,
+              "h": 240
+            },
+            "canvas": {
+              "cssW": 240,
+              "cssH": 240,
+              "attrW": 240,
+              "attrH": 240,
+              "dprUsed": 1,
+              "cssSquare": true,
+              "cssMatchesAttr": true,
+              "backdrop": true
+            },
+            "composer": {
+              "x": 262,
+              "y": 424,
+              "w": 284,
+              "h": 76
+            },
+            "at": {
+              "railW": 46,
+              "historyW": 176,
+              "chatW": 330,
+              "sphereW": 278
+            },
+            "expected": {
+              "rail": 46,
+              "history": 176,
+              "sphere": 278,
+              "orb": 240
+            },
+            "tokensOk": true,
+            "leftGroupMerged": true,
+            "leftGroupWidth": 222,
+            "gapHistoryChat": 8,
+            "gapChatSphere": 8,
+            "panelsInside": true,
+            "orbSquare": true,
+            "orbSizeOk": true,
+            "composerHeightOk": true,
+            "composerWidth": 284,
+            "canvasMatch": true,
+            "computed": {
+              "railW": "46px",
+              "historyW": "176px",
+              "sphereW": "278px",
+              "orbSize": "240px"
+            },
+            "historyDisplay": "flex",
+            "view": "nox",
+            "screenshot": "verify-resize-1.png",
+            "screenshotError": null
+          },
+          {
+            "size": "960x640",
+            "inner": [
+              960,
+              640
+            ],
+            "dpr": 1,
+            "overflowX": false,
+            "bodyScrollWidth": 960,
+            "rail": {
+              "x": 9,
+              "y": 9,
+              "w": 46,
+              "h": 622
+            },
+            "history": {
+              "x": 55,
+              "y": 9,
+              "w": 176,
+              "h": 622
+            },
+            "chat": {
+              "x": 239,
+              "y": 9,
+              "w": 426,
+              "h": 622
+            },
+            "sphere": {
+              "x": 673,
+              "y": 9,
+              "w": 278,
+              "h": 622
+            },
+            "orb": {
+              "x": 692,
+              "y": 206,
+              "w": 240,
+              "h": 240
+            },
+            "orbRect": {
+              "x": 692,
+              "y": 206,
+              "w": 240,
+              "h": 240
+            },
+            "canvas": {
+              "cssW": 240,
+              "cssH": 240,
+              "attrW": 240,
+              "attrH": 240,
+              "dprUsed": 1,
+              "cssSquare": true,
+              "cssMatchesAttr": true,
+              "backdrop": true
+            },
+            "composer": {
+              "x": 262,
+              "y": 544,
+              "w": 380,
+              "h": 76
+            },
+            "at": {
+              "railW": 46,
+              "historyW": 176,
+              "chatW": 426,
+              "sphereW": 278
+            },
+            "expected": {
+              "rail": 46,
+              "history": 176,
+              "sphere": 278,
+              "orb": 240
+            },
+            "tokensOk": true,
+            "leftGroupMerged": true,
+            "leftGroupWidth": 222,
+            "gapHistoryChat": 8,
+            "gapChatSphere": 8,
+            "panelsInside": true,
+            "orbSquare": true,
+            "orbSizeOk": true,
+            "composerHeightOk": true,
+            "composerWidth": 380,
+            "canvasMatch": true,
+            "computed": {
+              "railW": "46px",
+              "historyW": "176px",
+              "sphereW": "278px",
+              "orbSize": "240px"
+            },
+            "historyDisplay": "flex",
+            "view": "nox",
+            "screenshot": "verify-resize-2.png",
+            "screenshotError": null
+          },
+          {
+            "size": "1200x720",
+            "inner": [
+              1200,
+              720
+            ],
+            "dpr": 1,
+            "overflowX": false,
+            "bodyScrollWidth": 1200,
+            "rail": {
+              "x": 9,
+              "y": 9,
+              "w": 52,
+              "h": 702
+            },
+            "history": {
+              "x": 61,
+              "y": 9,
+              "w": 244,
+              "h": 702
+            },
+            "chat": {
+              "x": 313,
+              "y": 9,
+              "w": 510,
+              "h": 702
+            },
+            "sphere": {
+              "x": 831,
+              "y": 9,
+              "w": 360,
+              "h": 702
+            },
+            "orb": {
+              "x": 845,
+              "y": 200,
+              "w": 332,
+              "h": 332
+            },
+            "orbRect": {
+              "x": 845,
+              "y": 200,
+              "w": 332,
+              "h": 332
+            },
+            "canvas": {
+              "cssW": 332,
+              "cssH": 332,
+              "attrW": 332,
+              "attrH": 332,
+              "dprUsed": 1,
+              "cssSquare": true,
+              "cssMatchesAttr": true,
+              "backdrop": true
+            },
+            "composer": {
+              "x": 326,
+              "y": 624,
+              "w": 484,
+              "h": 76
+            },
+            "at": {
+              "railW": 52,
+              "historyW": 244,
+              "chatW": 510,
+              "sphereW": 360
+            },
+            "expected": {
+              "rail": 52,
+              "history": 244,
+              "sphere": 360,
+              "orb": 332
+            },
+            "tokensOk": true,
+            "leftGroupMerged": true,
+            "leftGroupWidth": 296,
+            "gapHistoryChat": 8,
+            "gapChatSphere": 8,
+            "panelsInside": true,
+            "orbSquare": true,
+            "orbSizeOk": true,
+            "composerHeightOk": true,
+            "composerWidth": 484,
+            "canvasMatch": true,
+            "computed": {
+              "railW": "52px",
+              "historyW": "244px",
+              "sphereW": "360px",
+              "orbSize": "332px"
+            },
+            "historyDisplay": "flex",
+            "view": "nox",
+            "screenshot": "verify-resize-3.png",
+            "screenshotError": null
+          }
+        ]
+      },
+      "screenshot": "verify-resize-1.png",
+      "screenshots": [
+        "verify-resize-1.png",
+        "verify-resize-2.png",
+        "verify-resize-3.png"
+      ]
+    },
+    {
+      "check": "fps",
+      "ok": true,
+      "evidence": {
+        "window": {
+          "visible": true,
+          "focused": true,
+          "contentSize": [
+            1200,
+            720
+          ],
+          "bounds": {
+            "x": 360,
+            "y": 156,
+            "width": 1200,
+            "height": 720
+          }
+        },
+        "screen": {
+          "scaleFactor": 1,
+          "size": {
+            "width": 1920,
+            "height": 1080
+          },
+          "workAreaSize": {
+            "width": 1920,
+            "height": 1032
+          }
+        },
+        "runs": [
+          {
+            "requested": "wire",
+            "applied": "wire",
+            "dpr": 1,
+            "innerWidth": 1200,
+            "innerHeight": 720,
+            "visibility": "visible",
+            "raf": {
+              "frames": 541,
+              "ms": 3002.8,
+              "fps": 180.2
+            },
+            "orb": {
+              "found": true,
+              "stats": {
+                "fps": 180,
+                "frameMs": 2.362623958781491,
+                "frames": 2825,
+                "variant": "wire",
+                "state": "attentive"
+              }
+            },
+            "orbCanvas": {
+              "cssW": 332,
+              "cssH": 332,
+              "attrW": 332,
+              "attrH": 332
+            }
+          },
+          {
+            "requested": "wire",
+            "applied": "wire",
+            "dpr": 1,
+            "innerWidth": 1200,
+            "innerHeight": 720,
+            "visibility": "visible",
+            "raf": {
+              "frames": 541,
+              "ms": 3001.2,
+              "fps": 180.3
+            },
+            "orb": {
+              "found": true,
+              "stats": {
+                "fps": 180,
+                "frameMs": 2.347593640766848,
+                "frames": 3481,
+                "variant": "wire",
+                "state": "attentive"
+              }
+            },
+            "orbCanvas": {
+              "cssW": 332,
+              "cssH": 332,
+              "attrW": 332,
+              "attrH": 332
+            }
+          },
+          {
+            "requested": "nox",
+            "applied": "nox",
+            "dpr": 1,
+            "innerWidth": 1200,
+            "innerHeight": 720,
+            "visibility": "visible",
+            "raf": {
+              "frames": 541,
+              "ms": 3002.4,
+              "fps": 180.2
+            },
+            "orb": {
+              "found": true,
+              "stats": {
+                "fps": 180,
+                "frameMs": 1.0888485140304298,
+                "frames": 4131,
+                "variant": "nox",
+                "state": "attentive"
+              }
+            },
+            "orbCanvas": {
+              "cssW": 332,
+              "cssH": 332,
+              "attrW": 332,
+              "attrH": 332
+            }
+          }
+        ],
+        "summary": {
+          "wire": [
+            {
+              "fps": 180.2,
+              "frames": 541,
+              "ms": 3002.8,
+              "orbFps": 180,
+              "dpr": 1,
+              "size": [
+                1200,
+                720
+              ],
+              "visibility": "visible"
+            },
+            {
+              "fps": 180.3,
+              "frames": 541,
+              "ms": 3001.2,
+              "orbFps": 180,
+              "dpr": 1,
+              "size": [
+                1200,
+                720
+              ],
+              "visibility": "visible"
+            }
+          ],
+          "wireVarianceFps": 0.1,
+          "nox": {
+            "fps": 180.2,
+            "frames": 541,
+            "ms": 3002.4,
+            "orbFps": 180,
+            "dpr": 1,
+            "size": [
+              1200,
+              720
+            ],
+            "visibility": "visible"
+          },
+          "note": "Замер rAF в видимом окне, variant через window.NoxScreen.setVariant; orb.getStats() снят через обёртку прототипа класса (инстанс не выставлен наружу)."
+        }
+      },
+      "screenshot": "verify-fps-wire-1.png",
+      "screenshots": [
+        "verify-fps-wire-1.png",
+        "verify-fps-nox-1.png"
+      ]
+    },
+    {
+      "check": "console-errors",
+      "ok": true,
+      "evidence": {
+        "consoleErrors": [],
+        "consoleWarningsCount": 0,
+        "consoleWarnings": [],
+        "pageErrors": [],
+        "pageEvents": 15,
+        "visibility": "visible",
+        "finalState": {
+          "header": "idle",
+          "headerText": "Готов",
+          "stage": "idle",
+          "busy": false,
+          "stopVisible": false,
+          "working": "▸Ход работы · Готово · 0.0 с"
+        }
+      },
+      "screenshot": "verify-console-1.png",
+      "screenshots": [
+        "verify-console-1.png"
+      ]
+    }
+  ],
+  "consoleErrors": [],
+  "consoleWarnings": [],
+  "summary": {
+    "total": 8,
+    "pass": 7,
+    "fail": 1,
+    "ok": false
+  },
+  "limits": [
+    "Проверка шла во временном профиле/данных; реальный профиль владельца (%APPDATA%\\jarvis-desktop) не использовался. Запущенный экземпляр владельца не трогали.",
+    "Мозг — локальный OpenAI-совместимый SSE-сервер внутри стенда (NOX_BRAIN_KEY/NOX_BRAIN_URL, 127.0.0.1): обычный ответ короткий, а на фразу «отмена» — поток ~4 с, чтобы отмену можно было реально нажать. Внешняя сеть и реальные модели не используются.",
+    "Баннер «нет модели» снят с отображения после фиксации его состояния: это окружение временного профиля, а не предмет проверки (как в scripts/nox-shot.js).",
+    "Минимальный размер окна временно снижен (960x640 -> 200x200), иначе 864x520 недостижим; это только на время стенда.",
+    "Флаги CalculateNativeWinOcclusion/disable-backgrounding-occluded-windows включены для стабильного capturePage; FPS снимался после show()+focus(), состояние окна зафиксировано в отчёте.",
+    "Реальный тест шрифтов пользовательского профиля (Sitka/Georgia) — зона Lead; здесь фиксируются computed font-family Nox в чистом профиле.",
+    "Приложение не проверялось на реальных системных командах: отправляемые сообщения безвредны и уходят только на локальный QA-сервер в этом же процессе."
+  ]
+}

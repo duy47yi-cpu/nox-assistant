@@ -1,0 +1,34 @@
+{
+  "activeId": "ab73d70b-13e3-4e29-8eac-662b518054f0",
+  "chats": [
+    {
+      "id": "ab73d70b-13e3-4e29-8eac-662b518054f0",
+      "history": [
+        {
+          "role": "user",
+          "content": "Сохрани отчёт аудита, затем проверь следующий пункт."
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "audit-retry-1",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"reports/audit-retry.txt\",\"content\":\"Один фиктивный отчёт для аудита.\\n\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "audit-retry-1",
+          "content": "{\"ok\":true,\"summary\":\"записал\",\"data\":{\"path\":\"reports/audit-retry.txt\",\"created\":true,\"backup\":null},\"verified\":\"confirmed\",\"evidence\":\"файл reports/audit-retry.txt совпадает с записью\"}"
+        }
+      ],
+      "updatedAt": 1794411134921
+    }
+  ]
+}

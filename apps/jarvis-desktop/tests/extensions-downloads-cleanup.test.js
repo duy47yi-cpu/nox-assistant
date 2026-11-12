@@ -10,6 +10,7 @@ const path = require('path');
 const {
   analyze,
   remove,
+  createDownloadsSession,
   classifyType,
   sizeBucket,
   ageBucket,
@@ -251,4 +252,128 @@ test('уборка: вспомогательные классификаторы'
   assert.equal(ageBucket(400), 'old');
   assert.equal(humanBytes(0), '0 Б');
   assert.equal(TEMP_EXT.has('.part'), true);
+});
+
+test('сеанс уборки: удаляет только выбранные файлы по действующему snapshotId и не трогает остальные', (t) => {
+  const dir = tempDir(t);
+  const f1 = makeFile(dir, 'old1.zip', { size: 120, ageDays: 45 });
+  const f2 = makeFile(dir, 'old2.tmp', { size: 80, ageDays: 2 });
+  const fresh = makeFile(dir, 'fresh.pdf', { size: 50, ageDays: 1 });
+
+  const session = createDownloadsSession({ now: () => NOW });
+  const report = session.analyze(dir);
+  assert.equal(report.ok, true);
+  assert.ok(report.snapshotId);
+  assert.equal(report.candidates.length, 2);
+  assert.ok(Number.isFinite(report.candidates[0].mtimeMs));
+
+  const picked = report.candidates.find((c) => c.path === 'old2.tmp');
+  const res = session.remove({
+    snapshotId: report.snapshotId,
+    items: [{ path: picked.path, size: picked.size, mtimeMs: picked.mtimeMs }],
+    paths: [picked.path],
+  }, true, { folder: dir });
+
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.removed, ['old2.tmp']);
+  assert.equal(res.bytesFreed, 80);
+  assert.equal(fs.existsSync(f2), false);
+  assert.equal(fs.existsSync(f1), true, 'невыбранный кандидат не удалён');
+  assert.equal(fs.existsSync(fresh), true, 'свежий файл не удалён');
+
+  // Повторное использование того же snapshotId невозможно без нового analyze().
+  const replay = session.remove({
+    snapshotId: report.snapshotId,
+    items: [{ path: 'old1.zip' }],
+    paths: ['old1.zip'],
+  }, true, { folder: dir });
+  assert.equal(replay.ok, false);
+  assert.equal(replay.reason, 'list_changed');
+  assert.equal(replay.needsReanalyze, true);
+  assert.equal(fs.existsSync(f1), true);
+});
+
+test('сеанс уборки: невыбранный свежий файл и подменённый список отклоняются без удаления', (t) => {
+  const dir = tempDir(t);
+  const old = makeFile(dir, 'old.zip', { size: 100, ageDays: 45 });
+  const fresh = makeFile(dir, 'fresh.docx', { size: 50, ageDays: 1 });
+
+  const session = createDownloadsSession({ now: () => NOW });
+  const report = session.analyze(dir);
+
+  // Попытка подсунуть файл, которого не было в списке кандидатов анализа.
+  const spoofed = session.remove({
+    snapshotId: report.snapshotId,
+    items: [{ path: 'old.zip', size: 100, mtimeMs: report.candidates[0].mtimeMs }, { path: 'fresh.docx', size: 50, mtimeMs: 0 }],
+    paths: ['old.zip', 'fresh.docx'],
+  }, true, { folder: dir });
+  assert.equal(spoofed.ok, false);
+  assert.equal(spoofed.reason, 'list_changed');
+  assert.equal(spoofed.needsReanalyze, true);
+  assert.equal(fs.existsSync(old), true, 'откат всей пачки до удаления');
+  assert.equal(fs.existsSync(fresh), true);
+
+  // Повторный анализ + несоответствие items и paths.
+  const r2 = session.analyze(dir);
+  const mismatch = session.remove({
+    snapshotId: r2.snapshotId,
+    items: [{ path: 'old.zip', size: 100, mtimeMs: r2.candidates[0].mtimeMs }],
+    paths: ['fresh.docx'],
+  }, true, { folder: dir });
+  assert.equal(mismatch.ok, false);
+  assert.equal(mismatch.reason, 'list_changed');
+  assert.equal(fs.existsSync(old), true);
+  assert.equal(fs.existsSync(fresh), true);
+});
+
+test('сеанс уборки: изменение или пропажа одного файла на диске после проверки отменяет всю пачку', (t) => {
+  const dir = tempDir(t);
+  const a = makeFile(dir, 'a.zip', { size: 100, ageDays: 45 });
+  const b = makeFile(dir, 'b.tmp', { size: 40, ageDays: 2 });
+
+  const session = createDownloadsSession({ now: () => NOW });
+  const report = session.analyze(dir);
+  const items = report.candidates.map((c) => ({ path: c.path, size: c.size, mtimeMs: c.mtimeMs }));
+  const paths = items.map((c) => c.path);
+
+  // Файл b изменён на диске после анализа (допустим, дописан или заменён).
+  fs.writeFileSync(b, Buffer.alloc(99, 3));
+
+  const res = session.remove({ snapshotId: report.snapshotId, items, paths }, true, { folder: dir });
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, 'list_changed');
+  assert.equal(res.needsReanalyze, true);
+  assert.deepEqual(res.removed, []);
+  assert.equal(fs.existsSync(a), true, 'файл a тоже не удалён, пока список не перепроверен');
+  assert.equal(fs.existsSync(b), true);
+
+  // После повторной проверки подтверждённое удаление проходит.
+  const freshReport = session.analyze(dir);
+  const freshItems = freshReport.candidates.map((c) => ({ path: c.path, size: c.size, mtimeMs: c.mtimeMs }));
+  const okRes = session.remove({
+    snapshotId: freshReport.snapshotId,
+    items: freshItems,
+    paths: freshItems.map((c) => c.path),
+  }, true, { folder: dir });
+  assert.equal(okRes.ok, true);
+  assert.deepEqual(okRes.removed.sort(), ['a.zip', 'b.tmp']);
+  assert.equal(fs.existsSync(a), false);
+  assert.equal(fs.existsSync(b), false);
+});
+
+test('сеанс уборки: пустой выбор не удаляет файлы и не требует confirm-обхода', (t) => {
+  const dir = tempDir(t);
+  const a = makeFile(dir, 'a.tmp', { size: 40, ageDays: 2 });
+  const session = createDownloadsSession({ now: () => NOW });
+  const report = session.analyze(dir);
+
+  const empty = session.remove({ snapshotId: report.snapshotId, items: [], paths: [] }, true, { folder: dir });
+  assert.equal(empty.ok, false);
+  assert.equal(empty.reason, 'selection_empty');
+  assert.equal(fs.existsSync(a), true);
+
+  const noConfirm = session.remove({ snapshotId: report.snapshotId, items: [{ path: 'a.tmp' }], paths: ['a.tmp'] }, false, { folder: dir });
+  assert.equal(noConfirm.ok, false);
+  assert.equal(noConfirm.reason, 'confirm_required');
+  assert.equal(fs.existsSync(a), true);
 });

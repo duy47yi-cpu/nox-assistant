@@ -1,0 +1,17 @@
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; font-family: Inter, system-ui, sans-serif; color: var(--text); }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.quick { margin: 10px; padding: 2px; max-height: calc(100vh - 20px); overflow: auto; }
+.quick-pet { display: flex; justify-content: center; align-items: center; height: 96px; margin: -5px 0 8px; }
+.quick-pet canvas { display: block; width: 92px; height: 92px; }
+header, .actions, .work-head, .approval-head, .approval-actions { display: flex; align-items: center; gap: 10px; }
+header { width: fit-content; margin: 0 0 4px auto; padding: 4px 5px 4px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); } header strong { color: var(--accent); font-size: 13px; } header span, .actions span { color: var(--text-2); font-size: 12px; } header button { margin-left: 4px; font-size: 19px; padding: 0 7px; border: 0; background: transparent; }
+#quickForm { padding: 10px 12px 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); box-shadow: 0 8px 24px #0003; }
+textarea { display: block; width: 100%; resize: vertical; min-height: 48px; max-height: 110px; padding: 9px 10px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--text); font: inherit; }
+textarea:focus-visible, button:focus-visible, pre:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; font-size: 13px; }
+button:disabled { opacity: .45; cursor: default; }.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.actions { margin-top: 6px; }.actions span { flex: 1; } #quickWork { margin-top: 10px; padding: 10px 2px 0; border-top: 1px solid var(--border); }.work-head #quickStatus { flex: 1; } #quickStep, #approvalTime { color: var(--text-2); font-size: 12px; }
+#quickReply { white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; font-size: 14px; } #quickReply:empty { display: none; }
+#miniApproval { margin-top: 14px; padding: 12px; border: 1px solid var(--accent-line); border-radius: 10px; background: var(--surface-2); }.approval-head strong { flex: 1; }.approval-actions { justify-content: flex-end; } #approvalArgs { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 110px; overflow: auto; padding: 10px; background: var(--surface); border-radius: 8px; font: 13px/1.45 system-ui; } #approvalReason, #approvalError, #quickError { font-size: 13px; } #approvalError:empty, #quickError:empty { display: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

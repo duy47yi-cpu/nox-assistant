@@ -53,11 +53,13 @@ test('громкость: «уровень громкости N» — то же,
   assert.ok(parseOffline('тише').steps[0].args.keys.startsWith('volume_down'));
 });
 
-test('чтение вслух: буфер и выделенное (копирование, пауза, чтение)', () => {
+test('чтение вслух: буфер и выделенное (без копирования, управление чтением)', () => {
   assert.deepEqual(parseOffline('прочитай вслух').steps, [{ tool: 'read_clipboard_aloud', args: {} }]);
-  const sel = parseOffline('прочитай выделенное').steps;
-  assert.deepEqual(sel.map((step) => step.tool), ['ui_keys', 'wait', 'read_clipboard_aloud']);
-  assert.deepEqual(sel[0].args, { keys: 'ctrl+c' });
+  // Выделенное читаем своим источником: Ctrl+C больше не нажимаем, буфер обмена остаётся владельцу.
+  assert.deepEqual(parseOffline('прочитай выделенное').steps, [{ tool: 'read_clipboard_aloud', args: { source: 'selection' } }]);
+  assert.deepEqual(parseOffline('пауза').steps, [{ tool: 'read_clipboard_aloud', args: { action: 'pause' } }]);
+  assert.deepEqual(parseOffline('продолжай читать').steps, [{ tool: 'read_clipboard_aloud', args: { action: 'resume' } }]);
+  assert.deepEqual(parseOffline('хватит читать').steps, [{ tool: 'read_clipboard_aloud', args: { action: 'stop' } }]);
 });
 
 test('экран, погода и блокировка: короткие фразы; опасные выключения здесь не разбираются', () => {

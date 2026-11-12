@@ -1,0 +1,113 @@
+{
+  "mode": "restart-abrupt",
+  "pid": 18848,
+  "readyMs": 1113.5221,
+  "electron": "44.9.3",
+  "chromium": "152.0.7977.167",
+  "initialTheme": {
+    "theme": null,
+    "accent": null,
+    "look": null,
+    "resolved": "dark",
+    "systemLight": false,
+    "bg": "#14120E",
+    "appBg": "rgb(15, 15, 16)"
+  },
+  "restart": {
+    "modelCalls": 1,
+    "ui": {
+      "dialog": true,
+      "pendingRows": 1,
+      "lastChat": "Подготовь пробную запись для проверки перезапуска.\n▸\nХод работы · Выполняется · 0.2 с\nЗапись файла: reports/audit-restart-unapproved.txt, Действие требует согл… · ждёт решения\nждёт решения\nЗапись файла\nreports/audit-restart-unapproved.txt, Действие требует согласия.\nРешить"
+    },
+    "fileExists": false,
+    "journal": [],
+    "turns": [
+      {
+        "ts": "2026-11-10T17:59:52.725Z",
+        "kind": "model",
+        "turn": "0d0ff4d8",
+        "round": 1,
+        "messages": 2,
+        "tools": 126,
+        "ms": 18,
+        "ok": true,
+        "requestChars": 73420,
+        "promptTokens": null,
+        "cachedTokens": null,
+        "completionTokens": null,
+        "reasoningTokens": null,
+        "reasoningChars": 0,
+        "reasoning": null,
+        "toolCalls": [
+          "workspace_write"
+        ],
+        "answerChars": 0
+      },
+      {
+        "ts": "2026-11-10T17:59:52.728Z",
+        "kind": "tool_start",
+        "turn": "0d0ff4d8",
+        "round": 1,
+        "callId": "audit-restart-unapproved",
+        "name": "workspace_write",
+        "risk": "T1"
+      }
+    ],
+    "deals": {
+      "waiting": [
+        {
+          "ts": "2026-11-10T17:59:52.922Z",
+          "ref": "approval:audit-restart-unapproved",
+          "title": "workspace_write",
+          "source": "approval",
+          "state": "waiting",
+          "reason": "ждёт вашего решения",
+          "due": null,
+          "since": "2026-11-10T17:59:52.922Z",
+          "cleared": false
+        }
+      ],
+      "failed": [],
+      "overdue": [],
+      "stale": [],
+      "unverified": [],
+      "started": [
+        {
+          "ts": "2026-11-10T17:59:52.695Z",
+          "ref": "turn:2c2d70c6",
+          "title": "Подготовь пробную запись для проверки перезапуска.",
+          "source": "turn",
+          "state": "started",
+          "reason": "",
+          "due": null,
+          "since": "2026-11-10T17:59:52.695Z",
+          "cleared": false
+        }
+      ],
+      "promised": []
+    }
+  },
+  "processes": [
+    {
+      "type": "Browser",
+      "cpuPercent": 0,
+      "workingSetKiB": 160332
+    },
+    {
+      "type": "GPU",
+      "cpuPercent": 0,
+      "workingSetKiB": 162424
+    },
+    {
+      "type": "Utility",
+      "cpuPercent": 0,
+      "workingSetKiB": 101708
+    },
+    {
+      "type": "Tab",
+      "cpuPercent": 0,
+      "workingSetKiB": 144560
+    }
+  ]
+}

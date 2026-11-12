@@ -1,0 +1,4 @@
+{"seq":1,"ts":"2026-11-10T18:00:00.950Z","ref":"turn:1a55327a","title":"Подготовь пробную запись для проверки перезапуска.","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-10T18:00:00.950Z","cleared":false}
+{"seq":2,"ts":"2026-11-10T18:00:01.153Z","ref":"approval:audit-restart-unapproved","title":"workspace_write","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-10T18:00:01.153Z","cleared":false}
+{"seq":3,"ts":"2026-11-10T18:00:01.169Z","ref":"turn:1a55327a","title":"Подготовь пробную запись для проверки перезапуска.","state":"failed","reason":"ход остановлен, часть действий могла выполниться","due":null,"since":"2026-11-10T18:00:01.169Z","cleared":false}
+{"seq":4,"ts":"2026-11-10T18:00:02.442Z","ref":"approval:audit-restart-unapproved","forget":true}

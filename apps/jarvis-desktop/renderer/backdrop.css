@@ -1,6 +1,5 @@
 /* Фон окна: своя картинка (.theme-bg) и эффекты (.theme-fx) под панелями во всех разделах.
- * Подключается последним. Картинку хранит backdrop.js, выбор фона и эффекта — theme-boot.js (jarvis.look).
- * Пока нет ни картинки, ни эффекта, ни одно правило отсюда не срабатывает: окно выглядит как раньше. */
+ * Подключается последним. Картинку хранит backdrop.js, выбор фона и эффекта — theme-boot.js (jarvis.look). */
 
 .theme-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; display: none; }
 html[data-bg="image"][data-own-bg] .theme-bg { display: block; }
@@ -18,14 +17,56 @@ html[data-bg="image"][data-own-bg] .theme-bg { display: block; }
 html[data-fx] body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .theme-fx { display: block !important; }
 body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) :is(.theme-bg, .theme-fx) { z-index: -1; }
 
-/* Панели Nox непрозрачные, фон за ними был бы виден только в зазорах. С картинкой, эффектом или
- * темой с градиентом (список сверяет tests/look.test.js с themes.css) панели полупрозрачные;
- * вложенные поверхности плотнее, чтобы текст не терялся. Сплошной фон возвращает плотные панели. */
-html:is([data-fx], [data-bg="image"][data-own-bg], :is([data-theme="aurora"], [data-theme="ember"], [data-theme="dawn"], [data-theme="liquid"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradient"], [data-theme="gradientday"], [data-theme="midnight"], [data-theme="neon"], [data-theme="starry"], [data-theme="moonlight"], [data-theme="sunrise"], [data-theme="glass"]):not([data-bg])) body[data-view] {
-  --nox-surface-1: color-mix(in srgb, var(--surface) 60%, transparent);
-  --nox-surface-2: color-mix(in srgb, var(--surface) 60%, transparent);
-  --nox-surface-3: color-mix(in srgb, var(--surface-2) 72%, transparent);
-  --nox-surface-4: color-mix(in srgb, var(--surface-3) 84%, transparent);
+@media (prefers-reduced-transparency: no-preference) and (forced-colors: none) {
+  /* Внутренние поверхности плотнее. Для тем с одним эффектом сохраняем прежнюю плотность. */
+  html:is([data-fx], [data-bg="image"][data-own-bg], :is([data-theme="aurora"], [data-theme="ember"], [data-theme="dawn"], [data-theme="liquid"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradient"], [data-theme="gradientday"], [data-theme="midnight"], [data-theme="neon"], [data-theme="starry"], [data-theme="moonlight"], [data-theme="sunrise"], [data-theme="glass"]):not([data-bg])) body[data-view] {
+    --nox-surface-1: color-mix(in srgb, var(--surface) 60%, transparent);
+    --nox-surface-2: color-mix(in srgb, var(--surface) var(--nox-glass-fill, 60%), transparent);
+    --nox-surface-3: color-mix(in srgb, var(--surface-2) 82%, transparent);
+    --nox-surface-4: color-mix(in srgb, var(--surface-3) 92%, transparent);
+    --nox-panel-glass: blur(min(14px, calc(var(--glass-blur) * .45)));
+    --nox-glass-edge: color-mix(in srgb, var(--border) 94%, var(--text));
+  }
+
+  /* Самостоятельные эффекты поверх сплошного фона не требуют нового фильтра. */
+  html:is([data-bg="solid"], [data-theme="dark"], [data-theme="light"], [data-theme="graphite"], [data-theme="lime"], [data-theme="paper"], [data-theme="forest"], [data-theme="wine"], [data-theme="cobalt"]):not([data-bg="image"][data-own-bg]) body[data-view] {
+    --nox-panel-glass: none;
+    --nox-glass-edge: var(--nox-border);
+  }
+
+  html:is([data-theme="aurora"], [data-theme="frost"], [data-theme="gradient"], [data-theme="midnight"], [data-theme="moonlight"], [data-theme="glass"]):not([data-bg]) {
+    --nox-glass-fill: 28%;
+  }
+
+  html[data-bg="image"][data-own-bg] {
+    --nox-glass-fill: 78%;
+  }
+
+  /* Один фильтр на внешнюю панель. Композер, карточки и текст его не дублируют. */
+  html:not([data-glass="off"]) body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"])
+    :is(.nox-panel, .nox-cmd-panel, .nox-conn-panel, .nox-set, .nox-page) {
+    backdrop-filter: var(--nox-panel-glass, none);
+    border-color: var(--nox-glass-edge, var(--nox-border));
+  }
+}
+
+/* Окна поверх содержимого должны перекрывать текст под собой. */
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"])
+  :is(.dialog, .nox-work-dialog, .menu, .pick-panel, .nox-grid.hist-drawer .nox-history) {
+  background-color: var(--surface);
+  backdrop-filter: none;
+}
+
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  /* В том числе фильтры старых слоёв интерфейса. Картинку оставляем за плотными панелями. */
+  body[data-view] {
+    --glass-panel: none;
+    --glass-dialog: none;
+    --glass-composer: none;
+  }
+  body[data-view] :is(.rail, .stage, .convo, .account-card, .account-gate-card, .dialog) {
+    backdrop-filter: none;
+  }
 }
 
 /* Настройки → Вид: строка «Своя картинка». */

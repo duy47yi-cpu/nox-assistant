@@ -12,6 +12,7 @@
 //   os       — снимок require('os'): {cpus, totalmem, freemem, platform, arch, uptime};
 //   tasks    — runtime.queue.list(): [{id, title, status, updatedAt}];
 //   reminders/missions — list() хранилищ: [{id, text, dueAt, done, ...}] / [{id, goal, status, nextRunAt}];
+//   calendar — fetchCalendar() из src/calendar/index.js: {connected, state, source, sourceLabel, timeZone, items, conflicts, fetchedAt, stale};
 //   music    — readMusicHistory(): [{query, service, at}] от новых к старым;
 //   weather  — getCurrentWeather(city): {ok, temp, apparent, precipitation, fetchedAt} или {ok:false, reason};
 //   currency — getRates(codes): {ok, date, rates:[{code,name,value,previous}], fetchedAt} или {ok:false, reason};
@@ -24,15 +25,28 @@
 //   news     — fetchNews(): {ok, items:[{title,link,date,summary,source}], fetchedAt, stale, reason};
 //   pet      — декоративная анимация: данных нет, источник не читается вообще.
 
-const DATA_STATES = Object.freeze(['ok', 'empty', 'error', 'stale']);
+const {
+  normalizeCalendarSnapshot,
+  getUpcomingEvents,
+  buildMorningBriefing,
+  dayBoundsInZone,
+  CALENDAR_STATES,
+} = require('../calendar');
+
+const DATA_STATES = Object.freeze(['ok', 'empty', 'not_connected', 'error', 'stale']);
 
 // Пределы по умолчанию; рендерер может передать свои из config виджета.
 const DEFAULTS = Object.freeze({
   weatherMaxAgeMs: 45 * 60 * 1000, // кэш open-meteo обновляется раз в 30 минут
   currencyMaxAgeMs: 20 * 60 * 1000, // кэш курса ЦБ — 15 минут
   newsMaxAgeMs: 30 * 60 * 1000, // кэш новостей — 30 минут
+  calendarMaxAgeMs: 30 * 60 * 1000, // кэш календаря — 30 минут
   tasksLimit: 10,
   todayLimit: 10,
+  calendarLimit: 10,
+  calendarDays: 14,
+  meetingsLimit: 10,
+  meetingsWindowDays: 7,
   appsLimit: 6,
   musicLimit: 5,
   commandsLimit: 10,
@@ -175,18 +189,24 @@ function startOfDay(now) {
   return date.getTime();
 }
 
-// «Сегодня»: напоминания на сегодня и просроченные (они всё ещё ждут владельца)
-// и ближайшие миссии на сегодня. Пропущенные значения не выдумываются.
+// «Сегодня»: напоминания на сегодня и просроченные (они всё ещё ждут владельца),
+// ближайшие миссии на сегодня и (при переданном sources.calendar) сегодняшние встречи,
+// пересечения и утренняя сводка с подписью источника. Пропущенные значения не выдумываются.
 function today(sources = {}, options = {}) {
-  const { now = Date.now() } = options;
+  const { now = Date.now(), timeZone } = options;
   const limit = clampLimit(options.limit, DEFAULTS.todayLimit, 20);
   if (!isPlainObject(sources)) return result('today', 'error', null, 'bad_source');
   const reminders = sources.reminders === undefined ? [] : sources.reminders;
   const missions = sources.missions === undefined ? [] : sources.missions;
   if (!Array.isArray(reminders)) return result('today', 'error', null, 'bad_source');
   if (!Array.isArray(missions)) return result('today', 'error', null, 'bad_source');
-  const start = startOfDay(now);
-  const end = start + 24 * 60 * 60 * 1000;
+
+  const bounds = timeZone !== undefined
+    ? dayBoundsInZone(now, timeZone)
+    : { startMs: startOfDay(now), endMs: startOfDay(now) + 24 * 60 * 60 * 1000, timeZone: undefined };
+  const start = bounds.startMs;
+  const end = bounds.endMs;
+
   const dueReminders = [];
   for (const raw of reminders) {
     if (!isPlainObject(raw) || typeof raw.id !== 'string' || typeof raw.text !== 'string' || raw.done) continue;
@@ -198,6 +218,7 @@ function today(sources = {}, options = {}) {
       text: raw.text.slice(0, 300),
       dueAt: new Date(due).toISOString(),
       overdue: due < start,
+      source: 'Напоминания',
     });
   }
   dueReminders.sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
@@ -211,16 +232,234 @@ function today(sources = {}, options = {}) {
       goal: raw.goal.slice(0, 300),
       nextRunAt: new Date(next).toISOString(),
       status: typeof raw.status === 'string' ? raw.status : null,
+      source: 'Расписание миссий',
     });
   }
   scheduled.sort((a, b) => new Date(a.nextRunAt) - new Date(b.nextRunAt));
-  const total = dueReminders.length + scheduled.length;
-  if (!total) return result('today', 'empty', { reminders: [], missions: [], total: 0 });
-  return result('today', 'ok', {
+
+  if (sources.calendar === undefined) {
+    const total = dueReminders.length + scheduled.length;
+    if (!total) return result('today', 'empty', { reminders: [], missions: [], total: 0 });
+    return result('today', 'ok', {
+      reminders: dueReminders.slice(0, limit),
+      missions: scheduled.slice(0, limit),
+      total,
+    });
+  }
+
+  const cal = normalizeCalendarSnapshot(sources.calendar, {
+    now,
+    timeZone: bounds.timeZone,
+    maxAgeMs: options.maxAgeMs,
+    rangeStartMs: start,
+    rangeEndMs: end,
+  });
+  if (cal.state === 'error' && !dueReminders.length && !scheduled.length) {
+    return result('today', 'error', {
+      reminders: [],
+      missions: [],
+      events: [],
+      conflicts: [],
+      calendarState: 'error',
+      source: cal.source,
+      sourceLabel: cal.sourceLabel,
+      total: 0,
+    }, cal.reason || 'bad_source');
+  }
+
+  const briefing = buildMorningBriefing({
+    calendar: sources.calendar,
+    reminders,
+    missions,
+    now,
+    timeZone: bounds.timeZone,
+    maxAgeMs: options.maxAgeMs,
+  });
+
+  const total = dueReminders.length + scheduled.length + cal.items.length;
+  const baseValue = {
     reminders: dueReminders.slice(0, limit),
     missions: scheduled.slice(0, limit),
+    events: cal.items.slice(0, limit),
+    conflicts: cal.conflicts,
+    calendarState: cal.state,
+    source: cal.source,
+    sourceLabel: cal.sourceLabel,
+    briefing: briefing.text,
     total,
+  };
+  if (!total) {
+    return result('today', cal.state === 'not_connected' ? 'empty' : (cal.state === 'stale' ? 'stale' : 'empty'), baseValue);
+  }
+  return result('today', cal.state === 'stale' ? 'stale' : 'ok', baseValue);
+}
+
+function toEpochMs(value) {
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : Date.now();
+  }
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : Date.now();
+  }
+  return Number.isFinite(value) ? value : Date.now();
+}
+
+function annotateCalendarEvent(ev, nowMs, todayKey, tomorrowKey) {
+  const ongoing = Number.isFinite(ev.startMs) && Number.isFinite(ev.endMs)
+    ? (ev.startMs <= nowMs && ev.endMs > nowMs)
+    : false;
+  return {
+    ...ev,
+    ongoing,
+    isToday: ev.dateLocal === todayKey,
+    isTomorrow: ev.dateLocal === tomorrowKey,
+  };
+}
+
+// Календарь: встречи, часовой пояс, пересечения, подпись источника и 5 честных состояний:
+// ok, empty, not_connected, error, stale. Вымышленных встреч не создаёт.
+function calendar(source, options = {}) {
+  const nowMs = toEpochMs(options.now);
+  const preferredTz = options.timeZone || (isPlainObject(source) && typeof source.timeZone === 'string' && source.timeZone ? source.timeZone : undefined);
+  const limit = clampLimit(options.limit, DEFAULTS.calendarLimit, 50);
+  const days = Number.isInteger(options.days) && options.days > 0
+    ? clampLimit(options.days, DEFAULTS.calendarDays, 31)
+    : null;
+  const maxAgeMs = Number.isInteger(options.maxAgeMs) && options.maxAgeMs > 0 ? options.maxAgeMs : DEFAULTS.calendarMaxAgeMs;
+  const baseBounds = dayBoundsInZone(nowMs, preferredTz);
+  const tomorrowKey = dayBoundsInZone(baseBounds.endMs + 1000, baseBounds.timeZone).dateKey;
+  const rangeStartMs = Number.isFinite(options.rangeStartMs)
+    ? options.rangeStartMs
+    : (days !== null ? baseBounds.startMs : undefined);
+  const rangeEndMs = Number.isFinite(options.rangeEndMs)
+    ? options.rangeEndMs
+    : (days !== null ? baseBounds.startMs + days * 24 * 60 * 60 * 1000 : undefined);
+
+  const snap = normalizeCalendarSnapshot(source, {
+    now: nowMs,
+    timeZone: baseBounds.timeZone,
+    maxAgeMs,
+    rangeStartMs,
+    rangeEndMs,
   });
+  const briefing = buildMorningBriefing({
+    calendar: source,
+    reminders: options.reminders || [],
+    missions: options.missions || [],
+    now: nowMs,
+    timeZone: snap.timeZone,
+    maxAgeMs,
+  });
+
+  // В календаре держим фокус с начала сегодняшнего дня; если все события в прошлом — сохраняем их как обзор.
+  const fromToday = snap.items.filter((ev) => !Number.isFinite(ev.endMs) || ev.endMs > baseBounds.startMs);
+  const visiblePool = fromToday.length > 0 ? fromToday : snap.items;
+  const items = visiblePool.slice(0, limit).map((ev) => annotateCalendarEvent(ev, nowMs, baseBounds.dateKey, tomorrowKey));
+
+  const value = {
+    connected: snap.connected,
+    stateLabel: snap.stateLabel,
+    source: snap.source,
+    sourceLabel: snap.sourceLabel,
+    sources: snap.sources,
+    timeZone: snap.timeZone,
+    todayDateKey: baseBounds.dateKey,
+    tomorrowDateKey: tomorrowKey,
+    items,
+    conflicts: snap.conflicts,
+    total: snap.total,
+    fetchedAt: snap.fetchedAt,
+    stale: snap.stale,
+    briefing: briefing.text,
+  };
+  if (snap.state === 'error') {
+    return result('calendar', 'error', value, snap.reason || 'bad_source');
+  }
+  if (snap.state === 'not_connected') {
+    return result('calendar', 'not_connected', value, 'not_connected');
+  }
+  return result('calendar', snap.state, value, snap.reason || null);
+}
+
+// Встречи: ближайшие и текущие встречи на окно дней через ядро С3, с локальным временем,
+// источником каждого события и отметкой пересечений. Вымышленных встреч не создаёт.
+function meetings(source, options = {}) {
+  const nowMs = toEpochMs(options.now);
+  const preferredTz = options.timeZone || (isPlainObject(source) && typeof source.timeZone === 'string' && source.timeZone ? source.timeZone : undefined);
+  const limit = clampLimit(options.limit, DEFAULTS.meetingsLimit, 50);
+  const windowDays = clampLimit(options.days, DEFAULTS.meetingsWindowDays, 31);
+  const maxAgeMs = Number.isInteger(options.maxAgeMs) && options.maxAgeMs > 0 ? options.maxAgeMs : DEFAULTS.calendarMaxAgeMs;
+  const baseBounds = dayBoundsInZone(nowMs, preferredTz);
+  const tomorrowKey = dayBoundsInZone(baseBounds.endMs + 1000, baseBounds.timeZone).dateKey;
+
+  const snap = normalizeCalendarSnapshot(source, {
+    now: nowMs,
+    timeZone: baseBounds.timeZone,
+    maxAgeMs,
+  });
+
+  if (snap.state === 'error' || snap.state === 'not_connected') {
+    const emptyValue = {
+      connected: snap.connected,
+      stateLabel: snap.stateLabel,
+      source: snap.source,
+      sourceLabel: snap.sourceLabel,
+      sources: snap.sources,
+      timeZone: snap.timeZone,
+      todayDateKey: baseBounds.dateKey,
+      tomorrowDateKey: tomorrowKey,
+      windowDays,
+      items: [],
+      conflicts: [],
+      total: 0,
+      totalInCalendar: 0,
+      hasOtherEvents: false,
+      fetchedAt: snap.fetchedAt,
+      stale: false,
+    };
+    return snap.state === 'error'
+      ? result('meetings', 'error', emptyValue, snap.reason || 'bad_source')
+      : result('meetings', 'not_connected', emptyValue, 'not_connected');
+  }
+
+  const upcoming = getUpcomingEvents(snap, {
+    now: nowMs,
+    windowMs: windowDays * 24 * 60 * 60 * 1000,
+    limit,
+    timeZone: snap.timeZone,
+    source: snap.source,
+  });
+  const items = upcoming.items.map((ev) => ({
+    ...annotateCalendarEvent(ev, nowMs, baseBounds.dateKey, tomorrowKey),
+    startsInMinutes: !ev.allDay && ev.startMs > nowMs ? Math.max(1, Math.round((ev.startMs - nowMs) / 60000)) : 0,
+  }));
+  const itemSources = [...new Set(items.map((ev) => ev.source).filter(Boolean))];
+  const value = {
+    connected: true,
+    stateLabel: snap.stateLabel,
+    source: snap.source || upcoming.source,
+    sourceLabel: snap.sourceLabel,
+    sources: itemSources.length ? itemSources : snap.sources,
+    timeZone: upcoming.timeZone,
+    todayDateKey: baseBounds.dateKey,
+    tomorrowDateKey: tomorrowKey,
+    windowDays,
+    items,
+    conflicts: upcoming.conflicts,
+    total: upcoming.total,
+    totalInCalendar: snap.total,
+    hasOtherEvents: snap.total > 0 && upcoming.total === 0,
+    fetchedAt: snap.fetchedAt,
+    stale: snap.stale,
+  };
+  if (items.length === 0) {
+    const emptyState = snap.stale && snap.total > 0 ? 'stale' : 'empty';
+    const reason = snap.total > 0 ? 'no_upcoming' : (snap.reason || null);
+    return result('meetings', emptyState, value, reason);
+  }
+  return result('meetings', snap.stale ? 'stale' : 'ok', value, snap.reason || null);
 }
 
 // Музыка: последний настоящий запрос из истории. Нет истории — empty, а не «ничего не играет».
@@ -651,7 +890,17 @@ function pet(source) {
 const BUILDERS = Object.freeze({
   system: (sources) => system(sources.os),
   tasks: (sources, options) => tasks(sources.tasks, options),
-  today: (sources, options) => today({ reminders: sources.reminders, missions: sources.missions }, options),
+  today: (sources, options) => today({
+    reminders: sources.reminders,
+    missions: sources.missions,
+    ...(sources.calendar !== undefined ? { calendar: sources.calendar } : {}),
+  }, options),
+  calendar: (sources, options) => calendar(sources.calendar, {
+    ...options,
+    reminders: sources.reminders,
+    missions: sources.missions,
+  }),
+  meetings: (sources, options) => meetings(sources.calendar, options),
   music: (sources, options) => music(sources.music, options),
   weather: (sources, options) => weather(sources.weather, options),
   currency: (sources, options) => currency(sources.currency, options),
@@ -690,6 +939,7 @@ function buildDeskData(desk, sources = {}, options = {}) {
     const config = isPlainObject(widget.config) ? widget.config : {};
     const local = { ...options };
     if (Number.isInteger(config.limit)) local.limit = config.limit;
+    if (Number.isInteger(config.days)) local.days = config.days;
     if (typeof config.filter === 'string') local.filter = config.filter;
     try {
       out[widget.id] = buildWidget(widget.type, safe, local);
@@ -702,6 +952,7 @@ function buildDeskData(desk, sources = {}, options = {}) {
 
 module.exports = {
   DATA_STATES,
+  CALENDAR_STATES,
   DATA_TYPES,
   DEFAULTS,
   ACTIVE_TASK_STATUSES,
@@ -710,6 +961,8 @@ module.exports = {
   system,
   tasks,
   today,
+  calendar,
+  meetings,
   music,
   weather,
   currency,

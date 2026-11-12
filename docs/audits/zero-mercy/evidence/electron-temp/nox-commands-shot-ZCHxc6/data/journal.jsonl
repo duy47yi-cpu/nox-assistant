@@ -1,0 +1,1 @@
+{"ts":"2026-11-10T16:43:27.803Z","tool":"wait","args":{"ms":50},"risk":"T0","mode":"auto","decision":"allow","ok":true,"summary":"пауза 50 мс","source":"command","command":"49c8e983-ae1f-4b3c-a17b-522cc57a4c13","verified":null,"evidence":null,"runId":"e83b645d-6933-4341-bbf6-b39ae32fdb38","step":1}

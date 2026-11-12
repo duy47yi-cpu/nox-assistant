@@ -39,6 +39,8 @@ const LIMITS = Object.freeze({
 //   notes    — записи памяти (src/memory/store.js, list()), личные скрываются;
 //   downloads — отчёт о папке загрузок (src/extensions/downloads-cleanup.js, analyze);
 //   mcp      — подключённые MCP-сервисы (src/mcp/client.js, mcpManager.state());
+//   calendar — расписание и события из модуля календаря (src/calendar/index.js);
+//   meetings — ближайшие встречи, пересечения и время начала (src/calendar/index.js);
 //   news     — новости из RSS (src/news/rss.js, fetchNews; кэш 30 минут);
 //   pet      — декоративная анимация: данных нет, «показаний» нет.
 // Типов «финансы» и «умный дом» здесь нет: у них нет настоящих источников,
@@ -59,6 +61,8 @@ const WIDGET_TYPES = Object.freeze([
   Object.freeze({ id: 'notes', title: 'Заметки', defaultW: 6, defaultH: 4 }),
   Object.freeze({ id: 'downloads', title: 'Загрузки', defaultW: 6, defaultH: 4 }),
   Object.freeze({ id: 'mcp', title: 'MCP', defaultW: 6, defaultH: 4 }),
+  Object.freeze({ id: 'calendar', title: 'Календарь', defaultW: 6, defaultH: 5 }),
+  Object.freeze({ id: 'meetings', title: 'Встречи', defaultW: 6, defaultH: 5 }),
   Object.freeze({ id: 'news', title: 'Новости', defaultW: 4, defaultH: 3 }),
   Object.freeze({ id: 'pet', title: 'Питомец', defaultW: 4, defaultH: 3 }),
 ]);
@@ -106,6 +110,14 @@ const CONFIG_SCHEMA = Object.freeze({
   }),
   mcp: Object.freeze({
     limit: Object.freeze({ kind: 'int', min: 1, max: 20 }),
+  }),
+  calendar: Object.freeze({
+    limit: Object.freeze({ kind: 'int', min: 1, max: 50 }),
+    days: Object.freeze({ kind: 'int', min: 1, max: 31 }),
+  }),
+  meetings: Object.freeze({
+    limit: Object.freeze({ kind: 'int', min: 1, max: 50 }),
+    days: Object.freeze({ kind: 'int', min: 1, max: 31 }),
   }),
   news: Object.freeze({
     limit: Object.freeze({ kind: 'int', min: 1, max: 20 }),

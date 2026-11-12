@@ -1,0 +1,6 @@
+{"seq":1,"ts":"2026-11-11T08:45:00.265Z","ref":"approval:ddfdde44-2ac4-484c-9f0e-d3ee2d1a31b3","title":"zm_fake_effect","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-11T08:45:00.265Z","cleared":false}
+{"seq":2,"ts":"2026-11-11T08:45:00.509Z","ref":"approval:ddfdde44-2ac4-484c-9f0e-d3ee2d1a31b3","forget":true}
+{"seq":3,"ts":"2026-11-11T08:45:00.878Z","ref":"approval:9e1ce263-f54b-45c0-ab71-c948f97d2106","title":"zm_fake_effect","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-11T08:45:00.878Z","cleared":false}
+{"seq":4,"ts":"2026-11-11T08:45:01.106Z","ref":"approval:9e1ce263-f54b-45c0-ab71-c948f97d2106","forget":true}
+{"seq":5,"ts":"2026-11-11T08:45:37.165Z","ref":"approval:aba4d7ca-2fd4-4422-83b1-c688870e70f9","title":"zm_fake_effect","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-11T08:45:37.165Z","cleared":false}
+{"seq":6,"ts":"2026-11-11T08:45:37.591Z","ref":"approval:aba4d7ca-2fd4-4422-83b1-c688870e70f9","forget":true}

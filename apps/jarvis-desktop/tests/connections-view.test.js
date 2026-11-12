@@ -758,3 +758,102 @@ test('без моста окно не падает: список остаётс�
   await wait();
   assert.equal(ids.mcpAddError.hidden, true, 'без моста форма ничего не обещает');
 });
+
+// ── Четыре достоверных состояния (М2) ────────────────────────────────────────
+const pillWord = (card) => textOf(byClass(card, 'mcp-pill')[0]).trim();
+
+test('четыре состояния: слова пилюль достоверны, сервис не выглядит подключённым без соединения', async () => {
+  const catalog = [{
+    id: 'filesystem', title: 'Файлы', verified: true, envKeys: [], category: 'files', docs: 'https://example.org/docs',
+    description: 'чтение и запись файлов в выбранной папке',
+  }];
+  const configured = { ...connected, name: 'waiting', status: 'idle', tools: [], toolCount: 0 };
+  const off = { ...connected, name: 'off', status: 'disabled', disabled: true, tools: [], toolCount: 0 };
+  const err = { ...broken, name: 'broken' };
+  const { ids } = makeSandbox({ mcpState: async () => ({ servers: [connected, configured, off, err], catalog }) });
+  await wait();
+
+  assert.equal(pillWord(cardOf(ids, 'echo')), 'Подключён');
+  assert.equal(pillWord(cardOf(ids, 'waiting')), 'Настроено');
+  assert.equal(pillWord(cardOf(ids, 'off')), 'Настроено');
+  assert.equal(pillWord(cardOf(ids, 'broken')), 'Ошибка');
+  assert.equal(cardOf(ids, 'echo').getAttribute('data-group'), 'connected');
+  assert.equal(cardOf(ids, 'waiting').getAttribute('data-group'), 'configured');
+  assert.equal(cardOf(ids, 'broken').getAttribute('data-group'), 'error');
+
+  // Запись каталога без сохранённого сервиса — «Предложено», а не подключённый сервис.
+  const row = findAll(ids.mcpPopularList, (n) => n.getAttribute('data-popular') === 'filesystem')[0];
+  assert.ok(row, 'карточка каталога есть');
+  assert.equal(row.getAttribute('data-group'), 'proposed');
+  assert.equal(textOf(byClass(row, 'mcp-pill')[0]).trim(), 'Предложено');
+  assert.match(textOf(row), /чтение и запись файлов/);
+});
+
+test('права до включения видны, а список действий — только после соединения', async () => {
+  const catalog = [{ id: 'waiting', title: 'Ожидание', verified: true, envKeys: [], category: 'other', description: 'запуск локального сервера' }];
+  const configured = { ...connected, name: 'waiting', status: 'idle', tools: [{ name: 'x', title: 'Действие' }], toolCount: 1 };
+  const { ids } = makeSandbox({ mcpState: async () => ({ servers: [connected, configured], catalog }) });
+  await wait();
+
+  const configuredCard = textOf(cardOf(ids, 'waiting'));
+  assert.match(configuredCard, /Права: запуск локального сервера/);
+  assert.doesNotMatch(configuredCard, /Действия \(/);
+  assert.equal(byClass(cardOf(ids, 'waiting'), 'mcp-caps').length, 0);
+
+  const liveCard = textOf(cardOf(ids, 'echo'));
+  assert.doesNotMatch(liveCard, /Права:/);
+  assert.match(liveCard, /Действия \(2\)/);
+});
+
+test('ошибка объясняется словами, техническая причина остаётся дословно', async () => {
+  const { ids } = makeSandbox({ mcpState: async () => ({ servers: [broken] }) });
+  await wait();
+  const text = textOf(cardOf(ids, 'echo'));
+  assert.match(text, /Не удалось запустить: программы из команды нет/);
+  assert.match(text, /Ошибка: программа не найдена: ENOENT/);
+});
+
+test('включение без соединения не объявляет «подключён»', async () => {
+  const calls = [];
+  const still = { ...connected, status: 'idle', tools: [], toolCount: 0 };
+  const bridge = {
+    mcpState: async () => ({ servers: [{ ...connected, status: 'disabled', disabled: true, tools: [], toolCount: 0 }] }),
+    mcpToggle: async (name, disabled) => { calls.push([name, disabled]); return { ok: true, servers: [still] }; },
+  };
+  const { ids, toasts } = makeSandbox(bridge);
+  await wait();
+  const button = actionOf(cardOf(ids, 'echo'));
+  button.fire('click', clickEvent(button));
+  await wait();
+  assert.deepEqual(calls, [['echo', false]]);
+  assert.ok(toasts.some((toast) => toast.text === 'Сервис «echo» настроен, соединения ещё нет' && toast.kind === 'ok'));
+  assert.equal(toasts.some((toast) => /подключён/.test(toast.text)), false, 'успех не выдуман');
+});
+
+test('«Повторить» без соединения показывает причину, а не успех', async () => {
+  const bridge = {
+    mcpState: async () => ({ servers: [broken] }),
+    mcpToggle: async () => ({ ok: true, servers: [broken] }),
+  };
+  const { ids, toasts } = makeSandbox(bridge);
+  await wait();
+  const button = actionOf(cardOf(ids, 'echo'));
+  assert.equal(button.textContent, 'Повторить');
+  button.fire('click', clickEvent(button));
+  await wait();
+  assert.equal(ids.mcpErrorDialog.open, true);
+  assert.equal(toasts.some((toast) => toast.text === 'Сервис «echo» подключён'), false);
+});
+
+test('детали: состояние словами и права до включения', async () => {
+  const catalog = [{ id: 'waiting', title: 'Ожидание', verified: true, envKeys: [], category: 'other', description: 'запуск локального сервера' }];
+  const configured = { ...connected, name: 'waiting', status: 'idle', tools: [], toolCount: 0 };
+  const { ids } = makeSandbox({ mcpState: async () => ({ servers: [configured], catalog }) });
+  await wait();
+  const card = cardOf(ids, 'waiting');
+  card.fire('click', clickEvent(card));
+  const body = textOf(ids.mcpDetailsBody);
+  assert.match(body, /Настроено · сохранено, но ещё не подключалось/);
+  assert.match(body, /Разрешения до включения/);
+  assert.match(body, /Что получит сервис:\s+запуск локального сервера/);
+});

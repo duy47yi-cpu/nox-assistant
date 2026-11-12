@@ -1,0 +1,9 @@
+﻿D:\nox-release\apps\jarvis-desktop> "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /t:library /utf8output /R:"System.dll" /R:"C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0.0.0__31bf3856ad364e35\System.Management.Automation.dll" /R:"System.Core.dll" /out:"D:\nox-release\tmp-quick-chat\ut5vkcja.dll" /debug- /optimize+ /warnaserror /optimize+  "D:\nox-release\tmp-quick-chat\ut5vkcja.0.cs"
+
+
+Microsoft (R) Visual C# Compiler version 14.8.10001.0
+for C# 5
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+This compiler is provided as part of the Microsoft (R) .NET Framework, but only supports language versions up to C# 5, which is no longer the latest version. For compilers that support newer versions of the C# programming language, see http://go.microsoft.com/fwlink/?LinkID=533240
+

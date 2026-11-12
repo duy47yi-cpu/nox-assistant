@@ -1,0 +1,8 @@
+{
+  "voice": false,
+  "backgroundModelRuns": false,
+  "desktopOverlay": false,
+  "mode": "ask",
+  "seededBrief": true,
+  "windowBg": "#14120E"
+}

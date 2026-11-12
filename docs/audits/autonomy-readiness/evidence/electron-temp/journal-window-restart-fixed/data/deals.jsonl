@@ -1,0 +1,5 @@
+{"seq":1,"ts":"2026-11-11T15:32:20.567Z","ref":"turn:708ae587","title":"Подготовь пробную запись для проверки перезапуска.","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-11T15:32:20.567Z","cleared":false}
+{"seq":2,"ts":"2026-11-11T15:32:21.151Z","ref":"approval:96e5ae4a-8639-44c3-929f-fa1c3a4127e3","title":"workspace_write","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-11T15:32:21.151Z","cleared":false}
+{"seq":3,"ts":"2026-11-11T15:32:23.480Z","ref":"turn:708ae587","title":"Подготовь пробную запись для проверки перезапуска.","state":"failed","reason":"ход прерван перезапуском, результат неизвестен","due":null,"since":"2026-11-11T15:32:23.479Z","cleared":false}
+{"seq":4,"ts":"2026-11-11T15:32:23.481Z","ref":"call:audit-restart-unapproved","title":"workspace_write","source":"interrupted","state":"waiting","reason":"вызов прерван перезапуском, результат неизвестен","due":null,"since":"2026-11-11T15:32:20.626Z","cleared":false}
+{"seq":5,"ts":"2026-11-11T15:32:23.483Z","ref":"approval:96e5ae4a-8639-44c3-929f-fa1c3a4127e3","forget":true}

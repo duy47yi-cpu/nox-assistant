@@ -140,31 +140,115 @@
   let lastTrigger = null;
 
   // Статус сервиса: новые поля status/error, старые connected/disabled — тот же смысл.
+  // Незнакомый статус не показываем как «Настроено»: честнее «старая сборка моста».
   function statusOf(server) {
-    if (server && server.status) return server.status;
-    if (server && server.disabled) return 'disabled';
-    if (server && server.connected) return 'connected';
-    return 'legacy';
+    let status = null;
+    if (server && server.status) status = String(server.status);
+    else if (server && server.disabled) status = 'disabled';
+    else if (server && server.connected) status = 'connected';
+    else status = 'legacy';
+    return STATUS[status] ? status : 'legacy';
   }
 
-  // Тексты и цвета семи состояний. Слова различимы без цвета (важно для a11y).
+  // Тексты и цвета состояний. Слова различимы без цвета (важно для a11y).
+  // Пилюля всегда называет одно из четырёх достоверных состояний; подсказка внутри состояния
+  // («Выключен», «Подключается», «Изменения инструментов») живёт в строке состояния ниже.
   const STATUS = {
     connected: { word: 'Подключён', tone: 'ok' },
     connecting: { word: 'Подключается', tone: 'accent' },
-    disabled: { word: 'Выключен', tone: 'ghost' },
-    idle: { word: 'Не настроен', tone: 'muted' },
-    legacy: { word: 'Устаревший', tone: 'muted' },
+    disabled: { word: 'Настроено', tone: 'ghost' },
+    idle: { word: 'Настроено', tone: 'muted' },
+    legacy: { word: 'Настроено', tone: 'muted' },
     error: { word: 'Ошибка', tone: 'err' },
     drift: { word: 'Изменения инструментов', tone: 'warn' },
   };
+
+  // Четыре достоверных состояния раздела (М2): «Предложено» — запись каталога, которой ещё нет
+  // в настройках; «Настроено» — сервис сохранён, но соединения нет (выключен, ещё не запускался,
+  // старая сборка); «Подключено» — живое соединение (включая «Подключается» и ожидание
+  // подтверждения изменений); «Ошибка» — сохранить удалось, соединиться нет.
+  // Группа — единственный источник правды: пилюля, счётчики и итоги действий смотрят только
+  // на неё, поэтому сервис не может выглядеть подключённым без фактического соединения.
+  const CONNECTED_STATUSES = ['connected', 'connecting', 'drift'];
+  function groupOf(server) {
+    const status = statusOf(server);
+    if (status === 'error') return 'error';
+    if (CONNECTED_STATUSES.includes(status)) return 'connected';
+    return 'configured';
+  }
 
   function statusInfo(server) {
     return STATUS[statusOf(server)] || STATUS.idle;
   }
 
+  // Пилюля состояния: одна и та же в списке, деталях и панели популярных.
+  const pillOf = (word, tone) => el('span', { class: 'mcp-pill', 'data-tone': tone },
+    el('span', { class: 'mcp-pill-dot', 'aria-hidden': 'true' }), el('span', { text: word }));
+  const statusPill = (server) => { const info = statusInfo(server); return pillOf(info.word, info.tone); };
+
+  // Причина ошибки понятным русским. Исходный текст остаётся рядом («Подробнее», диалог),
+  // объяснение его не подменяет.
+  function explainError(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return 'Причина не сообщена. Проверьте команду или адрес сервиса и повторите.';
+    const low = text.toLowerCase();
+    if (low.includes('enoent') || low.includes('не найден') || low.includes('not found')) {
+      return 'Не удалось запустить: программы из команды нет на этом компьютере.';
+    }
+    if (low.includes('eacces') || low.includes('eperm') || low.includes('отказано')) {
+      return 'Не удалось запустить: у Windows нет прав на эту программу или папку.';
+    }
+    if (low.includes('enotfound') || low.includes('econnrefused') || low.includes('econnreset') || low.includes('network') || low.includes('fetch failed')) {
+      return 'Не удалось достучаться до сервиса: проверьте адрес и подключение к сети.';
+    }
+    if (low.includes('timeout') || low.includes('не ответил') || low.includes('истекло')) {
+      return 'Сервис не ответил за отведённое время. Возможно, он занят или сеть медленная.';
+    }
+    if (low.includes('401') || low.includes('403') || low.includes('unauthorized')) {
+      return 'Сервис отклонил соединение: проверьте адрес и ключ доступа в настройках сервиса.';
+    }
+    return text;
+  }
+
+  // Права до включения: что сервис получит после соединения. Список действий до соединения
+  // неизвестен — не выдумываем его, показываем права и честно говорим, что появится после проверки.
+  function catalogEntry(server) {
+    if (!verifiedCatalog || !server || !server.name) return null;
+    return verifiedCatalog.find((entry) => entry && entry.id === server.name) || null;
+  }
+
+  function rightsOf(server) {
+    const entry = catalogEntry(server);
+    const scope = (entry && entry.description && String(entry.description)) || (server.transport === 'http'
+      ? 'доступ по указанному адресу в интернете'
+      : 'запуск указанной программы на этом компьютере');
+    return {
+      scope,
+      policy: 'Подключение не расширяет права приложения: действия сервиса спрашиваются по общим правилам, пока вы не разрешите их в настройках.',
+    };
+  }
+
+  // Проверка перехода: итог действия читаем из фактического состояния в ответе ядра,
+  // а не из одного «ok». «Подключён» говорим только когда группа действительно «Подключено».
+  function findServer(servers, name) {
+    return (Array.isArray(servers) ? servers : []).find((x) => x && x.name === name) || null;
+  }
+
+  function outcomeOf(name, servers) {
+    const fresh = findServer(servers, name);
+    if (!fresh) return null;
+    const group = groupOf(fresh);
+    if (group === 'connected') return { kind: 'ok', text: `Сервис «${name}» подключён` };
+    if (group === 'error') return { kind: 'error', text: `Сервис «${name}» сохранён, но не подключился: ${explainError(fresh.error)}` };
+    if (statusOf(fresh) === 'disabled') return { kind: 'ok', text: `Сервис «${name}» выключен, его действия больше не доступны` };
+    return { kind: 'ok', text: `Сервис «${name}» настроен, соединения ещё нет` };
+  }
+
   // Что сервис умеет: имена действий (не внутренние имена модели) или объявленные возможности.
   function capabilitiesText(server) {
     if (!server || statusOf(server) === 'error') return null;
+    // До фактического соединения набор действий неизвестен: «настроено» не выдаём за «умеет».
+    if (groupOf(server) !== 'connected') return null;
     const tools = Array.isArray(server.tools) ? server.tools : [];
     if (tools.length) {
       const titles = tools.slice(0, 4).map((tool) => String((tool && (tool.title || tool.name)) || '').trim()).filter(Boolean);
@@ -198,8 +282,8 @@
       return `Подключён · ${n} ${plural(n, ['действие', 'действия', 'действий'])}`;
     }
     if (status === 'connecting') return 'Подключается…';
-    if (status === 'disabled') return 'Выключен';
-    if (status === 'idle') return 'Не подключён';
+    if (status === 'disabled') return 'Выключен · соединения нет, действия недоступны';
+    if (status === 'idle') return 'Настроено · сохранено, но ещё не подключалось';
     if (status === 'legacy') return 'Подключится при запуске';
     if (status === 'error') return `Ошибка: ${String(server.error || 'причина не сообщена')}`;
     if (status === 'drift') return 'Набор действий изменился — нужно ваше подтверждение';
@@ -278,10 +362,10 @@
   function filteredServers() {
     const q = STATE.q.trim().toLowerCase();
     return SERVERS.filter((server) => {
-      const status = statusOf(server);
-      if (STATE.filter === 'connected' && !['connected', 'connecting', 'drift'].includes(status)) return false;
-      if (STATE.filter === 'disabled' && status !== 'disabled') return false;
-      if (STATE.filter === 'error' && status !== 'error') return false;
+      const group = groupOf(server);
+      if (STATE.filter === 'connected' && group !== 'connected') return false;
+      if (STATE.filter === 'disabled' && group !== 'configured') return false;
+      if (STATE.filter === 'error' && group !== 'error') return false;
       if (!q) return true;
       return searchText(server).includes(q);
     });
@@ -347,10 +431,16 @@
       class: 'mcp-line'
         + (status === 'error' ? ' mcp-line-error' : '')
         + (status === 'drift' ? ' mcp-line-warn' : ''),
-      text: status === 'error' ? 'Не удалось подключиться' : statusLine(server),
+      text: status === 'error' ? explainError(server.error) : statusLine(server),
     });
     main.append(line);
+    // Исходная техническая причина остаётся рядом: объяснение её не подменяет и не прячет.
     if (status === 'error') technical.append(el('p', { text: statusLine(server) }));
+
+    // Права до включения: что сервис получит, видно ещё до соединения.
+    if (groupOf(server) !== 'connected') {
+      main.append(el('div', { class: 'mcp-rights', text: `Права: ${rightsOf(server).scope}` }));
+    }
 
     const caps = capabilitiesText(server);
     if (caps) main.append(el('div', { class: 'mcp-caps', text: caps }));
@@ -371,6 +461,7 @@
 
     const node = el('li', {
       class: 'mcp-card', 'data-name': String(server.name || ''), 'data-status': status,
+      'data-group': groupOf(server),
       'data-focus-key': `card:${server.name}`,
       tabindex: '0', role: 'group', 'aria-label': `${server.name}: ${info.word}`,
     }, el('span', { class: 'mcp-icon', 'aria-hidden': 'true' }, icon('plug')), main, actions);
@@ -402,21 +493,33 @@
     if (again && typeof again.focus === 'function') again.focus();
   }
 
-  function renderCounts() {
-    const counts = { all: SERVERS.length, connected: 0, disabled: 0, error: 0 };
-    for (const server of SERVERS) {
-      const status = statusOf(server);
-      if (['connected', 'connecting', 'drift'].includes(status)) counts.connected += 1;
-      else if (status === 'disabled') counts.disabled += 1;
-      else if (status === 'error') counts.error += 1;
+  // Подпись чипа фильтра приводим к четырём достоверным состояниям, счёт одной правдой (groupOf).
+  function setChipWord(chip, word) {
+    if (!chip || !chip.childNodes) return;
+    for (const kid of chip.childNodes) {
+      if (kid && kid.nodeType === 3) { kid.nodeValue = `${word} `; return; }
     }
-    const map = { mcpFilterAllCount: counts.all, mcpFilterConnectedCount: counts.connected, mcpFilterDisabledCount: counts.disabled, mcpFilterErrorCount: counts.error };
+  }
+
+  function renderCounts() {
+    const counts = { all: SERVERS.length, connected: 0, configured: 0, error: 0 };
+    for (const server of SERVERS) {
+      const group = groupOf(server);
+      if (group === 'connected') counts.connected += 1;
+      else if (group === 'error') counts.error += 1;
+      else counts.configured += 1;
+    }
+    const map = { mcpFilterAllCount: counts.all, mcpFilterConnectedCount: counts.connected, mcpFilterDisabledCount: counts.configured, mcpFilterErrorCount: counts.error };
     for (const [id, value] of Object.entries(map)) {
       const node = $(id);
       if (node) node.textContent = String(value);
     }
-    for (const chip of document.querySelectorAll ? document.querySelectorAll('#mcpFilters .nox-chip-filter') : []) {
-      chip.setAttribute('aria-pressed', String(chip.getAttribute('data-filter') === STATE.filter));
+    const chips = document.querySelectorAll ? document.querySelectorAll('#mcpFilters .nox-chip-filter') : [];
+    for (const chip of chips) {
+      const filter = chip.getAttribute('data-filter');
+      chip.setAttribute('aria-pressed', String(filter === STATE.filter));
+      if (filter === 'connected') setChipWord(chip, 'Подключённые');
+      else if (filter === 'disabled') setChipWord(chip, 'Настроенные');
     }
   }
 
@@ -462,9 +565,12 @@
     }
     if (button) button.disabled = false;
     if (r && r.servers) paint(r.servers);
-    if (!r || !r.ok) { toast((r && r.error) || 'Не получилось', 'error'); return; }
-    if (r.error) { toast(String(r.error), 'error'); return; }
-    toast(disabled ? `Сервис «${server.name}» выключен, его действия больше не доступны` : `Сервис «${server.name}» включён`, 'ok');
+    if (!r || !r.ok) { toast(explainError((r && r.error) || 'Не получилось'), 'error'); return; }
+    if (r.error) { toast(explainError(r.error), 'error'); return; }
+    if (disabled) { toast(`Сервис «${server.name}» выключен, его действия больше не доступны`, 'ok'); return; }
+    // Итог включения читаем из фактического состояния сервиса, а не из одного «ok».
+    const outcome = outcomeOf(server.name, (r && r.servers) || SERVERS);
+    toast(outcome ? outcome.text : `Сервис «${server.name}» сохранён, соединения ещё нет`, outcome ? outcome.kind : 'ok');
   }
 
   async function retryServer(server, button) {
@@ -484,15 +590,26 @@
     if (r && r.servers) paint(r.servers);
     if (!r || !r.ok) { openConnectError(server.name, (r && r.error) || 'не получилось переподключить', button); return; }
     if (r.error) { openConnectError(server.name, String(r.error), button); return; }
-    toast(`Сервис «${server.name}» подключён`, 'ok');
+    // «Подключён» говорим только если сервис действительно подключился.
+    const fresh = findServer(r.servers, server.name);
+    if (fresh && groupOf(fresh) === 'connected') {
+      toast(`Сервис «${server.name}» подключён`, 'ok');
+      return;
+    }
+    openConnectError(server.name, (fresh && fresh.error) || 'сервис не сообщил соединение', button);
   }
 
   function openConnectError(name, reason, trigger) {
     const dialog = $('mcpErrorDialog');
     if (!dialog) return;
     lastTrigger = trigger || lastTrigger;
+    const plain = explainError(reason);
     const nameNode = $('mcpConnErrName');
-    if (nameNode) nameNode.textContent = `Сервис «${name}» сохранён, но не подключился.`;
+    if (nameNode) {
+      const head = `Сервис «${name}» сохранён, но не подключился.`;
+      // Если причина уже понятна словами — объяснение рядом, исходный текст ниже не подменяется.
+      nameNode.textContent = plain && plain !== String(reason || '').trim() ? `${head} ${plain}` : head;
+    }
     const reasonNode = $('mcpConnErrReason');
     if (reasonNode) reasonNode.textContent = String(reason || 'причина не сообщена');
     dialog.dataset.name = name;
@@ -525,6 +642,10 @@
       el('span', { class: 'mcp-detail-name', text: String(server.name || '') }),
       detailPill(server)));
     if (meta) parts.push(el('div', { class: 'mcp-detail-meta', text: meta }));
+    // Состояние словами: четыре достоверных состояния, без догадок.
+    const group = groupOf(server);
+    parts.push(el('div', { class: 'mcp-detail-status', 'data-group': group,
+      text: group === 'error' ? explainError(server.error) : statusLine(server) }));
 
     const transport = server.transport === 'http' ? 'Адрес' : 'Команда';
     const targetBox = el('div', { class: 'mcp-target-box' },
@@ -565,8 +686,11 @@
         chips.length ? el('div', { class: 'mcp-diff' }, ...chips.map((item) => el('span', { class: 'mcp-diff-chip', 'data-kind': item.kind, text: item.text }))) : null));
     }
 
+    const rights = rightsOf(server);
     parts.push(el('div', { class: 'mcp-detail-section' },
-      el('div', { class: 'mcp-detail-section-title', text: 'Разрешения' }),
+      el('div', { class: 'mcp-detail-section-title', text: group === 'connected' ? 'Разрешения' : 'Разрешения до включения' }),
+      el('p', { class: 'mcp-detail-text mcp-rights-scope' },
+        el('b', { text: 'Что получит сервис: ' }), `${rights.scope}.`),
       el('p', { class: 'mcp-detail-text' },
         el('b', { text: 'Подключение не расширяет права приложения. ' }),
         'Действия сервиса проходят общую политику Nox: перед изменяющими системными действиями Джарвис спросит вас. Подтверждение набора действий сервиса — отдельное решение и не разрешает агенту системные действия.')));
@@ -599,10 +723,15 @@
         if (fresh) renderDetails(fresh);
       }
     });
+    const hint = server.disabled === true
+      ? 'Действия недоступны, пока не включите'
+      : group === 'connected' ? 'Действия доступны после вашего разрешения'
+        : group === 'error' ? 'Сохранён, но соединения нет — действия недоступны'
+          : 'Сохранён: действия появятся после соединения';
     parts.push(el('div', { class: 'mcp-toggle-row' },
       el('span', { class: 'mcp-toggle-text' },
         el('span', { class: 'mcp-toggle-name', text: server.disabled === true ? 'Сервис выключен' : 'Сервис включён' }),
-        el('span', { class: 'mcp-toggle-hint', text: server.disabled === true ? 'Действия недоступны, пока не включите' : 'Действия доступны после вашего разрешения' })),
+        el('span', { class: 'mcp-toggle-hint', text: hint })),
       sw));
 
     body.replaceChildren(...parts.filter(Boolean));
@@ -800,7 +929,15 @@
         toast(`Сервис сохранён, но не подключился: ${r.error}`, 'error');
         openConnectError(name, r.error);
       } else {
-        toast('Сервис подключён. Его действия спрашиваются, пока вы не разрешите их в настройках', 'ok');
+        // Итог проверяем по фактическому состоянию: «подключён» — только когда соединение есть.
+        const fresh = findServer(r.servers, name);
+        if (!fresh || groupOf(fresh) === 'connected') {
+          toast('Сервис подключён. Его действия спрашиваются, пока вы не разрешите их в настройках', 'ok');
+        } else if (groupOf(fresh) === 'error') {
+          toast(`Сервис сохранён, но не подключился: ${explainError(fresh.error)}`, 'error');
+        } else {
+          toast('Сервис сохранён. Соединения ещё нет, действия появятся после подключения', 'ok');
+        }
       }
     } finally {
       if (button) button.disabled = false;
@@ -838,7 +975,8 @@
     if (!listBox || !catsBox) return;
     const items = popularItems().filter(popularMatches);
     const names = installedNames();
-    const key = JSON.stringify(items.map((item) => [item.id, item.available])) + '|' + STATE.popularCat + '|' + STATE.q + '|' + [...names].join(',') + '|' + JSON.stringify(mail) + '|' + mailConnecting;
+    const key = JSON.stringify(items.map((item) => [item.id, item.available])) + '|' + STATE.popularCat + '|' + STATE.q + '|' + [...names].join(',') + '|' + JSON.stringify(mail) + '|' + mailConnecting
+      + '|' + SERVERS.map((server) => `${server.name}:${statusOf(server)}`).join(',');
     if (key === popularKey) return;
     popularKey = key;
 
@@ -892,10 +1030,18 @@
         button = el('button', { class: 'mcp-popular-add', type: 'button', disabled: true, text: 'Не настроено' });
         button.title = item.reason || 'Сервис пока недоступен';
       }
-      const row = el('div', { class: 'mcp-popular-row', 'data-popular': item.id },
+      // Запись каталога без сохранённого сервиса — «Предложено», а не «подключено».
+      const fresh = findServer(SERVERS, item.id);
+      const row = el('div', {
+        class: 'mcp-popular-row', 'data-popular': item.id,
+        'data-group': fresh ? groupOf(fresh) : 'proposed',
+      },
         popularIcon(item.id),
         el('div', { class: 'mcp-popular-main' },
-          el('span', { class: 'mcp-popular-name', text: item.title }),
+          el('span', { class: 'mcp-popular-head' },
+            el('span', { class: 'mcp-popular-name', text: item.title }),
+            fresh ? statusPill(fresh) : pillOf('Предложено', 'ghost')),
+          el('span', { class: 'mcp-popular-desc', text: String(item.hint || (fresh && fresh.target) || '') }),
           !already && item.reason ? el('span', { class: 'sr-only', text: item.reason }) : null),
         button);
       return row;
@@ -945,10 +1091,18 @@
     if (!r || !r.ok) { toast((r && r.error) || 'Не получилось добавить', 'error'); return; }
     if (r.servers) paint(r.servers, { force: true });
     if (r.error) {
-      toast(`Сервис «${item.title}» сохранён, но не подключился: ${r.error}`, 'error');
+      toast(`Сервис «${item.title}» сохранён, но не подключился: ${explainError(r.error)}`, 'error');
       openConnectError(item.id, r.error);
     } else {
-      toast(`Сервис «${item.title}» подключён. Его действия спрашиваются, пока вы не разрешите их`, 'ok');
+      const fresh = findServer(r.servers, item.id);
+      if (!fresh || groupOf(fresh) === 'connected') {
+        toast(`Сервис «${item.title}» подключён. Его действия спрашиваются, пока вы не разрешите их`, 'ok');
+      } else if (groupOf(fresh) === 'error') {
+        toast(`Сервис «${item.title}» сохранён, но не подключился: ${explainError(fresh.error)}`, 'error');
+        openConnectError(item.id, fresh.error);
+      } else {
+        toast(`Сервис «${item.title}» добавлен. Соединения ещё нет, действия появятся после подключения`, 'ok');
+      }
     }
   }
 

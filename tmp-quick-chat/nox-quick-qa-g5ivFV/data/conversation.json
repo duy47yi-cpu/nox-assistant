@@ -1,0 +1,73 @@
+{
+  "activeId": "c945c4d0-0e32-435a-82c3-4b4a87d751ee",
+  "chats": [
+    {
+      "id": "c945c4d0-0e32-435a-82c3-4b4a87d751ee",
+      "history": [
+        {
+          "role": "user",
+          "content": "какая погода"
+        },
+        {
+          "role": "assistant",
+          "content": "Не вышло: Скажите город (ответ без модели)"
+        },
+        {
+          "role": "user",
+          "content": "проверка разрешения отклонить"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "qa-write",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"quick-qa.txt\",\"content\":\"Точный тестовый текст\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "qa-write",
+          "content": "{\"ok\":false,\"summary\":\"отклонено\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Тестовый ответ."
+        },
+        {
+          "role": "user",
+          "content": "проверка разрешения разрешить"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "qa-write",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"quick-qa.txt\",\"content\":\"Точный тестовый текст\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "qa-write",
+          "content": "{\"ok\":true,\"summary\":\"записал\",\"data\":{\"path\":\"quick-qa.txt\",\"created\":true,\"backup\":null},\"verified\":\"confirmed\",\"evidence\":\"файл quick-qa.txt совпадает с записью\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Тестовый ответ."
+        }
+      ],
+      "updatedAt": 1794491900986
+    }
+  ]
+}

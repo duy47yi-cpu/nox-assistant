@@ -1,0 +1,53 @@
+{
+  "mode": "retry",
+  "pid": 36932,
+  "readyMs": 4421.6062,
+  "electron": "44.9.3",
+  "chromium": "152.0.7977.167",
+  "initialTheme": {
+    "theme": null,
+    "accent": null,
+    "look": null,
+    "resolved": "dark",
+    "systemLight": false,
+    "bg": "#14120E",
+    "appBg": "rgb(15, 15, 16)"
+  },
+  "retry": {
+    "retryButtons": 0,
+    "writes": 1,
+    "errorTexts": [
+      "Не получилось: Сбой фиктивной модели после записи отчёта. Часть действий уже выполнялась, поэтому повтора кнопкой нет: проверьте результат и напишите, что продолжить."
+    ],
+    "fixtureFiles": [
+      "inbox",
+      "notes",
+      "rag",
+      "README.md",
+      "reports",
+      "reports\\audit-retry.txt"
+    ]
+  },
+  "processes": [
+    {
+      "type": "Browser",
+      "cpuPercent": 0,
+      "workingSetKiB": 165468
+    },
+    {
+      "type": "GPU",
+      "cpuPercent": 0,
+      "workingSetKiB": 170788
+    },
+    {
+      "type": "Utility",
+      "cpuPercent": 0,
+      "workingSetKiB": 102716
+    },
+    {
+      "type": "Tab",
+      "cpuPercent": 0,
+      "workingSetKiB": 154592
+    }
+  ]
+}

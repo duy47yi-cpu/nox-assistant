@@ -726,7 +726,7 @@ test('model-pick.js слушает смену модели из Настроек
   assert.match(read('nox-settings.js'), /dispatchEvent\(new CustomEvent\('jarvis:tier'/);
 });
 
-test('index.html: 13 карточек с категориями, новые карточки и прежние id на месте', () => {
+test('index.html: 15 карточек с категориями, новые карточки и прежние id на месте', () => {
   const html = read('index.html');
   const start = html.indexOf('class="view view-settings"');
   const end = html.indexOf('<!-- Подтверждение действия', start);
@@ -734,13 +734,15 @@ test('index.html: 13 карточек с категориями, новые ка
   const view = html.slice(start, end);
 
   const sections = [...view.matchAll(/<section class="set-section"([^>]*)>/g)].map((match) => match[1]);
-  assert.equal(sections.length, 13, 'карточек настроек');
+  assert.equal(sections.length, 15, 'карточек настроек');
   const cats = sections.map((attrs) => /data-cat="([a-z]+)"/.exec(attrs));
   assert.equal(cats.every(Boolean), true, 'у каждой карточки есть data-cat');
   const counts = {};
   for (const match of cats) counts[match[1]] = (counts[match[1]] || 0) + 1;
-  assert.deepEqual(counts, { ai: 2, security: 3, voice: 3, general: 3, look: 1, sphere: 1 });
-  assert.equal((view.match(/class="set-title"/g) || []).length, 13, 'у каждой карточки есть заголовок');
+  assert.deepEqual(counts, { ai: 2, security: 3, voice: 4, general: 4, look: 1, sphere: 1 });
+  assert.match(view, /<section[^>]+data-cat="voice"[^>]+id="notificationVoiceSettings"/);
+  assert.match(view, /<section[^>]+data-cat="general"[^>]+id="restSettings"/);
+  assert.equal((view.match(/class="set-title"/g) || []).length, 15, 'у каждой карточки есть заголовок');
 
   for (const id of ['setNav', 'setSearch', 'setChips', 'setNavList', 'setMain', 'settingsPage', 'setNoMatches', 'setStatus', 'setError', 'settings-ai', 'settings-sphere', 'setModelTier', 'setThinking', 'setModelHint', 'setThinkingHint', 'sphereVariant', 'sphereSize', 'sphereGlow', 'sphereReset', 'sphereApply', 'spherePreview']) {
     assert.ok(view.includes(`id="${id}"`), `id="${id}" потерян`);
@@ -769,7 +771,7 @@ test('index.html: 13 карточек с категориями, новые ка
   assert.deepEqual(lost, [], 'потерянные id настроек');
 
   const settings = [...view.matchAll(/data-setting="([a-zA-Z]+)"/g)].map((match) => match[1]).sort();
-  assert.deepEqual(settings, ['alwaysListen', 'alwaysOnTop', 'autoStart', 'desktopOverlay', 'dictation', 'memoryAuto', 'motion', 'quiet', 'screenAuto', 'terseReplies', 'voice'].sort());
+  assert.deepEqual(settings, ['alwaysListen', 'alwaysOnTop', 'autoStart', 'desktopOverlay', 'dictation', 'memoryAuto', 'motion', 'quiet', 'restEnabled', 'screenAuto', 'terseReplies', 'voice'].sort());
   assert.ok(view.includes('data-local="orbAnim"'), 'настройка анимации шара на месте');
 
   assert.match(html, /href="nox-settings\.css"/, 'стиль Nox-настроек подключён');

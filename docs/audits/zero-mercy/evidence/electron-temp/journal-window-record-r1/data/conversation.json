@@ -1,0 +1,38 @@
+{
+  "activeId": "3fcb923e-1fd3-47e1-955c-666ee80ee46d",
+  "chats": [
+    {
+      "id": "3fcb923e-1fd3-47e1-955c-666ee80ee46d",
+      "history": [
+        {
+          "role": "user",
+          "content": "Подготовь пробную запись для проверки черновика."
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "audit-record-refuse",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"reports/audit-record-refused.txt\",\"content\":\"Этот фиктивный файл не должен появиться.\\n\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "audit-record-refuse",
+          "content": "{\"ok\":false,\"summary\":\"отклонено\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Пробный ход завершён."
+        }
+      ],
+      "updatedAt": 1794333182155
+    }
+  ]
+}

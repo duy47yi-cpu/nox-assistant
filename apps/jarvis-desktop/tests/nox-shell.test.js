@@ -130,12 +130,9 @@ test('переход раздела вызывает перенос беседы
   assert.match(SCREEN_SRC, /addEventListener\('jarvis:view', \(e\) => onView\(e\.detail\)\)/);
 });
 
-test('секундомер и поток ответа не запускают обход всех сообщений', () => {
-  const start = SCREEN_SRC.indexOf('function tickWorking()');
-  const tick = SCREEN_SRC.slice(start, SCREEN_SRC.indexOf('function finishWorking', start));
-  assert.match(tick, /nodeValue/, 'время меняется в текстовом узле без childList-мутации');
+test('ход работы находится вне наблюдаемой ленты, а поток ответа не запускает обход всех сообщений', () => {
+  assert.match(SCREEN_SRC, /refs\.chatMount\.prepend\(row\)/, 'панель не вложена в ленту сообщений');
   assert.match(SCREEN_SRC, /new MutationObserver\(\(records\) =>/);
-  assert.match(SCREEN_SRC, /closest\('\.nox-working'\)/, 'служебная строка отфильтрована наблюдателем');
   assert.match(SCREEN_SRC, /needsCopy/, 'кнопки копирования проверяются только для новых ответов');
 });
 

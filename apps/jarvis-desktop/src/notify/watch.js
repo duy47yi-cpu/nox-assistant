@@ -13,6 +13,7 @@
 // - первый проход только запоминает уже существующее (старые провалы и файлы не объявляются при запуске).
 
 const fs = require('fs');
+const { readNotificationVoice, inNotificationQuietHours } = require('../voice/delivery');
 
 const DEFAULT_PER_HOUR = 6;
 const QUIET_FROM = 23;
@@ -26,6 +27,16 @@ const COST_WARN = 0.8; // доля дневного лимита, с котор�
 const CHANNELS = ['window', 'telegram'];
 const SHOW_MAX = 5; // сколько деталей перечислять в одном сообщении
 const CLIP = 160;
+const REST_IDLE_SECONDS = 180;
+const REST_TEXT = 'Можно сделать короткий перерыв. Если сейчас неудобно, просто продолжайте работу.';
+
+function validRestInterval(value) {
+  return Number.isInteger(value) && value >= 5 && value <= 120;
+}
+
+function readRestSettings(raw = {}) {
+  return { restEnabled: raw.restEnabled === true, restInterval: validRestInterval(raw.restInterval) ? raw.restInterval : 50 };
+}
 
 const TITLES = {
   inbox: 'Новые файлы в inbox',
@@ -37,6 +48,12 @@ const TITLES = {
   cost: 'Расход за день',
   'app-hung': 'Программа не отвечает',
 };
+
+const SPEECH_CATEGORIES = new Map([
+  ['reminder', 'reminders'], ['inbox', 'files'], ['cost', 'budget'], ['app-hung', 'apps'],
+  ['task-failed', 'tasks'], ['task-stuck', 'tasks'], ['mission-failed', 'tasks'], ['mission-stuck', 'tasks'],
+]);
+const IMPORTANT_KINDS = new Set(['task-failed', 'task-stuck', 'mission-failed', 'mission-stuck', 'app-hung']);
 
 function clip(text) {
   const chars = Array.from(String(text ?? '').replace(/\s+/g, ' ').trim());
@@ -96,11 +113,17 @@ function mergeText(items) {
 class WatchNotifier {
   // settings() — объект настроек; sources — функции чтения: inbox (имена файлов), tasks, missions (списки),
   // cost ({spentUsd, limitUsd} или null); channels — {window, telegram}: {available(): bool, send(text): Promise}.
-  constructor({ now = () => new Date(), settings = () => ({}), sources = {}, channels = {}, log = () => {}, intervalMs = 60000 } = {}) {
+  constructor({ now = () => new Date(), settings = () => ({}), sources = {}, channels = {}, speak, idleSeconds, showBreak, onFresh = null, log = () => {}, intervalMs = 60000 } = {}) {
     this.now = now;
     this.settings = settings;
     this.sources = { inbox: () => [], tasks: () => [], missions: () => [], apps: () => [], cost: () => null, ...sources };
     this.channels = channels;
+    this.speak = speak;
+    this.idleSeconds = idleSeconds;
+    this.showBreak = showBreak;
+    this.onFresh = typeof onFresh === 'function' ? onFresh : null;
+    this._restPaused = new Set();
+    this._rest = null;
     this.log = log;
     this.intervalMs = intervalMs;
     this._timer = null;
@@ -124,20 +147,91 @@ class WatchNotifier {
     if (this._busy) return 0;
     this._busy = true;
     try {
+      this._checkRest(now);
       const { found: scanned, active } = await this._scan(now);
       const incoming = this._incoming.splice(0).filter((c) => this._markSeen(c, now));
       const cfg = readConfig(this.settings());
       // Первый проход только запоминает уже существующее: при запуске старые поводы не объявляются.
       const fresh = this._primed ? [...scanned, ...incoming] : incoming;
       this._primed = true;
+      if (this.onFresh && fresh.length) { try { await this.onFresh(fresh, now); } catch (err) { this.log(`события: ${err && err.message ? err.message : err}`); } }
       for (const c of fresh) {
         for (const ch of c.channels) if (this._open(ch, cfg)) this._queue[ch].push(c);
       }
+      this._speakFresh(fresh);
       const sent = await this._deliver(now, cfg);
       this._prune(now, active);
       return sent;
     } finally {
       this._busy = false;
+    }
+  }
+
+  _speakFresh(fresh) {
+    if (!this.speak || !fresh.length) return;
+    const items = groupByKind(fresh.filter((item) => SPEECH_CATEGORIES.has(item.kind))).map((group) => ({
+      category: SPEECH_CATEGORIES.get(group[0].kind),
+      important: IMPORTANT_KINDS.has(group[0].kind),
+      text: mergeText(group),
+    }));
+    this._speakItems(items);
+  }
+
+  _speakItems(items) {
+    if (!this.speak || !items.length) return;
+    // Голос не задерживает системное уведомление и Telegram, даже если синтез отвечает долго.
+    Promise.resolve().then(() => this.speak(items)).catch((err) => this.log(`голос уведомлений: ${err.message || err}`));
+  }
+
+  resetRest() {
+    this._rest = null;
+  }
+
+  setRestPaused(reason, paused) {
+    if (paused) this._restPaused.add(reason);
+    else this._restPaused.delete(reason);
+    this.resetRest();
+  }
+
+  _checkRest(now) {
+    if (!this.idleSeconds) return;
+    const raw = this.settings();
+    const { restEnabled, restInterval } = readRestSettings(raw);
+    if (!restEnabled || this._restPaused.size || raw.quiet === true
+      || inNotificationQuietHours(readNotificationVoice(raw.notificationVoice), now)) {
+      this.resetRest();
+      return;
+    }
+    if (!this._isRestActive()) {
+      this.resetRest();
+      return;
+    }
+
+    const time = now.getTime();
+    const prev = this._rest;
+    // После сна, скачка часов или долгой паузы таймера не достраиваем пропущенное рабочее время.
+    if (!prev || prev.minutes !== restInterval || time < prev.last || time - prev.last > 2 * this.intervalMs) {
+      this._rest = { since: time, last: time, minutes: restInterval };
+      return;
+    }
+    prev.last = time;
+    if (time - prev.since < restInterval * 60000) return;
+    prev.since = time;
+    if (raw.watchWindow !== false && this.showBreak) {
+      try { this.showBreak(REST_TEXT); } catch (err) { this.log(`режим отдыха: ${err.message || err}`); }
+    }
+    this._speakItems([{
+      category: 'breaks', important: false, text: REST_TEXT,
+      isCurrent: () => this._rest === prev && prev.since === time && this._isRestActive(),
+    }]);
+  }
+
+  _isRestActive() {
+    try {
+      const idle = this.idleSeconds();
+      return Number.isFinite(idle) && idle >= 0 && idle < REST_IDLE_SECONDS;
+    } catch {
+      return false;
     }
   }
 
@@ -277,6 +371,7 @@ class WatchNotifier {
   stop() {
     if (this._timer) clearInterval(this._timer);
     this._timer = null;
+    this.resetRest();
   }
 
   _background() {
@@ -286,4 +381,4 @@ class WatchNotifier {
   }
 }
 
-module.exports = { WatchNotifier, listInboxFiles, isNight, readConfig, mergeText, DEFAULT_PER_HOUR };
+module.exports = { WatchNotifier, listInboxFiles, isNight, readConfig, mergeText, DEFAULT_PER_HOUR, readRestSettings, validRestInterval };

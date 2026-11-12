@@ -1,0 +1,1528 @@
+{
+  "scale": 2,
+  "keyboard": {
+    "nox": {
+      "axControls": 17,
+      "unnamed": [],
+      "switched": true,
+      "afterShortcut": {
+        "id": "chatInput",
+        "tag": "TEXTAREA",
+        "nav": null,
+        "name": "Поручение для Джарвиса",
+        "focusVisible": true,
+        "outline": "none",
+        "outlineWidth": "3px",
+        "rect": [
+          88,
+          433.8608703613281,
+          447,
+          24
+        ],
+        "dialog": null,
+        "view": "nox"
+      },
+      "tab": [
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "commands",
+          "name": "Команды",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            14.5,
+            108,
+            36,
+            36
+          ],
+          "dialog": null,
+          "view": "nox"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "journal",
+          "name": "История",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            14.5,
+            148,
+            36,
+            36
+          ],
+          "dialog": null,
+          "view": "nox"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "mcp",
+          "name": "Подключения",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            14.5,
+            188,
+            36,
+            36
+          ],
+          "dialog": null,
+          "view": "nox"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "settings",
+          "name": "Настройки",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            14.5,
+            228,
+            36,
+            36
+          ],
+          "dialog": null,
+          "view": "nox"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "account",
+          "name": "Аккаунт",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            16.5,
+            466,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "nox"
+        },
+        {
+          "id": "bannerAction",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Как подключить",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            685.2578125,
+            18,
+            132.7421875,
+            32
+          ],
+          "dialog": null,
+          "view": "nox"
+        },
+        {
+          "id": "attachBtn",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Прикрепить файлы (до 5)",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            88,
+            463,
+            28,
+            28
+          ],
+          "dialog": null,
+          "view": "nox"
+        },
+        {
+          "id": "regionBtn",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Объясни, что я обвёл: обвести область экрана",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            122,
+            463,
+            28,
+            28
+          ],
+          "dialog": null,
+          "view": "nox"
+        },
+        {
+          "id": "chatInput",
+          "tag": "TEXTAREA",
+          "nav": null,
+          "name": "Поручение для Джарвиса",
+          "focusVisible": true,
+          "outline": "none",
+          "outlineWidth": "3px",
+          "rect": [
+            88,
+            433,
+            447,
+            24
+          ],
+          "dialog": null,
+          "view": "nox"
+        },
+        {
+          "id": "dictationBtn",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Диктовка",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            459,
+            463,
+            28,
+            28
+          ],
+          "dialog": null,
+          "view": "nox"
+        },
+        {
+          "id": "pickTrigger",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Модель: Быстрая, думает кратко. Изменить",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            365,
+            463,
+            88,
+            28
+          ],
+          "dialog": null,
+          "view": "nox"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Оформление",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            710,
+            90,
+            28,
+            28
+          ],
+          "dialog": null,
+          "view": "nox"
+        }
+      ],
+      "reverse": {
+        "id": "pickTrigger",
+        "tag": "BUTTON",
+        "nav": null,
+        "name": "Модель: Быстрая, думает кратко. Изменить",
+        "focusVisible": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "rect": [
+          365,
+          463,
+          88,
+          28
+        ],
+        "dialog": null,
+        "view": "nox"
+      }
+    },
+    "commands": {
+      "axControls": 69,
+      "unnamed": [],
+      "switched": true,
+      "afterShortcut": {
+        "id": null,
+        "tag": "BODY",
+        "nav": null,
+        "name": null,
+        "focusVisible": false,
+        "outline": "none",
+        "outlineWidth": "3px",
+        "rect": [
+          0,
+          0,
+          864,
+          520
+        ],
+        "dialog": null,
+        "view": "commands"
+      },
+      "tab": [
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "journal",
+          "name": "История",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            14,
+            148,
+            36,
+            36
+          ],
+          "dialog": null,
+          "view": "commands"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "mcp",
+          "name": "Подключения",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            14,
+            188,
+            36,
+            36
+          ],
+          "dialog": null,
+          "view": "commands"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "settings",
+          "name": "Настройки",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            14,
+            228,
+            36,
+            36
+          ],
+          "dialog": null,
+          "view": "commands"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "account",
+          "name": "Аккаунт",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            16,
+            466,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "commands"
+        },
+        {
+          "id": "cmdNew",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Новая команда (Ctrl+N)",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            623,
+            21.5,
+            105,
+            40
+          ],
+          "dialog": null,
+          "view": "commands"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Свернуть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            740,
+            25.5,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "commands"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Развернуть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            774,
+            25.5,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "commands"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Закрыть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            808,
+            25.5,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "commands"
+        },
+        {
+          "id": "tabMine",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Мои\n·\n11",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            78,
+            82,
+            86.3359375,
+            40
+          ],
+          "dialog": null,
+          "view": "commands"
+        },
+        {
+          "id": "cmdSearch",
+          "tag": "INPUT",
+          "nav": null,
+          "name": "Поиск по имени и фразам",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            350.6640625,
+            83,
+            185.6328125,
+            38
+          ],
+          "dialog": null,
+          "view": "commands"
+        },
+        {
+          "id": "cmdRecord",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Записать действия и превратить их в команду",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            557.296875,
+            84,
+            102.9296875,
+            36
+          ],
+          "dialog": null,
+          "view": "commands"
+        },
+        {
+          "id": "cmdImport",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Импортировать команды из файла",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            668.2265625,
+            84,
+            79.9140625,
+            36
+          ],
+          "dialog": null,
+          "view": "commands"
+        }
+      ],
+      "reverse": {
+        "id": "cmdRecord",
+        "tag": "BUTTON",
+        "nav": null,
+        "name": "Записать действия и превратить их в команду",
+        "focusVisible": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "rect": [
+          557.296875,
+          84,
+          102.9296875,
+          36
+        ],
+        "dialog": null,
+        "view": "commands"
+      }
+    },
+    "journal": {
+      "axControls": 21,
+      "unnamed": [],
+      "switched": true,
+      "afterShortcut": {
+        "id": null,
+        "tag": "BODY",
+        "nav": null,
+        "name": null,
+        "focusVisible": false,
+        "outline": "none",
+        "outlineWidth": "3px",
+        "rect": [
+          0,
+          0,
+          864,
+          520
+        ],
+        "dialog": null,
+        "view": "journal"
+      },
+      "tab": [
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "mcp",
+          "name": "Подключения",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            12,
+            248,
+            51,
+            48
+          ],
+          "dialog": null,
+          "view": "journal"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "settings",
+          "name": "Настройки",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            12,
+            300,
+            51,
+            48
+          ],
+          "dialog": null,
+          "view": "journal"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "account",
+          "name": "Аккаунт",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            12,
+            400,
+            51,
+            48
+          ],
+          "dialog": null,
+          "view": "journal"
+        },
+        {
+          "id": "railToggle",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Свернуть панель",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            12,
+            456,
+            51,
+            48
+          ],
+          "dialog": null,
+          "view": "journal"
+        },
+        {
+          "id": "bannerAction",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Как подключить",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            694.2578125,
+            73,
+            132.7421875,
+            32
+          ],
+          "dialog": null,
+          "view": "journal"
+        },
+        {
+          "id": "youHalf",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Ждёт вас: 0",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            461.0703125,
+            12,
+            120.7734375,
+            40
+          ],
+          "dialog": null,
+          "view": "journal"
+        },
+        {
+          "id": "modePill",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Режим доступа: Авто-умный",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            589.84375,
+            12,
+            156.15625,
+            40
+          ],
+          "dialog": null,
+          "view": "journal"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Свернуть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            760,
+            18,
+            28,
+            28
+          ],
+          "dialog": null,
+          "view": "journal"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Развернуть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            790,
+            18,
+            28,
+            28
+          ],
+          "dialog": null,
+          "view": "journal"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Закрыть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            820,
+            18,
+            28,
+            28
+          ],
+          "dialog": null,
+          "view": "journal"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Все",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            115,
+            182,
+            47.7734375,
+            32
+          ],
+          "dialog": null,
+          "view": "journal"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Подтверждено",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            164.7734375,
+            182,
+            119.3046875,
+            32
+          ],
+          "dialog": null,
+          "view": "journal"
+        }
+      ],
+      "reverse": {
+        "id": null,
+        "tag": "BUTTON",
+        "nav": null,
+        "name": "Все",
+        "focusVisible": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "rect": [
+          115,
+          182,
+          47.7734375,
+          32
+        ],
+        "dialog": null,
+        "view": "journal"
+      }
+    },
+    "mcp": {
+      "axControls": 31,
+      "unnamed": [],
+      "switched": true,
+      "afterShortcut": {
+        "id": null,
+        "tag": "BODY",
+        "nav": null,
+        "name": null,
+        "focusVisible": false,
+        "outline": "none",
+        "outlineWidth": "3px",
+        "rect": [
+          0,
+          0,
+          864,
+          520
+        ],
+        "dialog": null,
+        "view": "mcp"
+      },
+      "tab": [
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "settings",
+          "name": "Настройки",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            14,
+            228,
+            36,
+            36
+          ],
+          "dialog": null,
+          "view": "mcp"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "account",
+          "name": "Аккаунт",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            16,
+            466,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "mcp"
+        },
+        {
+          "id": "mcpAddBtn",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Добавить сервис",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            543.828125,
+            21.5,
+            184.171875,
+            40
+          ],
+          "dialog": null,
+          "view": "mcp"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Свернуть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            740,
+            25.5,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "mcp"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Развернуть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            774,
+            25.5,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "mcp"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Закрыть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            808,
+            25.5,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "mcp"
+        },
+        {
+          "id": "mcpSearch",
+          "tag": "INPUT",
+          "nav": null,
+          "name": "Поиск сервисов",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            114,
+            83,
+            185.1953125,
+            38
+          ],
+          "dialog": null,
+          "view": "mcp"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Все\n0",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            322.1953125,
+            86,
+            59.640625,
+            32
+          ],
+          "dialog": null,
+          "view": "mcp"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Подключённые\n0",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            389.8359375,
+            86,
+            129.90625,
+            32
+          ],
+          "dialog": null,
+          "view": "mcp"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Выключенные\n0",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            527.7421875,
+            86,
+            123.171875,
+            32
+          ],
+          "dialog": null,
+          "view": "mcp"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Ошибка\n0",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            658.9140625,
+            86,
+            84.890625,
+            32
+          ],
+          "dialog": null,
+          "view": "mcp"
+        },
+        {
+          "id": "mcpReload",
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Обновить состояние",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            808,
+            86,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "mcp"
+        }
+      ],
+      "reverse": {
+        "id": null,
+        "tag": "BUTTON",
+        "nav": null,
+        "name": "Ошибка\n0",
+        "focusVisible": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "rect": [
+          658.9140625,
+          86,
+          84.890625,
+          32
+        ],
+        "dialog": null,
+        "view": "mcp"
+      }
+    },
+    "settings": {
+      "axControls": 77,
+      "unnamed": [],
+      "switched": true,
+      "afterShortcut": {
+        "id": null,
+        "tag": "BODY",
+        "nav": null,
+        "name": null,
+        "focusVisible": false,
+        "outline": "none",
+        "outlineWidth": "3px",
+        "rect": [
+          0,
+          0,
+          864,
+          520
+        ],
+        "dialog": null,
+        "view": "settings"
+      },
+      "tab": [
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": "account",
+          "name": "Аккаунт",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            16,
+            466,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "settings"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Свернуть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            740,
+            25.500364303588867,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "settings"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Развернуть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            774,
+            25.5,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "settings"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Закрыть",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            808,
+            25.5,
+            32,
+            32
+          ],
+          "dialog": null,
+          "view": "settings"
+        },
+        {
+          "id": "setSearch",
+          "tag": "INPUT",
+          "nav": null,
+          "name": "Поиск настроек",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            89,
+            95,
+            512.8671875,
+            40
+          ],
+          "dialog": null,
+          "view": "settings"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Все",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            609.8671875,
+            99,
+            47.859375,
+            32
+          ],
+          "dialog": null,
+          "view": "settings"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "ИИ",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            663.7265625,
+            99,
+            44.15625,
+            32
+          ],
+          "dialog": null,
+          "view": "settings"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Вид",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            713.8828125,
+            99,
+            48.6484375,
+            32
+          ],
+          "dialog": null,
+          "view": "settings"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Голос",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            768.53125,
+            99,
+            60.46875,
+            32
+          ],
+          "dialog": null,
+          "view": "settings"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Общие",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            89,
+            143,
+            88.3203125,
+            34
+          ],
+          "dialog": null,
+          "view": "settings"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "ИИ и провайдеры",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            179.3203125,
+            143,
+            158.171875,
+            34
+          ],
+          "dialog": null,
+          "view": "settings"
+        },
+        {
+          "id": null,
+          "tag": "BUTTON",
+          "nav": null,
+          "name": "Голос и память",
+          "focusVisible": true,
+          "outline": "solid",
+          "outlineWidth": "2px",
+          "rect": [
+            339.4921875,
+            143,
+            142.53125,
+            34
+          ],
+          "dialog": null,
+          "view": "settings"
+        }
+      ],
+      "reverse": {
+        "id": null,
+        "tag": "BUTTON",
+        "nav": null,
+        "name": "ИИ и провайдеры",
+        "focusVisible": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "rect": [
+          179.3203125,
+          143,
+          158.171875,
+          34
+        ],
+        "dialog": null,
+        "view": "settings"
+      }
+    }
+  },
+  "dialogs": {
+    "cmdActionDialog": {
+      "opened": false,
+      "observed": {
+        "bounds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "screen": [
+          864,
+          520
+        ],
+        "dialogWidth": 0,
+        "scrollWidth": 0
+      },
+      "entry": {
+        "id": "cmdStepAdd",
+        "tag": "BUTTON",
+        "nav": null,
+        "name": "Выбрать действие для нового шага",
+        "focusVisible": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "rect": [
+          628.4375,
+          371,
+          180.5625,
+          32
+        ],
+        "dialog": null,
+        "view": "commands"
+      },
+      "tab": [],
+      "reverse": {
+        "id": "cmdStepAdd",
+        "tag": "BUTTON",
+        "nav": null,
+        "name": "Выбрать действие для нового шага",
+        "focusVisible": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "rect": [
+          628.4375,
+          371,
+          180.5625,
+          32
+        ],
+        "dialog": null,
+        "view": "commands"
+      },
+      "closed": true,
+      "returned": {
+        "id": "cmdStepAdd",
+        "tag": "BUTTON",
+        "nav": null,
+        "name": "Выбрать действие для нового шага",
+        "focusVisible": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "rect": [
+          628.4375,
+          371,
+          180.5625,
+          32
+        ],
+        "dialog": null,
+        "view": "commands"
+      },
+      "trigger": "cmdStepAdd"
+    },
+    "mcpAddDialog": {
+      "opened": false,
+      "observed": {
+        "bounds": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "screen": [
+          864,
+          520
+        ],
+        "dialogWidth": 0,
+        "scrollWidth": 0
+      },
+      "entry": {
+        "id": "mcpAddBtn",
+        "tag": "BUTTON",
+        "nav": null,
+        "name": "Добавить сервис",
+        "focusVisible": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "rect": [
+          543.828125,
+          21.5,
+          184.171875,
+          40
+        ],
+        "dialog": null,
+        "view": "mcp"
+      },
+      "tab": [],
+      "reverse": {
+        "id": "mcpAddBtn",
+        "tag": "BUTTON",
+        "nav": null,
+        "name": "Добавить сервис",
+        "focusVisible": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "rect": [
+          543.828125,
+          21.5,
+          184.171875,
+          40
+        ],
+        "dialog": null,
+        "view": "mcp"
+      },
+      "closed": true,
+      "returned": {
+        "id": "mcpAddBtn",
+        "tag": "BUTTON",
+        "nav": null,
+        "name": "Добавить сервис",
+        "focusVisible": true,
+        "outline": "solid",
+        "outlineWidth": "2px",
+        "rect": [
+          543.828125,
+          21.5,
+          184.171875,
+          40
+        ],
+        "dialog": null,
+        "view": "mcp"
+      },
+      "trigger": "mcpAddBtn"
+    }
+  },
+  "layouts": [
+    {
+      "requested": [
+        864,
+        520
+      ],
+      "view": "nox",
+      "width": 864,
+      "height": 520,
+      "dpr": 2,
+      "scrollWidth": 864,
+      "viewWidth": 800,
+      "viewScrollWidth": 800,
+      "bounds": [
+        55,
+        69,
+        855,
+        511
+      ]
+    },
+    {
+      "requested": [
+        864,
+        520
+      ],
+      "view": "commands",
+      "width": 864,
+      "height": 520,
+      "dpr": 2,
+      "scrollWidth": 864,
+      "viewWidth": 792,
+      "viewScrollWidth": 792,
+      "bounds": [
+        63,
+        9.033467292785645,
+        855,
+        511.03346729278564
+      ]
+    },
+    {
+      "requested": [
+        864,
+        520
+      ],
+      "view": "journal",
+      "width": 864,
+      "height": 520,
+      "dpr": 2,
+      "scrollWidth": 864,
+      "viewWidth": 788,
+      "viewScrollWidth": 788,
+      "bounds": [
+        76,
+        124.02265167236328,
+        864,
+        520.0226516723633
+      ]
+    },
+    {
+      "requested": [
+        864,
+        520
+      ],
+      "view": "mcp",
+      "width": 864,
+      "height": 520,
+      "dpr": 2,
+      "scrollWidth": 864,
+      "viewWidth": 792,
+      "viewScrollWidth": 792,
+      "bounds": [
+        63,
+        9.033476829528809,
+        855,
+        511.0334768295288
+      ]
+    },
+    {
+      "requested": [
+        864,
+        520
+      ],
+      "view": "settings",
+      "width": 864,
+      "height": 520,
+      "dpr": 2,
+      "scrollWidth": 864,
+      "viewWidth": 792,
+      "viewScrollWidth": 792,
+      "bounds": [
+        63,
+        9.123876571655273,
+        855,
+        511.1238765716553
+      ]
+    }
+  ],
+  "errors": [],
+  "display": {
+    "size": {
+      "width": 480,
+      "height": 270
+    },
+    "workAreaSize": {
+      "width": 960,
+      "height": 516
+    },
+    "scaleFactor": 2,
+    "electron": "44.9.3"
+  },
+  "newCommand": {
+    "visible": true,
+    "focus": {
+      "id": "cmdName",
+      "tag": "INPUT",
+      "nav": null,
+      "name": "Имя команды",
+      "focusVisible": true,
+      "outline": "none",
+      "outlineWidth": "3px",
+      "rect": [
+        99,
+        128.0481719970703,
+        710,
+        40
+      ],
+      "dialog": null,
+      "view": "commands"
+    }
+  },
+  "motion": {
+    "emulatedReduce": {
+      "media": true,
+      "visibility": "visible",
+      "pixelsChanged": true,
+      "canvas": [
+        480,
+        480
+      ],
+      "motion": "on",
+      "ignore": true
+    },
+    "appMotionOff": {
+      "media": true,
+      "visibility": "visible",
+      "pixelsChanged": true,
+      "canvas": [
+        480,
+        480
+      ],
+      "motion": "on",
+      "ignore": true
+    }
+  }
+}

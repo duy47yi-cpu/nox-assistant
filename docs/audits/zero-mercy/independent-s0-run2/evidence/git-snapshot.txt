@@ -1,0 +1,72 @@
+Wed Nov 11 13:59:34     2026
+7e6cdc5099828c7a38fbc4c1053afcf667cb0565
+ M AGENTS.md
+ M apps/jarvis-desktop/main.js
+ M apps/jarvis-desktop/preload.js
+ M apps/jarvis-desktop/renderer/app.js
+ M apps/jarvis-desktop/renderer/connections.js
+ M apps/jarvis-desktop/renderer/index.html
+ M apps/jarvis-desktop/renderer/model-pick.js
+ M apps/jarvis-desktop/renderer/settings-nav.js
+ M apps/jarvis-desktop/src/agent/loop.js
+ M apps/jarvis-desktop/src/chats/book.js
+ M apps/jarvis-desktop/src/screen/agent.js
+ M apps/jarvis-desktop/tests/approvals.test.js
+ M apps/jarvis-desktop/tests/chats.test.js
+ M apps/jarvis-desktop/tests/connections-view.test.js
+ M apps/jarvis-desktop/tests/loop.test.js
+ M apps/jarvis-desktop/tests/screen-agent.test.js
+?? apps/jarvis-desktop/docs/audits/
+?? apps/jarvis-desktop/renderer/nox-commands.css
+?? apps/jarvis-desktop/renderer/nox-commands.js
+?? apps/jarvis-desktop/renderer/nox-connections.css
+?? apps/jarvis-desktop/renderer/nox-connections.js
+?? apps/jarvis-desktop/renderer/nox-screen.css
+?? apps/jarvis-desktop/renderer/nox-screen.js
+?? apps/jarvis-desktop/renderer/nox-settings.css
+?? apps/jarvis-desktop/renderer/nox-settings.js
+?? apps/jarvis-desktop/renderer/orb-nox.js
+?? apps/jarvis-desktop/scripts/nox-commands-shot.js
+?? apps/jarvis-desktop/scripts/nox-compare.js
+?? apps/jarvis-desktop/scripts/nox-connections-shot.js
+?? apps/jarvis-desktop/scripts/nox-qa-verify.js
+?? apps/jarvis-desktop/scripts/nox-settings-shot.js
+?? apps/jarvis-desktop/scripts/nox-shot.js
+?? apps/jarvis-desktop/skills/replica/
+?? apps/jarvis-desktop/tests/settings-view.test.js
+?? docs/audits/
+?? docs/reconstruction/
+?? replica/
+?? scripts/
+warning: in the working copy of 'apps/jarvis-desktop/renderer/app.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/jarvis-desktop/renderer/connections.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/jarvis-desktop/renderer/index.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/jarvis-desktop/renderer/model-pick.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/jarvis-desktop/renderer/settings-nav.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/jarvis-desktop/src/chats/book.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/jarvis-desktop/tests/approvals.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/jarvis-desktop/tests/chats.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'apps/jarvis-desktop/tests/connections-view.test.js', LF will be replaced by CRLF the next time Git touches it
+ AGENTS.md                                          |   24 +-
+ apps/jarvis-desktop/main.js                        |   61 +-
+ apps/jarvis-desktop/preload.js                     |    1 +
+ apps/jarvis-desktop/renderer/app.js                |  741 +++++++++----
+ apps/jarvis-desktop/renderer/connections.js        | 1153 +++++++++++++++++---
+ apps/jarvis-desktop/renderer/index.html            |  620 +++++++++--
+ apps/jarvis-desktop/renderer/model-pick.js         |    8 +
+ apps/jarvis-desktop/renderer/settings-nav.js       |  280 ++++-
+ apps/jarvis-desktop/src/agent/loop.js              |   14 +-
+ apps/jarvis-desktop/src/chats/book.js              |   20 +-
+ apps/jarvis-desktop/src/screen/agent.js            |   14 +-
+ apps/jarvis-desktop/tests/approvals.test.js        |   34 +
+ apps/jarvis-desktop/tests/chats.test.js            |   10 +
+ apps/jarvis-desktop/tests/connections-view.test.js |  650 ++++++++++-
+ apps/jarvis-desktop/tests/loop.test.js             |    8 +-
+ apps/jarvis-desktop/tests/screen-agent.test.js     |   15 +-
+ 16 files changed, 3037 insertions(+), 616 deletions(-)
+15d2c6d5484d19da68b17152996eeedaab769ae247fe43f3fe65c9115f3770c5 *src/agent/loop.js
+39d186577a4a13b30c5d0c97a62a1ca971f806d24c299df53c2fce82646d3896 *src/screen/agent.js
+e41919369e967df0b2ea8a48c1a90118e5068e6a5b8d9340fc4cb1a1ad731a25 *src/policy/approvals.js
+0ddc846d62695995f3b297035d36d9b653056501329fd9a7fae66b68a86c3b03 *renderer/app.js
+ec72818639d31ca5ebd601bffd8effbca9fe0bf42b135d0fa02913c782296e9e *main.js
+0a2301d8c0b7640ca19f449cdc06363e16d77b6012d0a893694d5abd5d0aba1f *preload.js

@@ -1,0 +1,57 @@
+{
+  "activeId": "f321f322-999d-4cc8-a916-03dfdf2ca602",
+  "chats": [
+    {
+      "id": "f321f322-999d-4cc8-a916-03dfdf2ca602",
+      "history": [
+        {
+          "role": "user",
+          "content": "Сохрани отчёт аудита, затем проверь следующий пункт."
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "audit-retry-1",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"reports/audit-retry.txt\",\"content\":\"Один фиктивный отчёт для аудита.\\n\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "audit-retry-1",
+          "content": "{\"ok\":true,\"summary\":\"записал\",\"data\":{\"path\":\"reports/audit-retry.txt\",\"created\":true,\"backup\":null},\"verified\":\"confirmed\",\"evidence\":\"файл reports/audit-retry.txt совпадает с записью\"}"
+        },
+        {
+          "role": "user",
+          "content": "Сохрани отчёт аудита, затем проверь следующий пункт."
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "audit-retry-2",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"reports/audit-retry.txt\",\"content\":\"Один фиктивный отчёт для аудита.\\n\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "audit-retry-2",
+          "content": "{\"ok\":true,\"summary\":\"перезаписал\",\"data\":{\"path\":\"reports/audit-retry.txt\",\"created\":false,\"backup\":\"backups/20261110-224809-030__audit-retry.txt__4b0c892e50.bak\"},\"verified\":\"confirmed\",\"evidence\":\"файл reports/audit-retry.txt совпадает с записью\"}"
+        }
+      ],
+      "updatedAt": 1794332889264
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"seq":6,"items":[{"ts":"2026-11-10T17:35:50.578Z","ref":"turn:fe6a58f1","title":"Проверка отмены хода Nox.","source":"turn","state":"failed","reason":"ход остановлен, часть действий могла выполниться: This operation was aborted","due":null,"since":"2026-11-10T17:35:50.578Z","cleared":false}]}

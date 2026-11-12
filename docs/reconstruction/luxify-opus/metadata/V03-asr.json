@@ -1,0 +1,9 @@
+{
+ "video": "yPGB7_7OcWSnDvYaFLOREg",
+ "model": "faster-whisper small int8 cpu",
+ "language_forced": "ru",
+ "vad_filter": true,
+ "duration": 35.456,
+ "duration_after_vad": 0.0,
+ "segments": []
+}

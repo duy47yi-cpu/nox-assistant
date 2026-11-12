@@ -1,0 +1,672 @@
+{
+  "root": "C:\\Users\\abdut\\AppData\\Local\\Temp\\zm-s03-win-AA60Hv",
+  "size": [
+    1200,
+    720
+  ],
+  "results": [
+    {
+      "id": "N3",
+      "scenario": "двойной клик «Разрешить» у A при ждущем B; потом B отдельно",
+      "ipcForA": [
+        "once"
+      ],
+      "afterDouble": {
+        "gate": true,
+        "current": null,
+        "buttons": []
+      },
+      "bDecisionByDouble": null,
+      "later": {
+        "shownB": true,
+        "buttonsRightAfterOpen": [
+          "reject:on",
+          "session:off",
+          "once:off"
+        ],
+        "armedLater": true,
+        "decision": "once"
+      },
+      "pass": true,
+      "ranNow": [
+        "N3-A.txt",
+        "N3-X.txt"
+      ],
+      "closes": [
+        {
+          "t": 1794401549139,
+          "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+        },
+        {
+          "t": 1794401549148,
+          "ev": "close"
+        }
+      ]
+    },
+    {
+      "id": "N3",
+      "scenario": "двойной клик «Разрешить» у A при ждущем B; потом B отдельно",
+      "ipcForA": [
+        "once"
+      ],
+      "afterDouble": {
+        "gate": true,
+        "current": null,
+        "buttons": []
+      },
+      "bDecisionByDouble": null,
+      "later": {
+        "shownB": true,
+        "buttonsRightAfterOpen": [
+          "reject:on",
+          "session:off",
+          "once:off"
+        ],
+        "armedLater": true,
+        "decision": "once"
+      },
+      "pass": true,
+      "ranNow": [
+        "N3-A.txt",
+        "N3-X.txt"
+      ],
+      "closes": [
+        {
+          "t": 1794401553216,
+          "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+        },
+        {
+          "t": 1794401553224,
+          "ev": "close"
+        }
+      ]
+    },
+    {
+      "id": "N3",
+      "scenario": "двойной клик «Разрешить» у A при ждущем B; потом B отдельно",
+      "ipcForA": [
+        "once"
+      ],
+      "afterDouble": {
+        "gate": true,
+        "current": null,
+        "buttons": []
+      },
+      "bDecisionByDouble": null,
+      "later": {
+        "shownB": true,
+        "buttonsRightAfterOpen": [
+          "reject:on",
+          "session:off",
+          "once:off"
+        ],
+        "armedLater": true,
+        "decision": "once"
+      },
+      "pass": true,
+      "ranNow": [
+        "N3-A.txt",
+        "N3-X.txt"
+      ],
+      "closes": [
+        {
+          "t": 1794401557228,
+          "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+        },
+        {
+          "t": 1794401557237,
+          "ev": "close"
+        }
+      ]
+    },
+    {
+      "id": "N3",
+      "scenario": "двойной клик «Разрешить» у A при ждущем B; потом B отдельно",
+      "ipcForA": [
+        "once"
+      ],
+      "afterDouble": {
+        "gate": true,
+        "current": null,
+        "buttons": []
+      },
+      "bDecisionByDouble": null,
+      "later": {
+        "shownB": true,
+        "buttonsRightAfterOpen": [
+          "reject:on",
+          "session:off",
+          "once:off"
+        ],
+        "armedLater": true,
+        "decision": "once"
+      },
+      "pass": true,
+      "ranNow": [
+        "N3-A.txt",
+        "N3-X.txt"
+      ],
+      "closes": [
+        {
+          "t": 1794401562297,
+          "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+        }
+      ]
+    },
+    {
+      "id": "N8trace",
+      "idA": "c6d9424c",
+      "restoreMs": 112,
+      "trace": [
+        {
+          "dt": 112,
+          "open": true,
+          "cur": "c6d9424c",
+          "gate": false
+        }
+      ]
+    },
+    {
+      "id": "N8",
+      "scenario": "перезагрузка окна, восстановленная карточка, «Разрешить»",
+      "restored": true,
+      "armed": true,
+      "pass": true,
+      "ranNow": [
+        "N3-A.txt",
+        "N3-X.txt",
+        "N8-A.txt"
+      ],
+      "closes": []
+    }
+  ],
+  "log": [
+    {
+      "t": 1794401546242,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401546252,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401546289,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794401546312,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "d4d1d75e-216d-4268-9d58-30b4b4efac0f"
+    },
+    {
+      "t": 1794401547106,
+      "kind": "ipc-in",
+      "id": "d4d1d75e-216d-4268-9d58-30b4b4efac0f",
+      "decision": "once",
+      "token": true
+    },
+    {
+      "t": 1794401547107,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "d4d1d75e-216d-4268-9d58-30b4b4efac0f",
+      "decision": "once"
+    },
+    {
+      "t": 1794401547107,
+      "kind": "ipc-core",
+      "id": "d4d1d75e-216d-4268-9d58-30b4b4efac0f",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794401547107,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794401547140,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794401547145,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401547166,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794401549135,
+      "kind": "ipc-in",
+      "id": "2ead59cc-f1d5-42fe-8091-85192ff2cd9c",
+      "decision": "once",
+      "token": true
+    },
+    {
+      "t": 1794401549135,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "2ead59cc-f1d5-42fe-8091-85192ff2cd9c",
+      "decision": "once"
+    },
+    {
+      "t": 1794401549135,
+      "kind": "synthetic-resolved",
+      "id": "2ead59cc-f1d5-42fe-8091-85192ff2cd9c",
+      "label": "N3-X",
+      "decision": "once"
+    },
+    {
+      "t": 1794401549135,
+      "kind": "ipc-core",
+      "id": "2ead59cc-f1d5-42fe-8091-85192ff2cd9c",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794401550351,
+      "kind": "row",
+      "id": "N3",
+      "pass": true
+    },
+    {
+      "t": 1794401550366,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401550368,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401550398,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794401550406,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "4a7f2813-b898-4913-b79d-df52cbe0eebb"
+    },
+    {
+      "t": 1794401551168,
+      "kind": "ipc-in",
+      "id": "4a7f2813-b898-4913-b79d-df52cbe0eebb",
+      "decision": "once",
+      "token": true
+    },
+    {
+      "t": 1794401551168,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "4a7f2813-b898-4913-b79d-df52cbe0eebb",
+      "decision": "once"
+    },
+    {
+      "t": 1794401551168,
+      "kind": "ipc-core",
+      "id": "4a7f2813-b898-4913-b79d-df52cbe0eebb",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794401551168,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794401551201,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401551229,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794401553212,
+      "kind": "ipc-in",
+      "id": "d7bd492d-04d0-413c-8fb9-0e10683d651c",
+      "decision": "once",
+      "token": true
+    },
+    {
+      "t": 1794401553212,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "d7bd492d-04d0-413c-8fb9-0e10683d651c",
+      "decision": "once"
+    },
+    {
+      "t": 1794401553212,
+      "kind": "synthetic-resolved",
+      "id": "d7bd492d-04d0-413c-8fb9-0e10683d651c",
+      "label": "N3-X",
+      "decision": "once"
+    },
+    {
+      "t": 1794401553212,
+      "kind": "ipc-core",
+      "id": "d7bd492d-04d0-413c-8fb9-0e10683d651c",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794401554413,
+      "kind": "row",
+      "id": "N3",
+      "pass": true
+    },
+    {
+      "t": 1794401554421,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401554424,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401554449,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794401554458,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "fee2fbd1-8697-41dd-988e-264af2219438"
+    },
+    {
+      "t": 1794401555178,
+      "kind": "ipc-in",
+      "id": "fee2fbd1-8697-41dd-988e-264af2219438",
+      "decision": "once",
+      "token": true
+    },
+    {
+      "t": 1794401555178,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "fee2fbd1-8697-41dd-988e-264af2219438",
+      "decision": "once"
+    },
+    {
+      "t": 1794401555178,
+      "kind": "ipc-core",
+      "id": "fee2fbd1-8697-41dd-988e-264af2219438",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794401555178,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794401555182,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401555201,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794401557227,
+      "kind": "ipc-in",
+      "id": "a866dd08-adcc-47ff-be66-e619c5e81974",
+      "decision": "once",
+      "token": true
+    },
+    {
+      "t": 1794401557227,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "a866dd08-adcc-47ff-be66-e619c5e81974",
+      "decision": "once"
+    },
+    {
+      "t": 1794401557227,
+      "kind": "synthetic-resolved",
+      "id": "a866dd08-adcc-47ff-be66-e619c5e81974",
+      "label": "N3-X",
+      "decision": "once"
+    },
+    {
+      "t": 1794401557227,
+      "kind": "ipc-core",
+      "id": "a866dd08-adcc-47ff-be66-e619c5e81974",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794401558428,
+      "kind": "row",
+      "id": "N3",
+      "pass": true
+    },
+    {
+      "t": 1794401558433,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401558436,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401558461,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794401558471,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "20029936-e3cd-46dc-8aef-7a187e831d9b"
+    },
+    {
+      "t": 1794401559354,
+      "kind": "ipc-in",
+      "id": "20029936-e3cd-46dc-8aef-7a187e831d9b",
+      "decision": "once",
+      "token": true
+    },
+    {
+      "t": 1794401559354,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "20029936-e3cd-46dc-8aef-7a187e831d9b",
+      "decision": "once"
+    },
+    {
+      "t": 1794401559354,
+      "kind": "ipc-core",
+      "id": "20029936-e3cd-46dc-8aef-7a187e831d9b",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794401559355,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794401559360,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401559378,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794401562296,
+      "kind": "ipc-in",
+      "id": "96de9bf8-754d-41c8-bb51-25c8ce0ab23a",
+      "decision": "once",
+      "token": true
+    },
+    {
+      "t": 1794401562296,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "96de9bf8-754d-41c8-bb51-25c8ce0ab23a",
+      "decision": "once"
+    },
+    {
+      "t": 1794401562296,
+      "kind": "synthetic-resolved",
+      "id": "96de9bf8-754d-41c8-bb51-25c8ce0ab23a",
+      "label": "N3-X",
+      "decision": "once"
+    },
+    {
+      "t": 1794401562296,
+      "kind": "ipc-core",
+      "id": "96de9bf8-754d-41c8-bb51-25c8ce0ab23a",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794401563504,
+      "kind": "row",
+      "id": "N3",
+      "pass": true
+    },
+    {
+      "t": 1794401563508,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401563511,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401563534,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794401563544,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "c6d9424c-af29-4f1f-a4e6-90c67d8ce9a2"
+    },
+    {
+      "t": 1794401565296,
+      "kind": "ipc-in",
+      "id": "c6d9424c-af29-4f1f-a4e6-90c67d8ce9a2",
+      "decision": "once",
+      "token": true
+    },
+    {
+      "t": 1794401565296,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "c6d9424c-af29-4f1f-a4e6-90c67d8ce9a2",
+      "decision": "once"
+    },
+    {
+      "t": 1794401565296,
+      "kind": "ipc-core",
+      "id": "c6d9424c-af29-4f1f-a4e6-90c67d8ce9a2",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794401565296,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794401565299,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794401565302,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794401565320,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794401565365,
+      "kind": "row",
+      "id": "N8",
+      "pass": true
+    }
+  ]
+}

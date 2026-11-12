@@ -1,0 +1,19 @@
+{
+  "activeId": "5ed87bce-c791-4513-ad3b-53c6e50666a3",
+  "chats": [
+    {
+      "id": "5ed87bce-c791-4513-ad3b-53c6e50666a3",
+      "history": [
+        {
+          "role": "user",
+          "content": "какая погода"
+        },
+        {
+          "role": "assistant",
+          "content": "Не вышло: Скажите город (ответ без модели)"
+        }
+      ],
+      "updatedAt": 1794491709413
+    }
+  ]
+}

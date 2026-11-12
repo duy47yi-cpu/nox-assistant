@@ -1,0 +1,491 @@
+{
+  "mode": "approval-ipc",
+  "pid": 28928,
+  "readyMs": 1025.1852,
+  "electron": "44.9.3",
+  "chromium": "152.0.7977.167",
+  "initialTheme": {
+    "theme": null,
+    "accent": null,
+    "look": null,
+    "resolved": "dark",
+    "systemLight": false,
+    "bg": "#14120E",
+    "appBg": "rgb(15, 15, 16)"
+  },
+  "approval": {
+    "failed": {
+      "pending": [
+        "be282270-04eb-43d2-9f58-6b9d85d22cb8"
+      ],
+      "dialog": {
+        "open": true,
+        "text": "Действие: audit-failed-bridge?",
+        "arguments": "{\n  \"text\": \"audit-failed-bridge\"\n}",
+        "focus": "reject",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 192,
+        "right": 672,
+        "top": 122,
+        "bottom": 398
+      },
+      "messages": [
+        "Джарвис не подключён к модели — пока отвечает заглушкой.\n\nКак подключить",
+        "▸\nХод работы · Выполняется · 0.3 с",
+        "Без ответа отменится через 30 секунд",
+        "Запрос уже неактуален: Error invoking remote method 'approval:respond': Error: Synthetic IPC failure before responding"
+      ],
+      "afterReopen": {
+        "pending": [
+          "be282270-04eb-43d2-9f58-6b9d85d22cb8"
+        ],
+        "dialog": {
+          "open": true,
+          "text": "Действие: audit-failed-bridge?",
+          "arguments": "{\n  \"text\": \"audit-failed-bridge\"\n}",
+          "focus": "reject",
+          "countdown": "Без ответа отменится через 30 секунд",
+          "width": 864,
+          "height": 520,
+          "left": 192,
+          "right": 672,
+          "top": 122,
+          "bottom": 398
+        },
+        "messages": [
+          "Джарвис не подключён к модели — пока отвечает заглушкой.\n\nКак подключить",
+          "▸\nХод работы · Выполняется · 0.3 с",
+          "Без ответа отменится через 30 секунд",
+          "Запрос уже неактуален: Error invoking remote method 'approval:respond': Error: Synthetic IPC failure before responding"
+        ]
+      }
+    },
+    "stalled": {
+      "afterClick": {
+        "pending": [
+          "bdb5487f-6c72-42c9-85a9-198d088f8e12"
+        ],
+        "dialog": {
+          "open": true,
+          "text": "Действие: audit-stalled-bridge?",
+          "arguments": "{\n  \"text\": \"audit-stalled-bridge\"\n}",
+          "focus": "",
+          "countdown": "Без ответа отменится через 30 секунд",
+          "width": 864,
+          "height": 520,
+          "left": 192,
+          "right": 672,
+          "top": 122,
+          "bottom": 398
+        },
+        "buttons": [
+          true,
+          true,
+          true
+        ]
+      },
+      "afterExpiry": {
+        "pending": [],
+        "dialog": {
+          "open": false,
+          "text": "Действие: audit-stalled-bridge?",
+          "arguments": "{\n  \"text\": \"audit-stalled-bridge\"\n}",
+          "focus": "chatInput",
+          "countdown": "Без ответа отменится через 1 секунду",
+          "width": 864,
+          "height": 520,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "bottom": 0
+        },
+        "buttons": [
+          false,
+          false,
+          false
+        ],
+        "reason": "время на подтверждение вышло"
+      },
+      "next": {
+        "pending": [],
+        "dialog": {
+          "open": false,
+          "text": "Действие: audit-next-after-stall?",
+          "arguments": "{\n  \"text\": \"audit-next-after-stall\"\n}",
+          "focus": "chatInput",
+          "countdown": "Без ответа отменится через 30 секунд",
+          "width": 864,
+          "height": 520,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "bottom": 0
+        },
+        "buttons": [
+          true,
+          true,
+          true
+        ],
+        "calls": [
+          {
+            "id": "be282270-04eb-43d2-9f58-6b9d85d22cb8",
+            "decision": "once"
+          },
+          {
+            "id": "bdb5487f-6c72-42c9-85a9-198d088f8e12",
+            "decision": "once"
+          },
+          {
+            "id": "84aa94e9-f832-48d2-9697-c1c78fbbbb7f",
+            "decision": "once"
+          }
+        ],
+        "effects": [
+          {
+            "id": "audit-ipc-next",
+            "text": "audit-next-after-stall"
+          }
+        ]
+      }
+    },
+    "effects": [
+      {
+        "id": "audit-ipc-next",
+        "text": "audit-next-after-stall"
+      }
+    ],
+    "calls": [
+      {
+        "id": "be282270-04eb-43d2-9f58-6b9d85d22cb8",
+        "decision": "once"
+      },
+      {
+        "id": "bdb5487f-6c72-42c9-85a9-198d088f8e12",
+        "decision": "once"
+      },
+      {
+        "id": "84aa94e9-f832-48d2-9697-c1c78fbbbb7f",
+        "decision": "once"
+      }
+    ],
+    "events": [
+      {
+        "marker": "audit-failed-bridge",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "31b9c7db",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "tool_start",
+        "id": "audit-ipc-fail",
+        "approvalId": null,
+        "callId": null,
+        "runId": "31b9c7db",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-failed-bridge"
+        }
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "31b9c7db",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "approval_request",
+        "id": "be282270-04eb-43d2-9f58-6b9d85d22cb8",
+        "approvalId": "be282270-04eb-43d2-9f58-6b9d85d22cb8",
+        "callId": "audit-ipc-fail",
+        "runId": "31b9c7db",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-failed-bridge"
+        }
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "tool_result",
+        "id": "audit-ipc-fail",
+        "approvalId": null,
+        "callId": null,
+        "runId": "31b9c7db",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "31b9c7db",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "text",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "31b9c7db",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "done",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "31b9c7db",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-failed-bridge",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "31b9c7db",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "6e5420a2",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "tool_start",
+        "id": "audit-ipc-stall",
+        "approvalId": null,
+        "callId": null,
+        "runId": "6e5420a2",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-stalled-bridge"
+        }
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "6e5420a2",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "approval_request",
+        "id": "bdb5487f-6c72-42c9-85a9-198d088f8e12",
+        "approvalId": "bdb5487f-6c72-42c9-85a9-198d088f8e12",
+        "callId": "audit-ipc-stall",
+        "runId": "6e5420a2",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-stalled-bridge"
+        }
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "tool_result",
+        "id": "audit-ipc-stall",
+        "approvalId": null,
+        "callId": null,
+        "runId": "6e5420a2",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "6e5420a2",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "text",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "6e5420a2",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "done",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "6e5420a2",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-stalled-bridge",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "6e5420a2",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9ebd1304",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "tool_start",
+        "id": "audit-ipc-next",
+        "approvalId": null,
+        "callId": null,
+        "runId": "9ebd1304",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-next-after-stall"
+        }
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9ebd1304",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "approval_request",
+        "id": "84aa94e9-f832-48d2-9697-c1c78fbbbb7f",
+        "approvalId": "84aa94e9-f832-48d2-9697-c1c78fbbbb7f",
+        "callId": "audit-ipc-next",
+        "runId": "9ebd1304",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-next-after-stall"
+        }
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9ebd1304",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "tool_result",
+        "id": "audit-ipc-next",
+        "approvalId": null,
+        "callId": null,
+        "runId": "9ebd1304",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9ebd1304",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "text",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9ebd1304",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "done",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9ebd1304",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-next-after-stall",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9ebd1304",
+        "name": null,
+        "args": null
+      }
+    ],
+    "consoleErrors": []
+  },
+  "processes": [
+    {
+      "type": "Browser",
+      "cpuPercent": 0,
+      "workingSetKiB": 124328
+    },
+    {
+      "type": "GPU",
+      "cpuPercent": 0,
+      "workingSetKiB": 141036
+    },
+    {
+      "type": "Utility",
+      "cpuPercent": 0,
+      "workingSetKiB": 50824
+    },
+    {
+      "type": "Tab",
+      "cpuPercent": 0,
+      "workingSetKiB": 193220
+    }
+  ]
+}

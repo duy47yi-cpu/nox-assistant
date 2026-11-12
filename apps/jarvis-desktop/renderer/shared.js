@@ -179,6 +179,8 @@
     image_read_text: 'Чтение текста с картинки',
     image_look: 'Просмотр картинки',
     currency_rate: 'Курс валют',
+    calendar_upcoming: 'Предстоящие встречи',
+    calendar_briefing: 'Утренняя сводка на сегодня',
     web_check_claims: 'Проверка утверждений по источникам',
     command_create: 'Новая команда',
     command_build: 'Сценарий по описанию',

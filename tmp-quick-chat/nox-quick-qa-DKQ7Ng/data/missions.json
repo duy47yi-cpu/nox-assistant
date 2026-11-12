@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "id": "3d0b6737-5ead-4aab-b226-ff686519e5fc",
+      "goal": "Утренний брифинг. Вызови skill_read с именем briefing и выполни инструкцию навыка. Ничего не выдумывай: пустые разделы так и пиши.",
+      "schedule": {
+        "type": "daily",
+        "at": "09:00"
+      },
+      "enabled": true,
+      "createdAt": "2026-11-12T14:15:19.795Z",
+      "nextRunAt": "2026-11-13T04:00:00.000Z",
+      "lastRunAt": null,
+      "runs": 0,
+      "lastResult": null,
+      "status": "idle"
+    }
+  ]
+}

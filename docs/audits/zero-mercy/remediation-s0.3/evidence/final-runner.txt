@@ -1,0 +1,4 @@
+s03 1200x720 A exit 0
+s03 864x520 A exit 0
+s03 864x520 B exit 0
+s03 1200x720 B exit 0

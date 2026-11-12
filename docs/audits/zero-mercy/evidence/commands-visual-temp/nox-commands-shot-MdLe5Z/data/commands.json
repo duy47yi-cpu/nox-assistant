@@ -1,0 +1,322 @@
+{
+  "items": [
+    {
+      "id": "cmd-shot-01",
+      "schemaVersion": 2,
+      "createdAt": "2026-10-11T17:03:13.423Z",
+      "updatedAt": "2026-11-08T17:03:13.423Z",
+      "name": "Кино",
+      "enabled": true,
+      "phrases": [
+        "кино",
+        "включи кино"
+      ],
+      "optionalPhrases": [
+        "включи",
+        "запусти"
+      ],
+      "steps": [
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 30
+          }
+        },
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "chrome"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1200
+          }
+        },
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "f11",
+            "window": "Chrome"
+          }
+        }
+      ],
+      "lastRunAt": "2026-11-07T17:03:13.423Z",
+      "hotkey": null,
+      "folder": "Медиа",
+      "collections": [
+        "вечер"
+      ],
+      "origin": "manual"
+    },
+    {
+      "id": "cmd-shot-02",
+      "schemaVersion": 2,
+      "createdAt": "2026-10-11T17:03:13.423Z",
+      "updatedAt": "2026-11-08T17:03:13.423Z",
+      "name": "Отбой",
+      "enabled": true,
+      "phrases": [
+        "отбой",
+        "спокойной ночи"
+      ],
+      "optionalPhrases": [
+        "включи"
+      ],
+      "steps": [
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 5
+          }
+        },
+        {
+          "tool": "speak",
+          "args": {
+            "text": "Спокойной ночи"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 500
+          }
+        },
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+d"
+          }
+        }
+      ],
+      "lastRunAt": "2026-11-02T17:03:13.423Z",
+      "hotkey": null,
+      "folder": "Вечер",
+      "collections": [
+        "вечер"
+      ],
+      "origin": "recorded"
+    },
+    {
+      "id": "cmd-shot-03",
+      "schemaVersion": 2,
+      "createdAt": "2026-10-11T17:03:13.423Z",
+      "updatedAt": "2026-11-08T17:03:13.423Z",
+      "name": "Проверить почту",
+      "enabled": true,
+      "phrases": [
+        "проверь почту",
+        "почта"
+      ],
+      "optionalPhrases": [
+        "открой"
+      ],
+      "steps": [
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "chrome"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1500
+          }
+        }
+      ],
+      "lastRunAt": "2026-11-10T12:03:13.423Z",
+      "hotkey": null,
+      "folder": "Работа",
+      "collections": [],
+      "origin": "manual"
+    },
+    {
+      "id": "cmd-shot-04",
+      "schemaVersion": 2,
+      "createdAt": "2026-10-11T17:03:13.423Z",
+      "updatedAt": "2026-11-08T17:03:13.423Z",
+      "name": "Рабочее утро",
+      "enabled": true,
+      "phrases": [
+        "рабочее утро",
+        "начни работу",
+        "утро"
+      ],
+      "optionalPhrases": [
+        "открой",
+        "запусти"
+      ],
+      "steps": [
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "code"
+          }
+        },
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "chrome"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1500
+          }
+        },
+        {
+          "tool": "speak",
+          "args": {
+            "text": "Доброе утро"
+          }
+        }
+      ],
+      "lastRunAt": "2026-11-09T19:03:13.423Z",
+      "hotkey": "Ctrl+Alt+1",
+      "folder": "Работа",
+      "collections": [
+        "утро"
+      ],
+      "origin": "manual"
+    },
+    {
+      "id": "cmd-shot-05",
+      "schemaVersion": 2,
+      "createdAt": "2026-10-11T17:03:13.423Z",
+      "updatedAt": "2026-11-08T17:03:13.423Z",
+      "name": "Созвон",
+      "enabled": true,
+      "phrases": [
+        "созвон",
+        "начни созвон"
+      ],
+      "optionalPhrases": [
+        "открой"
+      ],
+      "steps": [
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "zoom"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1000
+          }
+        }
+      ],
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Работа",
+      "collections": [],
+      "origin": "ai"
+    },
+    {
+      "id": "cmd-shot-06",
+      "schemaVersion": 2,
+      "createdAt": "2026-10-11T17:03:13.423Z",
+      "updatedAt": "2026-11-08T17:03:13.423Z",
+      "name": "Тихий час",
+      "enabled": false,
+      "phrases": [
+        "тихий час",
+        "не мешай"
+      ],
+      "optionalPhrases": [],
+      "steps": [
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 10
+          }
+        },
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+d"
+          }
+        }
+      ],
+      "lastRunAt": "2026-10-29T17:03:13.423Z",
+      "hotkey": null,
+      "folder": "Вечер",
+      "collections": [
+        "вечер"
+      ],
+      "origin": "manual"
+    },
+    {
+      "id": "cmd-shot-07",
+      "schemaVersion": 2,
+      "createdAt": "2026-10-11T17:03:13.423Z",
+      "updatedAt": "2026-11-08T17:03:13.423Z",
+      "name": "Уборка",
+      "enabled": true,
+      "phrases": [
+        "уборка",
+        "убери окна"
+      ],
+      "optionalPhrases": [
+        "сверни"
+      ],
+      "steps": [
+        {
+          "tool": "ui_keys",
+          "args": {
+            "keys": "win+d"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 300
+          }
+        }
+      ],
+      "lastRunAt": "2026-11-04T17:03:13.423Z",
+      "hotkey": null,
+      "folder": "Порядок",
+      "collections": [],
+      "origin": "recorded"
+    },
+    {
+      "id": "cmd-shot-08",
+      "schemaVersion": 2,
+      "createdAt": "2026-10-11T17:03:13.423Z",
+      "updatedAt": "2026-11-08T17:03:13.423Z",
+      "name": "Экран: только чат",
+      "enabled": true,
+      "phrases": [
+        "режим только чат",
+        "только чат"
+      ],
+      "optionalPhrases": [
+        "включи"
+      ],
+      "steps": [
+        {
+          "tool": "volume_set",
+          "args": {
+            "percent": 40
+          }
+        },
+        {
+          "tool": "speak",
+          "args": {
+            "text": "Включаю тихий режим"
+          }
+        }
+      ],
+      "lastRunAt": null,
+      "hotkey": null,
+      "folder": "Работа",
+      "collections": [],
+      "origin": "manual"
+    }
+  ]
+}

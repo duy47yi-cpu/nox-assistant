@@ -1,0 +1,86 @@
+{
+  "activeId": "d59cbb7e-ab06-418f-af1a-2f331e723920",
+  "chats": [
+    {
+      "id": "d59cbb7e-ab06-418f-af1a-2f331e723920",
+      "history": [
+        {
+          "role": "user",
+          "content": "какая погода"
+        },
+        {
+          "role": "assistant",
+          "content": "Не вышло: Скажите город (ответ без модели)"
+        },
+        {
+          "role": "user",
+          "content": "проверка разрешения отклонить"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "qa-write",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"quick-qa.txt\",\"content\":\"Точный тестовый текст\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "qa-write",
+          "content": "{\"ok\":false,\"summary\":\"отклонено\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Тестовый ответ."
+        },
+        {
+          "role": "user",
+          "content": "проверка разрешения разрешить"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "qa-write",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"quick-qa.txt\",\"content\":\"Точный тестовый текст\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "qa-write",
+          "content": "{\"ok\":true,\"summary\":\"записал\",\"data\":{\"path\":\"quick-qa.txt\",\"created\":true,\"backup\":null},\"verified\":\"confirmed\",\"evidence\":\"файл quick-qa.txt совпадает с записью\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Тестовый ответ."
+        },
+        {
+          "role": "user",
+          "content": "проверка остановка"
+        },
+        {
+          "role": "user",
+          "content": "проверка остановка ещё раз"
+        }
+      ],
+      "updatedAt": 1794493087541
+    },
+    {
+      "id": "3862993e-3087-4597-a96e-1da112a11a53",
+      "history": [],
+      "updatedAt": 1794493086975
+    }
+  ]
+}

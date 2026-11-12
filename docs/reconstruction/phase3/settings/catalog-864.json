@@ -1,0 +1,1221 @@
+{
+  "inner": [
+    864,
+    520
+  ],
+  "dpr": 1,
+  "view": "settings",
+  "title": "Nox — Джарвис",
+  "crumb": "Настройки",
+  "scroll": {
+    "viewSettings": {
+      "top": 0,
+      "height": 502,
+      "client": 502
+    }
+  },
+  "elements": {
+    ".app": {
+      "x": 0,
+      "y": 0,
+      "w": 864,
+      "h": 520,
+      "hidden": false,
+      "display": "grid",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".rail": {
+      "x": 9,
+      "y": 9,
+      "w": 46,
+      "h": 502,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".topbar": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".main": {
+      "x": 63,
+      "y": 9,
+      "w": 792,
+      "h": 502,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".views": {
+      "x": 63,
+      "y": 9,
+      "w": 792,
+      "h": 502,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".view-settings": {
+      "x": 63,
+      "y": 9,
+      "w": 792,
+      "h": 502,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "absolute"
+    },
+    "#setPanel": {
+      "x": 63,
+      "y": 9,
+      "w": 792,
+      "h": 502,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setHead": {
+      "x": 64,
+      "y": 10,
+      "w": 790,
+      "h": 64,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setStatus": {
+      "x": 726,
+      "y": 42,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setBody": {
+      "x": 64,
+      "y": 74,
+      "w": 790,
+      "h": 436,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setNav": {
+      "x": 78,
+      "y": 84,
+      "w": 762,
+      "h": 114,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setSearch": {
+      "x": 89,
+      "y": 95,
+      "w": 513,
+      "h": 40,
+      "hidden": false,
+      "display": "inline-block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setChips": {
+      "x": 610,
+      "y": 99,
+      "w": 219,
+      "h": 32,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setNavList": {
+      "x": 89,
+      "y": 143,
+      "w": 740,
+      "h": 44,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setMain": {
+      "x": 78,
+      "y": 208,
+      "w": 762,
+      "h": 288,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#settingsPage": {
+      "x": 78,
+      "y": 208,
+      "w": 748,
+      "h": 8656,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setNoMatches": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setError": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": true,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setErrorText": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "inline",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setNavList button[data-cat]": {
+      "x": 89,
+      "y": 143,
+      "w": 88,
+      "h": 34,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setNavList button[aria-current=\"true\"]": {
+      "x": 89,
+      "y": 143,
+      "w": 88,
+      "h": 34,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#settings-ai": {
+      "x": 78,
+      "y": 1515,
+      "w": 748,
+      "h": 325,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setModelTier": {
+      "x": 99,
+      "y": 1661,
+      "w": 706,
+      "h": 40,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setThinking": {
+      "x": 99,
+      "y": 1769,
+      "w": 706,
+      "h": 40,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setModelHint": {
+      "x": 99,
+      "y": 1636,
+      "w": 706,
+      "h": 17,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setThinkingHint": {
+      "x": 99,
+      "y": 1744,
+      "w": 706,
+      "h": 17,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#settings-mode": {
+      "x": 78,
+      "y": 7158,
+      "w": 748,
+      "h": 384,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#modeOptions": {
+      "x": 99,
+      "y": 7221,
+      "w": 706,
+      "h": 300,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mailSettings": {
+      "x": 78,
+      "y": 7554,
+      "w": 748,
+      "h": 259,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mailStatus": {
+      "x": 99,
+      "y": 7637,
+      "w": 706,
+      "h": 17,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#mailConnect": {
+      "x": 99,
+      "y": 7662,
+      "w": 101,
+      "h": 32,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#voiceVolume": {
+      "x": 99,
+      "y": 2692,
+      "w": 706,
+      "h": 20,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#voiceRate": {
+      "x": 99,
+      "y": 2780,
+      "w": 706,
+      "h": 20,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#voicePersona": {
+      "x": 99,
+      "y": 3016,
+      "w": 706,
+      "h": 40,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setKeepAwake": {
+      "x": 99,
+      "y": 949,
+      "w": 706,
+      "h": 40,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#setDictation": {
+      "x": 99,
+      "y": 3228,
+      "w": 32,
+      "h": 20,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    "#memorySettings": {
+      "x": 78,
+      "y": 3396,
+      "w": 748,
+      "h": 200,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#memoryList": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#memoryEmpty": {
+      "x": 99,
+      "y": 3493,
+      "w": 706,
+      "h": 35,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#remindersSettings": {
+      "x": 78,
+      "y": 3608,
+      "w": 748,
+      "h": 200,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#remindersList": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#extensionsSettings": {
+      "x": 78,
+      "y": 7825,
+      "w": 748,
+      "h": 1039,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#clipEnabled": {
+      "x": 116,
+      "y": 8047,
+      "w": 32,
+      "h": 20,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    "#snipForm": {
+      "x": 116,
+      "y": 8352,
+      "w": 672,
+      "h": 64,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#dlAnalyze": {
+      "x": 116,
+      "y": 8583,
+      "w": 146,
+      "h": 32,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#brainRecheck": {
+      "x": 99,
+      "y": 1960,
+      "w": 151,
+      "h": 32,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#chatClear": {
+      "x": 99,
+      "y": 1440,
+      "w": 162,
+      "h": 32,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#settings-sphere": {
+      "x": 78,
+      "y": 6639,
+      "w": 748,
+      "h": 507,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#sphereVariant": {
+      "x": 99,
+      "y": 6793,
+      "w": 144,
+      "h": 38,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#sphereSize": {
+      "x": 99,
+      "y": 6899,
+      "w": 506,
+      "h": 20,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#sphereGlow": {
+      "x": 99,
+      "y": 6987,
+      "w": 506,
+      "h": 20,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#spherePreview": {
+      "x": 640,
+      "y": 6761,
+      "w": 150,
+      "h": 150,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#sphereApply": {
+      "x": 712,
+      "y": 7093,
+      "w": 93,
+      "h": 32,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#sphereReset": {
+      "x": 99,
+      "y": 7093,
+      "w": 84,
+      "h": 32,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#sphereBadge": {
+      "x": 747,
+      "y": 6665,
+      "w": 58,
+      "h": 20,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#spherePreviewNote": {
+      "x": 99,
+      "y": 7027,
+      "w": 506,
+      "h": 52,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#settings-model": {
+      "x": 78,
+      "y": 1852,
+      "w": 748,
+      "h": 253,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#ownerProviders": {
+      "x": 78,
+      "y": 2117,
+      "w": 748,
+      "h": 267,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#themeSeg": {
+      "x": 99,
+      "y": 3957,
+      "w": 706,
+      "h": 194,
+      "hidden": false,
+      "display": "grid",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#orbPick": {
+      "x": 99,
+      "y": 5742,
+      "w": 285,
+      "h": 40,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#toasts": {
+      "x": 848,
+      "y": 504,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "fixed"
+    }
+  },
+  "nav": [
+    {
+      "i": 0,
+      "cat": "general",
+      "text": "Общие",
+      "current": "true",
+      "rect": {
+        "x": 89,
+        "y": 143,
+        "w": 88,
+        "h": 34,
+        "hidden": false,
+        "display": "list-item",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 1,
+      "cat": "ai",
+      "text": "ИИ и провайдеры",
+      "current": "",
+      "rect": {
+        "x": 179,
+        "y": 143,
+        "w": 158,
+        "h": 34,
+        "hidden": false,
+        "display": "list-item",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 2,
+      "cat": "voice",
+      "text": "Голос и память",
+      "current": "",
+      "rect": {
+        "x": 340,
+        "y": 143,
+        "w": 143,
+        "h": 34,
+        "hidden": false,
+        "display": "list-item",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 3,
+      "cat": "look",
+      "text": "Внешний вид",
+      "current": "",
+      "rect": {
+        "x": 484,
+        "y": 143,
+        "w": 129,
+        "h": 34,
+        "hidden": false,
+        "display": "list-item",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 4,
+      "cat": "sphere",
+      "text": "Сфера Nox",
+      "current": "",
+      "rect": {
+        "x": 615,
+        "y": 143,
+        "w": 114,
+        "h": 34,
+        "hidden": false,
+        "display": "list-item",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 5,
+      "cat": "security",
+      "text": "Безопасность",
+      "current": "",
+      "rect": {
+        "x": 731,
+        "y": 143,
+        "w": 134,
+        "h": 34,
+        "hidden": false,
+        "display": "list-item",
+        "visibility": "visible",
+        "position": "static"
+      }
+    }
+  ],
+  "cards": [
+    {
+      "i": 0,
+      "id": "",
+      "cat": "general",
+      "title": "Окно и уведомления",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 208,
+        "w": 748,
+        "h": 812,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 1,
+      "id": "",
+      "cat": "general",
+      "title": "Рабочая папка",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 1032,
+        "w": 748,
+        "h": 288,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 2,
+      "id": "",
+      "cat": "general",
+      "title": "Разговор",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 1332,
+        "w": 748,
+        "h": 171,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 3,
+      "id": "settings-ai",
+      "cat": "ai",
+      "title": "ИИ и провайдеры",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 1515,
+        "w": 748,
+        "h": 325,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 4,
+      "id": "settings-model",
+      "cat": "ai",
+      "title": "Модель и связь",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 1852,
+        "w": 748,
+        "h": 253,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 5,
+      "id": "ownerProviders",
+      "cat": "ai",
+      "title": "Провайдеры владельца",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 2117,
+        "w": 748,
+        "h": 267,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 6,
+      "id": "",
+      "cat": "voice",
+      "title": "Ответы",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 2396,
+        "w": 748,
+        "h": 988,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 7,
+      "id": "memorySettings",
+      "cat": "voice",
+      "title": "Память",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 3396,
+        "w": 748,
+        "h": 200,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 8,
+      "id": "remindersSettings",
+      "cat": "voice",
+      "title": "Напоминания",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 3608,
+        "w": 748,
+        "h": 200,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 9,
+      "id": "",
+      "cat": "look",
+      "title": "Вид",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 3820,
+        "w": 748,
+        "h": 2807,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 10,
+      "id": "settings-sphere",
+      "cat": "sphere",
+      "title": "Сфера Nox — предпросмотр",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 6639,
+        "w": 748,
+        "h": 507,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 11,
+      "id": "settings-mode",
+      "cat": "security",
+      "title": "Режим доступа",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 7158,
+        "w": 748,
+        "h": 384,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 12,
+      "id": "mailSettings",
+      "cat": "security",
+      "title": "Почта Gmail",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 7554,
+        "w": 748,
+        "h": 259,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 13,
+      "id": "extensionsSettings",
+      "cat": "security",
+      "title": "Расширения",
+      "hiddenAttr": false,
+      "catHidden": false,
+      "rect": {
+        "x": 78,
+        "y": 7825,
+        "w": 748,
+        "h": 1039,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    }
+  ],
+  "chips": [
+    {
+      "chip": "all",
+      "pressed": "true",
+      "text": "Все"
+    },
+    {
+      "chip": "ai",
+      "pressed": "false",
+      "text": "ИИ"
+    },
+    {
+      "chip": "look",
+      "pressed": "false",
+      "text": "Вид"
+    },
+    {
+      "chip": "voice",
+      "pressed": "false",
+      "text": "Голос"
+    }
+  ],
+  "sections": [
+    {
+      "i": 0,
+      "id": "",
+      "title": "Окно и уведомления",
+      "rect": {
+        "x": 78,
+        "y": 208,
+        "w": 748,
+        "h": 812,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 1,
+      "id": "",
+      "title": "Рабочая папка",
+      "rect": {
+        "x": 78,
+        "y": 1032,
+        "w": 748,
+        "h": 288,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 2,
+      "id": "",
+      "title": "Разговор",
+      "rect": {
+        "x": 78,
+        "y": 1332,
+        "w": 748,
+        "h": 171,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 3,
+      "id": "settings-ai",
+      "title": "ИИ и провайдеры",
+      "rect": {
+        "x": 78,
+        "y": 1515,
+        "w": 748,
+        "h": 325,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 4,
+      "id": "settings-model",
+      "title": "Модель и связь",
+      "rect": {
+        "x": 78,
+        "y": 1852,
+        "w": 748,
+        "h": 253,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 5,
+      "id": "ownerProviders",
+      "title": "Провайдеры владельца",
+      "rect": {
+        "x": 78,
+        "y": 2117,
+        "w": 748,
+        "h": 267,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 6,
+      "id": "",
+      "title": "Ответы",
+      "rect": {
+        "x": 78,
+        "y": 2396,
+        "w": 748,
+        "h": 988,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 7,
+      "id": "memorySettings",
+      "title": "Память",
+      "rect": {
+        "x": 78,
+        "y": 3396,
+        "w": 748,
+        "h": 200,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 8,
+      "id": "remindersSettings",
+      "title": "Напоминания",
+      "rect": {
+        "x": 78,
+        "y": 3608,
+        "w": 748,
+        "h": 200,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 9,
+      "id": "",
+      "title": "Вид",
+      "rect": {
+        "x": 78,
+        "y": 3820,
+        "w": 748,
+        "h": 2807,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 10,
+      "id": "settings-sphere",
+      "title": "Сфера Nox — предпросмотр",
+      "rect": {
+        "x": 78,
+        "y": 6639,
+        "w": 748,
+        "h": 507,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 11,
+      "id": "settings-mode",
+      "title": "Режим доступа",
+      "rect": {
+        "x": 78,
+        "y": 7158,
+        "w": 748,
+        "h": 384,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 12,
+      "id": "mailSettings",
+      "title": "Почта Gmail",
+      "rect": {
+        "x": 78,
+        "y": 7554,
+        "w": 748,
+        "h": 259,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    {
+      "i": 13,
+      "id": "extensionsSettings",
+      "title": "Расширения",
+      "rect": {
+        "x": 78,
+        "y": 7825,
+        "w": 748,
+        "h": 1039,
+        "hidden": false,
+        "display": "block",
+        "visibility": "visible",
+        "position": "static"
+      }
+    }
+  ],
+  "mode": "catalog",
+  "extra": {
+    "mode": "catalog",
+    "categoryId": "",
+    "query": ""
+  }
+}

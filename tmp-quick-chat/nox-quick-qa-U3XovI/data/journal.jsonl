@@ -1,0 +1,2 @@
+{"ts":"2026-11-12T14:13:52.792Z","tool":"weather_now","args":{},"risk":"T0","mode":"ask","decision":"allow","ok":false,"summary":"Скажите город","source":"command","verified":null,"evidence":null,"runId":"5eecca67-528a-4a52-825f-2e86f8215d30","step":1}
+{"ts":"2026-11-12T14:14:25.159Z","tool":"workspace_write","args":{"path":"quick-qa.txt","content":"Точный тестовый текст"},"risk":"T1","mode":"ask","decision":"reject","ok":false,"summary":"отклонено","callId":"qa-write","runId":"79e612c5","step":1,"status":"failed","verified":null,"verifiedStatus":null,"evidence":null}

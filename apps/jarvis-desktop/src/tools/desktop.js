@@ -3,6 +3,9 @@
 const { runPowerShell, probeProcess, pollUntil } = require('./system');
 const { cannotVerify } = require('../agent/effects');
 const { READ_SCRIPT: CLIPBOARD_READ } = require('./clipboard');
+const { createReader, MAX_READ } = require('../voice/reader');
+const fs = require('fs');
+const path = require('path');
 
 const MAX_WAIT_MS = 10000;
 
@@ -197,6 +200,7 @@ const pcShutdown = {
 const READ_CHUNK = 220;
 const READ_LIMIT = 1500;
 
+// Отдельный кусок старого деления: им пользуются сценарии команд, трогать его не нужно.
 function splitForSpeech(text) {
   let rest = String(text || '').replace(/\s+/g, ' ').trim().slice(0, READ_LIMIT);
   const parts = [];
@@ -219,28 +223,194 @@ async function speakChunks(parts, say, signal) {
   }
 }
 
+// Выделенный текст: UIA TextPattern того элемента, где стоит курсор. Буфер обмена не трогаем —
+// копирование затёрло бы то, что владелец там держит.
+const SELECTION_SCRIPT = [
+  '[Console]::OutputEncoding = [Text.Encoding]::UTF8',
+  'Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes',
+  'try {',
+  '  $el = [System.Windows.Automation.AutomationElement]::FocusedElement',
+  '  if ($el) {',
+  '    $tp = $el.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern)',
+  '    if ($tp) { $sel = $tp.GetSelection(); if ($sel -and $sel.Count -gt 0) { $t = ($sel | ForEach-Object { $_.GetText(-1) }) -join "`n"; [Console]::Out.Write($t) } }',
+  '  }',
+  '} catch { }',
+].join('\n');
+
+// Документ .docx — это zip с word/document.xml. Достаём XML и превращаем в текст в Node.
+const DOCX_XML_SCRIPT = [
+  '[Console]::OutputEncoding = [Text.Encoding]::UTF8',
+  'Add-Type -AssemblyName System.IO.Compression.FileSystem',
+  'try {',
+  '  $zip = [System.IO.Compression.ZipFile]::OpenRead($env:JARVIS_DOC)',
+  '  try {',
+  '    $entry = $zip.GetEntry("word/document.xml")',
+  '    if ($entry) { $reader = New-Object System.IO.StreamReader($entry.Open()); [Console]::Out.Write($reader.ReadToEnd()) }',
+  '  } finally { $zip.Dispose() }',
+  '} catch { }',
+].join('\n');
+
+// Что читаем файлом: обычный текст и html как есть, docx — через xml. Прочее честно не читаем.
+const TEXT_EXT = new Set(['.txt', '.md', '.markdown', '.json', '.csv', '.log', '.ini', '.cfg', '.yml', '.yaml', '.js', '.ts', '.py', '.ps1', '.sh', '.xml', '.sql']);
+const HTML_EXT = new Set(['.html', '.htm']);
+const DOC_EXT = new Set(['.docx']);
+const FILE_BYTES_MAX = 4 * 1024 * 1024;
+
+// Текст из html: без скриптов, стилей и разметки. Сущности — самые частые.
+function htmlToText(html) {
+  return String(html || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
+// Текст из word/document.xml: абзац — перевод строки, остальные теги прочь.
+function docxXmlToText(xml) {
+  return String(xml || '')
+    .replace(/<w:p[ >]/g, '\n<w:p ')
+    .replace(/<w:tab\/>/g, ' ')
+    .replace(/<w:br\/>/g, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+// Файл в текст: только поддерживаемые расширения, только обычный файл, не больше FILE_BYTES_MAX.
+async function readDocumentText(file, { signal, runner = runPowerShell, fsImpl = fs } = {}) {
+  const ext = path.extname(String(file)).toLowerCase();
+  const name = path.basename(String(file));
+  if (/^\.env/i.test(name)) return { ok: false, summary: 'файлы .env я не читаю' };
+  if (!TEXT_EXT.has(ext) && !HTML_EXT.has(ext) && !DOC_EXT.has(ext)) {
+    return { ok: false, summary: `такой файл вслух не читаю (${ext || 'без расширения'}): поддерживаю текст, html и docx` };
+  }
+  let stat = null;
+  try {
+    stat = fsImpl.statSync(file);
+  } catch {
+    return { ok: false, summary: 'файл не найден' };
+  }
+  if (!stat.isFile()) return { ok: false, summary: 'это не файл' };
+  if (stat.size > FILE_BYTES_MAX) return { ok: false, summary: 'файл слишком большой для чтения вслух' };
+  if (DOC_EXT.has(ext)) {
+    const res = await runner(DOCX_XML_SCRIPT, { JARVIS_DOC: file }, { signal, timeoutMs: 20000 });
+    if (!res.ok) return { ok: false, summary: res.summary };
+    const text = docxXmlToText((res.data && res.data.stdout) || '');
+    if (!text.trim()) return { ok: false, summary: 'в документе нет текста' };
+    return { ok: true, text };
+  }
+  let raw = '';
+  try {
+    raw = fsImpl.readFileSync(file, 'utf8');
+  } catch (err) {
+    return { ok: false, summary: `не смог прочитать файл: ${err.message}` };
+  }
+  raw = raw.replace(/^\uFEFF/, '');
+  const text = HTML_EXT.has(ext) ? htmlToText(raw) : raw;
+  if (!text.trim()) return { ok: false, summary: 'в файле нет текста' };
+  return { ok: true, text };
+}
+
+// Голос для чтения вслух. Он берётся в момент чтения, а не при сборке инструментов: голос
+// подключается позже, а во время работы может смениться (локальный или облачный).
+let reader = null;
+function getReader() {
+  if (!reader) {
+    reader = createReader({
+      speak: (text, signal) => {
+        if (!speaker) throw new Error('голос не подключён');
+        return speaker(text, signal);
+      },
+    });
+  }
+  return reader;
+}
+
+// Короткий и честный рассказ о том, где чтение: «3 из 12», «дальше не читаю» и так далее.
+function readerSummary(snapshot) {
+  const at = `${Math.min(snapshot.index + (snapshot.state === 'done' ? 0 : 1), snapshot.total)} из ${snapshot.total}`;
+  switch (snapshot.state) {
+    case 'playing': return `читаю: ${at}${snapshot.label ? ` (${snapshot.label})` : ''}`;
+    case 'paused': return `пауза на ${at}`;
+    case 'stopped': return `остановлено на ${at}`;
+    case 'done': return `дочитано: ${snapshot.total} из ${snapshot.total}`;
+    case 'error': return `чтение прервалось на ${at}: ${snapshot.error || 'голос не ответил'}`;
+    default: return 'сейчас ничего не читаю';
+  }
+}
+
+const READ_ACTIONS = ['start', 'pause', 'resume', 'stop', 'status'];
+const READ_SOURCES = ['clipboard', 'selection', 'file'];
+
 const readClipboardAloud = {
   name: 'read_clipboard_aloud',
-  description: `Прочитать вслух текст из буфера обмена (до ${READ_LIMIT} символов). Сначала скопируйте нужный текст; если буфер пуст, так и скажу.`,
+  description: `Прочитать вслух текст: из буфера обмена, выделенное сейчас или файл (txt, md, html, docx, json, csv, log). Читаю кусками по предложениям, в фоне, до ${MAX_READ} символов. Управление: action "pause" — пауза, "resume" — продолжить с того же места, "stop" — остановить, "status" — где сейчас. Для файла укажи path.`,
   risk: 'T1',
-  parameters: { type: 'object', properties: {} },
-  async run(args, ctx = {}) {
-    if (!speaker) return { ok: false, summary: 'голос не подключён', data: {} };
-    const res = await runPowerShell(CLIPBOARD_READ, {}, { signal: ctx.signal, timeoutMs: 10000 });
-    if (!res.ok) return { ok: false, summary: res.summary, data: {} };
-    const text = String((res.data && res.data.stdout) || '').trim();
-    if (!text) return { ok: false, summary: 'буфер пуст: скопируйте текст и попросите снова', data: {} };
-    const parts = splitForSpeech(text);
-    try {
-      await speakChunks(parts, speaker, ctx.signal);
-    } catch (err) {
-      return { ok: false, summary: `голос: ${err.message}`, data: {} };
+  parameters: {
+    type: 'object',
+    properties: {
+      action: { type: 'string', enum: READ_ACTIONS, description: 'start (по умолчанию), pause, resume, stop, status' },
+      source: { type: 'string', enum: READ_SOURCES, description: 'clipboard (по умолчанию), selection или file' },
+      path: { type: 'string', description: 'путь к файлу, когда source = file' },
+    },
+  },
+  async run(args = {}, ctx = {}) {
+    const action = String(args.action || 'start');
+    if (!READ_ACTIONS.includes(action)) return { ok: false, summary: `не знаю действие «${action}»`, data: {} };
+    const book = getReader();
+    if (action === 'status') return { ok: true, summary: readerSummary(book.snapshot()), data: book.snapshot() };
+    if (action === 'pause' || action === 'resume' || action === 'stop') {
+      const before = book.snapshot();
+      const after = action === 'pause' ? book.pause() : action === 'resume' ? book.resume() : book.stop();
+      // Ничего не делали — так и говорим, без выдумки.
+      if (before.state === after.state) return { ok: true, summary: readerSummary(after), data: after };
+      return { ok: true, summary: readerSummary(after), data: after };
     }
-    const truncated = text.length > READ_LIMIT;
+
+    const source = String(args.source || 'clipboard');
+    if (!READ_SOURCES.includes(source)) return { ok: false, summary: `не знаю источник «${source}»`, data: {} };
+    if (!speaker) return { ok: false, summary: 'голос не подключён', data: {} };
+
+    let text = '';
+    let label = null;
+    if (source === 'file') {
+      const file = String(args.path || '').trim();
+      if (!file) return { ok: false, summary: 'не указан файл', data: {} };
+      const doc = await readDocumentText(file, { signal: ctx.signal });
+      if (!doc.ok) return { ok: false, summary: doc.summary, data: {} };
+      text = doc.text;
+      label = path.basename(file);
+    } else if (source === 'selection') {
+      const res = await runPowerShell(SELECTION_SCRIPT, {}, { signal: ctx.signal, timeoutMs: 15000 });
+      if (!res.ok) return { ok: false, summary: res.summary, data: {} };
+      text = String((res.data && res.data.stdout) || '').trim();
+      if (!text) return { ok: false, summary: 'выделенного текста не видно: выделите фрагмент и попросите снова', data: {} };
+      label = 'выделенное';
+    } else {
+      const res = await runPowerShell(CLIPBOARD_READ, {}, { signal: ctx.signal, timeoutMs: 10000 });
+      if (!res.ok) return { ok: false, summary: res.summary, data: {} };
+      text = String((res.data && res.data.stdout) || '').trim();
+      if (!text) return { ok: false, summary: 'буфер пуст: скопируйте текст и попросите снова', data: {} };
+      label = 'буфер обмена';
+    }
+
+    const started = book.start(text, { label });
+    if (!started.total) return { ok: false, summary: 'нечего читать: текста нет', data: started };
+    // Чтение идёт в фоне: ход не занимается на минуты, пауза и стоп приходят следующим поручением.
     return {
       ok: true,
-      summary: `прочитано ${Math.min(text.length, READ_LIMIT)} символов${truncated ? ', дальше не читаю' : ''}`,
-      data: { chars: text.length, parts: parts.length, truncated },
+      summary: `${readerSummary(started)}${started.truncated ? `, дальше не читаю (всего ${started.chars} символов)` : ''}`,
+      data: started,
     };
   },
   verify: cannotVerify('голос отработал, но услышан ли звук, узнать нельзя'),
@@ -248,4 +418,37 @@ const readClipboardAloud = {
 
 const desktopTools = [wait, windowsMinimizeAll, windowsRestoreAll, monitorOff, appClose, speak, pcShutdown, readClipboardAloud];
 
-module.exports = { desktopTools, comboScript, setSpeaker, MAX_WAIT_MS, MINIMIZE_SCRIPT, RESTORE_SCRIPT, splitForSpeech, speakChunks, READ_LIMIT, READ_CHUNK };
+// Чтение вслух нужно и снаружи инструментов: окно и аварийный стоп спрашивают, читает ли Джарвис,
+// и могут остановить чтение, не дожидаясь нового поручения.
+function readAloudBusy() {
+  return Boolean(reader && reader.busy);
+}
+
+function stopReading() {
+  if (reader) reader.stop();
+}
+
+module.exports = {
+  desktopTools,
+  comboScript,
+  setSpeaker,
+  MAX_WAIT_MS,
+  MINIMIZE_SCRIPT,
+  RESTORE_SCRIPT,
+  splitForSpeech,
+  speakChunks,
+  READ_LIMIT,
+  READ_CHUNK,
+  getReader,
+  readAloudBusy,
+  stopReading,
+  readDocumentText,
+  htmlToText,
+  docxXmlToText,
+  SELECTION_SCRIPT,
+  DOCX_XML_SCRIPT,
+  FILE_BYTES_MAX,
+  TEXT_EXT,
+  HTML_EXT,
+  DOC_EXT,
+};

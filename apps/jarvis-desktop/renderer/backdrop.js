@@ -14,8 +14,16 @@
     open.onerror = () => reject(open.error);
     open.onsuccess = () => {
       const db = open.result;
-      const tx = db.transaction(STORE, mode);
-      const req = fn(tx.objectStore(STORE));
+      let tx;
+      let req;
+      try {
+        tx = db.transaction(STORE, mode);
+        req = fn(tx.objectStore(STORE));
+      } catch (err) {
+        db.close();
+        reject(err);
+        return;
+      }
       tx.oncomplete = () => { db.close(); resolve(req.result); };
       tx.onerror = tx.onabort = () => { db.close(); reject(tx.error); };
     };
@@ -29,16 +37,28 @@
     document.dispatchEvent(new Event('nox:backdrop'));
   }
 
-  // Причина отказа словами или null. Чистая функция: её проверяет tests/backdrop.test.js.
+  // Причина отказа словами или null. Чистая функция: её проверяет tests/look.test.js.
   function reject(file) {
     if (!file || !/^image\/(png|jpeg|webp|gif|avif|bmp)$/.test(file.type || '')) return 'Нужна картинка: PNG, JPG, WebP или GIF';
     if (!(file.size > 0)) return 'Файл пустой';
     if (file.size > MAX_BYTES) return 'Картинка больше 25 МБ';
     return null;
   }
+  // Картинка должна не только называться картинкой, но и читаться движком: битый файл
+  // с расширением .png иначе сохраняется молча и оставляет пустой фон.
+  async function readable(file) {
+    if (typeof createImageBitmap !== 'function') return true;
+    let bmp = null;
+    try {
+      bmp = await createImageBitmap(file);
+      return !!(bmp && bmp.width > 0 && bmp.height > 0);
+    } catch { return false; }
+    finally { if (bmp && bmp.close) bmp.close(); }
+  }
   async function set(file) {
     const why = reject(file);
     if (why) throw new Error(why);
+    if (!(await readable(file))) throw new Error('Файл не читается как картинка');
     await store('readwrite', (s) => s.put(file, KEY));
     show(file);
   }

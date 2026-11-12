@@ -1,0 +1,3 @@
+{"seq":1,"ts":"2026-11-11T08:46:57.770Z","ref":"turn:5bac6b52","title":"zm-restart: подготовь пробную запись","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-11T08:46:57.770Z","cleared":false}
+{"seq":2,"ts":"2026-11-11T08:47:00.214Z","ref":"turn:5bac6b52","title":"zm-restart: подготовь пробную запись","state":"failed","reason":"ход прерван перезапуском, результат неизвестен","due":null,"since":"2026-11-11T08:47:00.214Z","cleared":false}
+{"seq":3,"ts":"2026-11-11T08:47:00.215Z","ref":"call:call_0","title":"workspace_write","source":"interrupted","state":"waiting","reason":"вызов прерван перезапуском, результат неизвестен","due":null,"since":"2026-11-11T08:46:57.858Z","cleared":false}

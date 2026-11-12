@@ -1,0 +1,887 @@
+{
+  "inner": [
+    1200,
+    720
+  ],
+  "dpr": 1,
+  "view": "nox",
+  "title": "Nox — Джарвис",
+  "crumb": "Чат",
+  "railCurrent": "nox",
+  "scroll": {
+    "viewCommands": {
+      "top": 0,
+      "height": 0,
+      "client": 0
+    },
+    "document": {
+      "top": 0,
+      "height": 720,
+      "client": 720
+    }
+  },
+  "elements": {
+    ".app": {
+      "x": 0,
+      "y": 0,
+      "w": 1200,
+      "h": 720,
+      "hidden": false,
+      "display": "grid",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".rail": {
+      "x": 9,
+      "y": 9,
+      "w": 52,
+      "h": 702,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".rail-item[data-nav=\"commands\"]": {
+      "x": 18,
+      "y": 108,
+      "w": 36,
+      "h": 36,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".topbar": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".main": {
+      "x": 61,
+      "y": 9,
+      "w": 1130,
+      "h": 702,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".views": {
+      "x": 61,
+      "y": 9,
+      "w": 1130,
+      "h": 702,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    ".view-commands": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": true,
+      "display": "none",
+      "visibility": "visible",
+      "position": "absolute"
+    },
+    "#commands": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdLists": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".cmd-toolbar": null,
+    "#panelMine": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdList": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdPacks": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdPacks .pack-grid": null,
+    "#cmdPacks .pack-card": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdEditor": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": true,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdEditor .editor-main": null,
+    "#cmdEditor .editor-foot": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdEditorTitle": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "inline",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdName": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdPhrases": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdSteps": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdRunResult": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": true,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdRun": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdSave": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdDelete": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdNew": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdImport": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdExport": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdRecord": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdRecordPanel": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": true,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdImportDialog": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "absolute"
+    },
+    "#toasts": {
+      "x": 1184,
+      "y": 704,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "fixed"
+    },
+    "#cmdCatalog": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".nox-cmd-head": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".nox-cmd-toolbar": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".nox-cmd-body": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".nox-cmd-list": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdList .cmd-item:first-child": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "grid",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".nox-packs": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdPacksList": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".nox-tabs": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".nox-cmd-tools": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".nox-editor-main": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".nox-editor-side": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".nox-editor-foot": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".nox-editor-head": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdBack": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdSideSub": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdSideReady": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdLoading": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": true,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#cmdActionDialog": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "absolute"
+    },
+    ".nox-picker": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "absolute"
+    },
+    "#npList": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#npCats": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    ".view-nox": {
+      "x": 61,
+      "y": 9,
+      "w": 1130,
+      "h": 702,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "absolute"
+    },
+    ".nox-grid": {
+      "x": 61,
+      "y": 9,
+      "w": 1130,
+      "h": 702,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#noxHistory": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "hidden": false,
+      "display": "none",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#noxChat": {
+      "x": 61,
+      "y": 9,
+      "w": 762,
+      "h": 702,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    "#noxSphere": {
+      "x": 831,
+      "y": 9,
+      "w": 360,
+      "h": 702,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#feed": {
+      "x": 61,
+      "y": 54,
+      "w": 761,
+      "h": 568,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#composer": {
+      "x": 73,
+      "y": 624,
+      "w": 737,
+      "h": 76,
+      "hidden": false,
+      "display": "flex",
+      "visibility": "visible",
+      "position": "relative"
+    },
+    "#chatInput": {
+      "x": 86,
+      "y": 632,
+      "w": 711,
+      "h": 24,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    },
+    "#noxComposerSlot": {
+      "x": 61,
+      "y": 622,
+      "w": 761,
+      "h": 88,
+      "hidden": false,
+      "display": "block",
+      "visibility": "visible",
+      "position": "static"
+    }
+  },
+  "cmdList": {
+    "count": 8,
+    "counterText": "8",
+    "rows": [
+      {
+        "i": 0,
+        "name": "Кино",
+        "enabled": true,
+        "off": false,
+        "selected": false,
+        "open": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "hidden": false,
+          "display": "grid",
+          "visibility": "visible",
+          "position": "static"
+        }
+      },
+      {
+        "i": 1,
+        "name": "Отбой",
+        "enabled": true,
+        "off": false,
+        "selected": false,
+        "open": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "hidden": false,
+          "display": "grid",
+          "visibility": "visible",
+          "position": "static"
+        }
+      },
+      {
+        "i": 2,
+        "name": "Проверить почту",
+        "enabled": true,
+        "off": false,
+        "selected": false,
+        "open": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "hidden": false,
+          "display": "grid",
+          "visibility": "visible",
+          "position": "static"
+        }
+      },
+      {
+        "i": 3,
+        "name": "Рабочее утро",
+        "enabled": true,
+        "off": false,
+        "selected": false,
+        "open": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "hidden": false,
+          "display": "grid",
+          "visibility": "visible",
+          "position": "static"
+        }
+      },
+      {
+        "i": 4,
+        "name": "Созвон",
+        "enabled": true,
+        "off": false,
+        "selected": false,
+        "open": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "hidden": false,
+          "display": "grid",
+          "visibility": "visible",
+          "position": "static"
+        }
+      },
+      {
+        "i": 5,
+        "name": "Тихий час",
+        "enabled": false,
+        "off": true,
+        "selected": false,
+        "open": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "hidden": false,
+          "display": "grid",
+          "visibility": "visible",
+          "position": "static"
+        }
+      },
+      {
+        "i": 6,
+        "name": "Уборка",
+        "enabled": true,
+        "off": false,
+        "selected": false,
+        "open": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "hidden": false,
+          "display": "grid",
+          "visibility": "visible",
+          "position": "static"
+        }
+      },
+      {
+        "i": 7,
+        "name": "Экран: только чат",
+        "enabled": true,
+        "off": false,
+        "selected": false,
+        "open": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "hidden": false,
+          "display": "grid",
+          "visibility": "visible",
+          "position": "static"
+        }
+      }
+    ],
+    "totalHeight": 0
+  },
+  "packs": {
+    "cards": 9,
+    "first": {
+      "i": 0,
+      "id": "montage",
+      "state": "default",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "hidden": false,
+        "display": "flex",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    "last": {
+      "i": 8,
+      "id": "apps",
+      "state": "default",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "hidden": false,
+        "display": "flex",
+        "visibility": "visible",
+        "position": "static"
+      }
+    },
+    "consts": [
+      "montage",
+      "games",
+      "browser",
+      "windows",
+      "explorer",
+      "text",
+      "media",
+      "sites",
+      "apps"
+    ]
+  },
+  "editor": {
+    "open": false,
+    "isEditingClass": false,
+    "title": "",
+    "nameValue": "",
+    "phrases": 0,
+    "steps": 0,
+    "stepOptions": 0,
+    "runDisabled": false,
+    "saveDisabled": false,
+    "deleteHidden": false,
+    "dirty": false,
+    "sideSub": "Без запуска — только текст шагов",
+    "sideReady": 0,
+    "backVisible": false
+  },
+  "modal": {
+    "importOpen": false,
+    "importCount": "",
+    "importSummary": "",
+    "importItems": 0,
+    "pickerOpen": false,
+    "pickerCats": 0,
+    "pickerItems": 0
+  },
+  "recording": {
+    "panelOpen": false,
+    "steps": 0
+  },
+  "toasts": 0,
+  "mode": "chat",
+  "extra": {
+    "mode": "chat",
+    "command": null,
+    "actionName": null,
+    "ready": {
+      "rows": 8,
+      "cards": 9,
+      "packsVisible": true,
+      "packs": {
+        "present": true,
+        "cards": 9,
+        "visible": true
+      }
+    },
+    "cleaned": {
+      "banner": true,
+      "blurred": true
+    },
+    "requested": {
+      "width": 1200,
+      "height": 720
+    }
+  }
+}

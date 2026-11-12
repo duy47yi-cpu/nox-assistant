@@ -132,7 +132,7 @@ test('add: пустой текст, плохая дата и repeat вне на�
   assert.throws(() => store.add({ text: 'x', dueAt: 'не дата' }), /плохая дата/);
   assert.throws(() => store.add({ text: 'x' }), /дата/);
   assert.throws(() => store.add({ text: 'x', dueAt: 1234 }), /дата/);
-  assert.throws(() => store.add({ text: 'x', dueAt, repeat: 'weekly' }), /repeat/);
+  assert.throws(() => store.add({ text: 'x', dueAt, repeat: 'yearly' }), /repeat/);
   assert.throws(() => store.add({ text: 'x', dueAt, repeat: 'DAILY' }), /repeat/);
   assert.equal(fs.existsSync(file), false, 'при ошибке валидации файл не создаётся');
 
@@ -478,4 +478,122 @@ test('просрочка и отмена переживают перезапус
   assert.equal(afterCancel.get(second.id), null, 'отмена переживает перезапуск');
   assert.deepEqual(afterCancel.list({ includeDone: true }).map((r) => r.text), ['просроченное']);
   assert.equal(new ReminderStore(file).get(overdue.id).done, true, 'доставленное разовое закрыто');
+});
+
+test('по будням: пропуск выходных, один показ после простоя, отмена всей серии', async (t) => {
+  const store = newStore(t);
+  let clock = new Date('2027-01-01T00:00:00Z');
+  const [, remindAt, list, cancel] = remindersTools(store, { now: () => clock });
+  const added = await remindAt.run({
+    text: 'план на день', at: '2027-01-02T09:00', repeat: 'weekdays', timeZone: 'Asia/Tokyo',
+  });
+  assert.equal(added.ok, true);
+  assert.equal(added.data.dueAt, '2027-01-04T00:00:00.000Z');
+  assert.equal((await remindAt.verify({}, added)).status, 'confirmed');
+  assert.equal((await list.run()).data[0].repeat, 'weekdays');
+
+  clock = new Date('2027-01-09T01:00:00Z');
+  const reopened = new ReminderStore(store.filePath);
+  const calls = [];
+  const scheduler = new Scheduler({ store: reopened, now: () => clock, notify: (item) => calls.push(item) });
+  assert.equal(await scheduler.tick(), 1);
+  assert.equal(await scheduler.tick(), 0);
+  assert.equal(calls[0].late, true);
+  assert.equal(reopened.get(added.data.id).dueAt, '2027-01-11T00:00:00.000Z');
+  const cancelled = await cancel.run({ id: added.data.id });
+  assert.equal(cancelled.ok, true);
+  assert.equal((await cancel.verify({}, cancelled)).status, 'confirmed');
+  clock = new Date('2027-01-11T00:00:00Z');
+  assert.equal(await scheduler.tick(), 0);
+});
+
+test('еженедельно: перевод часов весной сдвигает только одно срабатывание', async (t) => {
+  const store = newStore(t);
+  const [, remindAt] = remindersTools(store, { now: () => NOW });
+  const args = { text: 'отчёт', repeat: 'weekly', timeZone: 'America/New_York' };
+  assert.match((await remindAt.run({ ...args, at: '2027-03-14T02:30' })).summary, /нет из-за перевода часов/);
+  assert.match((await remindAt.run({ ...args, at: '2027-11-07T01:30' })).summary, /повторяется/);
+  assert.match((await remindAt.run({ ...args, at: '2027-03-07T02:30', timeZone: 'Unknown/Zone' })).summary, /timeZone/);
+  const { data } = await remindAt.run({ ...args, at: '2027-03-07T02:30' });
+  let clock = new Date('2027-03-07T07:30:00Z');
+  const scheduler = new Scheduler({ store, now: () => clock, notify: () => {} });
+  assert.equal(await scheduler.tick(), 1);
+  assert.equal(store.get(data.id).dueAt, '2027-03-14T07:30:00.000Z'); // 03:30 после перевода
+  clock = new Date('2027-03-14T07:29:59Z');
+  assert.equal(await scheduler.tick(), 0);
+  clock = new Date('2027-03-14T07:30:00Z');
+  assert.equal(await scheduler.tick(), 1);
+  assert.equal(store.get(data.id).dueAt, '2027-03-21T06:30:00.000Z'); // снова 02:30
+});
+
+test('еженедельно: повторяющийся осенью час даёт один показ даже после перезапуска', async (t) => {
+  const store = newStore(t);
+  const record = store.add({ text: 'отчёт', dueAt: '2027-10-31T01:30:00-04:00', repeat: 'weekly', timeZone: 'America/New_York' });
+  let clock = new Date(record.dueAt);
+  const scheduler = new Scheduler({ store, now: () => clock, notify: () => {} });
+  assert.equal(await scheduler.tick(), 1);
+  assert.equal(store.get(record.id).dueAt, '2027-11-07T05:30:00.000Z');
+  clock = new Date('2027-11-07T05:30:00Z');
+  assert.equal(await scheduler.tick(), 1);
+  clock = new Date('2027-11-07T06:30:00Z');
+  const reopened = new ReminderStore(store.filePath);
+  assert.equal(await new Scheduler({ store: reopened, now: () => clock, notify: () => {} }).tick(), 0);
+  assert.equal(reopened.get(record.id).dueAt, '2027-11-14T06:30:00.000Z');
+});
+
+test('ежемесячно: високосный февраль, возврат к 31 числу и перенос серии', (t) => {
+  const store = newStore(t);
+  const { id } = store.add({ text: 'счёт', dueAt: '2027-12-31T23:45:00-05:00', repeat: 'monthly', timeZone: 'America/New_York' });
+  for (const [fired, next] of [
+    ['2028-01-01T04:45:00Z', '2028-02-01T04:45:00.000Z'],
+    ['2028-02-01T04:45:00Z', '2028-03-01T04:45:00.000Z'],
+    ['2028-03-01T04:45:00Z', '2028-04-01T03:45:00.000Z'],
+    ['2028-04-01T03:45:00Z', '2028-05-01T03:45:00.000Z'],
+    ['2028-05-01T03:45:00Z', '2028-06-01T03:45:00.000Z'],
+  ]) {
+    store.update(id, { text: 'оплатить счёт', repeat: 'monthly' });
+    assert.equal(store.markFired(id, fired).dueAt, next);
+  }
+  const moved = store.update(id, { dueAt: '2029-01-31T10:00:00Z', timeZone: 'UTC' });
+  assert.equal(store.markFired(id, moved.dueAt).dueAt, '2029-02-28T10:00:00.000Z');
+  assert.equal(store.markFired(id, '2029-02-28T10:00:00Z').dueAt, '2029-03-31T10:00:00.000Z');
+});
+
+test('отмена и перенос во время доставки не дают завершить устаревшие сроки', async (t) => {
+  const store = newStore(t);
+  const { id } = store.add({ text: 'перенос', dueAt: '2026-10-27T09:00:00Z', repeat: 'weekly', timeZone: 'UTC' });
+  const cancelled = store.add({ text: 'отмена', dueAt: '2026-10-27T09:10:00Z', repeat: 'monthly', timeZone: 'UTC' });
+  const calls = [];
+  const movedTo = '2026-10-28T09:00:00.000Z';
+  const scheduler = new Scheduler({
+    store, now: () => NOW,
+    notify: async (item) => {
+      calls.push(item.id);
+      store.update(id, { dueAt: movedTo });
+      store.cancel(cancelled.id);
+    },
+  });
+  assert.equal(await scheduler.tick(), 1);
+  assert.deepEqual(calls, [id]);
+  assert.equal(store.get(id).dueAt, movedTo);
+  assert.equal(store.get(id).firedAt, null);
+  assert.equal(store.get(cancelled.id), null);
+});
+
+test('сбой сохранения после доставки повторяет запись без второго уведомления', async (t) => {
+  const store = newStore(t);
+  const record = store.add({ text: 'еженедельно', dueAt: NOW, repeat: 'weekly', timeZone: 'UTC' });
+  const markFired = store.markFired.bind(store);
+  let fail = true;
+  t.mock.method(store, 'markFired', (...args) => {
+    if (fail) throw new Error('сбой записи');
+    return markFired(...args);
+  });
+  const calls = [];
+  const scheduler = new Scheduler({ store, now: () => NOW, notify: (item) => calls.push(item.id) });
+  await assert.rejects(scheduler.tick(), /сбой записи/);
+  fail = false;
+  assert.equal(await scheduler.tick(), 0);
+  assert.deepEqual(calls, [record.id]);
+  assert.equal(store.get(record.id).dueAt, '2026-11-03T10:00:00.000Z');
 });

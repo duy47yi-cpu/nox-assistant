@@ -1,0 +1,113 @@
+{
+  "mode": "restart-read",
+  "pid": 28944,
+  "readyMs": 934.2965999999999,
+  "electron": "44.9.3",
+  "chromium": "152.0.7977.167",
+  "initialTheme": {
+    "theme": null,
+    "accent": null,
+    "look": null,
+    "resolved": "dark",
+    "systemLight": false,
+    "bg": "#14120E",
+    "appBg": "rgb(15, 15, 16)"
+  },
+  "restart": {
+    "modelCalls": 0,
+    "ui": {
+      "dialog": false,
+      "pendingRows": 0,
+      "lastChat": "Подготовь пробную запись для проверки перезапуска.\n\nХод прерван: приложение закрылось до ответа. Незаконченные действия я не повторял — проверьте результат и напишите, что продолжить."
+    },
+    "fileExists": false,
+    "journal": [],
+    "turns": [
+      {
+        "ts": "2026-11-11T15:32:20.618Z",
+        "kind": "model",
+        "turn": "f87cfb6a",
+        "round": 1,
+        "messages": 2,
+        "tools": 126,
+        "ms": 24,
+        "ok": true,
+        "requestChars": 75326,
+        "promptTokens": null,
+        "cachedTokens": null,
+        "completionTokens": null,
+        "reasoningTokens": null,
+        "reasoningChars": 0,
+        "reasoning": null,
+        "toolCalls": [
+          "workspace_write"
+        ],
+        "answerChars": 0
+      },
+      {
+        "ts": "2026-11-11T15:32:20.626Z",
+        "kind": "tool_start",
+        "turn": "f87cfb6a",
+        "round": 1,
+        "callId": "audit-restart-unapproved",
+        "name": "workspace_write",
+        "risk": "T1"
+      }
+    ],
+    "deals": {
+      "waiting": [
+        {
+          "ts": "2026-11-11T15:32:23.481Z",
+          "ref": "call:audit-restart-unapproved",
+          "title": "workspace_write",
+          "source": "interrupted",
+          "state": "waiting",
+          "reason": "вызов прерван перезапуском, результат неизвестен",
+          "due": null,
+          "since": "2026-11-11T15:32:20.626Z",
+          "cleared": false
+        }
+      ],
+      "failed": [
+        {
+          "ts": "2026-11-11T15:32:23.480Z",
+          "ref": "turn:708ae587",
+          "title": "Подготовь пробную запись для проверки перезапуска.",
+          "source": "turn",
+          "state": "failed",
+          "reason": "ход прерван перезапуском, результат неизвестен",
+          "due": null,
+          "since": "2026-11-11T15:32:23.479Z",
+          "cleared": false
+        }
+      ],
+      "overdue": [],
+      "stale": [],
+      "unverified": [],
+      "started": [],
+      "promised": []
+    }
+  },
+  "processes": [
+    {
+      "type": "Browser",
+      "cpuPercent": 0,
+      "workingSetKiB": 158528
+    },
+    {
+      "type": "GPU",
+      "cpuPercent": 0,
+      "workingSetKiB": 159840
+    },
+    {
+      "type": "Utility",
+      "cpuPercent": 0,
+      "workingSetKiB": 102348
+    },
+    {
+      "type": "Tab",
+      "cpuPercent": 0,
+      "workingSetKiB": 152108
+    }
+  ]
+}

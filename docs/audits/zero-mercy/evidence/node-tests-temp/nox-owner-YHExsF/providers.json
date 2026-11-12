@@ -1,0 +1,11 @@
+{
+  "selected": "Дом",
+  "providers": [
+    {
+      "name": "Дом",
+      "baseUrl": "http://localhost:11434/v1",
+      "model": "my-model",
+      "key": ""
+    }
+  ]
+}

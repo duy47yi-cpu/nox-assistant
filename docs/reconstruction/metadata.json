@@ -1,0 +1,107 @@
+{
+  "IMG_47650": {
+    "duration": 23.87,
+    "width": 1604,
+    "height": 1080,
+    "fps": "50/1",
+    "codec": "hevc"
+  },
+  "IMG_28645": {
+    "duration": 25.133333,
+    "width": 720,
+    "height": 1280,
+    "fps": "30/1",
+    "codec": "hevc"
+  },
+  "IMG_22660": {
+    "duration": 61.366667,
+    "width": 1092,
+    "height": 576,
+    "fps": "30/1",
+    "codec": "h264"
+  },
+  "IMG_51356": {
+    "duration": 28.233333,
+    "width": 720,
+    "height": 1280,
+    "fps": "30/1",
+    "codec": "hevc"
+  },
+  "IMG_39258": {
+    "duration": 35.733333,
+    "width": 1098,
+    "height": 576,
+    "fps": "30/1",
+    "codec": "hevc"
+  },
+  "IMG_25482": {
+    "duration": 33.041995,
+    "width": 1080,
+    "height": 1920,
+    "fps": "30/1",
+    "codec": "hevc"
+  },
+  "IMG_47805": {
+    "duration": 40.666667,
+    "width": 576,
+    "height": 1024,
+    "fps": "30/1",
+    "codec": "h264"
+  },
+  "IMG_58655": {
+    "duration": 23.966667,
+    "width": 1080,
+    "height": 1918,
+    "fps": "30/1",
+    "codec": "hevc"
+  },
+  "IMG_9218": {
+    "duration": 38.833333,
+    "width": 1080,
+    "height": 1920,
+    "fps": "30/1",
+    "codec": "hevc"
+  },
+  "IMG_55336": {
+    "duration": 41.6,
+    "width": 1080,
+    "height": 1918,
+    "fps": "30/1",
+    "codec": "hevc"
+  },
+  "IMG_13006": {
+    "duration": 26.933333,
+    "width": 1080,
+    "height": 1920,
+    "fps": "30/1",
+    "codec": "hevc"
+  },
+  "IMG_44070": {
+    "duration": 24.310998,
+    "width": 576,
+    "height": 1024,
+    "fps": "30/1",
+    "codec": "h264"
+  },
+  "IMG_54946": {
+    "duration": 24.433333,
+    "width": 1080,
+    "height": 1920,
+    "fps": "30/1",
+    "codec": "hevc"
+  },
+  "IMG_37326": {
+    "duration": 27.833333,
+    "width": 576,
+    "height": 1024,
+    "fps": "30/1",
+    "codec": "h264"
+  },
+  "45": {
+    "duration": 24.0,
+    "width": 720,
+    "height": 1280,
+    "fps": "30/1",
+    "codec": "hevc"
+  }
+}

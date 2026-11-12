@@ -7,6 +7,7 @@
 // Ввод-вывод синхронный, fs и часы внедряются: тесты идут на временных папках.
 const nodeFs = require('fs');
 const nodePath = require('path');
+const crypto = require('crypto');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MB = 1024 * 1024;
@@ -207,6 +208,7 @@ function analyze(folder, options = {}) {
       size: file.size,
       sizeText: humanBytes(file.size),
       modifiedAt: new Date(file.mtimeMs).toISOString(),
+      mtimeMs: file.mtimeMs,
       ageDays,
       type,
       typeTitle: TYPE_TITLES[type] || type,
@@ -254,10 +256,106 @@ function analyze(folder, options = {}) {
   };
 }
 
+function normalizeExpectedMap(expected) {
+  if (!expected) return null;
+  const map = new Map();
+  if (expected instanceof Map) {
+    for (const [k, v] of expected.entries()) {
+      const key = String(k || '').trim();
+      if (key && v && typeof v === 'object') {
+        map.set(key, { path: key, size: Number(v.size) || 0, mtimeMs: Number(v.mtimeMs) || 0 });
+      }
+    }
+    return map;
+  }
+  if (Array.isArray(expected)) {
+    for (const v of expected) {
+      const key = String((v && v.path) || '').trim();
+      if (key) map.set(key, { path: key, size: Number(v.size) || 0, mtimeMs: Number(v.mtimeMs) || 0 });
+    }
+    return map;
+  }
+  if (typeof expected === 'object') {
+    for (const [k, v] of Object.entries(expected)) {
+      const key = String(k || '').trim();
+      if (key && v && typeof v === 'object') {
+        map.set(key, { path: key, size: Number(v.size) || 0, mtimeMs: Number(v.mtimeMs) || 0 });
+      }
+    }
+    return map;
+  }
+  return null;
+}
+
+function validateCandidateTarget(raw, { root, realRoot, expectedMap, fs, path }) {
+  const rel = typeof raw === 'string' ? raw : String((raw && raw.path) || '');
+  const clean = rel.trim();
+  if (!clean) return { kind: 'refused', entry: { path: '', reason: 'не указан путь' } };
+  if (path.isAbsolute(clean) || /^[a-zA-Z]:/.test(clean) || clean.startsWith('\\\\') || clean.startsWith('//')) {
+    return { kind: 'refused', entry: { path: clean, reason: 'абсолютный путь: удаляю только внутри папки загрузок' } };
+  }
+  if (clean.split(/[\\/]+/).some((part) => part === '..')) {
+    return { kind: 'refused', entry: { path: clean, reason: 'путь с «..» выводит за папку загрузок' } };
+  }
+  const abs = path.resolve(root, clean);
+  if (!relativeInside(root, abs, path) || abs === root) {
+    return { kind: 'refused', entry: { path: clean, reason: 'путь вне папки загрузок' } };
+  }
+  if (expectedMap) {
+    const exp = expectedMap.get(clean);
+    if (!exp) {
+      return { kind: 'changed', entry: { path: clean, reason: 'файл не входит в подтверждённый список проверки' } };
+    }
+    if (raw && typeof raw === 'object') {
+      if (raw.size !== undefined && Number(raw.size) !== exp.size) {
+        return { kind: 'changed', entry: { path: clean, reason: 'размер файла изменился после проверки' } };
+      }
+      if (raw.mtimeMs !== undefined && Math.abs(Number(raw.mtimeMs) - exp.mtimeMs) > 0.5) {
+        return { kind: 'changed', entry: { path: clean, reason: 'время изменения файла не совпадает с проверкой' } };
+      }
+    }
+  }
+  let stat;
+  try {
+    stat = fs.lstatSync(abs);
+  } catch (err) {
+    const code = String((err && err.code) || '');
+    return {
+      kind: 'failed',
+      entry: { path: clean, reason: code === 'ENOENT' ? 'файла уже нет' : `не удалось проверить: ${code || 'ошибка'}` },
+    };
+  }
+  if (stat.isSymbolicLink()) {
+    return { kind: 'refused', entry: { path: clean, reason: 'это ссылка: по ссылкам не удаляю' } };
+  }
+  if (!stat.isFile()) {
+    return { kind: 'refused', entry: { path: clean, reason: 'это не обычный файл: папка или другое' } };
+  }
+  // Junction в середине пути не виден ни проверке строки, ни lstat: сверяем настоящий путь.
+  try {
+    const realFile = fs.realpathSync(abs);
+    if (realFile !== realRoot && !relativeInside(realRoot, realFile, path)) {
+      return { kind: 'refused', entry: { path: clean, reason: 'путь уводит за папку загрузок через ссылку' } };
+    }
+    if (realFile === realRoot) {
+      return { kind: 'refused', entry: { path: clean, reason: 'это сама папка загрузок' } };
+    }
+  } catch {
+    return { kind: 'failed', entry: { path: clean, reason: 'файл исчез до удаления' } };
+  }
+  if (expectedMap) {
+    const exp = expectedMap.get(clean);
+    if (Number(stat.size) !== exp.size || Math.abs(Number(stat.mtimeMs) - exp.mtimeMs) > 0.5) {
+      return { kind: 'changed', entry: { path: clean, reason: 'файл изменился на диске после проверки' } };
+    }
+  }
+  return { kind: 'ok', clean, abs, size: Number(stat.size) || 0, mtimeMs: Number(stat.mtimeMs) || 0 };
+}
+
 /**
  * Удаление файлов-кандидатов. Ничего не делает без confirm === true.
  * candidates — массив путей из analyze (относительные) или объектов {path}.
- * options: {folder, fs, path}. folder — та же папка, что анализировалась.
+ * options: {folder, fs, path, expected, strictSnapshot}. folder — та же папка, что анализировалась.
  * Возврат: {ok, removed, refused, failed, bytesFreed, bytesFreedText, message}.
  *   refused — защита (путь вне папки, ссылка, папка): эти файлы не тронуты;
  *   failed  — обычная ошибка удаления (файла уже нет, нет прав).
@@ -300,6 +398,105 @@ function remove(candidates, confirm, options = {}) {
     return { ok: false, reason: 'candidates_required', message: 'нужен список файлов из анализа', removed: [], refused: [], failed: [], bytesFreed: 0 };
   }
 
+  const expectedMap = normalizeExpectedMap(options.expected);
+  const strictSnapshot = options.strictSnapshot === true || Boolean(expectedMap);
+
+  if (strictSnapshot) {
+    if (!expectedMap) {
+      return {
+        ok: false,
+        reason: 'list_changed',
+        needsReanalyze: true,
+        message: 'Список файлов не привязан к проверке. Выполните повторную проверку загрузок.',
+        removed: [],
+        refused: [],
+        failed: [],
+        changed: [],
+        bytesFreed: 0,
+        bytesFreedText: humanBytes(0),
+      };
+    }
+    const seenStrict = new Set();
+    const targets = [];
+    const refused = [];
+    const failed = [];
+    const changed = [];
+    for (const raw of candidates) {
+      const rel = typeof raw === 'string' ? raw : String((raw && raw.path) || '');
+      const cleanKey = rel.trim();
+      if (cleanKey && seenStrict.has(cleanKey)) {
+        changed.push({ path: cleanKey, reason: 'повторный путь в списке удаления' });
+        continue;
+      }
+      if (cleanKey) seenStrict.add(cleanKey);
+      const checked = validateCandidateTarget(raw, { root, realRoot, expectedMap, fs, path });
+      if (checked.kind === 'ok') targets.push(checked);
+      else if (checked.kind === 'refused') refused.push(checked.entry);
+      else if (checked.kind === 'changed') changed.push(checked.entry);
+      else {
+        changed.push(checked.entry);
+        failed.push(checked.entry);
+      }
+    }
+    if (targets.length === 0 && refused.length === 0 && failed.length === 0 && changed.length === 0) {
+      return {
+        ok: false,
+        reason: 'selection_empty',
+        message: 'Ничего не выбрано для удаления.',
+        removed: [],
+        refused: [],
+        failed: [],
+        changed: [],
+        bytesFreed: 0,
+        bytesFreedText: humanBytes(0),
+      };
+    }
+    if (refused.length > 0 || failed.length > 0 || changed.length > 0) {
+      return {
+        ok: false,
+        reason: 'list_changed',
+        needsReanalyze: true,
+        message: 'Список или состояние файлов изменились после проверки. Выполните повторную проверку.',
+        removed: [],
+        refused,
+        failed,
+        changed,
+        bytesFreed: 0,
+        bytesFreedText: humanBytes(0),
+      };
+    }
+    const removed = [];
+    let bytesFreed = 0;
+    for (const target of targets) {
+      try {
+        const fresh = fs.lstatSync(target.abs);
+        if (fresh.isSymbolicLink() || !fresh.isFile() || Number(fresh.size) !== target.size || Math.abs(Number(fresh.mtimeMs) - target.mtimeMs) > 0.5) {
+          failed.push({ path: target.clean, reason: 'файл изменился перед удалением' });
+          continue;
+        }
+        fs.unlinkSync(target.abs);
+        bytesFreed += target.size;
+        removed.push(target.clean);
+      } catch (err) {
+        failed.push({ path: target.clean, reason: `не удалось удалить: ${String((err && err.code) || 'ошибка')}` });
+      }
+    }
+    const ok = failed.length === 0;
+    const message = removed.length === 0
+      ? 'ничего не удалено: есть ошибки'
+      : `удалено файлов: ${removed.length}, освобождено ${humanBytes(bytesFreed)}`;
+    return {
+      ok,
+      removed,
+      refused: [],
+      failed,
+      changed: [],
+      bytesFreed,
+      bytesFreedText: humanBytes(bytesFreed),
+      message,
+    };
+  }
+
   const removed = [];
   const refused = [];
   const failed = [];
@@ -309,63 +506,17 @@ function remove(candidates, confirm, options = {}) {
   for (const raw of candidates) {
     const rel = typeof raw === 'string' ? raw : String((raw && raw.path) || '');
     const clean = rel.trim();
-    if (!clean) {
-      refused.push({ path: '', reason: 'не указан путь' });
-      continue;
-    }
-    if (seen.has(clean)) continue;
-    seen.add(clean);
-    if (path.isAbsolute(clean) || /^[a-zA-Z]:/.test(clean) || clean.startsWith('\\\\') || clean.startsWith('//')) {
-      refused.push({ path: clean, reason: 'абсолютный путь: удаляю только внутри папки загрузок' });
-      continue;
-    }
-    if (clean.split(/[\\/]+/).some((part) => part === '..')) {
-      refused.push({ path: clean, reason: 'путь с «..» выводит за папку загрузок' });
-      continue;
-    }
-    const abs = path.resolve(root, clean);
-    if (!relativeInside(root, abs, path) || abs === root) {
-      refused.push({ path: clean, reason: 'путь вне папки загрузок' });
-      continue;
-    }
-    let stat;
+    if (clean && seen.has(clean)) continue;
+    if (clean) seen.add(clean);
+    const checked = validateCandidateTarget(raw, { root, realRoot, expectedMap: null, fs, path });
+    if (checked.kind === 'refused') { refused.push(checked.entry); continue; }
+    if (checked.kind === 'failed') { failed.push(checked.entry); continue; }
     try {
-      stat = fs.lstatSync(abs);
+      fs.unlinkSync(checked.abs);
+      bytesFreed += checked.size;
+      removed.push(checked.clean);
     } catch (err) {
-      const code = String((err && err.code) || '');
-      failed.push({ path: clean, reason: code === 'ENOENT' ? 'файла уже нет' : `не удалось проверить: ${code || 'ошибка'}` });
-      continue;
-    }
-    if (stat.isSymbolicLink()) {
-      refused.push({ path: clean, reason: 'это ссылка: по ссылкам не удаляю' });
-      continue;
-    }
-    if (!stat.isFile()) {
-      refused.push({ path: clean, reason: 'это не обычный файл: папка или другое' });
-      continue;
-    }
-    // Junction в середине пути не виден ни проверке строки, ни lstat: сверяем настоящий путь.
-    try {
-      const realFile = fs.realpathSync(abs);
-      if (realFile !== realRoot && !relativeInside(realRoot, realFile, path)) {
-        refused.push({ path: clean, reason: 'путь уводит за папку загрузок через ссылку' });
-        continue;
-      }
-      if (realFile === realRoot) {
-        refused.push({ path: clean, reason: 'это сама папка загрузок' });
-        continue;
-      }
-    } catch {
-      failed.push({ path: clean, reason: 'файл исчез до удаления' });
-      continue;
-    }
-    try {
-      const size = Number(stat.size) || 0;
-      fs.unlinkSync(abs);
-      bytesFreed += size;
-      removed.push(clean);
-    } catch (err) {
-      failed.push({ path: clean, reason: `не удалось удалить: ${String((err && err.code) || 'ошибка')}` });
+      failed.push({ path: checked.clean, reason: `не удалось удалить: ${String((err && err.code) || 'ошибка')}` });
     }
   }
 
@@ -384,9 +535,126 @@ function remove(candidates, confirm, options = {}) {
   };
 }
 
+/**
+ * Сеанс проверки и подтверждённого удаления: привязывает удаление к одноразовому снимку
+ * анализа (snapshotId) и не позволяет удалить неподтверждённые или изменившиеся файлы.
+ */
+function createDownloadsSession({ fs = nodeFs, path = nodePath, now = () => Date.now() } = {}) {
+  let snapshot = null;
+
+  return {
+    analyze(folder, options = {}) {
+      const report = analyze(folder, { fs, path, now, ...options });
+      if (report && report.ok) {
+        const snapshotId = crypto.randomUUID();
+        const candidates = new Map();
+        for (const item of Array.isArray(report.candidates) ? report.candidates : []) {
+          if (item && typeof item.path === 'string') {
+            candidates.set(item.path, {
+              path: item.path,
+              size: Number(item.size) || 0,
+              mtimeMs: Number(item.mtimeMs) || 0,
+            });
+          }
+        }
+        snapshot = { id: snapshotId, folder: report.folder, candidates, createdAt: now() };
+        return { ...report, snapshotId };
+      }
+      snapshot = null;
+      return report;
+    },
+
+    remove(payload, confirm, options = {}) {
+      if (confirm !== true) {
+        return {
+          ok: false,
+          reason: 'confirm_required',
+          message: 'удаление только по явному подтверждению владельца (confirm: true)',
+          removed: [],
+          refused: [],
+          failed: [],
+          bytesFreed: 0,
+        };
+      }
+      const p = payload && typeof payload === 'object' ? payload : {};
+      const folderText = String(options.folder ?? '').trim();
+      if (!folderText) {
+        snapshot = null;
+        return { ok: false, reason: 'folder_required', message: 'не указана папка загрузок', removed: [], refused: [], failed: [], bytesFreed: 0 };
+      }
+      const resolvedFolder = path.resolve(folderText);
+      const active = snapshot;
+      if (!active || typeof p.snapshotId !== 'string' || p.snapshotId !== active.id || active.folder !== resolvedFolder) {
+        snapshot = null;
+        return {
+          ok: false,
+          reason: 'list_changed',
+          needsReanalyze: true,
+          message: 'Список файлов устарел или изменён. Выполните повторную проверку загрузок.',
+          removed: [],
+          refused: [],
+          failed: [],
+          changed: [],
+          bytesFreed: 0,
+          bytesFreedText: humanBytes(0),
+        };
+      }
+      const rawItems = Array.isArray(p.items) ? p.items : null;
+      const rawPaths = Array.isArray(p.paths) ? p.paths : [];
+      const targets = rawItems || rawPaths;
+      if (!targets.length) {
+        return {
+          ok: false,
+          reason: 'selection_empty',
+          message: 'Ничего не выбрано для удаления.',
+          removed: [],
+          refused: [],
+          failed: [],
+          changed: [],
+          bytesFreed: 0,
+          bytesFreedText: humanBytes(0),
+        };
+      }
+      if (rawItems && Array.isArray(p.paths)) {
+        const itemPaths = rawItems.map((x) => (x && typeof x.path === 'string' ? x.path : ''));
+        const pathList = p.paths.map((x) => (typeof x === 'string' ? x : ''));
+        if (itemPaths.length !== pathList.length || itemPaths.some((v, i) => v !== pathList[i])) {
+          snapshot = null;
+          return {
+            ok: false,
+            reason: 'list_changed',
+            needsReanalyze: true,
+            message: 'Список удаляемых файлов изменился после подтверждения. Нужна повторная проверка.',
+            removed: [],
+            refused: [],
+            failed: [],
+            changed: [],
+            bytesFreed: 0,
+            bytesFreedText: humanBytes(0),
+          };
+        }
+      }
+      // Одноразовый снимок: при запуске удаления сбрасывается, повтор без нового анализа невозможен.
+      snapshot = null;
+      return remove(targets, true, {
+        folder: active.folder,
+        fs,
+        path,
+        expected: active.candidates,
+        strictSnapshot: true,
+      });
+    },
+
+    getSnapshotId() {
+      return snapshot ? snapshot.id : null;
+    },
+  };
+}
+
 module.exports = {
   analyze,
   remove,
+  createDownloadsSession,
   humanBytes,
   classifyType,
   sizeBucket,

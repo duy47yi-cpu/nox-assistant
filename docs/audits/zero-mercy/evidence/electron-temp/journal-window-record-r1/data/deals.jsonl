@@ -1,0 +1,2 @@
+{"seq":1,"ts":"2026-11-10T17:53:01.892Z","ref":"turn:c6680371","title":"Подготовь пробную запись для проверки черновика.","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-10T17:53:01.892Z","cleared":false}
+{"seq":2,"ts":"2026-11-10T17:53:01.997Z","ref":"turn:c6680371","forget":true}

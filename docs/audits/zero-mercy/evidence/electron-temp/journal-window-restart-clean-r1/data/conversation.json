@@ -1,0 +1,34 @@
+{
+  "activeId": "2874c880-2a42-4461-a105-946ceba4ad4f",
+  "chats": [
+    {
+      "id": "2874c880-2a42-4461-a105-946ceba4ad4f",
+      "history": [
+        {
+          "role": "user",
+          "content": "Подготовь пробную запись для проверки перезапуска."
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "audit-restart-unapproved",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"reports/audit-restart-unapproved.txt\",\"content\":\"Действие требует согласия.\\n\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "audit-restart-unapproved",
+          "content": "{\"ok\":false,\"summary\":\"отклонено\"}"
+        }
+      ],
+      "updatedAt": 1794333605512
+    }
+  ]
+}

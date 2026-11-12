@@ -1,0 +1,178 @@
+
+Фоновые задачи с моделью выключены: включает владелец настройкой backgroundModelRuns
+[
+ {
+  "id": "N3",
+  "scenario": "двойной клик «Разрешить» у A при ждущем B; потом B отдельно",
+  "ipcForA": [
+   "once"
+  ],
+  "afterDouble": {
+   "gate": true,
+   "current": null,
+   "buttons": []
+  },
+  "bDecisionByDouble": null,
+  "later": {
+   "shownB": true,
+   "buttonsRightAfterOpen": [
+    "reject:on",
+    "session:off",
+    "once:off"
+   ],
+   "armedLater": true,
+   "decision": "once"
+  },
+  "pass": true,
+  "ranNow": [
+   "N3-A.txt",
+   "N3-X.txt"
+  ],
+  "closes": [
+   {
+    "t": 1794401549139,
+    "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+   },
+   {
+    "t": 1794401549148,
+    "ev": "close"
+   }
+  ]
+ },
+ {
+  "id": "N3",
+  "scenario": "двойной клик «Разрешить» у A при ждущем B; потом B отдельно",
+  "ipcForA": [
+   "once"
+  ],
+  "afterDouble": {
+   "gate": true,
+   "current": null,
+   "buttons": []
+  },
+  "bDecisionByDouble": null,
+  "later": {
+   "shownB": true,
+   "buttonsRightAfterOpen": [
+    "reject:on",
+    "session:off",
+    "once:off"
+   ],
+   "armedLater": true,
+   "decision": "once"
+  },
+  "pass": true,
+  "ranNow": [
+   "N3-A.txt",
+   "N3-X.txt"
+  ],
+  "closes": [
+   {
+    "t": 1794401553216,
+    "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+   },
+   {
+    "t": 1794401553224,
+    "ev": "close"
+   }
+  ]
+ },
+ {
+  "id": "N3",
+  "scenario": "двойной клик «Разрешить» у A при ждущем B; потом B отдельно",
+  "ipcForA": [
+   "once"
+  ],
+  "afterDouble": {
+   "gate": true,
+   "current": null,
+   "buttons": []
+  },
+  "bDecisionByDouble": null,
+  "later": {
+   "shownB": true,
+   "buttonsRightAfterOpen": [
+    "reject:on",
+    "session:off",
+    "once:off"
+   ],
+   "armedLater": true,
+   "decision": "once"
+  },
+  "pass": true,
+  "ranNow": [
+   "N3-A.txt",
+   "N3-X.txt"
+  ],
+  "closes": [
+   {
+    "t": 1794401557228,
+    "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+   },
+   {
+    "t": 1794401557237,
+    "ev": "close"
+   }
+  ]
+ },
+ {
+  "id": "N3",
+  "scenario": "двойной клик «Разрешить» у A при ждущем B; потом B отдельно",
+  "ipcForA": [
+   "once"
+  ],
+  "afterDouble": {
+   "gate": true,
+   "current": null,
+   "buttons": []
+  },
+  "bDecisionByDouble": null,
+  "later": {
+   "shownB": true,
+   "buttonsRightAfterOpen": [
+    "reject:on",
+    "session:off",
+    "once:off"
+   ],
+   "armedLater": true,
+   "decision": "once"
+  },
+  "pass": true,
+  "ranNow": [
+   "N3-A.txt",
+   "N3-X.txt"
+  ],
+  "closes": [
+   {
+    "t": 1794401562297,
+    "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+   }
+  ]
+ },
+ {
+  "id": "N8trace",
+  "idA": "c6d9424c",
+  "restoreMs": 112,
+  "trace": [
+   {
+    "dt": 112,
+    "open": true,
+    "cur": "c6d9424c",
+    "gate": false
+   }
+  ]
+ },
+ {
+  "id": "N8",
+  "scenario": "перезагрузка окна, восстановленная карточка, «Разрешить»",
+  "restored": true,
+  "armed": true,
+  "pass": true,
+  "ranNow": [
+   "N3-A.txt",
+   "N3-X.txt",
+   "N8-A.txt"
+  ],
+  "closes": []
+ }
+]

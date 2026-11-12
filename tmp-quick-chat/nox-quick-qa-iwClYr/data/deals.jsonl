@@ -1,0 +1,9 @@
+{"seq":1,"ts":"2026-11-12T14:04:34.220Z","ref":"mission:2c66b5d7-26b7-4707-ac76-d70824ce7cc7","title":"Утренний брифинг","source":"mission","state":"promised","reason":"","due":"2026-11-13T04:00:00.000Z","since":"2026-11-12T14:04:34.220Z","cleared":false}
+{"seq":2,"ts":"2026-11-12T14:04:39.721Z","ref":"turn:2ba0af40","title":"погода","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-12T14:04:39.721Z","cleared":false}
+{"seq":3,"ts":"2026-11-12T14:04:39.727Z","ref":"turn:2ba0af40","title":"погода","state":"failed","reason":"ход упал с ошибкой: weather_now: Скажите город","due":null,"since":"2026-11-12T14:04:39.727Z","cleared":false}
+{"seq":4,"ts":"2026-11-12T14:04:41.222Z","ref":"turn:20724f46","title":"проверка разрешения отклонить","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-12T14:04:41.222Z","cleared":false}
+{"seq":5,"ts":"2026-11-12T14:04:42.306Z","ref":"turn:20724f46","forget":true}
+{"seq":6,"ts":"2026-11-12T14:04:42.775Z","ref":"turn:47a20d00","title":"проверка разрешения разрешить","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-12T14:04:42.775Z","cleared":false}
+{"seq":7,"ts":"2026-11-12T14:04:44.011Z","ref":"turn:47a20d00","forget":true}
+{"seq":8,"ts":"2026-11-12T14:04:44.458Z","ref":"turn:a31e224e","title":"проверка остановка","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-12T14:04:44.458Z","cleared":false}
+{"seq":9,"ts":"2026-11-12T14:04:44.735Z","ref":"turn:a31e224e","title":"проверка остановка","state":"failed","reason":"ход остановлен, часть действий могла выполниться: This operation was aborted","due":null,"since":"2026-11-12T14:04:44.735Z","cleared":false}

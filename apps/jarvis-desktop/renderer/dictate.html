@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Диктовка Nox</title>
+  <link rel="stylesheet" href="themes.css">
+  <link rel="stylesheet" href="dictate.css">
+  <script src="theme-boot.js"></script>
+  <script src="dictate.js" defer></script>
+</head>
+<body>
+  <main class="dictate" aria-label="Диктовка в поле" aria-live="polite">
+    <header><span id="micDot" aria-hidden="true"></span><strong id="micLabel"></strong><span id="target"></span></header>
+    <p id="text"></p>
+    <p id="message" role="status"></p>
+    <footer>
+      <span id="hint"></span>
+      <button type="button" id="copy" hidden>Скопировать</button>
+      <button type="button" id="cancel">Отмена</button>
+      <button type="button" id="insert" class="primary">Вставить</button>
+    </footer>
+  </main>
+</body>
+</html>

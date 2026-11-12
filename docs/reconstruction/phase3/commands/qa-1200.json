@@ -1,0 +1,119 @@
+{
+  "ok": true,
+  "mode": "qa",
+  "qa": {
+    "passed": 15,
+    "failed": 0,
+    "checks": [
+      {
+        "name": "1. Каталог: #cmdCatalog виден, строк = ядру, счётчик, паки",
+        "ok": true,
+        "detail": "виден=true строк=8 ядро=8 счётчик=\"8\" паков=9"
+      },
+      {
+        "name": "2. Поиск: строки сузились, совпадение по имени/чипам/мете, сброс",
+        "ok": true,
+        "detail": "до=8 после=1 сузились=true все совпали=true сброс=true"
+      },
+      {
+        "name": "3. Вкладки: Библиотека и обратно, поля поиска",
+        "ok": true,
+        "detail": "libPanel=true libSearch=true libSel=true mineSearch=true minePanel=true libHidden=true"
+      },
+      {
+        "name": "4. Раскрытие строки: .cmd-steps-preview со шагами и обратно",
+        "ok": true,
+        "detail": "превью=true шагов=4 закрылось=true"
+      },
+      {
+        "name": "5. Переключатель: сохранение включённости через ядро и возврат",
+        "ok": true,
+        "detail": "было=true переключили и вернули"
+      },
+      {
+        "name": "6. Редактор: открывается по .cmd-name, имя и «Результат проверки»",
+        "ok": true,
+        "detail": "имя=\"Кино\" шагов=4 строк результата=4"
+      },
+      {
+        "name": "7. Защита несохранённого: #confirmDialog, Отмена и Выйти",
+        "ok": true,
+        "detail": "диалог=true остались в редакторе=true имя в ядре не изменилось=true"
+      },
+      {
+        "name": "8. Сохранение: новое имя в ядре, затем возврат имени",
+        "ok": true,
+        "detail": "новое имя в ядре=true ошибки нет=true"
+      },
+      {
+        "name": "9. Выбор действия: #cmdActionDialog, добавление и удаление шага",
+        "ok": true,
+        "detail": "категорий=6 действий=5 #npAdd=true шагов было=4 добавили=true удалили=true"
+      },
+      {
+        "name": "10. Безопасный запуск: «QA пауза» через .cmd-run, lastRunAt, удаление",
+        "ok": true,
+        "detail": "lastRunAt=true ошибки нет=true включена=true"
+      },
+      {
+        "name": "11. Запись: панель и #commands.is-recording, отмена",
+        "ok": true,
+        "detail": "показана=true убрана=true"
+      },
+      {
+        "name": "12. Чат цел: .nox-grid, #noxChat, #feed, #composer и возврат",
+        "ok": true,
+        "detail": ".nox-grid=true #noxChat=true #feed=true #composer=true каталог вернулся=true"
+      },
+      {
+        "name": "13a. 864x520: нет горизонтального переполнения каталога",
+        "ok": true,
+        "detail": "inner=864x520 scrollWidth=864 образцы=[{\"sel\":\".nox-cmd-toolbar\",\"rect\":{\"x\":64,\"right\":854,\"w\":790}},{\"sel\":\"#cmdList\",\"rect\":{\"x\":80,\"right\":826,\"w\":746}},{\"sel\":\"#cmdPacks\",\"rect\":{\"x\":78,\"right\":830,\"w\":752}}]"
+      },
+      {
+        "name": "13b. 864x520: кнопки нижней панели редактора внутри окна",
+        "ok": true,
+        "detail": "innerW=864 scrollWidth=864 кнопки=[{\"text\":\"Удалить\",\"x\":78,\"right\":185,\"w\":107,\"h\":36,\"visible\":true},{\"text\":\"Проверить\",\"x\":340,\"right\":459,\"w\":119,\"h\":36,\"visible\":true},{\"text\":\"Запустить сейчас\",\"x\":467,\"right\":631,\"w\":164,\"h\":36,\"visible\":true},{\"text\":\"Отмена\",\"x\":639,\"right\":718,\"w\":79,\"h\":36,\"visible\":true},{\"text\":\"Сохранить\",\"x\":726,\"right\":840,\"w\":114,\"h\":40,\"visible\":true}]"
+      },
+      {
+        "name": "14. Ошибки консоли",
+        "ok": true,
+        "detail": "нет"
+      }
+    ]
+  },
+  "width": 1200,
+  "height": 720,
+  "contentSize": {
+    "width": 1200,
+    "height": 720
+  },
+  "view": "commands",
+  "page": {
+    "innerWidth": 1200,
+    "innerHeight": 720,
+    "dpr": 1,
+    "title": "Nox — Джарвис"
+  },
+  "cleaned": {
+    "banner": true,
+    "blurred": true
+  },
+  "ready": {
+    "rows": 8,
+    "cards": 9,
+    "packsVisible": true,
+    "packs": {
+      "present": true,
+      "cards": 9,
+      "visible": true
+    }
+  },
+  "viewTrace": [
+    "nox",
+    "commands"
+  ],
+  "consoleErrors": [],
+  "windowsCount": 1,
+  "elapsedMs": 10229
+}

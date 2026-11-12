@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-12",
+  "timezone": "Asia/Dushanbe",
+  "spentUsd": 0.0380594,
+  "unknownCalls": 0,
+  "byTask": {},
+  "pending": [],
+  "calls": [
+    {
+      "ts": "2026-11-12T14:13:49.449Z",
+      "purpose": "warmup",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "costUsd": 8.000000000000001e-7,
+      "known": false
+    },
+    {
+      "ts": "2026-11-12T14:13:55.021Z",
+      "purpose": "chat",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "costUsd": 0.012663,
+      "known": false
+    },
+    {
+      "ts": "2026-11-12T14:14:25.183Z",
+      "purpose": "chat",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "costUsd": 0.012693,
+      "known": false
+    },
+    {
+      "ts": "2026-11-12T14:14:25.613Z",
+      "purpose": "chat",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "costUsd": 0.0127026,
+      "known": false
+    }
+  ]
+}

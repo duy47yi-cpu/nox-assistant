@@ -1,0 +1,15 @@
+{
+  "voice": false,
+  "backgroundModelRuns": false,
+  "alwaysListen": false,
+  "dictation": false,
+  "desktopOverlay": false,
+  "alwaysOnTop": false,
+  "motion": true,
+  "seededBrief": true,
+  "clipboardHistory": false,
+  "quiet": true,
+  "keepAwake": "off",
+  "city": "",
+  "windowBg": "#14120E"
+}

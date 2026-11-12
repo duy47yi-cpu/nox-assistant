@@ -1,0 +1,805 @@
+{
+  "mode": "approval",
+  "pid": 14516,
+  "readyMs": 1047.3445,
+  "electron": "44.9.3",
+  "chromium": "152.0.7977.167",
+  "initialTheme": {
+    "theme": null,
+    "accent": null,
+    "look": null,
+    "resolved": "dark",
+    "systemLight": false,
+    "bg": "#14120E",
+    "appBg": "rgb(15, 15, 16)"
+  },
+  "approval": {
+    "baseline": {
+      "dialog": {
+        "open": true,
+        "text": "Действие: audit-baseline-approval?",
+        "arguments": "{\n  \"text\": \"audit-baseline-approval\"\n}",
+        "focus": "reject",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 192,
+        "right": 672,
+        "top": 122,
+        "bottom": 398
+      },
+      "legacyNavExists": false,
+      "pending": [
+        {
+          "id": "0498612e-0437-440d-a54a-7e5446f532c6",
+          "args": {
+            "text": "audit-baseline-approval"
+          },
+          "autoCancelAt": 1794385019397
+        }
+      ],
+      "rendererErrors": [],
+      "expired": {
+        "ms": 4948.4726,
+        "reason": null,
+        "pending": 0,
+        "dialog": {
+          "open": false,
+          "text": "Действие: audit-baseline-approval?",
+          "arguments": "{\n  \"text\": \"audit-baseline-approval\"\n}",
+          "focus": "chatInput",
+          "countdown": "Без ответа отменится через 26 секунд",
+          "width": 864,
+          "height": 520,
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "bottom": 0
+        },
+        "effects": [
+          {
+            "id": "audit-baseline",
+            "text": "audit-baseline-approval"
+          }
+        ]
+      }
+    },
+    "keyboard": {
+      "initial": {
+        "open": true,
+        "text": "Действие: audit-fake-secret-for-display-only?",
+        "arguments": "{\n  \"text\": \"audit-fake-secret-for-display-only\"\n}",
+        "focus": "reject",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 192,
+        "right": 672,
+        "top": 78,
+        "bottom": 442
+      },
+      "Tab": {
+        "open": true,
+        "text": "Действие: audit-fake-secret-for-display-only?",
+        "arguments": "{\n  \"text\": \"audit-fake-secret-for-display-only\"\n}",
+        "focus": "session",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 192,
+        "right": 672,
+        "top": 78,
+        "bottom": 442
+      },
+      "Tabshift": {
+        "open": true,
+        "text": "Действие: audit-fake-secret-for-display-only?",
+        "arguments": "{\n  \"text\": \"audit-fake-secret-for-display-only\"\n}",
+        "focus": "reject",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 192,
+        "right": 672,
+        "top": 78,
+        "bottom": 442
+      },
+      "Escape": {
+        "open": false,
+        "text": "Действие: audit-fake-secret-for-display-only?",
+        "arguments": "{\n  \"text\": \"audit-fake-secret-for-display-only\"\n}",
+        "focus": "chatInput",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "bottom": 0
+      },
+      "effects": [
+        {
+          "id": "audit-baseline",
+          "text": "audit-baseline-approval"
+        }
+      ],
+      "afterSettlement": {
+        "open": false,
+        "text": "Действие: audit-fake-secret-for-display-only?",
+        "arguments": "{\n  \"text\": \"audit-fake-secret-for-display-only\"\n}",
+        "focus": "chatInput",
+        "countdown": "Без ответа отменится через 30 секунд",
+        "width": 864,
+        "height": 520,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "bottom": 0
+      },
+      "pending": 0
+    },
+    "observedFirst": {
+      "open": true,
+      "text": "Действие: audit-visible-first?",
+      "arguments": "{\n  \"text\": \"audit-visible-first\"\n}",
+      "focus": "reject",
+      "countdown": "Без ответа отменится через 30 секунд",
+      "width": 864,
+      "height": 520,
+      "left": 192,
+      "right": 672,
+      "top": 122,
+      "bottom": 398
+    },
+    "afterSettling": {
+      "open": true,
+      "text": "Действие: audit-visible-first?",
+      "arguments": "{\n  \"text\": \"audit-visible-first\"\n}",
+      "focus": "reject",
+      "countdown": "Без ответа отменится через 30 секунд",
+      "width": 864,
+      "height": 520,
+      "left": 192,
+      "right": 672,
+      "top": 122,
+      "bottom": 398
+    },
+    "pendingAfterSettling": [
+      {
+        "id": "cd3875b1-ea3c-4740-aa5e-34c3862f9ece",
+        "args": {
+          "text": "audit-visible-first"
+        }
+      },
+      {
+        "id": "fd597b27-e725-44a5-82dc-a90e9a01da4e",
+        "args": {
+          "text": "audit-hidden-second"
+        }
+      }
+    ],
+    "click": {
+      "open": true,
+      "text": "Действие: audit-visible-race-first?"
+    },
+    "collisionEffects": [
+      {
+        "id": "audit-baseline",
+        "text": "audit-baseline-approval"
+      },
+      {
+        "id": "audit-race-collision",
+        "text": "audit-visible-race-first"
+      }
+    ],
+    "events": [
+      {
+        "marker": "audit-baseline-approval",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "df201a82",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "tool_start",
+        "id": "audit-baseline",
+        "approvalId": null,
+        "callId": null,
+        "runId": "df201a82",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-baseline-approval"
+        }
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "df201a82",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "approval_request",
+        "id": "0498612e-0437-440d-a54a-7e5446f532c6",
+        "approvalId": "0498612e-0437-440d-a54a-7e5446f532c6",
+        "callId": "audit-baseline",
+        "runId": "df201a82",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-baseline-approval"
+        }
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "df201a82",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "tool_result",
+        "id": "audit-baseline",
+        "approvalId": null,
+        "callId": null,
+        "runId": "df201a82",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "df201a82",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "text",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "df201a82",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "done",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "df201a82",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-baseline-approval",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "df201a82",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "1ead8869",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "tool_start",
+        "id": "audit-keyboard",
+        "approvalId": null,
+        "callId": null,
+        "runId": "1ead8869",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-fake-secret-for-display-only"
+        }
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "1ead8869",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "approval_request",
+        "id": "3b4286e8-996d-4a7a-894e-98d8f8666424",
+        "approvalId": "3b4286e8-996d-4a7a-894e-98d8f8666424",
+        "callId": "audit-keyboard",
+        "runId": "1ead8869",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-fake-secret-for-display-only"
+        }
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "tool_result",
+        "id": "audit-keyboard",
+        "approvalId": null,
+        "callId": null,
+        "runId": "1ead8869",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "1ead8869",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "text",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "1ead8869",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "done",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "1ead8869",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-fake-secret-for-display-only",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "1ead8869",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "5dcdeaeb",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "tool_start",
+        "id": "audit-observe-collision",
+        "approvalId": null,
+        "callId": null,
+        "runId": "5dcdeaeb",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-visible-first"
+        }
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "5dcdeaeb",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "approval_request",
+        "id": "cd3875b1-ea3c-4740-aa5e-34c3862f9ece",
+        "approvalId": "cd3875b1-ea3c-4740-aa5e-34c3862f9ece",
+        "callId": "audit-observe-collision",
+        "runId": "5dcdeaeb",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-visible-first"
+        }
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9a647298",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "tool_start",
+        "id": "audit-observe-collision",
+        "approvalId": null,
+        "callId": null,
+        "runId": "9a647298",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-hidden-second"
+        }
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9a647298",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "approval_request",
+        "id": "fd597b27-e725-44a5-82dc-a90e9a01da4e",
+        "approvalId": "fd597b27-e725-44a5-82dc-a90e9a01da4e",
+        "callId": "audit-observe-collision",
+        "runId": "9a647298",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-hidden-second"
+        }
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "tool_result",
+        "id": "audit-observe-collision",
+        "approvalId": null,
+        "callId": null,
+        "runId": "5dcdeaeb",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "tool_result",
+        "id": "audit-observe-collision",
+        "approvalId": null,
+        "callId": null,
+        "runId": "9a647298",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "5dcdeaeb",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9a647298",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "text",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "5dcdeaeb",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "done",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "5dcdeaeb",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-first",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "5dcdeaeb",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "text",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9a647298",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "done",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9a647298",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-second",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "9a647298",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "e81da1e0",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "tool_start",
+        "id": "audit-race-collision",
+        "approvalId": null,
+        "callId": null,
+        "runId": "e81da1e0",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-visible-race-first"
+        }
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "e81da1e0",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "approval_request",
+        "id": "b45b770d-e565-4ed1-b1bb-6526f9866ae2",
+        "approvalId": "b45b770d-e565-4ed1-b1bb-6526f9866ae2",
+        "callId": "audit-race-collision",
+        "runId": "e81da1e0",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-visible-race-first"
+        }
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "33138cdf",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "tool_start",
+        "id": "audit-race-collision",
+        "approvalId": null,
+        "callId": null,
+        "runId": "33138cdf",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-hidden-race-second"
+        }
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "33138cdf",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "approval_request",
+        "id": "286219c3-a0db-44e0-a821-9fc72d751382",
+        "approvalId": "286219c3-a0db-44e0-a821-9fc72d751382",
+        "callId": "audit-race-collision",
+        "runId": "33138cdf",
+        "name": "audit_fixture_effect",
+        "args": {
+          "text": "audit-hidden-race-second"
+        }
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "e81da1e0",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "tool_result",
+        "id": "audit-race-collision",
+        "approvalId": null,
+        "callId": null,
+        "runId": "e81da1e0",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "e81da1e0",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "text",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "e81da1e0",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "done",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "e81da1e0",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-visible-race-first",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "e81da1e0",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "tool_result",
+        "id": "audit-race-collision",
+        "approvalId": null,
+        "callId": null,
+        "runId": "33138cdf",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "33138cdf",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "text",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "33138cdf",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "done",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "33138cdf",
+        "name": null,
+        "args": null
+      },
+      {
+        "marker": "audit-hidden-race-second",
+        "type": "status",
+        "id": null,
+        "approvalId": null,
+        "callId": null,
+        "runId": "33138cdf",
+        "name": null,
+        "args": null
+      }
+    ],
+    "consoleErrors": []
+  },
+  "processes": [
+    {
+      "type": "Browser",
+      "cpuPercent": 0,
+      "workingSetKiB": 132376
+    },
+    {
+      "type": "GPU",
+      "cpuPercent": 0,
+      "workingSetKiB": 144092
+    },
+    {
+      "type": "Utility",
+      "cpuPercent": 0,
+      "workingSetKiB": 50860
+    },
+    {
+      "type": "Tab",
+      "cpuPercent": 0,
+      "workingSetKiB": 192344
+    }
+  ]
+}

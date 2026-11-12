@@ -6,6 +6,127 @@
 (() => {
   'use strict';
 
+  const WORK_LABELS = {
+    planning: 'Планирование',
+    thinking: 'Обдумывает следующий шаг',
+    running: 'Выполняется',
+    awaiting_approval: 'Ждёт подтверждения',
+    verifying: 'Проверка результата',
+    answering: 'Готовит ответ',
+    succeeded: 'Ход завершён',
+    unverified: 'Результат не подтверждён',
+    incomplete: 'План не завершён',
+    failed: 'Не получилось',
+    cancelled: 'Остановлено',
+    needs_human: 'Нужно ваше участие',
+  };
+  const PLAN_CALLS = new Set(['plan_set', 'plan_done', 'turn_stop']);
+  const workText = (value) => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+
+  function createWork(runId) {
+    return { runId, phase: 'planning', closed: false, steps: [], summary: null, calls: new Map(), evidence: null, issue: '', unverified: false };
+  }
+
+  function workPhase(ev) {
+    if (ev.status === 'awaiting_approval' || ev.state === 'waiting_approval') return 'awaiting_approval';
+    if (ev.status === 'verifying' || ev.state === 'verifying') return 'verifying';
+    if (ev.status === 'planning' || ev.state === 'planning') return 'planning';
+    if (ev.state === 'thinking') return 'thinking';
+    if (ev.status === 'running' || ev.state === 'acting' || ev.state === 'searching') return 'running';
+    return null;
+  }
+
+  function currentWorkCall(work) {
+    const calls = [...work.calls.values()].filter((call) => !PLAN_CALLS.has(call.name));
+    return calls.findLast((call) => call.phase === 'awaiting_approval') || calls.at(-1);
+  }
+
+  // План — заявленный порядок, а не доказательство. Результат связываем с
+  // начатым вызовом, а plan_done отмечает шаг, но не подтверждает эффект.
+  function updateWork(work, ev) {
+    if (work.closed || ev.afterStop || ev.taskId || (work.runId && ev.runId && work.runId !== ev.runId)) return false;
+    if (!work.runId && ev.runId) work.runId = ev.runId;
+    switch (ev.type) {
+      case 'status': {
+        const phase = workPhase(ev);
+        if (!phase) return false;
+        const call = [...work.calls.values()].find((entry) => entry.step != null && entry.step === ev.step);
+        if (call && !PLAN_CALLS.has(call.name) && phase !== 'thinking') call.phase = phase;
+        work.phase = phase;
+        return true;
+      }
+      case 'tool_start': {
+        const plan = PLAN_CALLS.has(ev.name);
+        work.calls.set(ev.id ?? ev.step, {
+          name: ev.name, step: ev.step, phase: 'running',
+          target: ev.target,
+          ...(plan ? { steps: ev.args?.steps, index: ev.args?.step } : {}),
+        });
+        if (!plan) work.phase = 'running';
+        return !plan;
+      }
+      case 'approval_request': {
+        const call = work.calls.get(ev.id ?? ev.step);
+        if (call) call.phase = 'awaiting_approval';
+        work.phase = 'awaiting_approval';
+        return true;
+      }
+      case 'tool_result': {
+        const key = ev.id ?? ev.step;
+        const call = work.calls.get(key);
+        if (!call) return false;
+        work.calls.delete(key);
+        if (ev.ok === true && (!ev.status || ev.status === 'succeeded')) {
+          if (call.name === 'plan_set' && Array.isArray(call.steps)) {
+            work.steps = call.steps.slice(0, 20).map((text) => ({ text: workText(text), done: false })).filter((step) => step.text);
+          }
+          if (call.name === 'plan_done' && Number.isInteger(call.index) && work.steps[call.index - 1]) {
+            work.steps[call.index - 1].done = true;
+          }
+          const proof = workText(ev.evidence);
+          if (!PLAN_CALLS.has(call.name) && ev.verified === 'confirmed' && proof) {
+            work.evidence = { name: call.name, text: proof };
+          }
+        }
+        const unverified = ev.status === 'unverified' || ev.verified === 'unknown';
+        if (unverified) work.unverified = true;
+        if (ev.ok === false || ev.status === 'failed' || unverified) work.issue = workText(ev.summary);
+        if (!currentWorkCall(work)) work.phase = 'thinking';
+        return true;
+      }
+      case 'text':
+        if (work.phase === 'answering' || !ev.delta) return false;
+        work.phase = 'answering';
+        return true;
+      case 'error':
+        work.issue = workText(ev.message) || work.issue;
+        work.phase = 'failed';
+        break;
+      case 'done':
+        if (Number.isInteger(ev.plan?.total) && ev.plan.total > 0
+            && Number.isInteger(ev.plan.done) && ev.plan.done >= 0 && ev.plan.done <= ev.plan.total) {
+          work.summary = { done: ev.plan.done, total: ev.plan.total };
+        }
+        if (ev.cancelled || ev.status === 'cancelled') work.phase = 'cancelled';
+        else if (ev.outcome === 'needs_human') work.phase = 'needs_human';
+        else if (ev.status === 'failed') work.phase = 'failed';
+        else if (ev.status !== 'succeeded' || work.unverified) work.phase = 'unverified';
+        else if (work.summary ? work.summary.done < work.summary.total : work.steps.some((step) => !step.done)) work.phase = 'incomplete';
+        else work.phase = 'succeeded';
+        break;
+      default:
+        return false;
+    }
+    work.closed = true;
+    work.calls.clear();
+    return true;
+  }
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { createWork, updateWork, currentWorkCall };
+    return;
+  }
+
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
@@ -24,10 +145,8 @@
     orb: null,
     orbState: 'idle',
     composerFocus: false,
-    working: null,
-    workingStart: 0,
-    workingTimer: 0,
-    workingTone: 'running',
+    work: null,
+    workOwner: null,
     chatCount: 1,
     historySeq: 0,
   };
@@ -59,7 +178,6 @@
       composer: $('#composer'),
       chatTabsList: $('#chatTabsList'),
       workspaceSwitch: $('#workspaceSwitch'),
-      headerState: $('#headerState'),
     };
   }
 
@@ -246,45 +364,136 @@
     if (added && pinned && feed) feed.scrollTop = feed.scrollHeight;
   }
 
-  // ── Строка «Ход работы» с настоящим секундомером ───────────────
-  function workingRow() {
-    const row = el('div', 'nox-working');
-    row.setAttribute('role', 'status');
-    row.append(el('span', 'nox-tri', '▸'), el('span', 'nox-working-text', 'Ход работы · Выполняется'));
-    return row;
+  // ── Ход работы закреплён над лентой и не меняет её прокрутку ──────
+  function initWork() {
+    const row = el('section', 'nox-working');
+    row.setAttribute('aria-labelledby', 'noxWorkTitle');
+    const head = el('div', 'nox-work-head');
+    const title = el('h2', '', 'Ход работы');
+    title.id = 'noxWorkTitle';
+    const count = el('span', 'nox-work-count');
+    const more = el('button', 'nox-work-button', 'Подробнее');
+    more.type = 'button';
+    more.setAttribute('aria-haspopup', 'dialog');
+    head.append(title, count, more);
+    const status = el('div', 'nox-work-status');
+    status.setAttribute('role', 'status');
+    const plan = el('ol', 'nox-work-plan');
+    plan.setAttribute('aria-label', 'План задачи');
+    const note = el('p', 'nox-work-note');
+    const proof = el('p', 'nox-work-proof');
+    const dialog = el('dialog', 'nox-work-dialog');
+    const dialogTitle = el('h2', '', 'Ход работы');
+    dialogTitle.id = 'noxWorkDialogTitle';
+    dialog.setAttribute('aria-labelledby', dialogTitle.id);
+    const details = el('div', 'nox-work-details');
+    const close = el('button', 'nox-work-button', 'Закрыть');
+    close.type = 'button';
+    close.addEventListener('click', () => dialog.close());
+    more.addEventListener('click', () => { renderWorkDetails(); dialog.showModal(); });
+    dialog.append(dialogTitle, details, close);
+    row.append(head, status, plan, note, proof, dialog);
+    row.hidden = true;
+    refs.chatMount.prepend(row);
+    refs.work = { row, status, count, more, plan, note, proof, dialog, details };
   }
 
-  function ensureWorking() {
-    if (S.working && S.working.isConnected) return;
-    if (!refs || !refs.feedList) return;
-    const row = workingRow();
-    const turns = refs.feedList.querySelectorAll('.turn');
-    const last = turns.length ? turns[turns.length - 1] : null;
-    if (last) refs.feedList.insertBefore(row, last); else refs.feedList.append(row);
-    S.working = row;
-    S.workingStart = performance.now();
-    S.workingTone = 'running';
-    row.dataset.tone = 'running';
-    clearInterval(S.workingTimer);
-    S.workingTimer = setInterval(tickWorking, 100);
-    tickWorking();
+  const cleanWork = (text) => window.JarvisUI?.cleanSummary(text) ?? workText(text);
+  const workTool = (name) => window.JarvisUI?.toolTitle(name) || 'Действие';
+
+  function workStatus(work) {
+    const call = currentWorkCall(work);
+    const phase = call?.phase || work.phase;
+    const target = cleanWork(call?.target?.path || call?.target?.file || call?.target?.app);
+    return {
+      phase,
+      text: WORK_LABELS[phase],
+      action: call ? [workTool(call.name), target].filter(Boolean).join(' · ') : '',
+    };
   }
 
-  function tickWorking() {
-    if (!S.working || !S.working.isConnected) return;
-    const ms = performance.now() - S.workingStart;
-    const text = S.working.querySelector('.nox-working-text');
-    if (text && text.firstChild) text.firstChild.nodeValue = `Ход работы · Выполняется · ${(ms / 1000).toFixed(1)} с`;
+  function workPlan(list, start, end) {
+    const steps = S.work.steps;
+    const next = S.work.closed ? -1 : steps.findIndex((step) => !step.done);
+    list.start = start + 1;
+    list.replaceChildren(...steps.slice(start, end).map((step, offset) => {
+      const index = start + offset;
+      const item = el('li', 'nox-work-step');
+      const mark = el('span', 'nox-work-number', String(index + 1).padStart(2, '0'));
+      mark.setAttribute('aria-hidden', 'true');
+      const state = step.done ? 'Отмечен' : index === next ? 'Следующий' : '';
+      const text = cleanWork(step.text);
+      item.dataset.stepState = step.done ? 'done' : index === next ? 'next' : 'pending';
+      item.title = text;
+      item.append(mark, el('span', 'nox-work-step-text', text), el('span', 'nox-work-step-state', state));
+      return item;
+    }));
   }
 
-  function finishWorking(label, tone) {
-    if (!S.working || !S.working.isConnected) { S.working = null; clearInterval(S.workingTimer); return; }
-    const ms = S.workingStart ? performance.now() - S.workingStart : 0;
-    clearInterval(S.workingTimer);
-    const text = S.working.querySelector('.nox-working-text');
-    if (text) text.textContent = `Ход работы · ${label} · ${(ms / 1000).toFixed(1)} с`;
-    S.working.dataset.tone = tone || 'done';
-    S.working = null;
+  function noPlanText(work) {
+    if (work.summary) return 'Названия шагов недоступны';
+    return work.closed ? 'План не задан' : 'План пока не задан';
+  }
+
+  function renderWorkDetails() {
+    const work = S.work;
+    const { details } = refs.work;
+    const { text, action } = workStatus(work);
+    const list = el('ol', 'nox-work-plan');
+    list.setAttribute('aria-label', 'Полный план');
+    workPlan(list, 0, work.steps.length);
+    details.replaceChildren(el('p', '', [text, action].filter(Boolean).join(' · ')),
+      work.steps.length ? list : el('p', '', noPlanText(work)));
+    if (work.evidence) details.append(el('p', '', `Проверено · ${workTool(work.evidence.name)}: ${cleanWork(work.evidence.text)}`));
+    if (work.closed && work.issue && ['failed', 'unverified', 'needs_human', 'incomplete'].includes(work.phase)) {
+      details.append(el('p', '', cleanWork(work.issue)));
+    }
+  }
+
+  function renderWork() {
+    const { row, status, count, plan, note, proof, more, dialog } = refs.work;
+    const work = S.work;
+    row.hidden = !work;
+    if (!work) {
+      if (dialog.open) dialog.close();
+      return;
+    }
+    const { phase, text, action } = workStatus(work);
+    const statusText = [text, action].filter(Boolean).join(' · ');
+    row.dataset.phase = phase;
+    if (status.textContent !== statusText) status.textContent = statusText;
+    status.title = statusText;
+    const { done, total } = work.summary || { done: work.steps.filter((step) => step.done).length, total: work.steps.length };
+    count.textContent = total ? `План · ${done} из ${total}` : '';
+    const next = work.steps.findIndex((step) => !step.done);
+    const start = Math.max(0, Math.min(next < 0 ? work.steps.length - 3 : next - 1, work.steps.length - 3));
+    plan.hidden = !work.steps.length;
+    workPlan(plan, start, start + 3);
+    note.textContent = work.steps.length ? '' : noPlanText(work);
+    if (work.closed && work.issue && ['failed', 'unverified', 'needs_human', 'incomplete'].includes(phase)) {
+      note.textContent = cleanWork(work.issue);
+    }
+    note.hidden = !note.textContent;
+    proof.hidden = !work.evidence;
+    proof.replaceChildren();
+    if (work.evidence) {
+      const evidence = cleanWork(work.evidence.text);
+      proof.title = evidence;
+      proof.append(el('b', '', work.closed ? 'Проверено' : 'Уже проверено'), ' · ' + evidence);
+    }
+    more.hidden = !work.steps.length && !work.evidence && !work.issue && !action;
+    if (dialog.open) renderWorkDetails();
+  }
+
+  function lastUser() {
+    let node = refs.feedList.lastElementChild;
+    while (node && !node.classList.contains('msg-user')) node = node.previousElementSibling;
+    return node;
+  }
+
+  function clearWork() {
+    S.work = S.workOwner = null;
+    renderWork();
   }
 
   // ── Сфера: вариант, состояние, внимание поля ввода ─────────────
@@ -451,28 +660,17 @@
   }
 
   function initObservers() {
-    // Состояние ядра: шар и строка хода.
+    // Состояние ядра: шар.
     if (refs.stage) {
       new MutationObserver(applyStageState).observe(refs.stage, { attributes: true, attributeFilter: ['data-state'] });
-    }
-    if (refs.headerState) {
-      const BUSY = new Set(['thinking', 'planning', 'acting', 'searching', 'verifying', 'speaking', 'waiting_approval']);
-      new MutationObserver(() => {
-        const state = refs.headerState.dataset.state || 'idle';
-        if (BUSY.has(state) && !S.working) ensureWorking();
-      }).observe(refs.headerState, { attributes: true, attributeFilter: ['data-state'] });
     }
     if (refs.feedList) {
       let copyScheduled = false;
       new MutationObserver((records) => {
-        const changes = records.filter((record) => {
-          const target = record.target;
-          return !(target && target.nodeType === 1 && target.closest('.nox-working'));
-        });
-        if (!changes.length) return;
         syncEmpty();
-        if (S.working && !S.working.isConnected) { S.working = null; clearInterval(S.workingTimer); }
-        const needsCopy = changes.some((record) => [...record.addedNodes].some((node) => {
+        if (S.work && records.some((record) => record.target === refs.feedList)
+            && S.workOwner !== lastUser()) clearWork();
+        const needsCopy = records.some((record) => [...record.addedNodes].some((node) => {
           if (node.nodeType !== 1) return false;
           return node.matches('.turn') || Boolean(node.querySelector('.turn, .md'));
         }));
@@ -481,11 +679,6 @@
           copyScheduled = true;
           requestAnimationFrame(() => { copyScheduled = false; ensureCopyButtons(); });
         }
-        if (!S.working) return;
-        // Новый ход: строка должна стоять перед ответом текущего хода.
-        let last = refs.feedList.lastElementChild;
-        while (last && !last.classList.contains('turn')) last = last.previousElementSibling;
-        if (last && last.previousElementSibling !== S.working) refs.feedList.insertBefore(S.working, last);
       }).observe(refs.feedList, { childList: true, subtree: true });
     }
     if (refs.chatTabsList) {
@@ -517,26 +710,18 @@
     const bridge = api();
     if (!bridge || typeof bridge.onEvent !== 'function') return;
     bridge.onEvent((ev) => {
-      if (!ev || typeof ev !== 'object') return;
-      // Поздний итог действия после остановки: ход уже закрыт, «работаю» заново не показываем.
-      if (ev.afterStop === true) return;
-      switch (ev.type) {
-        case 'text':
-        case 'tool_start':
-        case 'tool_result':
-        case 'notice':
-        case 'approval_request':
-          ensureWorking();
-          break;
-        case 'error':
-          finishWorking('Не получилось', 'error');
-          break;
-        case 'done':
-          finishWorking(ev.cancelled === true || ev.status === 'cancelled' ? 'Остановлено' : 'Готово', 'done');
-          break;
-        default:
-          break;
+      if (!ev || typeof ev !== 'object' || ev.afterStop || ev.taskId) return;
+      const starts = ev.type === 'tool_start' || (ev.type === 'status' && workPhase(ev));
+      if (starts) {
+        const owner = lastUser();
+        if (!owner) return;
+        if (!S.work || owner !== S.workOwner) {
+          S.workOwner = owner;
+          S.work = createWork(ev.runId);
+          renderWork();
+        }
       }
+      if (S.work && S.workOwner.isConnected && updateWork(S.work, ev)) renderWork();
     });
   }
 
@@ -559,6 +744,7 @@
   function init() {
     cacheRefs();
     if (!refs.grid) return; // экрана нет в этой сборке
+    initWork();
     S.variant = readVariant();
     ensurePlacement();
     initOrb();

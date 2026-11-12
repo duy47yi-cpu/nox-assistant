@@ -1,0 +1,8 @@
+{"seq":1,"ts":"2026-11-11T08:43:33.290Z","ref":"approval:4f9d5a99-0abe-4152-b9c0-70bee406f455","title":"zm_fake_effect","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-11T08:43:33.290Z","cleared":false}
+{"seq":2,"ts":"2026-11-11T08:43:33.543Z","ref":"approval:4f9d5a99-0abe-4152-b9c0-70bee406f455","forget":true}
+{"seq":3,"ts":"2026-11-11T08:43:33.856Z","ref":"approval:cf2d589b-ac36-47cc-9e1e-a3fd9c2c4895","title":"zm_fake_effect","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-11T08:43:33.856Z","cleared":false}
+{"seq":4,"ts":"2026-11-11T08:43:34.121Z","ref":"approval:cf2d589b-ac36-47cc-9e1e-a3fd9c2c4895","forget":true}
+{"seq":5,"ts":"2026-11-11T08:43:38.197Z","ref":"approval:37aeea07-236a-4f2e-a216-b61f7aa25c99","title":"zm_fake_effect","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-11T08:43:38.197Z","cleared":false}
+{"seq":6,"ts":"2026-11-11T08:43:38.592Z","ref":"approval:37aeea07-236a-4f2e-a216-b61f7aa25c99","forget":true}
+{"seq":7,"ts":"2026-11-11T08:44:10.034Z","ref":"approval:f0c94c06-0fc8-402d-9d12-940eaa929ab5","title":"zm_fake_effect","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-11T08:44:10.034Z","cleared":false}
+{"seq":8,"ts":"2026-11-11T08:44:10.458Z","ref":"approval:f0c94c06-0fc8-402d-9d12-940eaa929ab5","forget":true}

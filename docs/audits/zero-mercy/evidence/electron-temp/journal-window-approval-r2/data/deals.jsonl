@@ -1,0 +1,4 @@
+{"seq":1,"ts":"2026-11-10T17:34:26.566Z","ref":"approval:audit-observe-collision","title":"audit_fixture_effect","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-10T17:34:26.566Z","cleared":false}
+{"seq":2,"ts":"2026-11-10T17:34:26.780Z","ref":"approval:audit-race-collision","title":"audit_fixture_effect","source":"approval","state":"waiting","reason":"ждёт вашего решения","due":null,"since":"2026-11-10T17:34:26.780Z","cleared":false}
+{"seq":3,"ts":"2026-11-10T17:34:26.780Z","ref":"approval:audit-observe-collision","forget":true}
+{"seq":4,"ts":"2026-11-10T17:34:26.913Z","ref":"approval:audit-race-collision","forget":true}

@@ -1,0 +1,12 @@
+{
+  "voice": false,
+  "backgroundModelRuns": false,
+  "alwaysListen": false,
+  "dictation": false,
+  "desktopOverlay": false,
+  "alwaysOnTop": false,
+  "motion": true,
+  "seededBrief": true,
+  "screenAuto": false,
+  "windowBg": "#14120E"
+}

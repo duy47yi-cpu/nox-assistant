@@ -1,0 +1,65 @@
+date: 2026-11-11T16:02:57+05:00
+HEAD: 7e6cdc5099828c7a38fbc4c1053afcf667cb0565
+node: v24.22.1
+electron: 
+v44.9.3
+
+## git status --short
+ M AGENTS.md
+ M apps/jarvis-desktop/main.js
+ M apps/jarvis-desktop/preload.js
+ M apps/jarvis-desktop/renderer/app.js
+ M apps/jarvis-desktop/renderer/connections.js
+ M apps/jarvis-desktop/renderer/index.html
+ M apps/jarvis-desktop/renderer/model-pick.js
+ M apps/jarvis-desktop/renderer/settings-nav.js
+ M apps/jarvis-desktop/src/agent/loop.js
+ M apps/jarvis-desktop/src/chats/book.js
+ M apps/jarvis-desktop/src/commands/runner.js
+ M apps/jarvis-desktop/src/policy/approvals.js
+ M apps/jarvis-desktop/src/screen/agent.js
+ M apps/jarvis-desktop/src/tasks/executor.js
+ M apps/jarvis-desktop/src/tasks/runtime.js
+ M apps/jarvis-desktop/tests/approvals.test.js
+ M apps/jarvis-desktop/tests/chats.test.js
+ M apps/jarvis-desktop/tests/connections-view.test.js
+ M apps/jarvis-desktop/tests/executor.test.js
+ M apps/jarvis-desktop/tests/loop.test.js
+ M apps/jarvis-desktop/tests/runtime.test.js
+ M apps/jarvis-desktop/tests/screen-agent.test.js
+?? apps/jarvis-desktop/docs/audits/
+?? apps/jarvis-desktop/renderer/nox-commands.css
+?? apps/jarvis-desktop/renderer/nox-commands.js
+?? apps/jarvis-desktop/renderer/nox-connections.css
+?? apps/jarvis-desktop/renderer/nox-connections.js
+?? apps/jarvis-desktop/renderer/nox-screen.css
+?? apps/jarvis-desktop/renderer/nox-screen.js
+?? apps/jarvis-desktop/renderer/nox-settings.css
+?? apps/jarvis-desktop/renderer/nox-settings.js
+?? apps/jarvis-desktop/renderer/orb-nox.js
+?? apps/jarvis-desktop/scripts/nox-commands-shot.js
+?? apps/jarvis-desktop/scripts/nox-compare.js
+?? apps/jarvis-desktop/scripts/nox-connections-shot.js
+?? apps/jarvis-desktop/scripts/nox-qa-verify.js
+?? apps/jarvis-desktop/scripts/nox-settings-shot.js
+?? apps/jarvis-desktop/scripts/nox-shot.js
+?? apps/jarvis-desktop/skills/replica/
+?? apps/jarvis-desktop/tests/settings-view.test.js
+?? docs/audits/
+?? docs/reconstruction/
+?? replica/
+?? scripts/
+?? tmp-s02/
+
+## sha256 of audited files
+ec025f8d2a826436c7488a8959f7f394a10ca59544593331b8d8e4947699820f *main.js
+b8b62dd85111b9b33c8c79fdca91ef2f33ceccb6f02728ba2ac56bba7304c4ce *preload.js
+adbda39039d754e4ff28d60cfefff73a252ba4d257038d7f7e54680c771db427 *renderer/app.js
+de48c87ba514ef4a7107ca9096cd7203d275d471aa79bdc0a8f9f1a68d1efcc0 *renderer/mini.js
+3faff9f77ea6fc33ca2d69c2ca8793501d1de8f47df68da6ff1f9b862dd8a012 *renderer/shared.js
+40298ddd0f5ddd6ded507d93ae5924382f2f558c9c9f2fdfb8ec70e34b8f141c *src/policy/approvals.js
+c8b46d13ea14c6ca7cb60655b5209f7d0f67bf07fd5d85bc4fd8bb475233071f *src/agent/loop.js
+d52bc34c25303f96bc3f53d57023bed3fc4c2596fe98b40109894ef023c9be3b *src/screen/agent.js
+ea2dd01e392cb91696f6a6678f214fb03b377471de70cd1c31ba6f6a60d65aa8 *src/tasks/executor.js
+e4e24f76174331e6289dbd4320aaac77e9feea30bde7d63512d4207c75978f21 *src/tasks/runtime.js
+14a5b85e8feac01883eb2290af4d1d143c5a12b4fd0c0523244e29696b228161 *src/commands/runner.js

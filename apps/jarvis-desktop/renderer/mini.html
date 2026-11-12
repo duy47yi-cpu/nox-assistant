@@ -2,35 +2,37 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <meta name="color-scheme" content="dark">
-  <title>Джарвис · мини</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Быстрый чат Nox</title>
   <link rel="stylesheet" href="themes.css">
+  <link rel="stylesheet" href="mini.css">
   <script src="theme-boot.js"></script>
-  <!-- Мини-режим: только шар, строка статуса и последнее действие. Окно без рамки, поверх остальных. -->
   <script src="shared.js" defer></script>
-  <script src="orb.js" defer></script>
+  <script src="orb-nox.js" defer></script>
   <script src="mini.js" defer></script>
 </head>
-<body class="mini-body">
-  <div class="mini">
-    <div class="mini-top">
-      <span class="mini-brand"><span class="brand-mark" data-icon="logo" aria-hidden="true"></span>Джарвис</span>
-      <span class="mini-top-btns">
-        <button class="icon-btn icon-btn-sm" type="button" id="miniStop" title="Остановить" aria-label="Остановить" hidden><span data-icon="stop"></span></button>
-        <button class="icon-btn icon-btn-sm" type="button" id="miniHide" title="Убрать с рабочего стола" aria-label="Убрать с рабочего стола"><span data-icon="x"></span></button>
-        <button class="icon-btn icon-btn-sm" type="button" id="miniExpand" title="Развернуть в полное окно" aria-label="Развернуть"><span data-icon="expand"></span></button>
-      </span>
-    </div>
-    <div class="mini-orb"><canvas class="orb-canvas" id="miniOrb" aria-hidden="true"></canvas></div>
-    <p class="mini-status" id="miniStatus" data-state="idle" aria-live="polite">Готов</p>
-    <p class="mini-last" id="miniLast" hidden><span class="mini-last-text" id="miniLastText"></span></p>
-    <div class="mini-approval" id="miniApproval" hidden>
-      <button class="btn btn-primary" type="button" id="miniOpenApproval">Нужно решение — открыть</button>
-    </div>
-  </div>
+<body>
+  <main class="quick" aria-label="Быстрый чат">
+    <header><strong>Nox</strong><span>Быстрый чат</span><button type="button" id="miniHide" aria-label="Скрыть">×</button></header>
+    <div class="quick-pet" aria-hidden="true"><canvas id="quickCore"></canvas></div>
+    <form id="quickForm">
+      <label class="sr" for="quickInput">Сообщение Джарвису</label>
+      <textarea id="quickInput" rows="2" placeholder="Что нужно сделать?"></textarea>
+      <div class="actions"><button type="button" id="quickMic" aria-label="Диктовка">Микрофон</button><span>Enter — отправить · Shift+Enter — новая строка</span><button class="primary" id="quickSend" type="submit">Отправить</button></div>
+      <section id="quickWork" aria-live="polite" hidden>
+        <div class="work-head"><span id="quickStep"></span><span id="quickStatus">Думаю</span><button id="miniStop" type="button">Стоп</button></div>
+        <p id="quickReply"></p><button type="button" id="miniExpand">Открыть в Nox</button>
+      </section>
+    </form>
+    <section id="miniApproval" aria-labelledby="approvalTitle" hidden>
+      <div class="approval-head"><strong id="approvalTitle">Нужно ваше разрешение</strong><span id="approvalTime"></span></div>
+      <p id="approvalAction"></p><p id="approvalReason"></p><pre id="approvalArgs" tabindex="0"></pre>
+      <p id="approvalError" role="alert"></p>
+      <div class="approval-actions"><button id="approvalReject" type="button">Отклонить</button><button id="approvalAllow" type="button" class="primary" disabled>Разрешить</button></div>
+      <button id="approvalNext" type="button" hidden>Показать следующий запрос</button>
+    </section>
+    <p id="quickError" role="alert"></p>
+  </main>
 </body>
 </html>

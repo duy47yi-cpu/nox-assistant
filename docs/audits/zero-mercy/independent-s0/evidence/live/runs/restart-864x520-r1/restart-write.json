@@ -1,0 +1,24 @@
+{
+  "mode": "restart-write",
+  "pending": [
+    {
+      "id": "fa350611-2ac4-4f40-9140-d8ca7c4e4050",
+      "name": "workspace_write",
+      "callId": "call_0",
+      "agentId": "75779f20-fd48-4f82-b1c7-f81a5980bfb2"
+    }
+  ],
+  "dialog": {
+    "open": true,
+    "q": "Запись файла: reports/zm-restart-marker.txt, must never be written without approval ?"
+  },
+  "fileExistsBeforeExit": false,
+  "restartModelCalls": 1,
+  "log": [
+    {
+      "t": 2470,
+      "what": "stub-model-call",
+      "n": 1
+    }
+  ]
+}

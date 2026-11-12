@@ -1,0 +1,31 @@
+{
+ "video": "video_2026-11-10_22-11-08",
+ "model": "faster-whisper small int8 cpu",
+ "language_forced": "ru",
+ "vad_filter": true,
+ "duration": 46.6986875,
+ "duration_after_vad": 5.664,
+ "segments": [
+  {
+   "start": 5.04,
+   "end": 6.7,
+   "text": "СПОКОЙНАЯ МУЗЫКА",
+   "no_speech_prob": 0.746,
+   "avg_logprob": -0.83,
+   "words": [
+    [
+     5.04,
+     6.44,
+     " СПОКОЙНАЯ",
+     0.63
+    ],
+    [
+     6.44,
+     6.7,
+     " МУЗЫКА",
+     0.9
+    ]
+   ]
+  }
+ ]
+}

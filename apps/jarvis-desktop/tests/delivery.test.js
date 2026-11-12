@@ -7,6 +7,76 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { classifyDelivery, selfEvident } = require('../src/voice/delivery');
+const { notificationVolume, readNotificationVoice, validNotificationVoice, NotificationSpeech } = require('../src/voice/delivery');
+
+const at = (h, m = 0) => new Date(2026, 10, 12, h, m);
+const settings = (patch = {}) => ({ notificationVoice: { ...readNotificationVoice(), enabled: true, ...patch } });
+const ordinary = { category: 'reminders', text: 'Напоминание' };
+const important = { category: 'tasks', important: true, text: 'Задача зависла' };
+
+test('тихие часы через полночь; исключение не отменяет категорию, общий тихий режим или нулевую громкость', () => {
+  assert.equal(notificationVolume(ordinary, {}, at(12)), null);
+  for (const now of [at(23), at(0), at(7, 59)]) {
+    assert.equal(notificationVolume(ordinary, settings(), now), null);
+    assert.equal(notificationVolume(important, settings(), now), null);
+    assert.equal(notificationVolume(important, settings({ importantAtNight: true, volume: 0.35 }), now), 0.35);
+    assert.equal(notificationVolume(important, settings({ importantAtNight: true, categories: ['reminders'] }), now), null);
+  }
+  for (const now of [at(8), at(22, 59)]) assert.equal(notificationVolume(ordinary, settings(), now), 0.7);
+  assert.equal(notificationVolume(ordinary, { ...settings(), quiet: true }, at(12)), null);
+  assert.equal(notificationVolume(ordinary, settings({ volume: 0 }), at(12)), null);
+  assert.equal(notificationVolume(ordinary, settings({ quietFrom: '10:30', quietTo: '12:00' }), at(11)), null);
+  assert.equal(notificationVolume(ordinary, settings({ quietFrom: '10:30', quietTo: '12:00' }), at(12)), 0.7);
+  assert.equal(notificationVolume(ordinary, settings({ quietFrom: '10:30', quietTo: '10:30' }), at(12)), null);
+  assert.equal(notificationVolume(ordinary, settings({ quietEnabled: false }), at(0)), 0.7);
+  assert.equal(validNotificationVoice(settings().notificationVoice), true);
+  assert.equal(validNotificationVoice(settings({ quietFrom: '25:00' }).notificationVoice), false);
+  assert.equal(validNotificationVoice(settings({ categories: ['unknown'] }).notificationVoice), false);
+});
+
+test('голос идёт по очереди; перед следующей фразой проверяются время и громкость', async () => {
+  const calls = [];
+  let cfg = settings();
+  let now = at(22, 59);
+  let release;
+  const voice = new NotificationSpeech({
+    settings: () => cfg, now: () => now,
+    speak: (text, { volume }) => {
+      calls.push([text, volume]);
+      if (text === ordinary.text) return new Promise((resolve) => { release = resolve; });
+    },
+  });
+  const done = voice.enqueue([ordinary, ordinary, important]);
+  await Promise.resolve();
+  assert.deepEqual(calls, [[ordinary.text, 0.7]]);
+  now = at(23);
+  cfg = settings({ volume: 0.4, importantAtNight: true });
+  release();
+  await done;
+  assert.deepEqual(calls, [[ordinary.text, 0.7], [important.text, 0.4]]);
+});
+
+test('диктовка и чтение имеют приоритет; явная речь ждёт завершения отмены уведомления', async () => {
+  let busy = true;
+  let finish;
+  let signal;
+  let foreground = false;
+  const voice = new NotificationSpeech({
+    settings: () => settings(), now: () => at(12), isBusy: () => busy,
+    speak: (_text, opts) => { signal = opts.signal; return new Promise((resolve) => { finish = resolve; }); },
+  });
+  await voice.enqueue([ordinary]);
+  assert.equal(signal, undefined);
+  busy = false;
+  const done = voice.enqueue([ordinary, important]);
+  await Promise.resolve();
+  const explicit = voice.foreground(() => { foreground = true; });
+  assert.equal(signal.aborted, true);
+  assert.equal(foreground, false);
+  finish();
+  await Promise.all([done, explicit]);
+  assert.equal(foreground, true);
+});
 
 test('без флага всё как раньше: ответ звучит целиком', () => {
   const out = classifyDelivery({ text: 'Открыл Блокнот.', tools: ['app_open'], failed: false, terse: false });

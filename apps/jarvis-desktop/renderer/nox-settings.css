@@ -488,6 +488,12 @@ body[data-view="settings"] .look-alpha-value {
   text-align: right;
 }
 body[data-view="settings"] .voice-opts .set-text { max-width: none; }
+body[data-view="settings"] #notificationVoiceSettings input[type="time"],
+body[data-view="settings"] #restInterval {
+  flex: 0 0 auto;
+  width: 128px;
+  max-width: 100%;
+}
 body[data-view="settings"] .voice-pick-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; flex: none; }
 
 /* Сегменты (размер текста, скругление, варианты сферы). */

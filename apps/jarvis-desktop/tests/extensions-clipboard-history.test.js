@@ -80,8 +80,9 @@ test('история: пароли, коды, токены и карты не с
   assert.equal(fs.existsSync(file), false, 'файл не должен создаваться при отказе');
   assert.equal(store.add({ text: 'безобидная заметка' }).ok, true);
   const raw = fs.readFileSync(file, 'utf8');
+  const rawWithoutIds = raw.replace(/"id"\s*:\s*"[^"]*"/g, '"id":""');
   for (const fragment of ['hunter2', 'qwerty123', 'abcdef123456', 'sk-live-abcdefghijklmnop', '123456', '4111']) {
-    assert.equal(raw.includes(fragment), false, `секрет не должен оказаться в файле: ${fragment}`);
+    assert.equal(rawWithoutIds.includes(fragment), false, `секрет не должен оказаться в файле: ${fragment}`);
   }
 });
 

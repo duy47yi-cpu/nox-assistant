@@ -1,0 +1,17 @@
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; font-family: Inter, system-ui, sans-serif; color: var(--text); }
+.dictate { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+header, footer { display: flex; align-items: center; gap: 8px; }
+header strong { font-size: 13px; white-space: nowrap; }
+#target { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: 12px; }
+#micDot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-2); flex: none; }
+[data-mic="listening"] #micDot { background: #e5484d; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { [data-mic="listening"] #micDot { animation: none; } }
+#text { flex: 1; min-height: 0; margin: 0; overflow-y: auto; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+#text:empty::before { content: attr(data-empty); color: var(--text-2); }
+#message { margin: 0; font-size: 13px; }
+#message:empty { display: none; }
+#hint { flex: 1; color: var(--text-2); font-size: 12px; }
+button { border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; font-size: 13px; }
+button:disabled { opacity: .45; cursor: default; }
+.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }

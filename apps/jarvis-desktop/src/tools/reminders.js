@@ -2,7 +2,8 @@
 
 // Инструменты напоминаний: через N минут (T0), на время (T0), список (T0), отмена (T2).
 // Работают через ReminderStore; любая ошибка возвращается как {ok: false, summary}.
-const { MAX_TEXT } = require('../schedule/store');
+const { MAX_TEXT, CALENDAR_REPEATS, zonedFormatter, resolveWallTime } = require('../schedule/store');
+const REPEAT_LABELS = { weekdays: 'по будням', weekly: 'еженедельно', monthly: 'ежемесячно' };
 
 const MAX_MINUTES = 10080;
 const MAX_ID = 100;
@@ -43,19 +44,14 @@ function validCalendarDate(iso) {
 
 // Преобразуем местное время ОС в один момент. При переходе часов время может
 // не существовать или встречаться дважды; такие случаи требуют уточнения.
-function resolveLocalTime(value) {
+function resolveLocalTime(value, { timeZone } = {}) {
   const m = LOCAL_TIME.exec(value);
   if (!m || !validCalendarDate(value) || Number(m[5]) > 59 || Number(m[6] || 0) > 59 || Number(m[1]) < 100) return { error: 'неверная дата' };
   const [y, month, day, h, min, sec] = m.slice(1).map((v) => Number(v || 0));
   const utc = Date.UTC(y, month - 1, day, h, min, sec);
-  const offsets = new Set();
-  for (let minutes = -2880; minutes <= 2880; minutes += 30) offsets.add(new Date(utc + minutes * 60000).getTimezoneOffset());
-  const candidates = [...offsets].map((offset) => utc + offset * 60000).filter((ms) => {
-    const d = new Date(ms);
-    return d.getFullYear() === y && d.getMonth() === month - 1 && d.getDate() === day && d.getHours() === h && d.getMinutes() === min && d.getSeconds() === sec;
-  });
+  const { matches: candidates } = resolveWallTime(utc, zonedFormatter(timeZone));
   if (!candidates.length) return { error: 'такого местного времени нет из-за перевода часов; уточните время' };
-  if (candidates.length > 1) return { error: 'это местное время повторяется при переводе часов; укажите часовой пояс' };
+  if (candidates.length > 1) return { error: 'это местное время повторяется при переводе часов; укажите смещение от UTC' };
   return { ms: candidates[0] };
 }
 
@@ -72,6 +68,8 @@ function remindersTools(store, { now = () => new Date(), workspaceId = () => 'de
     if (!saved) return { status: 'failed', evidence: 'напоминания нет в файле' };
     if (saved.dueAt !== result.data.dueAt) return { status: 'failed', evidence: 'в файле другое время' };
     if (saved.text !== result.data.text) return { status: 'failed', evidence: 'в файле другой текст напоминания' };
+    if ((saved.repeat ?? null) !== (result.data.repeat ?? null) || saved.timeZone !== result.data.timeZone ||
+        saved.repeatAnchor !== result.data.repeatAnchor) return { status: 'failed', evidence: 'в файле другое расписание повтора' };
     if (saved.done) return { status: 'failed', evidence: 'напоминание уже отмечено выполненным' };
     return { status: 'confirmed', evidence: `напоминание сохранено на ${saved.dueAt}` };
   }
@@ -110,12 +108,14 @@ function remindersTools(store, { now = () => new Date(), workspaceId = () => 'de
 
   const remindAt = {
     name: 'remind_at',
-    description: 'Напомнить в указанный момент. Для местного времени компьютера: YYYY-MM-DDTHH:mm; либо ISO 8601 с часовым поясом. Если время не указано, сначала уточни его.',
+    description: 'Напомнить разово, по будням, еженедельно или ежемесячно. Укажи первый срок. Если время не указано, сначала уточни его.',
     risk: 'T0',
     parameters: {
       type: 'object',
       properties: {
-        at: { type: 'string', description: 'Местное время YYYY-MM-DDTHH:mm или ISO 8601 с часовым поясом' },
+        at: { type: 'string', description: 'Местное время YYYY-MM-DDTHH:mm в timeZone или по часам компьютера. ISO 8601 со смещением задаёт точный момент первого срока.' },
+        repeat: { type: 'string', enum: CALENDAR_REPEATS, description: 'weekdays — по будням, weekly — еженедельно, monthly — ежемесячно. Для разового опусти поле.' },
+        timeZone: { type: 'string', description: 'Часовой пояс IANA, например Europe/Berlin. По умолчанию используется часовой пояс компьютера, в том числе для повторов.' },
         text: { type: 'string', minLength: 1, maxLength: MAX_TEXT },
       },
       required: ['at', 'text'],
@@ -123,20 +123,32 @@ function remindersTools(store, { now = () => new Date(), workspaceId = () => 'de
     async run(args = {}) {
       try {
         const at = String(args.at ?? '').trim();
+        const { repeat, timeZone } = args;
+        if (repeat != null && !CALENDAR_REPEATS.includes(repeat)) return failWith('допустимый повтор: по будням, еженедельно или ежемесячно');
         let dueMs;
         if (LOCAL_TIME.test(at)) {
-          const local = resolveLocalTime(at);
+          const local = resolveLocalTime(at, { timeZone });
           if (local.error) return failWith(local.error);
           dueMs = local.ms;
-        } else if (ISO_WITH_ZONE.test(at)) dueMs = new Date(at).getTime();
-        else return failWith('нужна дата YYYY-MM-DDTHH:mm или ISO 8601 с часовым поясом');
+        } else if (ISO_WITH_ZONE.test(at)) {
+          if (timeZone !== undefined) zonedFormatter(timeZone);
+          dueMs = new Date(at).getTime();
+        } else return failWith('нужна дата YYYY-MM-DDTHH:mm или ISO 8601 с часовым поясом');
         if (!validCalendarDate(at) || Number.isNaN(dueMs)) return failWith('неверная дата');
         if (dueMs <= nowMs()) return failWith('время уже прошло');
-        const record = store.add({ text: args.text, dueAt: new Date(dueMs).toISOString(), repeat: null, workspaceId: space() });
+        const record = store.add({ text: args.text, dueAt: new Date(dueMs), repeat, timeZone, workspaceId: space() });
+        const data = { id: record.id, text: record.text, dueAt: record.dueAt };
+        if (record.repeat) {
+          Object.assign(data, { repeat: record.repeat, timeZone: record.timeZone, repeatAnchor: record.repeatAnchor });
+          const first = new Intl.DateTimeFormat('ru-RU', {
+            timeZone: record.timeZone, dateStyle: 'short', timeStyle: 'short',
+          }).format(new Date(record.dueAt));
+          return { ok: true, summary: `напомню ${REPEAT_LABELS[record.repeat]}, впервые ${first} (${record.timeZone})`, data };
+        }
         return {
           ok: true,
           summary: `напомню ${localDateTime(new Date(dueMs))} (местное время)`,
-          data: { id: record.id, text: record.text, dueAt: record.dueAt },
+          data,
         };
       } catch (err) {
         return fail(err);
@@ -152,7 +164,8 @@ function remindersTools(store, { now = () => new Date(), workspaceId = () => 'de
     parameters: { type: 'object', properties: {} },
     async run() {
       try {
-        const items = store.list({ workspaceId: space() }).map(({ id, text, dueAt, repeat }) => ({ id, text, dueAt, repeat }));
+        const items = store.list({ workspaceId: space() }).map(({ id, text, dueAt, repeat, timeZone }) =>
+          ({ id, text, dueAt, repeat, ...(timeZone ? { timeZone } : {}) }));
         return { ok: true, summary: `напоминаний: ${items.length}`, data: items };
       } catch (err) {
         return fail(err);

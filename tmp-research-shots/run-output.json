@@ -1,0 +1,48 @@
+
+[
+  {
+    "state": "running",
+    "research": true,
+    "open": false,
+    "label": "Ищу...",
+    "rawRows": 0,
+    "shimmer": "search-shimmer",
+    "dots": [
+      "search-dot",
+      "search-dot",
+      "search-dot"
+    ],
+    "height": 28
+  },
+  {
+    "state": "closed",
+    "open": false,
+    "label": "Источники · 6",
+    "sources": 6,
+    "rawRows": 0,
+    "technical": false,
+    "width": 137,
+    "height": 28
+  },
+  {
+    "state": "opened",
+    "open": true,
+    "visible": 6,
+    "titles": [
+      "Anthropic — Wikipedia",
+      "Anthropic — официальный сайт",
+      "Anthropic raises funding — Reuters",
+      "Dario Amodei — Britannica",
+      "AI safety research — arXiv",
+      "Constitutional AI — Anthropic"
+    ],
+    "rawRows": 0
+  },
+  {
+    "state": "closed-small"
+  },
+  {
+    "state": "opened-small",
+    "open": true
+  }
+]

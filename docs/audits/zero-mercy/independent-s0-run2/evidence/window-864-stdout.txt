@@ -1,0 +1,194 @@
+
+Фоновые задачи с моделью выключены: включает владелец настройкой backgroundModelRuns
+Error occurred in handler for 'approval:respond': Error: synthetic IPC failure
+    at D:\nox-release\docs\audits\zero-mercy\independent-s0-run2\evidence\window-harness.js:41:37
+    at Session.<anonymous> (node:electron/js2c/browser_init:1:119048)
+    at Session.emit (node:events:514:28)
+[
+ {
+  "id": "W1",
+  "scenario": "ZM-001: тот же callId=call_0, A разрешено, B — Escape",
+  "shown": "A: 210b2712-1391-4f06-bcff-a6c650ff85b5; B: f2ebf6a4-f0ae-42d8-91d8-54a47699fa5e; callId A/B: call_0/call_0",
+  "permissionId": "210b2712-1391-4f06-bcff-a6c650ff85b5 ≠ f2ebf6a4-f0ae-42d8-91d8-54a47699fa5e: true",
+  "decision": "A=once, B=Escape(reject)",
+  "ran": [
+   "W1-A.txt"
+  ],
+  "expectedRan": [
+   "W1-A.txt"
+  ],
+  "match": true,
+  "dialogClosedAfterEsc": true
+ },
+ {
+  "id": "W2",
+  "scenario": "двойной клик «Разрешить» на C, затем показан D",
+  "shown": "C 3285a1b8-9d28-4025-9e42-9102de665aa5, D 5e1a79f5-c8e9-4474-a532-ef5e16c7f15b",
+  "permissionId": "3285a1b8-9d28-4025-9e42-9102de665aa5",
+  "decision": "C=once×2 (один дошёл), D=reject",
+  "ran": [
+   "W1-A.txt",
+   "W2-C.txt"
+  ],
+  "expectedRan": [
+   "W1-A.txt",
+   "W2-C.txt"
+  ],
+  "match": true,
+  "dWrittenBeforeDecision": false,
+  "ipcCallsForC": 1
+ },
+ {
+  "id": "W3",
+  "scenario": "IPC упал до решения, затем повтор «Разрешить»",
+  "shown": "079932e2-0be6-48b7-96b0-5d7677f96e98",
+  "permissionId": "079932e2-0be6-48b7-96b0-5d7677f96e98",
+  "decision": "once (сбой) → once",
+  "ran": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt"
+  ],
+  "expectedRan": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt"
+  ],
+  "match": true,
+  "stillShownAfterFail": true,
+  "ranAfterFail": false
+ },
+ {
+  "id": "W4",
+  "scenario": "ядро приняло решение, ответ IPC пришёл через 8 с",
+  "shown": "1889c23f-a68b-4d1f-9f50-c7ab24631ff4",
+  "permissionId": "1889c23f-a68b-4d1f-9f50-c7ab24631ff4",
+  "decision": "once",
+  "ran": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt",
+   "W4-F.txt"
+  ],
+  "expectedRan": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt",
+   "W4-F.txt"
+  ],
+  "match": true,
+  "closedBeforeIpcReply": true,
+  "ghostAfterLateReply": false
+ },
+ {
+  "id": "W5",
+  "scenario": "once завис 8 с, через 5 с владелец передумал — reject",
+  "shown": "069e13b5-1b54-404a-b759-ad5258a06a30",
+  "permissionId": "069e13b5-1b54-404a-b759-ad5258a06a30",
+  "decision": "once (завис) → reject",
+  "ran": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt",
+   "W4-F.txt"
+  ],
+  "expectedRan": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt",
+   "W4-F.txt"
+  ],
+  "match": true,
+  "reenabledAfter5s": true,
+  "ipc": [
+   "ipc-in:once:",
+   "ipc-in:reject:",
+   "ipc-core:reject:{\"ok\":true}",
+   "ipc-core:once:{\"ok\":false,\"reason\":\"запрос уже неактуален\"}"
+  ]
+ },
+ {
+  "id": "W6",
+  "scenario": "стоп хода во время подтверждения, потом поздний once",
+  "shown": "41e1d5b7-5554-4809-9621-2237d0af294b",
+  "permissionId": "41e1d5b7-5554-4809-9621-2237d0af294b",
+  "decision": "stop → once (поздний)",
+  "ran": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt",
+   "W4-F.txt"
+  ],
+  "expectedRan": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt",
+   "W4-F.txt"
+  ],
+  "match": true,
+  "dialogClosed": true,
+  "lateAnswer": {
+   "ok": false,
+   "reason": "запрос уже неактуален"
+  }
+ },
+ {
+  "id": "W7",
+  "scenario": "окно закрыто (в трей) во время подтверждения, 32 с",
+  "shown": "ae6f4861-898b-4624-9037-808a17f6c306",
+  "permissionId": "ae6f4861-898b-4624-9037-808a17f6c306",
+  "decision": "нет ответа → автоотмена",
+  "ran": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt",
+   "W4-F.txt"
+  ],
+  "expectedRan": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt",
+   "W4-F.txt"
+  ],
+  "match": true,
+  "dialogOpenAfterReopen": false,
+  "closedEvent": true
+ },
+ {
+  "id": "W8",
+  "scenario": "перезагрузка окна во время подтверждения",
+  "shown": "b6ff0757-e3cd-4b9b-b275-3ea09ad67e77",
+  "permissionId": "b6ff0757-e3cd-4b9b-b275-3ea09ad67e77",
+  "decision": "нет кнопок после перезагрузки → автоотмена → поздний once",
+  "ran": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt",
+   "W4-F.txt"
+  ],
+  "expectedRan": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt",
+   "W4-F.txt"
+  ],
+  "match": true,
+  "cardRestoredAfterReload": false,
+  "lateAnswer": {
+   "ok": false,
+   "reason": "время на подтверждение вышло"
+  }
+ },
+ {
+  "id": "W9-pre",
+  "scenario": "выход с ожидающим подтверждением",
+  "shown": "73969c92-d89d-45cb-8462-9cb93563901b",
+  "ran": [
+   "W1-A.txt",
+   "W2-C.txt",
+   "W3-E.txt",
+   "W4-F.txt"
+  ]
+ }
+]
+ROOT=C:\Users\abdut\AppData\Local\Temp\zm-run2-win-yy4mPf

@@ -441,6 +441,15 @@ body[data-view="mcp"] .mcp-target {
 body[data-view="mcp"] .mcp-line { font: 400 12px/16px var(--nox-font); color: var(--nox-text-2); overflow-wrap: anywhere; }
 body[data-view="mcp"] .mcp-line-error { color: var(--nox-err); }
 body[data-view="mcp"] .mcp-line-warn { color: var(--nox-warn); }
+/* Права до включения: одна строка под состоянием, без рамок и лишнего шума. */
+body[data-view="mcp"] .mcp-rights {
+  font: 400 11px/15px var(--nox-font);
+  color: var(--nox-text-3);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 body[data-view="mcp"] .mcp-caps {
   font: 400 11px/15px var(--nox-font);
   color: var(--nox-text-3);
@@ -662,6 +671,13 @@ body[data-view="mcp"] .mcp-popular-name {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Строка «имя + состояние»: в каталоге видно «Предложено», а не выдуманное подключение. */
+body[data-view="mcp"] .mcp-popular-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+body[data-view="mcp"] .mcp-popular-head .mcp-popular-name { flex: 1 1 auto; min-width: 0; }
+body[data-view="mcp"] .mcp-popular-head .mcp-pill { height: 18px; padding: 0 7px; font-size: 10px; flex: none; }
+/* В плитках ширина узкая: имя и состояние друг под другом, иначе имя ломается по буквам. */
+#mcpPage[data-collection-view="icons"] .mcp-popular-head { flex-direction: column; align-items: center; gap: 4px; }
+#mcpPage[data-collection-view="icons"] .mcp-popular-head .mcp-popular-name { flex: 0 0 auto; width: 100%; }
 body[data-view="mcp"] .mcp-popular-desc {
   font: 400 12px/16px var(--nox-font);
   color: var(--nox-text-3);
@@ -826,6 +842,11 @@ body[data-view="mcp"] .mcp-dialog-error [data-icon] svg { width: 14px; height: 1
 body[data-view="mcp"] .mcp-detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 body[data-view="mcp"] .mcp-detail-name { font: 600 16px/22px var(--nox-font); color: var(--nox-text-1); overflow-wrap: anywhere; min-width: 0; }
 body[data-view="mcp"] .mcp-detail-meta { font: 400 11px/15px var(--nox-font); color: var(--nox-text-3); overflow-wrap: anywhere; }
+/* Состояние словами под шапкой: подключается/выключен/ошибка — текстом, а не только цветом. */
+body[data-view="mcp"] .mcp-detail-status { font: 400 12px/17px var(--nox-font); color: var(--nox-text-2); overflow-wrap: anywhere; }
+body[data-view="mcp"] .mcp-detail-status[data-group="error"] { color: var(--nox-err); }
+body[data-view="mcp"] .mcp-detail-status[data-group="connected"] { color: var(--nox-text-1); }
+body[data-view="mcp"] .mcp-rights-scope { color: var(--nox-text-1); }
 body[data-view="mcp"] .mcp-target-box {
   display: flex;
   align-items: center;

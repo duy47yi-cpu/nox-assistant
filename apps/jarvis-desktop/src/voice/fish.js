@@ -25,8 +25,10 @@ const PLAY_TIMEOUT_MS = 2 * 60 * 1000;
 const PLAY_SCRIPT = [
   'Add-Type -AssemblyName PresentationCore,WindowsBase',
   '$p = New-Object System.Windows.Media.MediaPlayer',
-  '$ppVolume = 1.0; [void][double]::TryParse([string]$env:JARVIS_MP3_VOLUME, [ref]$ppVolume)',
-  '$ppRate = 1.0; [void][double]::TryParse([string]$env:JARVIS_MP3_RATE, [ref]$ppRate)',
+  '$culture = [System.Globalization.CultureInfo]::InvariantCulture',
+  '$number = [System.Globalization.NumberStyles]::Float',
+  '$ppVolume = 1.0; [void][double]::TryParse([string]$env:JARVIS_MP3_VOLUME, $number, $culture, [ref]$ppVolume)',
+  '$ppRate = 1.0; [void][double]::TryParse([string]$env:JARVIS_MP3_RATE, $number, $culture, [ref]$ppRate)',
   'if ($ppVolume -lt 0) { $ppVolume = 0 }',
   'if ($ppVolume -gt 1) { $ppVolume = 1 }',
   'if ($ppRate -lt 0.5) { $ppRate = 0.5 }',

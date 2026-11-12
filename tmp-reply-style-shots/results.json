@@ -1,0 +1,139 @@
+
+[
+  {
+    "style": "rich",
+    "view": "nox",
+    "math": 3,
+    "blocks": 2,
+    "fracs": 6,
+    "strong": 5,
+    "rawDollar": true,
+    "leftover": false,
+    "select": "rich",
+    "size": [
+      1200,
+      720
+    ],
+    "promptHasStyle": true,
+    "file": "D:\\nox-release\\tmp-reply-style-shots\\reply-style-nox-rich-1200x720.png"
+  },
+  {
+    "style": "rich",
+    "view": "nox",
+    "math": 3,
+    "blocks": 2,
+    "fracs": 6,
+    "strong": 5,
+    "rawDollar": true,
+    "leftover": false,
+    "select": "rich",
+    "size": [
+      864,
+      520
+    ],
+    "promptHasStyle": true,
+    "file": "D:\\nox-release\\tmp-reply-style-shots\\reply-style-nox-rich-864x520.png"
+  },
+  {
+    "style": "plain",
+    "view": "nox",
+    "math": 3,
+    "blocks": 2,
+    "fracs": 6,
+    "strong": 5,
+    "rawDollar": true,
+    "leftover": false,
+    "select": "plain",
+    "size": [
+      1200,
+      720
+    ],
+    "promptHasStyle": true,
+    "file": "D:\\nox-release\\tmp-reply-style-shots\\reply-style-nox-plain-1200x720.png"
+  },
+  {
+    "style": "plain",
+    "view": "nox",
+    "math": 3,
+    "blocks": 2,
+    "fracs": 6,
+    "strong": 5,
+    "rawDollar": true,
+    "leftover": false,
+    "select": "plain",
+    "size": [
+      864,
+      520
+    ],
+    "promptHasStyle": true,
+    "file": "D:\\nox-release\\tmp-reply-style-shots\\reply-style-nox-plain-864x520.png"
+  },
+  {
+    "style": "notes",
+    "view": "nox",
+    "math": 3,
+    "blocks": 2,
+    "fracs": 6,
+    "strong": 5,
+    "rawDollar": true,
+    "leftover": false,
+    "select": "notes",
+    "size": [
+      1200,
+      720
+    ],
+    "promptHasStyle": true,
+    "file": "D:\\nox-release\\tmp-reply-style-shots\\reply-style-nox-notes-1200x720.png"
+  },
+  {
+    "style": "notes",
+    "view": "nox",
+    "math": 3,
+    "blocks": 2,
+    "fracs": 6,
+    "strong": 5,
+    "rawDollar": true,
+    "leftover": false,
+    "select": "notes",
+    "size": [
+      864,
+      520
+    ],
+    "promptHasStyle": true,
+    "file": "D:\\nox-release\\tmp-reply-style-shots\\reply-style-nox-notes-864x520.png"
+  },
+  {
+    "style": "rich",
+    "view": "dialog",
+    "math": 3,
+    "blocks": 2,
+    "fracs": 6,
+    "strong": 5,
+    "rawDollar": true,
+    "leftover": false,
+    "select": "rich",
+    "size": [
+      1200,
+      720
+    ],
+    "promptHasStyle": true,
+    "file": "D:\\nox-release\\tmp-reply-style-shots\\reply-style-dialog-rich-1200x720.png"
+  },
+  {
+    "style": "rich",
+    "view": "dialog",
+    "math": 3,
+    "blocks": 2,
+    "fracs": 6,
+    "strong": 5,
+    "rawDollar": true,
+    "leftover": false,
+    "select": "rich",
+    "size": [
+      864,
+      520
+    ],
+    "promptHasStyle": true,
+    "file": "D:\\nox-release\\tmp-reply-style-shots\\reply-style-dialog-rich-864x520.png"
+  }
+]

@@ -1,0 +1,254 @@
+
+Фоновые задачи с моделью выключены: включает владелец настройкой backgroundModelRuns
+[
+ {
+  "id": "N1",
+  "scenario": "R4c: A истёк, B того же вида в очереди; клик «Разрешить», нацеленный на A; потом B открыт и подтверждён отдельно",
+  "newRequestKeptOffA": true,
+  "closedEventToClickMs": 80,
+  "dialogAtClick": "закрыт (gate)",
+  "elementUnderCursor": "approvalDialog",
+  "ipcForBFromClick": [],
+  "bDecisionByClick": null,
+  "dialogAfterClick": {
+   "gate": true,
+   "current": null
+  },
+  "later": {
+   "shownB": true,
+   "buttonsRightAfterOpen": [
+    "reject:on",
+    "session:off",
+    "once:off"
+   ],
+   "armedLater": true,
+   "decision": "once"
+  },
+  "pass": true,
+  "ranNow": [
+   "N1-X.txt"
+  ],
+  "closes": [
+   {
+    "t": 1794402323936,
+    "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+   },
+   {
+    "t": 1794402323945,
+    "ev": "close"
+   }
+  ]
+ },
+ {
+  "id": "N2",
+  "scenario": "фокус на «Разрешить» у A, A истёк, Enter; B не должен быть одобрен",
+  "dialogAtKey": "закрыт (gate)",
+  "afterEnter": {
+   "gate": false,
+   "current": "B",
+   "buttons": [
+    "reject:on",
+    "session:on",
+    "once:on"
+   ]
+  },
+  "ipcForB": [],
+  "bDecisionByEnter": null,
+  "bFinal": "reject",
+  "pass": true,
+  "ranNow": [
+   "N1-X.txt"
+  ],
+  "closes": [
+   {
+    "t": 1794402356801,
+    "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+   },
+   {
+    "t": 1794402356814,
+    "ev": "close"
+   }
+  ]
+ },
+ {
+  "id": "N3",
+  "scenario": "двойной клик «Разрешить» у A при ждущем B; потом B отдельно",
+  "ipcForA": [
+   "once"
+  ],
+  "afterDouble": {
+   "gate": true,
+   "current": null,
+   "buttons": []
+  },
+  "bDecisionByDouble": null,
+  "later": {
+   "shownB": true,
+   "buttonsRightAfterOpen": [
+    "reject:on",
+    "session:off",
+    "once:off"
+   ],
+   "armedLater": true,
+   "decision": "once"
+  },
+  "pass": true,
+  "ranNow": [
+   "N1-X.txt",
+   "N3-A.txt",
+   "N3-X.txt"
+  ],
+  "closes": [
+   {
+    "t": 1794402360673,
+    "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+   },
+   {
+    "t": 1794402360685,
+    "ev": "close"
+   }
+  ]
+ },
+ {
+  "id": "N4",
+  "scenario": "нажатие мыши начато на A, отпущено после истечения A",
+  "dialogAtUp": "закрыт (gate)",
+  "ipcForB": [],
+  "bDecisionByRelease": null,
+  "pass": true,
+  "ranNow": [
+   "N1-X.txt",
+   "N3-A.txt",
+   "N3-X.txt"
+  ],
+  "closes": [
+   {
+    "t": 1794402396050,
+    "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at HTMLDialogElement.<anonymous> (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1863:16)"
+   },
+   {
+    "t": 1794402396058,
+    "ev": "close"
+   }
+  ]
+ },
+ {
+  "id": "N5",
+  "scenario": "Escape у A → «закрыт»; Escape → диалог закрыт, B ждёт; B истекает без ответа",
+  "ipcForA": [],
+  "gateShown": false,
+  "closedByEscape": true,
+  "bPendingAfterClose": true,
+  "bAfterClose": null,
+  "bFinal": "reject",
+  "ipcForB": [],
+  "pass": false,
+  "ranNow": [
+   "N1-X.txt",
+   "N3-A.txt",
+   "N3-X.txt"
+  ],
+  "closes": [
+   {
+    "t": 1794402415078,
+    "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at HTMLDialogElement.<anonymous> (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1863:16)"
+   },
+   {
+    "t": 1794402415090,
+    "ev": "close"
+   }
+  ]
+ },
+ {
+  "id": "N6",
+  "scenario": "B пришёл, когда A уже на экране; клик через 30 мс одобряет A; затем B открыт и отклонён мышью",
+  "dialogAtClick": "A",
+  "queueAtClick": "1 из 2",
+  "ipcForA": [
+   "once"
+  ],
+  "bDecisionByClick": null,
+  "afterA": {
+   "gate": true
+  },
+  "bButtons": [
+   "reject:on",
+   "session:off",
+   "once:off"
+  ],
+  "bFinal": "reject",
+  "pass": true,
+  "ranNow": [
+   "N1-X.txt",
+   "N3-A.txt",
+   "N3-X.txt",
+   "N6-A.txt"
+  ],
+  "closes": [
+   {
+    "t": 1794402446489,
+    "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at refreshApproval (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1722:32) |     at approvalDrop (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1589:5) |     at onEvent (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:3190:9)"
+   },
+   {
+    "t": 1794402446502,
+    "ev": "close"
+   }
+  ]
+ },
+ {
+  "id": "N7",
+  "scenario": "ядро: «once»/«session» для B без токена и с токеном показа A",
+  "core": {
+   "noToken": {
+    "ok": false,
+    "reason": "этот запрос сейчас не показан в окне — откройте его заново"
+   },
+   "foreign": {
+    "ok": false,
+    "reason": "этот запрос сейчас не показан в окне — откройте его заново"
+   },
+   "sessionForeign": {
+    "ok": false,
+    "reason": "этот запрос сейчас не показан в окне — откройте его заново"
+   }
+  },
+  "bDecisionByCore": null,
+  "pass": true,
+  "ranNow": [
+   "N1-X.txt",
+   "N3-A.txt",
+   "N3-X.txt",
+   "N6-A.txt"
+  ],
+  "closes": [
+   {
+    "t": 1794402449687,
+    "stack": "    at HTMLDialogElement.close (<anonymous>:2:143) |     at HTMLDialogElement.<anonymous> (file:///D:/nox-release/apps/jarvis-desktop/renderer/app.js:1863:16)"
+   },
+   {
+    "t": 1794402449696,
+    "ev": "close"
+   }
+  ]
+ },
+ {
+  "id": "N8",
+  "scenario": "перезагрузка окна, восстановленная карточка, «Разрешить»",
+  "restored": true,
+  "armed": true,
+  "pass": true,
+  "ranNow": [
+   "N1-X.txt",
+   "N3-A.txt",
+   "N3-X.txt",
+   "N6-A.txt",
+   "N8-A.txt"
+  ],
+  "closes": []
+ }
+]
+Error occurred in handler for 'chat:list': TypeError: Object has been destroyed
+    at fromWindow (D:\nox-release\apps\jarvis-desktop\main.js:1418:47)
+    at D:\nox-release\apps\jarvis-desktop\main.js:2052:8
+    at Session.<anonymous> (node:electron/js2c/browser_init:1:119048)
+    at Session.emit (node:events:514:28)

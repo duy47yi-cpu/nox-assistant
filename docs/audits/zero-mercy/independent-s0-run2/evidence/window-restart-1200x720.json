@@ -1,0 +1,22 @@
+{
+  "root": "C:\\Users\\abdut\\AppData\\Local\\Temp\\zm-run2-win-yVYy1W",
+  "size": [
+    1200,
+    720
+  ],
+  "results": [
+    {
+      "id": "W9",
+      "scenario": "перезапуск того же профиля после выхода с открытым подтверждением W9-K",
+      "dialogOpen": false,
+      "ran": [
+        "W1-A.txt",
+        "W2-C.txt",
+        "W3-E.txt",
+        "W4-F.txt"
+      ],
+      "match": true
+    }
+  ],
+  "log": []
+}

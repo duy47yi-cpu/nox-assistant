@@ -1,0 +1,100 @@
+{
+  "format": "nox.commands",
+  "version": 1,
+  "schemaVersion": 2,
+  "exportedAt": "2026-11-10T17:03:22.158Z",
+  "commands": [
+    {
+      "schemaVersion": 2,
+      "name": "Пятничный отчёт",
+      "phrases": [
+        "пятничный отчёт"
+      ],
+      "optionalPhrases": [
+        "подготовь"
+      ],
+      "steps": [
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "excel"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1000
+          }
+        },
+        {
+          "tool": "speak",
+          "args": {
+            "text": "Отчёт готов"
+          }
+        }
+      ],
+      "enabled": true,
+      "hotkey": null,
+      "folder": "Работа",
+      "collections": [
+        "отчёты"
+      ],
+      "origin": "imported"
+    },
+    {
+      "schemaVersion": 2,
+      "name": "Встреча через час",
+      "phrases": [
+        "напомни о встрече"
+      ],
+      "optionalPhrases": [
+        "напомни"
+      ],
+      "steps": [
+        {
+          "tool": "speak",
+          "args": {
+            "text": "Встреча через час"
+          }
+        }
+      ],
+      "enabled": true,
+      "hotkey": null,
+      "folder": "Работа",
+      "collections": [],
+      "origin": "imported"
+    },
+    {
+      "schemaVersion": 2,
+      "name": "Созвон",
+      "phrases": [
+        "созвон",
+        "начни созвон",
+        "видеозвонок"
+      ],
+      "optionalPhrases": [
+        "открой",
+        "запусти"
+      ],
+      "steps": [
+        {
+          "tool": "app_open",
+          "args": {
+            "name": "teams"
+          }
+        },
+        {
+          "tool": "wait",
+          "args": {
+            "ms": 1200
+          }
+        }
+      ],
+      "enabled": true,
+      "hotkey": null,
+      "folder": "Работа",
+      "collections": [],
+      "origin": "imported"
+    }
+  ]
+}

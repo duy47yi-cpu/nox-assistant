@@ -1,0 +1,113 @@
+{
+  "mode": "restart-read",
+  "pid": 25412,
+  "readyMs": 2555.3145000000004,
+  "electron": "44.9.3",
+  "chromium": "152.0.7977.167",
+  "initialTheme": {
+    "theme": null,
+    "accent": null,
+    "look": null,
+    "resolved": "dark",
+    "systemLight": false,
+    "bg": "#14120E",
+    "appBg": "rgb(15, 15, 16)"
+  },
+  "restart": {
+    "modelCalls": 0,
+    "ui": {
+      "dialog": false,
+      "pendingRows": 0,
+      "lastChat": "С чего начнём?"
+    },
+    "fileExists": false,
+    "journal": [],
+    "turns": [
+      {
+        "ts": "2026-11-10T17:59:52.725Z",
+        "kind": "model",
+        "turn": "0d0ff4d8",
+        "round": 1,
+        "messages": 2,
+        "tools": 126,
+        "ms": 18,
+        "ok": true,
+        "requestChars": 73420,
+        "promptTokens": null,
+        "cachedTokens": null,
+        "completionTokens": null,
+        "reasoningTokens": null,
+        "reasoningChars": 0,
+        "reasoning": null,
+        "toolCalls": [
+          "workspace_write"
+        ],
+        "answerChars": 0
+      },
+      {
+        "ts": "2026-11-10T17:59:52.728Z",
+        "kind": "tool_start",
+        "turn": "0d0ff4d8",
+        "round": 1,
+        "callId": "audit-restart-unapproved",
+        "name": "workspace_write",
+        "risk": "T1"
+      }
+    ],
+    "deals": {
+      "waiting": [
+        {
+          "ts": "2026-11-10T17:59:54.177Z",
+          "ref": "call:audit-restart-unapproved",
+          "title": "workspace_write",
+          "source": "interrupted",
+          "state": "waiting",
+          "reason": "вызов прерван перезапуском, результат неизвестен",
+          "due": null,
+          "since": "2026-11-10T17:59:52.728Z",
+          "cleared": false
+        }
+      ],
+      "failed": [
+        {
+          "ts": "2026-11-10T17:59:54.176Z",
+          "ref": "turn:2c2d70c6",
+          "title": "Подготовь пробную запись для проверки перезапуска.",
+          "source": "turn",
+          "state": "failed",
+          "reason": "ход прерван перезапуском, результат неизвестен",
+          "due": null,
+          "since": "2026-11-10T17:59:54.175Z",
+          "cleared": false
+        }
+      ],
+      "overdue": [],
+      "stale": [],
+      "unverified": [],
+      "started": [],
+      "promised": []
+    }
+  },
+  "processes": [
+    {
+      "type": "Browser",
+      "cpuPercent": 0,
+      "workingSetKiB": 160064
+    },
+    {
+      "type": "GPU",
+      "cpuPercent": 0,
+      "workingSetKiB": 161844
+    },
+    {
+      "type": "Utility",
+      "cpuPercent": 0,
+      "workingSetKiB": 101536
+    },
+    {
+      "type": "Tab",
+      "cpuPercent": 0,
+      "workingSetKiB": 149196
+    }
+  ]
+}

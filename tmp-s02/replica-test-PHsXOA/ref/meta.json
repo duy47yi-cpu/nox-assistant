@@ -1,0 +1,47 @@
+{
+  "tool": "replica",
+  "version": 1,
+  "kind": "url",
+  "source": "file:///D:/nox-release/apps/jarvis-desktop/skills/replica/scripts/test/fixtures/ref.html",
+  "level": "faithful",
+  "captured": "2026-11-11T10:19:41.803Z",
+  "browser": "157.0.8103.40",
+  "opts": {
+    "selector": null,
+    "viewports": [
+      {
+        "width": 1440,
+        "height": 900
+      },
+      {
+        "width": 390,
+        "height": 844
+      }
+    ],
+    "action": "load",
+    "motion": 1000,
+    "fps": 30,
+    "settle": 2500,
+    "scheme": "light",
+    "hide": null,
+    "wait": null,
+    "dpr": 1,
+    "crop": null,
+    "start": null,
+    "end": null
+  },
+  "roots": {
+    "1440x900": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    "390x844": {
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 856
+    }
+  }
+}

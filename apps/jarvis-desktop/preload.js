@@ -7,6 +7,21 @@ contextBridge.exposeInMainWorld('jarvis', {
   stop: () => ipcRenderer.invoke('agent:stop'),
   showMain: () => ipcRenderer.invoke('window:showMain'),
   closeMini: () => ipcRenderer.invoke('mini:close'),
+  resizeQuick: (height) => ipcRenderer.invoke('quick:resize', height),
+  quickHotkey: () => ipcRenderer.invoke('quick:hotkey'),
+  setQuickHotkey: (key) => ipcRenderer.invoke('quick:setHotkey', String(key)),
+  onQuickShown: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('quick:shown', listener);
+    return () => ipcRenderer.removeListener('quick:shown', listener);
+  },
+  // Диктовка в поле другой программы: действия окна-подсказки (state, insert, cancel, copy) и его состояние.
+  fieldDictation: (action) => ipcRenderer.invoke('field-dictation:act', String(action)),
+  onFieldDictation: (callback) => {
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('field-dictation:state', listener);
+    return () => ipcRenderer.removeListener('field-dictation:state', listener);
+  },
   setWindowBackground: (color) => ipcRenderer.invoke('window:setBackground', String(color)),
   windowControl: (action) => ipcRenderer.invoke('window:control', String(action)),
   getState: () => ipcRenderer.invoke('state:get'),
@@ -74,6 +89,11 @@ contextBridge.exposeInMainWorld('jarvis', {
   saveCommand: (cmd) => ipcRenderer.invoke('commands:save', cmd),
   deleteCommand: (id) => ipcRenderer.invoke('commands:delete', id),
   runCommand: (id) => ipcRenderer.invoke('commands:run', id),
+  updateCommandTriggers: (id, triggers) => ipcRenderer.invoke('commands:triggers-update', { id, triggers }),
+  getCommandLaunches: (filters) => ipcRenderer.invoke('commands:launch-overview', filters),
+  triggerCommandLaunch: (payload) => ipcRenderer.invoke('commands:trigger', payload),
+  fireCommandEvent: (payload) => ipcRenderer.invoke('commands:fire-event', payload),
+  clearCommandLaunchLog: (commandId) => ipcRenderer.invoke('commands:launch-clear', { commandId }),
   exportCommands: () => ipcRenderer.invoke('commands:export'),
   pickCommandsImport: () => ipcRenderer.invoke('commands:import-pick'),
   applyCommandsImport: (token, confirm) => ipcRenderer.invoke('commands:import-apply', token, confirm === true),
@@ -99,6 +119,9 @@ contextBridge.exposeInMainWorld('jarvis', {
   desksResizeWidget: (deskId, widgetId, w, h) => ipcRenderer.invoke('desks:resize-widget', deskId, widgetId, w, h),
   desksUpdateWidget: (deskId, widgetId, patch) => ipcRenderer.invoke('desks:update-widget', deskId, widgetId, patch),
   desksRemoveWidget: (deskId, widgetId) => ipcRenderer.invoke('desks:remove-widget', deskId, widgetId),
+  calendarState: () => ipcRenderer.invoke('calendar:state'),
+  calendarSetSource: (payload) => ipcRenderer.invoke('calendar:setSource', payload),
+  calendarPickFile: () => ipcRenderer.invoke('calendar:pickFile'),
   clipboardHistoryState: () => ipcRenderer.invoke('clipboard-history:state'),
   clipboardHistoryList: (options) => ipcRenderer.invoke('clipboard-history:list', options),
   clipboardHistoryRemove: (id) => ipcRenderer.invoke('clipboard-history:remove', id),

@@ -1,0 +1,95 @@
+{
+  "activeId": "9f7d2ea2-5f93-4a86-adec-5ece1944c671",
+  "chats": [
+    {
+      "id": "9f7d2ea2-5f93-4a86-adec-5ece1944c671",
+      "history": [
+        {
+          "role": "user",
+          "content": "Подготовь пробную запись для проверки перезапуска."
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "audit-restart-unapproved",
+              "type": "function",
+              "function": {
+                "name": "workspace_write",
+                "arguments": "{\"path\":\"reports/audit-restart-unapproved.txt\",\"content\":\"Действие требует согласия.\\n\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "audit-restart-unapproved",
+          "content": "{\"ok\":true,\"summary\":\"записал\",\"data\":{\"path\":\"reports/audit-restart-unapproved.txt\",\"created\":true,\"backup\":null},\"verified\":\"confirmed\",\"evidence\":\"файл reports/audit-restart-unapproved.txt совпадает с записью\"}"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "audit-crash-wait",
+              "type": "function",
+              "function": {
+                "name": "wait",
+                "arguments": "{\"ms\":30000}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "audit-crash-wait",
+          "content": "{\"ok\":false,\"summary\":\"пауза от 0 до 10000 мс\",\"data\":{}}"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "audit-crash-wait",
+              "type": "function",
+              "function": {
+                "name": "wait",
+                "arguments": "{\"ms\":30000}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "audit-crash-wait",
+          "content": "{\"ok\":false,\"summary\":\"пауза от 0 до 10000 мс\",\"data\":{}}"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "audit-crash-wait",
+              "type": "function",
+              "function": {
+                "name": "wait",
+                "arguments": "{\"ms\":30000}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "audit-crash-wait",
+          "content": "{\"ok\":false,\"summary\":\"повтор: этот вызов уже выполнялся, его результат выше. Ответь по нему или скажи владельцу, что не получилось\"}"
+        },
+        {
+          "role": "assistant",
+          "content": "Не получилось довести дело до конца: инструмент возвращал один и тот же результат. Скажите, как поступить."
+        }
+      ],
+      "updatedAt": 1794411190849
+    }
+  ]
+}

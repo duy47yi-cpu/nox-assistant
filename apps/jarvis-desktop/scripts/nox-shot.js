@@ -6,6 +6,7 @@
 // Из папки apps/jarvis-desktop (ELECTRON_RUN_AS_NODE должен быть снят):
 //   electron scripts/nox-shot.js --out <png> [--width 1200] [--height 720]
 //     [--state full|empty] [--orb wire|nox] [--wait 2500] [--dump-geometry <json>]
+//     [--check-model-pick]
 //
 // --state full   — временный data/conversation.json в формате ChatBook ({activeId, chats}),
 //                  содержимое похоже на кадр muse/01-chat-full.png.
@@ -65,6 +66,7 @@ const dumpPath = dumpArg ? path.resolve(dumpArg) : '';
 const keepTemp = has('keep-temp');
 const keepBanner = has('keep-banner');
 const keepFocus = has('keep-focus');
+const checkModelPick = has('check-model-pick');
 // --look '{"theme":"starry","fx":"snow"}' — тема и ручки «Вида» (JarvisTheme.apply / setLook) перед снимком.
 // --own-bg — своя картинка на фоне: пробный рисунок проходит настоящий путь NoxBackdrop.set (IndexedDB окна).
 let lookArg = null;
@@ -307,6 +309,30 @@ async function readGeometry(win) {
   return geometry;
 }
 
+async function openModelPick(win) {
+  await win.webContents.executeJavaScript(`document.querySelector('#pickTrigger').click()`);
+  return win.webContents.executeJavaScript(`(async () => {
+    const trigger = document.querySelector('#pickTrigger');
+    const panel = document.querySelector('#pickPanel');
+    // Дожидаемся появления меню, прежде чем измерять его и проверять попадание мыши.
+    await Promise.all(panel.getAnimations().map((animation) => animation.finished));
+    const box = panel.getBoundingClientRect();
+    const chat = document.querySelector('#noxChat').getBoundingClientRect();
+    const inside = box.width > 0 && box.height > 0 &&
+      box.left >= Math.max(chat.left, 0) && box.right <= Math.min(chat.right, innerWidth) &&
+      box.top >= Math.max(chat.top, 0) && box.bottom <= Math.min(chat.bottom, innerHeight);
+    const options = [...panel.querySelectorAll('label.seg-opt')].map((label) => {
+      const rect = label.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      return { value: label.querySelector('input').value, reachable: label.contains(hit) };
+    });
+    return {
+      inside, options, expanded: trigger.getAttribute('aria-expanded') === 'true',
+      rightOverflow: box.right - Math.min(chat.right, innerWidth),
+    };
+  })()`);
+}
+
 async function capture(win) {
   // Окно создано скрытым или сразу показанным — показываем его без захвата фокуса,
   // чтобы не мешать живому отладочному окну. content — то, что вернёт capturePage.
@@ -331,6 +357,7 @@ async function capture(win) {
   })()`).catch(() => null);
   await sleep(250);
   const geometry = await readGeometry(win);
+  const modelPick = checkModelPick ? await openModelPick(win) : undefined;
 
   const image = await win.webContents.capturePage();
   if (!image || image.isEmpty()) throw new Error('capturePage вернул пустой кадр');
@@ -354,6 +381,7 @@ async function capture(win) {
     noxGeometry: geometry && geometry.noxScreen ? geometry.noxScreen : null,
     geometryPath: dumpPath || null,
     geometry: geometry ? geometry.elements || null : null,
+    modelPick,
     consoleErrors,
   });
 }

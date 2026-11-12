@@ -1,0 +1,144 @@
+{
+  "mode": "system",
+  "pid": 30360,
+  "readyMs": 1033.6393,
+  "electron": "44.9.3",
+  "chromium": "152.0.7977.167",
+  "initialTheme": {
+    "theme": null,
+    "accent": null,
+    "look": null,
+    "resolved": "dark",
+    "systemLight": false,
+    "bg": "#14120E",
+    "appBg": "rgb(15, 15, 16)"
+  },
+  "nativeSwitch": [
+    {
+      "requested": "light",
+      "nativeDark": false,
+      "renderer": {
+        "theme": "system",
+        "accent": null,
+        "look": null,
+        "resolved": "light",
+        "systemLight": true,
+        "bg": "#F4F1EB",
+        "appBg": "rgb(15, 15, 16)"
+      }
+    },
+    {
+      "requested": "dark",
+      "nativeDark": true,
+      "renderer": {
+        "theme": "system",
+        "accent": null,
+        "look": null,
+        "resolved": "dark",
+        "systemLight": false,
+        "bg": "#14120E",
+        "appBg": "rgb(15, 15, 16)"
+      }
+    },
+    {
+      "requested": "light",
+      "nativeDark": false,
+      "renderer": {
+        "theme": "system",
+        "accent": null,
+        "look": null,
+        "resolved": "light",
+        "systemLight": true,
+        "bg": "#F4F1EB",
+        "appBg": "rgb(15, 15, 16)"
+      }
+    }
+  ],
+  "mediaEmulation": [
+    {
+      "requested": "light",
+      "journal": {
+        "theme": "system",
+        "accent": null,
+        "look": null,
+        "resolved": "light",
+        "systemLight": true,
+        "bg": "#F4F1EB",
+        "appBg": "color(srgb 0.956863 0.945098 0.921569)"
+      },
+      "nox": {
+        "theme": "system",
+        "accent": null,
+        "look": null,
+        "resolved": "light",
+        "systemLight": true,
+        "bg": "#F4F1EB",
+        "appBg": "rgb(15, 15, 16)"
+      }
+    },
+    {
+      "requested": "dark",
+      "journal": {
+        "theme": "system",
+        "accent": null,
+        "look": null,
+        "resolved": "dark",
+        "systemLight": false,
+        "bg": "#14120E",
+        "appBg": "color(srgb 0.0784314 0.0705882 0.054902)"
+      },
+      "nox": {
+        "theme": "system",
+        "accent": null,
+        "look": null,
+        "resolved": "dark",
+        "systemLight": false,
+        "bg": "#14120E",
+        "appBg": "rgb(15, 15, 16)"
+      }
+    },
+    {
+      "requested": "light",
+      "journal": {
+        "theme": "system",
+        "accent": null,
+        "look": null,
+        "resolved": "light",
+        "systemLight": true,
+        "bg": "#F4F1EB",
+        "appBg": "color(srgb 0.956863 0.945098 0.921569)"
+      },
+      "nox": {
+        "theme": "system",
+        "accent": null,
+        "look": null,
+        "resolved": "light",
+        "systemLight": true,
+        "bg": "#F4F1EB",
+        "appBg": "rgb(15, 15, 16)"
+      }
+    }
+  ],
+  "processes": [
+    {
+      "type": "Browser",
+      "cpuPercent": 0,
+      "workingSetKiB": 127396
+    },
+    {
+      "type": "GPU",
+      "cpuPercent": 0,
+      "workingSetKiB": 156528
+    },
+    {
+      "type": "Utility",
+      "cpuPercent": 0,
+      "workingSetKiB": 53488
+    },
+    {
+      "type": "Tab",
+      "cpuPercent": 0,
+      "workingSetKiB": 197488
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"ts":"2026-11-10T17:53:01.957Z","tool":"workspace_write","args":{"path":"reports/audit-record-refused.txt","content":"Этот фиктивный файл не должен появиться.\n"},"risk":"T1","mode":"ask","decision":"reject","ok":false,"summary":"отклонено","callId":"audit-record-refuse","runId":"1dfdeec2","step":1,"status":"failed","verified":null,"verifiedStatus":null,"evidence":null}

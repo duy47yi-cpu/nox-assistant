@@ -1,0 +1,10 @@
+[
+  {
+    "axis": "pixels",
+    "gain": 0.01,
+    "text": "**pixels** · region [1216,512 16×16] holds 85% of the differing pixels — no measured element explains it (image, icon, gradient, canvas or font rendering?). Look at `sheets/1440x900-hot1.png`.",
+    "vps": [
+      "1440x900"
+    ]
+  }
+]

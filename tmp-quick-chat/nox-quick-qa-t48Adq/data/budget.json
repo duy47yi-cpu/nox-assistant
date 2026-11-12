@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-12",
+  "timezone": "Asia/Dushanbe",
+  "spentUsd": 0.0635372,
+  "unknownCalls": 0,
+  "byTask": {},
+  "pending": [],
+  "calls": [
+    {
+      "ts": "2026-11-12T14:03:07.313Z",
+      "purpose": "warmup",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "costUsd": 8.000000000000001e-7,
+      "known": false
+    },
+    {
+      "ts": "2026-11-12T14:03:12.578Z",
+      "purpose": "chat",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "costUsd": 0.012663,
+      "known": false
+    },
+    {
+      "ts": "2026-11-12T14:03:13.429Z",
+      "purpose": "chat",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "costUsd": 0.012693,
+      "known": false
+    },
+    {
+      "ts": "2026-11-12T14:03:13.905Z",
+      "purpose": "chat",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "costUsd": 0.0127036,
+      "known": false
+    },
+    {
+      "ts": "2026-11-12T14:03:43.947Z",
+      "purpose": "chat",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "costUsd": 0.012733600000000001,
+      "known": false
+    },
+    {
+      "ts": "2026-11-12T14:03:46.432Z",
+      "purpose": "chat",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "costUsd": 0.012743200000000001,
+      "known": false
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+ AGENTS.md                                          |   24 +-
+ apps/jarvis-desktop/main.js                        |   61 +-
+ apps/jarvis-desktop/preload.js                     |    1 +
+ apps/jarvis-desktop/renderer/app.js                |  741 +++++++++----
+ apps/jarvis-desktop/renderer/connections.js        | 1153 +++++++++++++++++---
+ apps/jarvis-desktop/renderer/index.html            |  620 +++++++++--
+ apps/jarvis-desktop/renderer/model-pick.js         |    8 +
+ apps/jarvis-desktop/renderer/settings-nav.js       |  280 ++++-
+ apps/jarvis-desktop/src/agent/loop.js              |   14 +-
+ apps/jarvis-desktop/src/chats/book.js              |   20 +-
+ apps/jarvis-desktop/src/screen/agent.js            |   14 +-
+ apps/jarvis-desktop/tests/approvals.test.js        |   34 +
+ apps/jarvis-desktop/tests/chats.test.js            |   10 +
+ apps/jarvis-desktop/tests/connections-view.test.js |  650 ++++++++++-
+ apps/jarvis-desktop/tests/loop.test.js             |    8 +-
+ apps/jarvis-desktop/tests/screen-agent.test.js     |   15 +-
+ 16 files changed, 3037 insertions(+), 616 deletions(-)

@@ -796,7 +796,7 @@ async function qaConnPhase1Page(cfg) {
     const offPill = offCard ? String((offCard.querySelector('.mcp-pill') || {}).textContent || '').trim() : '';
     const offLine = offCard ? String((offCard.querySelector('.mcp-line') || {}).textContent || '').trim() : '';
     const offAction = offCard ? String((offCard.querySelector('.mcp-card-action, button') || {}).textContent || '').trim() : '';
-    const offOk = offPill === 'Выключен' && /выключ/i.test(offLine) && /Включить/i.test(offAction);
+    const offOk = offPill === 'Настроено' && /выключ/i.test(offLine) && /Включить/i.test(offAction);
     // Вернуть включённым: переключатель в открытых деталях в состоянии "выключен" — щёлкаем ещё раз.
     const sw = q('#mcpDetailsBody input.switch');
     if (sw) sw.click();
@@ -814,6 +814,27 @@ async function qaConnPhase1Page(cfg) {
     const onCard = cardByName('echo-check');
     const onAction = onCard ? String((onCard.querySelector('.mcp-card-action, button') || {}).textContent || '').trim() : '';
     return { ok: offOk && /Детали/i.test(onAction), detail: 'выкл: pill="' + offPill + '" line="' + offLine.slice(0, 60) + '" action="' + offAction + '"; вернули action="' + onAction + '"' };
+  });
+
+  // 20. Права до включения в деталях выключенного сервиса (М2).
+  await check('20. Детали выключенного сервиса: «Выключен» словами и «Разрешения до включения»', async () => {
+    const offCard = cardByName('off-service');
+    if (!offCard) return { ok: false, detail: 'нет off-service' };
+    offCard.click();
+    await until(() => visible(q('#mcpDetailsDialog')), 8000);
+    await sleep(250);
+    const bodyNode = q('#mcpDetailsBody') || {};
+    const body = String(bodyNode.textContent || '');
+    const status = String((q('#mcpDetailsBody .mcp-detail-status') || {}).textContent || '').trim();
+    const before = body.includes('Разрешения до включения');
+    const scope = /Что получит сервис/.test(body);
+    const hint = String((q('#mcpDetailsBody .mcp-toggle-hint') || {}).textContent || '').trim();
+    closeDialog('mcpDetailsDialog');
+    await sleep(250);
+    return {
+      ok: /Выключен/i.test(status) && before && scope && /недоступн/i.test(hint),
+      detail: 'статус="' + status.slice(0, 70) + '" до включения=' + before + ' права=' + scope + ' подсказка="' + hint + '"',
+    };
   });
 
   await check('8. Добавление: #mcpAddSubmit заблокирован до валидных данных, затем реальный qa-service подключается и удаляется через детали', async () => {
@@ -1094,6 +1115,21 @@ async function qaConnEmptyPage() {
     return { ok: emptyVisible && cards === 0 && popularRows === 10 && available === 7 && unavailable === 3, detail: 'заглушка=' + emptyVisible + ' карточек=' + cards + ' популярных=' + popularRows + ' доступны=' + available + ' не настроены=' + unavailable };
   });
 
+  // 19. Каталог не выдаёт запись за подключённый сервис (М2): все записи «Предложено», права заранее.
+  await check('19. Каталог без соединения: все записи «Предложено» и с правами заранее', async () => {
+    const rows = qa('#mcpPopularList .mcp-popular-row');
+    const proposed = rows.filter((row) => row.getAttribute('data-group') === 'proposed');
+    const pill = (row) => String((row.querySelector('.mcp-pill') || {}).textContent || '').trim();
+    const rights = (row) => String((row.querySelector('.mcp-popular-desc') || {}).textContent || '').trim();
+    const withPill = proposed.filter((row) => pill(row) === 'Предложено').length;
+    const withRights = proposed.filter((row) => rights(row).length > 10).length;
+    const pretend = rows.filter((row) => /Подключён/.test(pill(row))).length;
+    return {
+      ok: rows.length > 0 && proposed.length === rows.length && withPill === proposed.length && withRights === proposed.length && pretend === 0,
+      detail: 'строк=' + rows.length + ' предложено=' + proposed.length + ' с пилюлей=' + withPill + ' с правами=' + withRights + ' мнимых подключений=' + pretend,
+    };
+  });
+
   return { checks };
 }
 
@@ -1143,7 +1179,6 @@ async function runQa(win, ctx) {
   await sleep(400);
   const errors = consoleErrors.slice();
   checks.push({ name: '18. Ошибки консоли', ok: errors.length === 0, detail: errors.length ? errors.join(' | ').slice(0, 900) : 'нет' });
-
   const passed = checks.filter((c) => c.ok).length;
   return { passed, failed: checks.length - passed, checks };
 }

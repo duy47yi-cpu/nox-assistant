@@ -1,0 +1,223 @@
+diff --git a/apps/jarvis-desktop/main.js b/apps/jarvis-desktop/main.js
+index 3f35d73..d7ce0b9 100644
+--- a/apps/jarvis-desktop/main.js
++++ b/apps/jarvis-desktop/main.js
+@@ -3,6 +3,18 @@
+ // Точка входа Jarvis: трей, окно чата и связка агента с интерфейсом по контракту IPC.
+ // Приложение живёт в трее: закрытие окна его прячет, выход только из меню трея.
+ 
++// Приложение запускают и из терминала, и из скриптов проверок. Если вывод закрыли (консоль
++// закрылась, родительский процесс завершился, оборвался stdout), запись в консоль даёт EPIPE,
++// и Electron показывает диалог «A JavaScript error occurred in the main process». Это не ошибка
++// продукта: глушим только EPIPE, остальные ошибки вывода остаются видимыми как раньше.
++for (const stream of [process.stdout, process.stderr]) {
++  if (!stream || typeof stream.on !== 'function') continue;
++  stream.on('error', (err) => {
++    if (err && err.code === 'EPIPE') return;
++    throw err;
++  });
++}
++
+ const fs = require('fs');
+ const os = require('os');
+ const { spawn } = require('child_process');
+@@ -321,6 +333,8 @@ function saveConversation() {
+   if (!agent) return false;
+   try {
+     fs.mkdirSync(DATA_DIR, { recursive: true });
++    // Время последней работы с чатом: экран Nox делит список на «Сегодня» и «Ранее».
++    chats.touch();
+     // Картинки (поле image) в файл разговора не пишем: они большие и устаревают.
+     const data = JSON.stringify(chats.toJSON((h) => maskHistory(trimHistory(h).map(({ image, ...m }) => m))), null, 2);
+     // Через временный файл: в этом файле теперь все чаты, сбой записи не должен их потерять.
+@@ -2700,6 +2714,8 @@ ipcMain.handle('settings:get', (event) => {
+     memoryAuto: s.memoryAuto !== false,
+     // «Тише озвучивать очевидное» включено по умолчанию: выключается явным false.
+     terseReplies: s.terseReplies !== false,
++    // Режим «не спать» переживает перезапуск: без этого список снова показывал бы «Пока работает».
++    keepAwake: ['off', 'while-working', 'always'].includes(s.keepAwake) ? s.keepAwake : 'while-working',
+     musicService: SERVICES[s.musicService] ? s.musicService : null,
+     ownerBuild: OWNER_BUILD,
+     workspace: workspaceHub && workspaceHub.chat() ? workspaceHub.chat().root() : WORKSPACE,
+@@ -3518,12 +3534,20 @@ ipcMain.handle('dictation:state', (event) => (fromWindow(event)
+ ipcMain.handle('approval:respond', (event, id, decision) => {
+   if (!fromWindow(event)) return { ok: false };
+   try {
++    const pending = approvals.list().find((entry) => entry.id === id);
+     const ok = approvals.respond(id, decision);
+     // Ответ снимает статус «ждёт подтверждения»: задача снова выполняется (или отклонённый шаг остаётся в работе).
+     // Задачи с мандатом link.js пропускает: исполнитель снимает их статус сам, получив свой ответ.
+     if (ok && resolvedApproval(runtime.queue)) runtime.saveTasks(runtime.queue.list());
+     // Отменённое подтверждение (задача заблокирована, на паузе, отменена, завершена; стоп) не принимается: причина — окну.
+     if (!ok) return { ok, reason: approvals.closedReason(id) || 'запрос уже неактуален' };
++    // Сверяем очередь окна отдельным событием до ответа IPC: если обратный ответ потеряется,
++    // интерфейс всё равно узнает, что брокер принял решение и снял именно этот запрос.
++    emitToWindow({ type: 'approval_closed', id, approvalId: id,
++      ...(pending && pending.agentId ? { agentId: pending.agentId } : {}),
++      ...(pending && pending.runId ? { runId: pending.runId } : {}),
++      ...(pending && pending.callId ? { callId: pending.callId } : {}),
++      decision, cancelled: false });
+     return { ok };
+   } catch {
+     return { ok: false };
+@@ -3570,6 +3594,22 @@ ipcMain.handle('window:setBackground', (event, color) => {
+   return { ok: true };
+ });
+ 
++// Кнопки окна без системной рамки: используются и на экране Nox, и в шапке прежних разделов.
++ipcMain.handle('window:control', (event, action) => {
++  if (!fromWindow(event) || !win || win.isDestroyed()) return { ok: false };
++  try {
++    switch (String(action)) {
++      case 'minimize': win.minimize(); break;
++      case 'maximize': if (win.isMaximized()) win.unmaximize(); else win.maximize(); break;
++      case 'close': win.close(); break;
++      default: return { ok: false };
++    }
++    return { ok: true, maximized: win.isMaximized() };
++  } catch (err) {
++    return { ok: false, error: err && err.message ? err.message : String(err) };
++  }
++});
++
+ // Эффекты в Windows могут быть выключены, и окно тогда замирает. По настройке «Анимации» просим его двигаться всё равно.
+ async function applyMotion(contents) {
+   try {
+@@ -3611,17 +3651,23 @@ ipcMain.handle('mail:connect', async (event, options) => {
+ 
+ function createWindow() {
+   win = new BrowserWindow({
+-    width: 1280,
+-    height: 800,
+-    minWidth: 420,
+-    minHeight: 480,
++    // Экран Nox: 1200×720 по спецификации; окно без системной рамки, кнопки — в панели сферы.
++    width: 1200,
++    height: 720,
++    useContentSize: true,
++    // Узкий режим из дизайн-системы Nox: 864×520. На нём раздел «Команды» перестраивается
++    // (паки под списком, кнопки редактора в одну строку), а экран чата уже свёрстан под него.
++    minWidth: 864,
++    minHeight: 520,
+     show: false,
+-    title: 'Джарвис — Nox Assistant',
++    frame: false,
++    title: 'Nox Assistant',
+     icon: windowIcon(),
+     // Окно прозрачное: фон рисует страница (тема или прозрачность/радиус из «Вид»).
+     // Подложка окна не перекрывает скруглённые углы; при нулевых ручках страница всё равно закрашивает фон.
+     transparent: true,
+     backgroundColor: '#00000000',
++    hasShadow: true,
+     webPreferences: {
+       preload: path.join(__dirname, 'preload.js'),
+       contextIsolation: true,
+@@ -3636,6 +3682,11 @@ function createWindow() {
+   if (meterNotice) win.webContents.once('did-finish-load', () => sendToWindow({ type: 'task', status: null, message: meterNotice }));
+   applyMotion(win.webContents);
+   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
++  // Раньше приложение стартовало только в трее, и окно приходилось искать горячей клавишей.
++  // Первый экран Nox показываем сразу; трей и Ctrl+Alt+J по-прежнему сворачивают и открывают окно.
++  win.once('ready-to-show', () => {
++    if (!quitting && win && !win.isDestroyed()) win.show();
++  });
+   // Закрытие крестиком прячет окно в трей, а не завершает приложение.
+   win.on('close', (event) => {
+     if (!quitting) {
+diff --git a/apps/jarvis-desktop/preload.js b/apps/jarvis-desktop/preload.js
+index 7ad1a47..0baeeea 100644
+--- a/apps/jarvis-desktop/preload.js
++++ b/apps/jarvis-desktop/preload.js
+@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('jarvis', {
+   showMain: () => ipcRenderer.invoke('window:showMain'),
+   closeMini: () => ipcRenderer.invoke('mini:close'),
+   setWindowBackground: (color) => ipcRenderer.invoke('window:setBackground', String(color)),
++  windowControl: (action) => ipcRenderer.invoke('window:control', String(action)),
+   getState: () => ipcRenderer.invoke('state:get'),
+   tasksAttention: () => ipcRenderer.invoke('tasks:attention'),
+   accountState: () => ipcRenderer.invoke('account:state'),
+diff --git a/apps/jarvis-desktop/src/agent/loop.js b/apps/jarvis-desktop/src/agent/loop.js
+index 99fc60e..2e15cd2 100644
+--- a/apps/jarvis-desktop/src/agent/loop.js
++++ b/apps/jarvis-desktop/src/agent/loop.js
+@@ -262,6 +262,7 @@ class Agent {
+     this._unknownCalls = new Map(); // ключ вызова → имя: действия с неизвестным исходом в этом ходу, вслепую не повторяем
+     this._turn = null; // замеры текущего хода
+     this._emitFn = typeof emit === 'function' ? emit : () => {};
++    this._agentId = randomUUID();
+     this._controller = null; // AbortController идущего хода; null, если хода нет
+     this._pendingImages = []; // снимки от инструментов, которые ещё не попали в историю
+     // Прогресс запуска: runId = id хода (связывает turns.jsonl, журнал и события окна).
+@@ -836,7 +837,10 @@ class Agent {
+ 
+   async _askApproval(tool, call, signal, info = {}) {
+     if (!this.approvals) return 'reject';
+-    // id совпадает с id вызова: интерфейс сводит approval_request и tool_start в одну запись истории.
++    // ID модели не является ключом разрешения: модель может повторить его в другом вызове.
++    // Отдельный одноразовый ключ связывает ответ только с этим агентом, ходом и действием.
++    const callId = call.id;
++    const approvalId = randomUUID();
+     const note = this._policyNote(call);
+     // Причина без «undefined»: пустые части отбрасываются, а не склеиваются в текст с дырами.
+     const safeWords = (value) => (typeof value === 'string' && value.trim() && !/\bundefined\b/i.test(value) ? value.trim() : '');
+@@ -850,7 +854,11 @@ class Agent {
+     // Предпросмотр изменения (если инструмент умеет): окно покажет, что именно изменится, до кнопок.
+     const preview = this._preview(tool, call.args);
+     const payload = {
+-      id: call.id,
++      id: approvalId,
++      approvalId,
++      agentId: this._agentId,
++      callId,
++      ...(this._runId ? { runId: this._runId } : {}),
+       name: tool.name,
+       args: call.args,
+       risk: tool.risk,
+@@ -866,7 +874,7 @@ class Agent {
+     // Сначала регистрируем запрос, потом сообщаем UI: быстрый ответ не потеряется.
+     const waiting = this.approvals.request(payload);
+     // Отказ, тайм-аут и закрытие диалога приходят сюда как reject: действие не выполняется.
+-    const onAbort = () => this.approvals.respond(payload.id, 'reject');
++    const onAbort = () => this.approvals.respond(approvalId, 'reject');
+     if (signal.aborted) onAbort();
+     else signal.addEventListener('abort', onAbort, { once: true });
+     this._emit({
+diff --git a/apps/jarvis-desktop/src/screen/agent.js b/apps/jarvis-desktop/src/screen/agent.js
+index b2709cb..461fede 100644
+--- a/apps/jarvis-desktop/src/screen/agent.js
++++ b/apps/jarvis-desktop/src/screen/agent.js
+@@ -1,5 +1,7 @@
+ 'use strict';
+ 
++const { randomUUID } = require('crypto');
++
+ // Агент экрана: снимок → модель выбирает один шаг → шаг → проверка (verify) → свежий снимок → следующий шаг.
+ // Цикл, политика (decide), журнал и стоп — общие из Agent. Своё здесь: до 40 шагов на ход и обязательное
+ // подтверждение опасного шага (отправка, оплата, удаление, установка, Enter после ввода текста) — через общий
+@@ -146,9 +148,15 @@ class ScreenAgent extends Agent {
+   async _askDanger(tool, call, signal, info = {}) {
+     if (!this.approvals) return 'reject';
+     const label = dangerLabel(call.name, call.args);
++    const approvalId = randomUUID();
++    const callId = call.id;
+     const payload = {
+-      // id совпадает с id вызова: интерфейс сводит запрос и шаг в одну запись истории.
+-      id: call.id,
++      // Разрешение имеет одноразовый ключ, отдельно связанный с действием, ходом и экземпляром агента.
++      id: approvalId,
++      approvalId,
++      agentId: this._agentId,
++      callId,
++      ...(this._runId ? { runId: this._runId } : {}),
+       name: tool.name,
+       args: call.args,
+       risk: tool.risk,
+@@ -161,7 +169,7 @@ class ScreenAgent extends Agent {
+     });
+     // Сначала регистрируем запрос, потом сообщаем окну: быстрый ответ не потеряется.
+     const waiting = this.approvals.request(payload);
+-    const onAbort = () => this.approvals.respond(payload.id, 'reject');
++    const onAbort = () => this.approvals.respond(approvalId, 'reject');
+     if (signal.aborted) onAbort();
+     else signal.addEventListener('abort', onAbort, { once: true });
+     this._emit({

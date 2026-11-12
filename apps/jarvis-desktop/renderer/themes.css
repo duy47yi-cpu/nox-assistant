@@ -405,20 +405,52 @@ select.input option {
 .theme-fx::before, .theme-fx::after { content: ""; position: absolute; inset: 0; }
 html[data-fx] .theme-fx { display: block; }
 
+/* Цвета звёзд и лунного света берутся из текущей темы: на тёмных — мягкое свечение, на светлых — плотнее. */
+[data-theme] {
+  --fx-star-1: color-mix(in srgb, var(--text) 85%, transparent);
+  --fx-star-2: color-mix(in srgb, color-mix(in srgb, var(--warn) 45%, var(--text)) 80%, transparent);
+  --fx-star-3: color-mix(in srgb, color-mix(in srgb, var(--hue) 60%, var(--text)) 70%, transparent);
+  --fx-star-4: color-mix(in srgb, var(--text) 80%, transparent);
+  --fx-star-5: color-mix(in srgb, color-mix(in srgb, var(--warn) 35%, var(--text)) 70%, transparent);
+  --fx-star-base: .55;
+  --fx-star-alt: .5;
+  --fx-twinkle-from: .2;
+  --fx-twinkle-to: .6;
+  --fx-moon-tint: color-mix(in srgb, var(--hue) 45%, var(--text));
+  --fx-moon-core: color-mix(in srgb, var(--fx-moon-tint) 22%, transparent);
+  --fx-moon-halo: color-mix(in srgb, var(--fx-moon-tint) 11%, transparent);
+  --fx-moon-beam: color-mix(in srgb, var(--fx-moon-tint) 6%, transparent);
+}
+:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"]) {
+  --fx-star-1: color-mix(in srgb, var(--text) 90%, transparent);
+  --fx-star-2: color-mix(in srgb, color-mix(in srgb, var(--warn) 65%, var(--text)) 88%, transparent);
+  --fx-star-3: color-mix(in srgb, color-mix(in srgb, var(--hue) 75%, var(--text)) 85%, transparent);
+  --fx-star-4: color-mix(in srgb, var(--hue) 85%, transparent);
+  --fx-star-5: color-mix(in srgb, color-mix(in srgb, var(--warn) 55%, var(--text)) 85%, transparent);
+  --fx-star-base: .78;
+  --fx-star-alt: .72;
+  --fx-twinkle-from: .48;
+  --fx-twinkle-to: .88;
+  --fx-moon-tint: color-mix(in srgb, var(--hue) 72%, var(--text));
+  --fx-moon-core: color-mix(in srgb, var(--fx-moon-tint) 22%, transparent);
+  --fx-moon-halo: color-mix(in srgb, var(--fx-moon-tint) 12%, transparent);
+  --fx-moon-beam: color-mix(in srgb, var(--fx-moon-tint) 15%, transparent);
+}
+
 html[data-fx="stars"] .theme-fx::before {
   background:
-    radial-gradient(circle at 20% 30%, #FFFFFFD9 0 1px, transparent 1.7px) 0 0 / 173px 151px,
-    radial-gradient(circle at 70% 65%, #FFE7A8CC 0 1.1px, transparent 1.9px) 0 0 / 241px 197px,
-    radial-gradient(circle at 45% 85%, #CFE0FFB3 0 0.8px, transparent 1.4px) 0 0 / 127px 113px;
-  opacity: .55; animation: fxTwinkle 6s ease-in-out infinite alternate;
+    radial-gradient(circle at 20% 30%, var(--fx-star-1) 0 1px, transparent 1.7px) 0 0 / 173px 151px,
+    radial-gradient(circle at 70% 65%, var(--fx-star-2) 0 1.1px, transparent 1.9px) 0 0 / 241px 197px,
+    radial-gradient(circle at 45% 85%, var(--fx-star-3) 0 0.8px, transparent 1.4px) 0 0 / 127px 113px;
+  opacity: var(--fx-star-base); animation: fxTwinkle 6s ease-in-out infinite alternate;
 }
 html[data-fx="stars"] .theme-fx::after {
   background:
-    radial-gradient(circle at 60% 20%, #FFFFFFCC 0 0.9px, transparent 1.5px) 0 0 / 211px 167px,
-    radial-gradient(circle at 15% 70%, #FFF3C4B3 0 1.3px, transparent 2.2px) 0 0 / 317px 263px;
-  opacity: .5; animation: fxTwinkle 8s ease-in-out -4s infinite alternate;
+    radial-gradient(circle at 60% 20%, var(--fx-star-4) 0 0.9px, transparent 1.5px) 0 0 / 211px 167px,
+    radial-gradient(circle at 15% 70%, var(--fx-star-5) 0 1.3px, transparent 2.2px) 0 0 / 317px 263px;
+  opacity: var(--fx-star-alt); animation: fxTwinkle 8s ease-in-out -4s infinite alternate;
 }
-@keyframes fxTwinkle { from { opacity: .2; } to { opacity: .6; } }
+@keyframes fxTwinkle { from { opacity: var(--fx-twinkle-from); } to { opacity: var(--fx-twinkle-to); } }
 
 /* Волны: одна линия на 1200px, начало и конец совпадают — полоса бесшовно едет по кругу. */
 :root {
@@ -440,11 +472,11 @@ html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme=
 
 /* Лунный свет: мягкое пятно света сверху справа и редкий косой луч; свет медленно дышит. */
 html[data-fx="moon"] .theme-fx::before {
-  background: radial-gradient(circle at 84% 12%, #E6EEFA33 0, #DDE7F81A 120px, transparent 420px);
+  background: radial-gradient(circle at 84% 12%, var(--fx-moon-core) 0, var(--fx-moon-halo) 120px, transparent 420px);
   animation: fxBreathe 14s ease-in-out infinite alternate;
 }
 html[data-fx="moon"] .theme-fx::after {
-  background: linear-gradient(205deg, transparent 30%, #DDE7F80D 42%, transparent 55%);
+  background: linear-gradient(205deg, transparent 30%, var(--fx-moon-beam) 42%, transparent 55%);
 }
 @keyframes fxBreathe { from { opacity: .65; } to { opacity: 1; } }
 
@@ -515,10 +547,16 @@ html[data-fx="pattern"] .theme-fx::before {
 }
 @keyframes fxTopo { to { -webkit-mask-position: -1200px 0; mask-position: -1200px 0; } }
 
-/* Выключатель «Анимации» в Настройках тоже включает reduce (main.js, applyMotion). */
+/* Уменьшение движения: Windows главнее, когда «Анимации» включены; выключены — окно считает
+   движение уменьшенным всегда (main.js, applyMotion). Гаснет только движение, рисунок остаётся. */
 @media (prefers-reduced-motion: reduce) {
-  .theme-fx::before, .theme-fx::after { animation: none !important; }
+  .theme-fx, .theme-fx::before, .theme-fx::after { animation: none !important; }
 }
+/* Тот же выключатель «Анимации» в Настройках, но без подмены в окне (html[data-animations] ставит
+   renderer/app.js): если подмена не дошла до страницы, эффекты всё равно стоят. */
+html[data-animations="off"] .theme-fx,
+html[data-animations="off"] .theme-fx::before,
+html[data-animations="off"] .theme-fx::after { animation: none !important; }
 
 /* ── Выбор темы: образец — это те же токены, что и в окне ─────── */
 .theme-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: var(--sp-2); margin-top: var(--sp-2); }

@@ -1,0 +1,31 @@
+{
+ "video": "6eY2h5i9vrl6Dw_2ejg8yA",
+ "model": "faster-whisper small int8 cpu",
+ "language_forced": "ru",
+ "vad_filter": true,
+ "duration": 46.6986875,
+ "duration_after_vad": 5.152,
+ "segments": [
+  {
+   "start": 0.5,
+   "end": 3.82,
+   "text": "ПОЗИТИВАЮЩАЯ МУЗЫКА",
+   "no_speech_prob": 0.494,
+   "avg_logprob": -0.846,
+   "words": [
+    [
+     0.5,
+     2.08,
+     " ПОЗИТИВАЮЩАЯ",
+     0.56
+    ],
+    [
+     3.52,
+     3.82,
+     " МУЗЫКА",
+     0.59
+    ]
+   ]
+  }
+ ]
+}

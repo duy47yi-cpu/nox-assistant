@@ -4,8 +4,21 @@
 // что и обычный агент. Команда не может запускать mission_* и command_* (фоновые задачи
 // и управление самими командами доступны только из чата). Остановка на первом неуспешном шаге.
 const { randomUUID } = require('crypto');
+const path = require('path');
 const { checkEffect } = require('../agent/effects');
-const { maskArgsForJournal, checkSteps, MAX_STEPS } = require('./store');
+const {
+  maskArgsForJournal,
+  checkSteps,
+  MAX_STEPS,
+  CommandRunLog,
+  DANGEROUS_TOOLS,
+  EVENT_CATALOG,
+  TRIGGER_KINDS,
+  checkHotkey,
+  describeScheduleTrigger,
+  eventLabel,
+} = require('./store');
+const { excludedFromAutonomy } = require('../tools/profiles');
 const { looksSecretEgress } = require('../memory/store');
 
 const FORBIDDEN_PREFIXES = ['mission_', 'command_'];
@@ -80,16 +93,22 @@ async function runStep(cmd, step, deps) {
   let verified = null;
   let evidence = null;
 
-  const finish = (decision, ok, summary) => {
+  const finish = (decision, ok, summary, verdictUsed = null) => {
     // В журнал — копия аргументов без секретов (пароль, токен, ключ), форма и длины сохраняются.
     journal.append({ tool: name, args: maskArgsForJournal(name, args), risk, mode, decision, ok, summary, source: 'command', command: cmd.id, verified, evidence });
     const check = verified ? { verified, evidence: evidence || '' } : {};
     emit({ type: 'tool_result', id, ok, summary, ...check });
+    if (typeof deps.onStepOutcome === 'function') {
+      deps.onStepOutcome({ tool: name, risk, verdict: verdictUsed, decision, ok, summary, verified, evidence });
+    }
     return { tool: name, ok, summary, ...check };
   };
 
   if (signal && signal.aborted) return finish('reject', false, 'отменено');
   if (isForbidden(name)) return finish('deny', false, FORBIDDEN_SUMMARY);
+  if (deps.blockAutonomyTools && (DANGEROUS_TOOLS.has(name) || excludedFromAutonomy(name))) {
+    return finish('deny', false, 'недоступно для автоматического запуска', 'deny');
+  }
 
   const tool = tools.get(name);
   if (!tool) return finish('deny', false, `неизвестный инструмент: ${name}`);
@@ -103,7 +122,7 @@ async function runStep(cmd, step, deps) {
       risk: tool.risk,
       args,
       workspace,
-      ownerCommand: deps.ownerCommand === true,
+      ownerCommand: deps.forceOwnerFalse === true ? false : deps.ownerCommand === true,
       source: tool.source,
       ownerAllowed: typeof tool.ownerAllowed === 'function' && tool.ownerAllowed(args) === true,
       sessionAllow: new Set(),
@@ -115,7 +134,7 @@ async function runStep(cmd, step, deps) {
   if (!VERDICTS.has(verdict)) verdict = 'deny';
 
   let decision = verdict;
-  if (verdict === 'deny') return finish('deny', false, 'отклонено');
+  if (verdict === 'deny') return finish('deny', false, 'отклонено', verdict);
   if (verdict === 'ask') {
     const payload = {
       id,
@@ -125,11 +144,11 @@ async function runStep(cmd, step, deps) {
       reason: `команда «${commandLabel(cmd, tool)}»`,
     };
     const answer = await askApproval(approvals, emit, payload, signal);
-    if (!ANSWERS.has(answer)) return finish('reject', false, 'отклонено');
+    if (!ANSWERS.has(answer)) return finish('reject', false, 'отклонено', verdict);
     decision = answer;
   }
 
-  if (signal && signal.aborted) return finish('reject', false, 'отменено');
+  if (signal && signal.aborted) return finish('reject', false, 'отменено', verdict);
   emit({ type: 'tool_start', id, name: tool.name, args: structuredClone(args), risk: tool.risk });
   let ok = false;
   let summary;
@@ -144,7 +163,7 @@ async function runStep(cmd, step, deps) {
     ok = false;
     summary = `ошибка: ${errText(err)}`;
   }
-  return finish(decision, ok, summary);
+  return finish(decision, ok, summary, verdict);
 }
 
 // Запускает команду. Возвращает {ok, results}, где results = [{tool, ok, summary}].
@@ -333,6 +352,605 @@ class CommandRecorder {
   }
 }
 
+const AUTO_TRIGGERS = new Set(['schedule', 'event']);
+
+function toDate(value) {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? new Date() : value;
+  if (value !== undefined && value !== null) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date();
+}
+
+function defaultTriggerDetail(cmd, trigger) {
+  if (trigger === 'hotkey') return (cmd.triggers && cmd.triggers.hotkey && cmd.triggers.hotkey.key) || cmd.hotkey || 'горячая клавиша';
+  if (trigger === 'schedule') return describeScheduleTrigger(cmd.triggers && cmd.triggers.schedule);
+  if (trigger === 'event') return eventLabel(cmd.triggers && cmd.triggers.event);
+  if (trigger === 'phrase') return 'голосовая фраза';
+  return 'ручной запуск';
+}
+
+function pluralSteps(n) {
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  if (mod100 >= 11 && mod100 <= 14) return 'шагов';
+  if (mod10 === 1) return 'шаг';
+  if (mod10 >= 2 && mod10 <= 4) return 'шага';
+  return 'шагов';
+}
+
+function describeLaunchFailure({ cmd, trigger, isAutomatic, out, stepOutcomes, sawAutoAskBlock, stopSwitch, signal, thrownErr }) {
+  if (thrownErr) {
+    const msg = errText(thrownErr);
+    return { status: 'failed', error: msg, reason: `ошибка выполнения: ${msg}` };
+  }
+  const results = out && Array.isArray(out.results) ? out.results : [];
+  const aborted = Boolean((stopSwitch && stopSwitch.isStopped()) || (signal && signal.aborted)
+    || results.some((r) => r.summary === 'остановлено: аварийный стоп' || r.summary === 'отменено'));
+  if (aborted) {
+    return { status: 'cancelled', error: null, reason: 'отменено: выполнение остановлено' };
+  }
+  if (out && out.ok) {
+    const count = results.length;
+    return { status: 'succeeded', error: null, reason: `выполнена успешно (${count} ${pluralSteps(count)})` };
+  }
+  const failedOutcome = [...stepOutcomes].reverse().find((o) => !o.ok) || null;
+  const failedStep = [...results].reverse().find((r) => !r.ok) || null;
+  if (sawAutoAskBlock || (isAutomatic && failedOutcome && failedOutcome.verdict === 'ask')) {
+    const toolName = (failedOutcome && failedOutcome.tool) || (failedStep && failedStep.tool) || 'действие';
+    return {
+      status: 'blocked',
+      error: 'требуется подтверждение владельца',
+      reason: `заблокировано: шаг «${toolName}» требует подтверждения владельца; автоматический запуск не может обойти подтверждение`,
+    };
+  }
+  if (failedOutcome && (failedOutcome.decision === 'deny' || failedOutcome.verdict === 'deny')) {
+    const msg = failedOutcome.summary || 'запрещено политикой';
+    return {
+      status: 'blocked',
+      error: msg,
+      reason: `заблокировано политикой безопасности: ${msg}`,
+    };
+  }
+  if (failedOutcome && failedOutcome.verdict === 'ask' && failedOutcome.decision === 'reject') {
+    return {
+      status: 'cancelled',
+      error: 'отклонено владельцем',
+      reason: `отменено: действие «${failedOutcome.tool || 'шаг'}» не получило подтверждения`,
+    };
+  }
+  const errMsg = (failedStep && failedStep.summary) || (out && out.error) || 'ошибка выполнения шага';
+  const stepLabel = failedStep && failedStep.tool ? `«${failedStep.tool}»: ` : '';
+  return {
+    status: 'failed',
+    error: errMsg,
+    reason: `ошибка: ${stepLabel}${errMsg}`,
+  };
+}
+
+class UnifiedCommandLauncher {
+  constructor({
+    store,
+    runLog = null,
+    depsProvider = null,
+    stop = null,
+    now = () => new Date(),
+    notify = null,
+    isBusy = null,
+    hotkeyDebounceMs = 0,
+    allowInteractiveApprovalForAuto = false,
+  } = {}) {
+    if (!store || typeof store.get !== 'function' || typeof store.markTriggerStart !== 'function') {
+      throw new Error('UnifiedCommandLauncher: нужен экземпляр CommandStore');
+    }
+    this.store = store;
+    this.runLog = runLog || new CommandRunLog(path.join(path.dirname(store.filePath), 'command-runs.json'));
+    this.depsProvider = depsProvider;
+    this.stop = stop;
+    this.now = now;
+    this.notify = typeof notify === 'function' ? notify : null;
+    this.isBusy = typeof isBusy === 'function' ? isBusy : null;
+    this.hotkeyDebounceMs = Number.isInteger(hotkeyDebounceMs) && hotkeyDebounceMs >= 0 ? hotkeyDebounceMs : 0;
+    this.allowInteractiveApprovalForAuto = allowInteractiveApprovalForAuto === true;
+    this._inFlight = new Set();
+    this._seenOccurrences = new Set();
+    this._loggedSkips = new Set();
+    this._tickBusy = false;
+  }
+
+  _safeNotify(payload) {
+    if (!this.notify) return;
+    try {
+      this.notify(payload);
+    } catch {
+      // Сбой уведомления не должен срывать запуск или журнал.
+    }
+  }
+
+  _rememberSeen(set, key, limit = 1000) {
+    if (!key) return;
+    if (set.size >= limit) set.clear();
+    set.add(key);
+  }
+
+  _hasSeenOccurrence(cmd, occurrenceKey) {
+    if (!occurrenceKey) return false;
+    const scoped = `${cmd.id}:${occurrenceKey}`;
+    if (this._seenOccurrences.has(scoped)) return true;
+    const recent = cmd.triggerState && Array.isArray(cmd.triggerState.recentOccurrenceKeys)
+      ? cmd.triggerState.recentOccurrenceKeys
+      : [];
+    return recent.some((entry) => entry && entry.key === occurrenceKey);
+  }
+
+  _checkCooldown(cmd, trigger, nowMs) {
+    const st = cmd.triggerState || {};
+    const attempts = st.lastAttemptAtByTrigger || {};
+    const lastIso = attempts[trigger];
+    if (!lastIso) return null;
+    const lastMs = Date.parse(lastIso);
+    if (!Number.isFinite(lastMs)) return null;
+    const elapsed = nowMs - lastMs;
+    if (elapsed < 0) return null;
+
+    if (trigger === 'hotkey') {
+      const htMs = cmd.triggers && cmd.triggers.hotkey && Number.isInteger(cmd.triggers.hotkey.cooldownMs)
+        ? cmd.triggers.hotkey.cooldownMs
+        : 0;
+      const limit = Math.max(htMs, this.hotkeyDebounceMs);
+      if (limit > 0 && elapsed < limit) {
+        return 'защита от повторного запуска: слишком частое нажатие горячей клавиши';
+      }
+    }
+    if (trigger === 'event') {
+      const sec = cmd.triggers && cmd.triggers.event && Number.isInteger(cmd.triggers.event.cooldownSec)
+        ? cmd.triggers.event.cooldownSec
+        : 0;
+      const limit = sec * 1000;
+      if (limit > 0 && elapsed < limit) {
+        const leftSec = Math.max(1, Math.ceil((limit - elapsed) / 1000));
+        return `защита от повторного запуска: пауза после прошлого срабатывания (осталось ${leftSec} с)`;
+      }
+    }
+    return null;
+  }
+
+  _resolveDeps(cmd, trigger, eventPayload, extraDeps) {
+    let base = {};
+    if (typeof this.depsProvider === 'function') {
+      base = this.depsProvider({ command: cmd, trigger, eventPayload }) || {};
+    } else if (this.depsProvider && typeof this.depsProvider === 'object') {
+      base = this.depsProvider;
+    }
+    return { ...base, ...(extraDeps || {}) };
+  }
+
+  async launch({
+    commandId,
+    commandName = null,
+    trigger = 'manual',
+    triggerDetail = null,
+    occurrenceKey = null,
+    scheduledFor = null,
+    eventPayload = null,
+    ownerCommand,
+    interactive = false,
+    deps = null,
+    now = null,
+  } = {}) {
+    if (!TRIGGER_KINDS.has(trigger)) {
+      throw new Error(`неизвестный способ запуска: ${trigger}`);
+    }
+    const at = toDate(now ?? this.now());
+    const nowMs = at.getTime();
+    const isAutomatic = AUTO_TRIGGERS.has(trigger);
+
+    const cmd = commandId ? this.store.get(commandId) : null;
+    if (!cmd) {
+      const reason = 'ошибка: команда не найдена';
+      const logEntry = this.runLog.append({
+        ts: at,
+        commandId: commandId || null,
+        commandName: commandName || 'неизвестная команда',
+        trigger,
+        triggerDetail: triggerDetail || trigger,
+        status: 'failed',
+        reason,
+        error: reason,
+        occurrenceKey,
+      });
+      return { ok: false, status: 'failed', reason, error: reason, results: [], logEntry };
+    }
+
+    const detail = triggerDetail || defaultTriggerDetail(cmd, trigger);
+    const resolvedDeps = this._resolveDeps(cmd, trigger, eventPayload, deps);
+    const stopSwitch = resolvedDeps.stop || this.stop;
+    const workspaceId = resolvedDeps.workspaceId || 'default';
+
+    const finishEarly = (status, reason, { dedupKey = null } = {}) => {
+      if (dedupKey) {
+        const scopedSkip = `${cmd.id}:${status}:${dedupKey}`;
+        if (this._loggedSkips.has(scopedSkip)) {
+          return {
+            ok: false,
+            skipped: status === 'skipped',
+            blocked: status === 'blocked',
+            cancelled: status === 'cancelled',
+            status,
+            reason,
+            deduped: true,
+            results: [],
+            command: cmd,
+          };
+        }
+        this._rememberSeen(this._loggedSkips, scopedSkip);
+      }
+      const logEntry = this.runLog.append({
+        ts: at,
+        commandId: cmd.id,
+        commandName: cmd.name,
+        trigger,
+        triggerDetail: detail,
+        status,
+        reason,
+        error: status === 'failed' || status === 'blocked' ? reason : null,
+        stepsOk: 0,
+        stepsTotal: Array.isArray(cmd.steps) ? cmd.steps.length : 0,
+        occurrenceKey,
+        workspaceId,
+      });
+      if (isAutomatic && (status === 'blocked' || status === 'failed')) {
+        this._safeNotify({ title: 'Джарвис: команда не запущена', body: `${cmd.name}: ${reason}`, workspaceId });
+      }
+      return {
+        ok: false,
+        skipped: status === 'skipped',
+        blocked: status === 'blocked',
+        cancelled: status === 'cancelled',
+        status,
+        reason,
+        results: [],
+        command: cmd,
+        logEntry,
+      };
+    };
+
+    if (stopSwitch && typeof stopSwitch.isStopped === 'function' && stopSwitch.isStopped()) {
+      return finishEarly('cancelled', 'отменено: включён аварийный стоп', {
+        dedupKey: trigger === 'schedule' ? (occurrenceKey || `schedule-stop:${cmd.id}`) : null,
+      });
+    }
+    if (cmd.enabled === false) {
+      return finishEarly('skipped', 'пропущено: команда выключена');
+    }
+
+    if (trigger === 'hotkey') {
+      const ht = cmd.triggers && cmd.triggers.hotkey;
+      if (!ht || !ht.key) return finishEarly('skipped', 'пропущено: горячая клавиша не назначена');
+      if (!ht.enabled) return finishEarly('skipped', 'пропущено: запуск по горячей клавише выключен');
+    } else if (trigger === 'schedule') {
+      const sch = cmd.triggers && cmd.triggers.schedule;
+      if (!sch || !sch.enabled) return finishEarly('skipped', 'пропущено: запуск по расписанию выключен');
+    } else if (trigger === 'event') {
+      const ev = cmd.triggers && cmd.triggers.event;
+      if (!ev || !ev.eventType) return finishEarly('skipped', 'пропущено: событие не выбрано');
+      if (!ev.enabled) return finishEarly('skipped', 'пропущено: запуск по событию выключен');
+    }
+
+    if (this._inFlight.has(cmd.id) || (cmd.triggerState && cmd.triggerState.status === 'running')) {
+      return finishEarly('skipped', 'защита от повторного запуска: команда уже выполняется');
+    }
+    if (this.isBusy) {
+      const busy = this.isBusy({ command: cmd, trigger });
+      if (busy) {
+        const busyReason = typeof busy === 'string' && busy.trim()
+          ? busy.trim()
+          : 'защита от повторного запуска: сейчас выполняется другая команда';
+        return finishEarly('skipped', busyReason);
+      }
+    }
+    if (this._hasSeenOccurrence(cmd, occurrenceKey)) {
+      return finishEarly('skipped', 'защита от повторного запуска: это срабатывание уже обработано');
+    }
+    const cooldownReason = this._checkCooldown(cmd, trigger, nowMs);
+    if (cooldownReason) {
+      return finishEarly('skipped', cooldownReason);
+    }
+    if (!Array.isArray(cmd.steps) || cmd.steps.length === 0) {
+      return finishEarly('failed', 'ошибка: в команде нет ни одного шага');
+    }
+
+    if (isAutomatic) {
+      for (const step of cmd.steps) {
+        const toolName = step && typeof step.tool === 'string' ? step.tool : '';
+        if (DANGEROUS_TOOLS.has(toolName) || isForbidden(toolName) || excludedFromAutonomy(toolName)) {
+          return finishEarly('blocked', `заблокировано: действие «${toolName}» недоступно при автоматическом запуске`);
+        }
+      }
+    }
+    if (!resolvedDeps.tools || !resolvedDeps.policy || !resolvedDeps.journal) {
+      return finishEarly('failed', 'ошибка запуска: не подключены инструменты или правила доступа');
+    }
+
+    this._inFlight.add(cmd.id);
+    const started = this.store.markTriggerStart(cmd.id, { trigger, scheduledFor, occurrenceKey, now: at });
+    if (!started) {
+      this._inFlight.delete(cmd.id);
+      return finishEarly('skipped', 'защита от повторного запуска: команда уже выполняется');
+    }
+    if (occurrenceKey) this._rememberSeen(this._seenOccurrences, `${cmd.id}:${occurrenceKey}`);
+
+    let sawAutoAskBlock = false;
+    const stepOutcomes = [];
+    const safeApprovals = isAutomatic && !(interactive === true && this.allowInteractiveApprovalForAuto && resolvedDeps.approvals)
+      ? {
+          request: async () => {
+            sawAutoAskBlock = true;
+            return 'reject';
+          },
+          respond: () => false,
+        }
+      : resolvedDeps.approvals;
+
+    const runDeps = {
+      ...resolvedDeps,
+      stop: stopSwitch,
+      approvals: safeApprovals,
+      ownerCommand: isAutomatic ? false : (ownerCommand === true || (ownerCommand === undefined && resolvedDeps.ownerCommand === true)),
+      forceOwnerFalse: isAutomatic,
+      blockAutonomyTools: isAutomatic,
+      onStepOutcome: (info) => stepOutcomes.push(info),
+    };
+
+    const startedMs = Date.now();
+    let out = null;
+    let thrownErr = null;
+    try {
+      out = await runCommand(started, runDeps);
+    } catch (err) {
+      thrownErr = err;
+    } finally {
+      this._inFlight.delete(cmd.id);
+    }
+
+    const durationMs = Math.max(0, Date.now() - startedMs);
+    const finishedAt = toDate(this.now());
+    const outcome = describeLaunchFailure({
+      cmd: started,
+      trigger,
+      isAutomatic,
+      out,
+      stepOutcomes,
+      sawAutoAskBlock,
+      stopSwitch,
+      signal: runDeps.signal,
+      thrownErr,
+    });
+    const updatedCmd = this.store.markTriggerFinish(cmd.id, {
+      trigger,
+      status: outcome.status,
+      reason: outcome.reason,
+      durationMs,
+      now: finishedAt,
+    });
+    const results = out && Array.isArray(out.results) ? out.results : [];
+    const logEntry = this.runLog.append({
+      ts: finishedAt,
+      commandId: cmd.id,
+      commandName: cmd.name,
+      trigger,
+      triggerDetail: detail,
+      status: outcome.status,
+      reason: outcome.reason,
+      error: outcome.error,
+      durationMs,
+      stepsOk: results.filter((r) => r && r.ok).length,
+      stepsTotal: Array.isArray(cmd.steps) ? cmd.steps.length : 0,
+      occurrenceKey,
+      workspaceId,
+    });
+    if (isAutomatic && outcome.status !== 'succeeded') {
+      this._safeNotify({ title: 'Джарвис: команда не запущена', body: `${cmd.name}: ${outcome.reason}`, workspaceId });
+    }
+    return {
+      ok: outcome.status === 'succeeded',
+      blocked: outcome.status === 'blocked',
+      cancelled: outcome.status === 'cancelled',
+      status: outcome.status,
+      reason: outcome.reason,
+      error: outcome.error,
+      durationMs,
+      results,
+      command: updatedCmd || started,
+      logEntry,
+    };
+  }
+
+  triggerCommand(commandId, trigger = 'manual', opts = {}) {
+    return this.launch({ ...opts, commandId, trigger });
+  }
+
+  async fireHotkey(hotkey, opts = {}) {
+    let canonical = null;
+    try {
+      canonical = checkHotkey(hotkey);
+    } catch {
+      return { ok: false, skipped: true, status: 'skipped', reason: 'горячая клавиша задана неверно', results: [] };
+    }
+    if (!canonical) {
+      return { ok: false, skipped: true, status: 'skipped', reason: 'горячая клавиша не задана', results: [] };
+    }
+    const cmd = this.store.findByHotkey(canonical);
+    if (!cmd) {
+      return { ok: false, skipped: true, status: 'skipped', reason: `горячая клавиша ${canonical} не назначена ни одной команде`, results: [] };
+    }
+    return this.launch({
+      ...opts,
+      commandId: cmd.id,
+      trigger: 'hotkey',
+      triggerDetail: canonical,
+      ownerCommand: opts.ownerCommand !== false,
+    });
+  }
+
+  async fireEvent(eventType, payload = {}, opts = {}) {
+    const at = toDate(opts.now ?? this.now());
+    const matched = this.store.findByEvent(eventType, payload);
+    const eventId = (payload && typeof payload.eventId === 'string' && payload.eventId.trim())
+      ? payload.eventId.trim()
+      : (typeof opts.occurrenceKey === 'string' && opts.occurrenceKey.trim() ? opts.occurrenceKey.trim() : null);
+    const results = [];
+    let ran = 0;
+    for (const cmd of matched) {
+      const occurrenceKey = eventId ? `event:${eventId}` : null;
+      const out = await this.launch({
+        commandId: cmd.id,
+        trigger: 'event',
+        triggerDetail: eventLabel(cmd.triggers && cmd.triggers.event),
+        occurrenceKey,
+        eventPayload: payload,
+        interactive: opts.interactive === true,
+        deps: opts.deps,
+        now: at,
+      });
+      results.push({ commandId: cmd.id, commandName: cmd.name, ...out });
+      if (!out.skipped && !out.blocked && !out.cancelled) ran += 1;
+    }
+    return { matched: matched.length, ran, results };
+  }
+
+  noteStopped(now = this.now()) {
+    const at = toDate(now);
+    const due = this.store.dueScheduledCommands(at);
+    let noted = 0;
+    for (const cmd of due) {
+      const slot = cmd.triggerState && cmd.triggerState.nextRunAt;
+      const key = slot ? `schedule:${cmd.id}:${slot}` : `schedule-stop:${cmd.id}`;
+      const scopedSkip = `${cmd.id}:cancelled:${key}`;
+      if (this._loggedSkips.has(scopedSkip)) continue;
+      this._rememberSeen(this._loggedSkips, scopedSkip);
+      this.runLog.append({
+        ts: at,
+        commandId: cmd.id,
+        commandName: cmd.name,
+        trigger: 'schedule',
+        triggerDetail: describeScheduleTrigger(cmd.triggers && cmd.triggers.schedule),
+        status: 'cancelled',
+        reason: 'отменено: включён аварийный стоп',
+        stepsOk: 0,
+        stepsTotal: Array.isArray(cmd.steps) ? cmd.steps.length : 0,
+        occurrenceKey: key,
+      });
+      noted += 1;
+    }
+    return noted;
+  }
+
+  _skipStaleAndLog(at) {
+    const stale = this.store.skipStaleSchedules(at);
+    for (const item of stale) {
+      this.runLog.append({
+        ts: at,
+        commandId: item.command.id,
+        commandName: item.command.name,
+        trigger: 'schedule',
+        triggerDetail: describeScheduleTrigger(item.command.triggers && item.command.triggers.schedule),
+        status: 'skipped',
+        reason: item.reason,
+        stepsOk: 0,
+        stepsTotal: Array.isArray(item.command.steps) ? item.command.steps.length : 0,
+        occurrenceKey: item.occurrenceKey,
+      });
+    }
+    return stale;
+  }
+
+  async tickScheduled(now = this.now()) {
+    if (this._tickBusy) return { ran: 0, skipped: 0, staleSkipped: 0, results: [] };
+    this._tickBusy = true;
+    try {
+      const at = toDate(now);
+      const stale = this._skipStaleAndLog(at);
+      if (this.stop && typeof this.stop.isStopped === 'function' && this.stop.isStopped()) {
+        const skipped = this.noteStopped(at);
+        return { ran: 0, skipped, staleSkipped: stale.length, results: [] };
+      }
+      const due = this.store.dueScheduledCommands(at);
+      const results = [];
+      let ran = 0;
+      for (const cmd of due) {
+        if (this.stop && typeof this.stop.isStopped === 'function' && this.stop.isStopped()) {
+          this.noteStopped(at);
+          break;
+        }
+        const slot = cmd.triggerState && cmd.triggerState.nextRunAt;
+        const occurrenceKey = slot ? `schedule:${cmd.id}:${slot}` : null;
+        const out = await this.launch({
+          commandId: cmd.id,
+          trigger: 'schedule',
+          triggerDetail: describeScheduleTrigger(cmd.triggers && cmd.triggers.schedule),
+          occurrenceKey,
+          scheduledFor: slot,
+          now: at,
+        });
+        results.push({ commandId: cmd.id, commandName: cmd.name, ...out });
+        if (!out.skipped && !out.blocked && !out.cancelled) ran += 1;
+      }
+      return { ran, skipped: results.length - ran, staleSkipped: stale.length, results };
+    } finally {
+      this._tickBusy = false;
+    }
+  }
+
+  async reconcile({ now = this.now() } = {}) {
+    const at = toDate(now);
+    const interrupted = this.store.reconcileInterrupted(at);
+    for (const item of interrupted) {
+      this.runLog.append({
+        ts: at,
+        commandId: item.command.id,
+        commandName: item.command.name,
+        trigger: item.trigger,
+        triggerDetail: defaultTriggerDetail(item.command, item.trigger),
+        status: 'interrupted',
+        reason: item.reason,
+        stepsOk: 0,
+        stepsTotal: Array.isArray(item.command.steps) ? item.command.steps.length : 0,
+        occurrenceKey: item.occurrenceKey,
+      });
+      this._safeNotify({ title: 'Джарвис: запуск команды прервался', body: `${item.command.name}: ${item.reason}` });
+    }
+    const stale = this._skipStaleAndLog(at);
+    return { interrupted, staleSkipped: stale };
+  }
+
+  launchOverview({ limit = 100, commandId = null, trigger = null, status = null } = {}) {
+    const commands = this.store.list().map((cmd) => ({
+      id: cmd.id,
+      name: cmd.name,
+      enabled: cmd.enabled !== false,
+      folder: cmd.folder || null,
+      stepsCount: Array.isArray(cmd.steps) ? cmd.steps.length : 0,
+      triggers: cmd.triggers,
+      triggerState: cmd.triggerState,
+      lastRunAt: cmd.lastRunAt || null,
+    }));
+    return {
+      commands,
+      log: this.runLog.list({ limit, commandId, trigger, status }),
+      stats: this.runLog.stats(),
+      events: EVENT_CATALOG,
+    };
+  }
+}
+
 module.exports = {
-  runCommand, commandReply, commandLabel, CommandRecorder, recordOverview, FORBIDDEN_PREFIXES,
+  runCommand,
+  commandReply,
+  commandLabel,
+  CommandRecorder,
+  recordOverview,
+  UnifiedCommandLauncher,
+  FORBIDDEN_PREFIXES,
 };

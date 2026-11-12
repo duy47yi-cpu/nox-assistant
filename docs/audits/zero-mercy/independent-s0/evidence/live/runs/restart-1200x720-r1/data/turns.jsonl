@@ -1,0 +1,2 @@
+{"ts":"2026-11-11T08:46:57.856Z","kind":"model","turn":"fde79fe5","round":1,"messages":2,"tools":126,"ms":59,"ok":true,"requestChars":73520,"promptTokens":null,"cachedTokens":null,"completionTokens":null,"reasoningTokens":null,"reasoningChars":0,"reasoning":null,"toolCalls":["workspace_write"],"answerChars":0}
+{"ts":"2026-11-11T08:46:57.858Z","kind":"tool_start","turn":"fde79fe5","round":1,"callId":"call_0","name":"workspace_write","risk":"T1"}

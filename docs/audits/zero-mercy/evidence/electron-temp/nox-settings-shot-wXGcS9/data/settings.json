@@ -1,0 +1,19 @@
+{
+  "voice": false,
+  "backgroundModelRuns": false,
+  "alwaysListen": false,
+  "dictation": false,
+  "desktopOverlay": false,
+  "alwaysOnTop": false,
+  "motion": true,
+  "seededBrief": true,
+  "voiceVolume": 0.7,
+  "voiceRate": 1.1,
+  "voicePersona": "butler",
+  "terseReplies": false,
+  "keepAwake": "always",
+  "modelTier": "fast",
+  "thinking": "low",
+  "windowBg": "#14120E",
+  "mode": "auto"
+}

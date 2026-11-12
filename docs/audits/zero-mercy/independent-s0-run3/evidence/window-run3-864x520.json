@@ -1,0 +1,602 @@
+{
+  "root": "C:\\Users\\abdut\\AppData\\Local\\Temp\\zm-run3-win-3hTnx8",
+  "size": [
+    864,
+    520
+  ],
+  "results": [
+    {
+      "id": "R1",
+      "scenario": "перезагрузка окна с ожидающим запросом, затем «Разрешить» в восстановленной карточке",
+      "restoredSameId": true,
+      "expected": [
+        "R1-A.txt"
+      ],
+      "pass": true,
+      "ranNow": [
+        "R1-A.txt"
+      ]
+    },
+    {
+      "id": "R2",
+      "scenario": "call_0 дважды в одном ходу: строки чата",
+      "rows": [
+        {
+          "text": "подтвержденоЗапись файлаR2-A.txt, R2-Aзаписал · файл R2-A.txt совпадает с записью",
+          "pending": false
+        },
+        {
+          "text": "ждёт решенияЗапись файлаR2-B.txt, R2-BРешить",
+          "pending": true
+        }
+      ],
+      "dialogB": "77a95ab0-9596-4fab-8805-e6a9ad983929",
+      "expected": [
+        "R1-A.txt",
+        "R2-A.txt"
+      ],
+      "pass": true,
+      "ranNow": [
+        "R1-A.txt",
+        "R2-A.txt"
+      ]
+    },
+    {
+      "id": "R3",
+      "scenario": "два запроса одновременно (чат A + задача B); A — «Разрешить» мышью; затем «Отклонить» мышью у B",
+      "dialogStayedOnA": true,
+      "bShownAfterA": true,
+      "bButtonsAfterA": [
+        "reject:true",
+        "once:true"
+      ],
+      "bDecisionAfterMouseReject": null,
+      "bDecisionFinal": "reject",
+      "expected": [
+        "R1-A.txt",
+        "R2-A.txt",
+        "R3-A.txt"
+      ],
+      "pass": true,
+      "ranNow": [
+        "R1-A.txt",
+        "R2-A.txt",
+        "R3-A.txt"
+      ]
+    },
+    {
+      "id": "R4",
+      "scenario": "A истёк, B (задача, без «На сессию») занял диалог; клик «Разрешить», нацеленный на A",
+      "closedEventToClickMs": 62,
+      "dialogAtClick": "B",
+      "elementUnderCursor": "DIALOG",
+      "ipcForB": [],
+      "bDecisionByClick": null,
+      "bDecisionFinal": "reject",
+      "aRan": false,
+      "bRanWouldBe": false,
+      "pass": true,
+      "ranNow": [
+        "R1-A.txt",
+        "R2-A.txt",
+        "R3-A.txt"
+      ]
+    },
+    {
+      "id": "R4c",
+      "scenario": "A истёк, B (второй агент, тот же вид) занял диалог; клик «Разрешить», нацеленный на A",
+      "closedEventToClickMs": 53,
+      "dialogAtClick": "B",
+      "elementUnderCursor": "once",
+      "ipcForB": [
+        "once"
+      ],
+      "bDecisionByClick": "once",
+      "bDecisionFinal": "once",
+      "aRan": false,
+      "bRanWouldBe": true,
+      "pass": false,
+      "ranNow": [
+        "R1-A.txt",
+        "R2-A.txt",
+        "R3-A.txt"
+      ]
+    },
+    {
+      "id": "R5",
+      "scenario": "ядро сняло запрос задачи, событие approval_closed потеряно; «Разрешить», потом Escape",
+      "stillOpenAfterOnce": true,
+      "stillOpenAfterEsc": true,
+      "decision": "reject",
+      "pass": true,
+      "ranNow": [
+        "R1-A.txt",
+        "R2-A.txt",
+        "R3-A.txt"
+      ],
+      "clearedByReload": true
+    }
+  ],
+  "log": [
+    {
+      "t": 1794394854797,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394854806,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394854865,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794394854880,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "92312f59-7962-42d0-9fb3-73b92e3f1276",
+      "callId": "call_0",
+      "path": "R1-A.txt"
+    },
+    {
+      "t": 1794394855067,
+      "kind": "ipc-in",
+      "id": "92312f59-7962-42d0-9fb3-73b92e3f1276",
+      "decision": "once"
+    },
+    {
+      "t": 1794394855067,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "92312f59-7962-42d0-9fb3-73b92e3f1276",
+      "callId": "call_0",
+      "decision": "once"
+    },
+    {
+      "t": 1794394855067,
+      "kind": "ipc-core",
+      "id": "92312f59-7962-42d0-9fb3-73b92e3f1276",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794394855067,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794394855071,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794394855075,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394855095,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794394855159,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394855163,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394855190,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794394855199,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "ab7e7995-0bec-46de-b313-0fff538855ab",
+      "callId": "call_0",
+      "path": "R2-A.txt"
+    },
+    {
+      "t": 1794394855260,
+      "kind": "ipc-in",
+      "id": "ab7e7995-0bec-46de-b313-0fff538855ab",
+      "decision": "once"
+    },
+    {
+      "t": 1794394855260,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "ab7e7995-0bec-46de-b313-0fff538855ab",
+      "callId": "call_0",
+      "decision": "once"
+    },
+    {
+      "t": 1794394855260,
+      "kind": "ipc-core",
+      "id": "ab7e7995-0bec-46de-b313-0fff538855ab",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794394855260,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794394855264,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794394855267,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394855293,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794394855303,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "77a95ab0-9596-4fab-8805-e6a9ad983929",
+      "callId": "call_0",
+      "path": "R2-B.txt"
+    },
+    {
+      "t": 1794394855404,
+      "kind": "ipc-in",
+      "id": "77a95ab0-9596-4fab-8805-e6a9ad983929",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394855404,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "77a95ab0-9596-4fab-8805-e6a9ad983929",
+      "callId": "call_0",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394855404,
+      "kind": "ipc-core",
+      "id": "77a95ab0-9596-4fab-8805-e6a9ad983929",
+      "decision": "reject",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794394855405,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394855428,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794394855495,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394855498,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394855528,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794394855538,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "e53d0f8f-1df1-43c5-953c-b95770fdef3a",
+      "callId": "call_0",
+      "path": "R3-A.txt"
+    },
+    {
+      "t": 1794394855611,
+      "kind": "ipc-in",
+      "id": "e53d0f8f-1df1-43c5-953c-b95770fdef3a",
+      "decision": "once"
+    },
+    {
+      "t": 1794394855611,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "e53d0f8f-1df1-43c5-953c-b95770fdef3a",
+      "callId": "call_0",
+      "decision": "once"
+    },
+    {
+      "t": 1794394855611,
+      "kind": "ipc-core",
+      "id": "e53d0f8f-1df1-43c5-953c-b95770fdef3a",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794394855611,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794394855615,
+      "kind": "ev",
+      "type": "status",
+      "state": "acting"
+    },
+    {
+      "t": 1794394855618,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394855639,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794394858719,
+      "kind": "ipc-in",
+      "id": "mtest:5f1e4d91-0657-4d67-af08-4c22c413e5b5",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394858719,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "mtest:5f1e4d91-0657-4d67-af08-4c22c413e5b5",
+      "callId": "call_0",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394858719,
+      "kind": "synthetic-resolved",
+      "id": "mtest:5f1e4d91-0657-4d67-af08-4c22c413e5b5",
+      "label": "R3-B",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394858719,
+      "kind": "ipc-core",
+      "id": "mtest:5f1e4d91-0657-4d67-af08-4c22c413e5b5",
+      "decision": "reject",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794394860228,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394860230,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394860253,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794394860261,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "6449ebe5-9927-4bdd-a7b5-2b7b92576582",
+      "callId": "call_0",
+      "path": "R4-A.txt"
+    },
+    {
+      "t": 1794394890256,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "6449ebe5-9927-4bdd-a7b5-2b7b92576582",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394890257,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394890276,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794394891851,
+      "kind": "ipc-in",
+      "id": "mtest:0c8d8a9a-b343-4e1d-a267-612587f884cf",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394891851,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "mtest:0c8d8a9a-b343-4e1d-a267-612587f884cf",
+      "callId": "call_0",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394891851,
+      "kind": "synthetic-resolved",
+      "id": "mtest:0c8d8a9a-b343-4e1d-a267-612587f884cf",
+      "label": "R4-B",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394891851,
+      "kind": "ipc-core",
+      "id": "mtest:0c8d8a9a-b343-4e1d-a267-612587f884cf",
+      "decision": "reject",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794394893363,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394893367,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394893390,
+      "kind": "ev",
+      "type": "status",
+      "state": "waiting_approval"
+    },
+    {
+      "t": 1794394893398,
+      "kind": "ev",
+      "type": "approval_request",
+      "id": "e769f78c-3ce9-4277-b06c-ff58e1bdf097",
+      "callId": "call_0",
+      "path": "R4-A.txt"
+    },
+    {
+      "t": 1794394923400,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "e769f78c-3ce9-4277-b06c-ff58e1bdf097",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394923401,
+      "kind": "ev",
+      "type": "status",
+      "state": "thinking"
+    },
+    {
+      "t": 1794394923442,
+      "kind": "ev",
+      "type": "status",
+      "state": "idle"
+    },
+    {
+      "t": 1794394923468,
+      "kind": "ipc-in",
+      "id": "6ebc8b26-cd3c-49c6-9cc6-d06244480483",
+      "decision": "once"
+    },
+    {
+      "t": 1794394923468,
+      "kind": "ev",
+      "type": "approval_closed",
+      "id": "6ebc8b26-cd3c-49c6-9cc6-d06244480483",
+      "callId": "call_0",
+      "decision": "once"
+    },
+    {
+      "t": 1794394923468,
+      "kind": "synthetic-resolved",
+      "id": "6ebc8b26-cd3c-49c6-9cc6-d06244480483",
+      "decision": "once"
+    },
+    {
+      "t": 1794394923468,
+      "kind": "ipc-core",
+      "id": "6ebc8b26-cd3c-49c6-9cc6-d06244480483",
+      "decision": "once",
+      "result": {
+        "ok": true
+      }
+    },
+    {
+      "t": 1794394925016,
+      "kind": "synthetic-resolved",
+      "id": "mtest:21654006-5df0-462c-ab81-a48d0d40a38c",
+      "label": "R5-B",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394925027,
+      "kind": "ipc-in",
+      "id": "mtest:21654006-5df0-462c-ab81-a48d0d40a38c",
+      "decision": "once"
+    },
+    {
+      "t": 1794394925028,
+      "kind": "ipc-core",
+      "id": "mtest:21654006-5df0-462c-ab81-a48d0d40a38c",
+      "decision": "once",
+      "result": {
+        "ok": false,
+        "reason": "задача поставлена на паузу"
+      }
+    },
+    {
+      "t": 1794394926523,
+      "kind": "ipc-in",
+      "id": "mtest:21654006-5df0-462c-ab81-a48d0d40a38c",
+      "decision": "reject"
+    },
+    {
+      "t": 1794394926523,
+      "kind": "ipc-core",
+      "id": "mtest:21654006-5df0-462c-ab81-a48d0d40a38c",
+      "decision": "reject",
+      "result": {
+        "ok": false,
+        "reason": "задача поставлена на паузу"
+      }
+    }
+  ]
+}

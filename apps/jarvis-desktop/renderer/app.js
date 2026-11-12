@@ -23,7 +23,7 @@
   const THEMES = window.JarvisTheme.IDS;
   const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
   const TIER_NAMES = { fast: 'Быстрая', smart: 'Умная' };
-  const SETTING_KEYS = ['voice', 'quiet', 'alwaysOnTop', 'desktopOverlay', 'alwaysListen', 'autoStart', 'screenAuto', 'memoryAuto', 'motion', 'dictation', 'terseReplies'];
+  const SETTING_KEYS = ['voice', 'quiet', 'alwaysOnTop', 'desktopOverlay', 'alwaysListen', 'autoStart', 'screenAuto', 'memoryAuto', 'motion', 'dictation', 'terseReplies', 'restEnabled'];
   const JOURNAL_LIMIT = 200;
   const MAX_FILES = 5;
   const MAX_PHRASES = 5;
@@ -240,7 +240,11 @@
     document.dispatchEvent(new CustomEvent('jarvis:view', { detail: view }));
     if (view === 'deals' || view === 'dialog') reloadDeals();
     placeOrb();
-    if (view === 'commands') { loadCatalog().then(loadCommands); loadLibrary(); }
+    if (view === 'commands') {
+      loadCatalog().then(loadCommands);
+      loadLibrary();
+      loadLaunchOverview();
+    }
     if (view === 'nox' || view === 'dialog') {
       requestAnimationFrame(() => { if (!$('#chatInput').disabled) $('#chatInput').focus(); scrollFeed(true); });
     }
@@ -575,6 +579,13 @@
     for (const s of orbSamples) s.setAnimated(on);
   }
 
+  // «Анимации» выключены — эффекты фона стоят, даже если в Windows движение разрешено.
+  // Окно вдобавок подменяет prefers-reduced-motion (main.js, applyMotion), но подмена может
+  // не дойти до страницы: это правило держит картинку само. Рисунок остаётся, гаснет движение.
+  function applyMotionLook() {
+    document.documentElement.dataset.animations = S.settings.motion === false ? 'off' : 'on';
+  }
+
   function linkDown() {
     return S.link === 'none' || S.stateOk === false;
   }
@@ -692,6 +703,14 @@
     // Режим сна — строковая настройка, поэтому отдельно от переключателей-галочек.
     const keepAwake = $('#setKeepAwake');
     if (keepAwake) keepAwake.addEventListener('change', () => changeKeepAwake(keepAwake.value));
+    const restInterval = $('#restInterval');
+    if (restInterval) restInterval.addEventListener('change', () => {
+      if (restInterval.value && restInterval.checkValidity()) changeSetting('restInterval', restInterval.valueAsNumber);
+      else {
+        syncToggles();
+        toast('Введите целое число от 5 до 120 минут', 'error');
+      }
+    });
   }
 
   // Режим «не спать»: off / while-working / always. Сохраняется сразу, окно показывает выбор как есть.
@@ -750,14 +769,20 @@
       keepAwake.value = ['off', 'while-working', 'always'].includes(S.settings.keepAwake) ? S.settings.keepAwake : 'while-working';
       keepAwake.disabled = !can;
     }
+    const restInterval = $('#restInterval');
+    if (restInterval) {
+      restInterval.value = S.settings.restInterval ?? 50;
+      restInterval.disabled = !can;
+    }
     syncDictationVisible();
+    applyMotionLook();
   }
 
   const settingRevisions = new Map();
   let settingsLoadSeq = 0;
 
   async function changeSetting(key, value) {
-    if (!SETTING_KEYS.includes(key)) return;
+    if (!SETTING_KEYS.includes(key) && key !== 'restInterval') return;
     const revision = (settingRevisions.get(key) || 0) + 1;
     settingRevisions.set(key, revision);
     const prev = S.settings[key];
@@ -1041,9 +1066,13 @@
         if ((settingRevisions.get(k) || 0) === (revisions.get(k) || 0)) S.settings[k] = s[k] === true;
       }
       if (['off', 'while-working', 'always'].includes(s.keepAwake)) S.settings.keepAwake = s.keepAwake;
+      if ((settingRevisions.get('restInterval') || 0) === (revisions.get('restInterval') || 0)) {
+        S.settings.restInterval = Number.isInteger(s.restInterval) ? s.restInterval : 50;
+      }
       if (TIER_NAMES[s.modelTier]) S.tier = s.modelTier;
       S.workspace = s.workspace ? String(s.workspace) : '';
       S.folders = Array.isArray(s.connectedFolders) ? s.connectedFolders.map(String) : [];
+      renderNotificationVoice(s.notificationVoice);
     }
     syncToggles();
     renderTier();
@@ -1896,10 +1925,42 @@
   }
 
   // Общий вопрос «да/нет» (без системных confirm()).
-  function ask(title, text, yes = 'Да', no = 'Отмена') {
+  function ask(title, text, yes = 'Да', no = 'Отмена', options = null) {
     const dlg = $('#confirmDialog');
     $('#cfTitle').textContent = title;
-    $('#cfText').textContent = text;
+    const list = $('#cfList');
+    const items = options && Array.isArray(options.items) ? options.items : null;
+    if (list) {
+      if (items && items.length > 0) {
+        $('#cfText').textContent = (options && options.summary) || text;
+        list.replaceChildren(...items.map((entry) => {
+          const li = document.createElement('li');
+          li.className = 'cf-item';
+          if (entry && typeof entry === 'object') {
+            const name = document.createElement('span');
+            name.className = 'cf-item-name';
+            name.textContent = String(entry.label || entry.path || '');
+            li.append(name);
+            if (entry.meta) {
+              const meta = document.createElement('span');
+              meta.className = 'cf-item-meta';
+              meta.textContent = String(entry.meta);
+              li.append(meta);
+            }
+          } else {
+            li.textContent = String(entry || '');
+          }
+          return li;
+        }));
+        list.hidden = false;
+      } else {
+        list.replaceChildren();
+        list.hidden = true;
+        $('#cfText').textContent = text;
+      }
+    } else {
+      $('#cfText').textContent = text;
+    }
     $('#cfYes').textContent = yes;
     $('#cfNo').textContent = no;
     const back = document.activeElement;
@@ -1908,6 +1969,7 @@
         $('#cfYes').onclick = null;
         $('#cfNo').onclick = null;
         dlg.oncancel = null;
+        if (list) { list.replaceChildren(); list.hidden = true; }
         if (dlg.open) dlg.close();
         if (back && back !== document.body && back.isConnected) back.focus();
         resolve(v);
@@ -3287,6 +3349,23 @@
         return;
       }
       switch (ev.type) {
+        case 'quick_rearm_approval':
+          if (A.view && A.view.id) showApprovalView(A.view.id);
+          break;
+        case 'quick_open_chat':
+          (async () => {
+            if (ev.workspaceId && ev.workspaceId !== currentWorkspaceId && !(await selectWorkspace(ev.workspaceId))) return;
+            const list = await call('chatList');
+            if (list && ev.chatId && list.activeId !== ev.chatId) await changeChat('chatSelect', ev.chatId);
+            show('nox');
+          })().catch((err) => console.error('[jarvis] быстрый чат:', err));
+          break;
+        case 'quick_user':
+          C.doneSinceSend = false;
+          C.lastSent = ev.text;
+          appendUser(ev.text, []);
+          showThinking();
+          break;
         case 'text':
           chatText(ev.delta);
           break;
@@ -3363,6 +3442,10 @@
           reloadDeals();
           break;
         }
+        case 'commands:changed':
+          if (has('listCommands') && S.view === 'commands') loadCommands();
+          if (S.view === 'commands' || cmdTab === 'launches') loadLaunchOverview();
+          break;
         default:
           break;
       }
@@ -3377,7 +3460,7 @@
   // ── Команды: вкладки «Мои» и «Библиотека» ─────────────────────
   // Разметка раздела пересобрана под дизайн-систему Nox (renderer/nox-commands.css):
   // данные, IPC и правила остались прежними, изменились только строки отрисовки.
-  const CMD_TABS = ['mine', 'lib'];
+  const CMD_TABS = ['mine', 'lib', 'launches'];
   let cmdTab = CMD_TABS.includes(store.get('cmdTab', 'mine')) ? store.get('cmdTab', 'mine') : 'mine';
 
   function setCmdTab(tab, focus) {
@@ -3392,10 +3475,17 @@
     }
     $('#panelMine').hidden = tab !== 'mine';
     $('#panelLib').hidden = tab !== 'lib';
+    const panelLaunches = $('#panelLaunches');
+    if (panelLaunches) panelLaunches.hidden = tab !== 'launches';
+    const packs = $('#cmdPacks');
+    if (packs) packs.hidden = tab === 'launches';
+    const commandsWrap = $('#commands');
+    if (commandsWrap) commandsWrap.classList.toggle('is-launches', tab === 'launches');
     // «Новая» и поиск «Моих» — только на «Моих», поиск библиотеки — только в «Библиотеке».
     $('#cmdNew').hidden = tab !== 'mine';
     $('#cmdSearchWrap').hidden = tab !== 'mine';
     $('#libSearchWrap').hidden = tab !== 'lib';
+    if (tab === 'launches') loadLaunchOverview();
   }
 
   function initCmdTabs() {
@@ -3590,6 +3680,8 @@
 
   function normCmd(c) {
     if (!c || typeof c !== 'object') return null;
+    const triggers = window.CmdSteps.normalizeTriggersModel(c.triggers, c.hotkey);
+    const activeHotkey = triggers.hotkey.enabled && triggers.hotkey.key ? triggers.hotkey.key : null;
     return {
       id: c.id ?? null,
       name: String(c.name || ''),
@@ -3604,7 +3696,9 @@
       lastRunAt: c.lastRunAt || null,
       folder: c.folder ? String(c.folder) : null,
       collections: Array.isArray(c.collections) ? c.collections.map((x) => String(x)).filter(Boolean) : [],
-      hotkey: c.hotkey ? String(c.hotkey) : null,
+      hotkey: activeHotkey,
+      triggers,
+      triggerState: c.triggerState && typeof c.triggerState === 'object' ? c.triggerState : null,
       origin: c.origin ? String(c.origin) : 'manual',
       updatedAt: c.updatedAt || null,
     };
@@ -3813,9 +3907,10 @@
     sw.title = c.enabled ? 'Включена: срабатывает на фразу' : 'Выключена: не срабатывает на фразу';
     sw.addEventListener('change', () => toggleCommand(c, sw));
     const ORIGIN_WORD = { recorded: 'запись', ai: 'из описания', imported: 'импорт', sample: 'пример' };
+    const badges = window.CmdSteps.triggersBadges(c).map((b) => b.text);
     const meta = [
       c.folder || '',
-      c.hotkey || '',
+      ...badges,
       stepsLabel(c.steps.length),
       ORIGIN_WORD[c.origin] || '',
       c.enabled ? '' : 'выключена',
@@ -3889,7 +3984,20 @@
     if (!(await confirmLeave())) return;
     setCmdTab('mine');
     K.selectedId = null;
-    K.draft = { id: null, name: '', phrases: ['рабочее утро'], steps: [{ tool: '', args: {} }], enabled: true, lastRunAt: null, folder: null, hotkey: null, origin: 'manual', warnings: [] };
+    K.draft = {
+      id: null,
+      name: '',
+      phrases: ['рабочее утро'],
+      steps: [{ tool: '', args: {} }],
+      enabled: true,
+      lastRunAt: null,
+      folder: null,
+      hotkey: null,
+      triggers: window.CmdSteps.normalizeTriggersModel(null, null),
+      triggerState: null,
+      origin: 'manual',
+      warnings: [],
+    };
     K.dirty = false;
     openEditor();
     $('#cmdName').focus();
@@ -3959,8 +4067,7 @@
     // Папка, горячая клавиша, происхождение и предупреждения записи.
     const folder = $('#cmdFolder');
     if (folder) folder.value = d.folder || '';
-    const hotkey = $('#cmdHotkey');
-    if (hotkey) hotkey.value = d.hotkey || '';
+    renderTriggerFields();
     const origin = $('#cmdOrigin');
     const originText = $('#cmdOriginText');
     if (origin && originText) {
@@ -4195,6 +4302,31 @@
     if (!d.name.trim()) add('Укажите имя.', () => $('#cmdName'));
     if (!d.phrases.length) add('Добавьте хотя бы одну фразу.', () => $('#cmdPhraseInput'));
     if (!d.steps.length) add('Добавьте хотя бы один шаг.', () => $('#cmdStepAdd'));
+    const trigFields = {
+      hotkey: '#cmdHotkey',
+      'schedule.minutes': '#cmdTrSchedEvery',
+      'schedule.at': '#cmdTrSchedTime',
+      'schedule.weekday': '#cmdTrSchedDay',
+      'event.eventType': '#cmdTrEventType',
+      'event.eventName': '#cmdTrEventName',
+      'event.cooldownSec': '#cmdTrEventCooldown',
+    };
+    const triggers = window.CmdSteps.normalizeTriggersModel(d.triggers, d.hotkey);
+    for (const err of window.CmdSteps.validateTriggersDraft(triggers, K.list, d.id)) {
+      if (typeof err === 'string') {
+        const hint = /клавиш/i.test(err) ? '#cmdHotkey'
+          : /интервал/i.test(err) ? '#cmdTrSchedEvery'
+          : /время/i.test(err) ? '#cmdTrSchedTime'
+          : /имя/i.test(err) ? '#cmdTrEventName'
+          : /событ/i.test(err) ? '#cmdTrEventType'
+          : /пауза/i.test(err) ? '#cmdTrEventCooldown'
+          : null;
+        add(err, hint ? () => $(hint) : null);
+      } else if (err && err.text) {
+        const sel = trigFields[err.field];
+        add(err.text, sel ? () => $(sel) : null);
+      }
+    }
     d.steps.forEach((s, i) => {
       const n = i + 1;
       const stepEl = () => $$('#cmdSteps .step')[i];
@@ -4245,13 +4377,15 @@
       return;
     }
     showCmdError('');
+    const triggers = window.CmdSteps.normalizeTriggersModel(d.triggers, d.hotkey);
     const payload = {
       name: d.name.trim(),
       phrases: d.phrases.slice(),
       steps: d.steps.map((s) => ({ tool: s.tool, args: { ...s.args } })),
       enabled: d.enabled,
       folder: d.folder || null,
-      hotkey: d.hotkey || null,
+      hotkey: triggers.hotkey.enabled && triggers.hotkey.key ? triggers.hotkey.key : null,
+      triggers,
       origin: d.origin || 'manual',
     };
     if (d.id !== null) payload.id = d.id;
@@ -4346,7 +4480,11 @@
     let err = '';
     try {
       r = await call('runCommand', cmd.id);
-      if (!r || r.ok === false) err = (r && r.error) ? (r.error === 'busy' ? 'Джарвис занят' : String(r.error)) : 'команда не выполнена';
+      if (!r || r.ok === false) {
+        err = (r && r.reason)
+          ? String(r.reason)
+          : ((r && r.error) ? (r.error === 'busy' ? 'Джарвис занят' : String(r.error)) : 'команда не выполнена');
+      }
     } catch (e) {
       err = errText(e);
     }
@@ -4891,8 +5029,375 @@
     if (ciApply) ciApply.addEventListener('click', applyCommandsImport);
     const folder = $('#cmdFolder');
     if (folder) folder.addEventListener('input', (e) => { if (!K.draft) return; K.draft.folder = e.target.value.trim() || null; markDirty(); });
-    const hotkey = $('#cmdHotkey');
-    if (hotkey) hotkey.addEventListener('input', (e) => { if (!K.draft) return; K.draft.hotkey = e.target.value.trim() || null; markDirty(); });
+    bindTriggerEditorFields();
+    initLaunchPanel();
+  }
+
+  // ── Способы запуска в редакторе и единая вкладка «Запуски» ─────
+  function populateTriggerSelects() {
+    const daySel = $('#cmdTrSchedDay');
+    if (daySel && !daySel.options.length) {
+      for (const d of window.CmdSteps.TRIGGER_WEEKDAYS || []) {
+        daySel.append(el('option', { value: String(d.value), text: d.label }));
+      }
+    }
+    const evOpts = window.CmdSteps.TRIGGER_EVENT_OPTIONS || [];
+    for (const sel of [$('#cmdTrEventType'), $('#launchEventType')]) {
+      if (!sel || sel.options.length) continue;
+      for (const opt of evOpts) {
+        sel.append(el('option', { value: opt.type, text: opt.label, title: opt.description || '' }));
+      }
+      if (sel.id === 'launchEventType') sel.value = 'user:custom';
+    }
+  }
+
+  function ensureDraftTriggers() {
+    if (!K.draft) return null;
+    if (!K.draft.triggers) K.draft.triggers = window.CmdSteps.normalizeTriggersModel(null, K.draft.hotkey);
+    return K.draft.triggers;
+  }
+
+  function syncTriggerVisibility() {
+    const tr = ensureDraftTriggers();
+    const sch = (tr && tr.schedule) || { type: 'daily' };
+    const ev = (tr && tr.event) || { eventType: 'app:startup' };
+    const isInterval = sch.type === 'interval';
+    const isWeekly = sch.type === 'weekly';
+    const everyWrap = $('#cmdTrSchedEveryWrap');
+    const dayWrap = $('#cmdTrSchedDayWrap');
+    const timeWrap = $('#cmdTrSchedTimeWrap');
+    const nameWrap = $('#cmdTrEventNameWrap');
+    if (everyWrap) everyWrap.hidden = !isInterval;
+    if (dayWrap) dayWrap.hidden = !isWeekly;
+    if (timeWrap) timeWrap.hidden = isInterval;
+    if (nameWrap) nameWrap.hidden = ev.eventType !== 'user:custom';
+  }
+
+  function renderTriggerFields() {
+    populateTriggerSelects();
+    const tr = ensureDraftTriggers();
+    if (!tr) return;
+    const hkOn = $('#cmdTrHotkeyOn');
+    const hk = $('#cmdHotkey');
+    if (hkOn) hkOn.checked = Boolean(tr.hotkey.enabled);
+    if (hk) hk.value = tr.hotkey.key || '';
+
+    const schOn = $('#cmdTrSchedOn');
+    const schType = $('#cmdTrSchedType');
+    const schEvery = $('#cmdTrSchedEvery');
+    const schDay = $('#cmdTrSchedDay');
+    const schTime = $('#cmdTrSchedTime');
+    if (schOn) schOn.checked = Boolean(tr.schedule.enabled);
+    if (schType) schType.value = tr.schedule.type || 'daily';
+    if (schEvery) schEvery.value = String(tr.schedule.minutes ?? 30);
+    if (schDay) schDay.value = String(tr.schedule.weekday || 1);
+    if (schTime) schTime.value = tr.schedule.at || '09:00';
+
+    const evOn = $('#cmdTrEventOn');
+    const evType = $('#cmdTrEventType');
+    const evName = $('#cmdTrEventName');
+    const evMatch = $('#cmdTrEventMatch');
+    const evCooldown = $('#cmdTrEventCooldown');
+    if (evOn) evOn.checked = Boolean(tr.event.enabled);
+    if (evType) evType.value = tr.event.eventType || 'app:startup';
+    if (evName) evName.value = tr.event.eventName || '';
+    if (evMatch) evMatch.value = tr.event.match || '';
+    if (evCooldown) evCooldown.value = String(Number.isFinite(tr.event.cooldownSec) ? tr.event.cooldownSec : 30);
+
+    syncTriggerVisibility();
+  }
+
+  function bindTriggerEditorFields() {
+    populateTriggerSelects();
+    const hkOn = $('#cmdTrHotkeyOn');
+    const hk = $('#cmdHotkey');
+    if (hkOn) {
+      hkOn.addEventListener('change', (e) => {
+        const tr = ensureDraftTriggers();
+        if (!tr) return;
+        tr.hotkey.enabled = e.target.checked;
+        tr.hotkey._userToggledOff = !e.target.checked;
+        K.draft.hotkey = tr.hotkey.enabled && tr.hotkey.key ? tr.hotkey.key : null;
+        markDirty();
+      });
+    }
+    if (hk) {
+      hk.addEventListener('input', (e) => {
+        const tr = ensureDraftTriggers();
+        if (!tr) return;
+        const val = e.target.value.trim() || null;
+        tr.hotkey.key = val;
+        if (!val) {
+          tr.hotkey.enabled = false;
+          if (hkOn) hkOn.checked = false;
+        } else if (!tr.hotkey._userToggledOff) {
+          tr.hotkey.enabled = true;
+          if (hkOn) hkOn.checked = true;
+        }
+        K.draft.hotkey = tr.hotkey.enabled && tr.hotkey.key ? tr.hotkey.key : null;
+        markDirty();
+      });
+    }
+
+    const schOn = $('#cmdTrSchedOn');
+    const schType = $('#cmdTrSchedType');
+    const schEvery = $('#cmdTrSchedEvery');
+    const schDay = $('#cmdTrSchedDay');
+    const schTime = $('#cmdTrSchedTime');
+    if (schOn) schOn.addEventListener('change', (e) => { const tr = ensureDraftTriggers(); if (!tr) return; tr.schedule.enabled = e.target.checked; markDirty(); });
+    if (schType) schType.addEventListener('change', (e) => { const tr = ensureDraftTriggers(); if (!tr) return; tr.schedule.type = e.target.value; syncTriggerVisibility(); markDirty(); });
+    if (schEvery) schEvery.addEventListener('input', (e) => { const tr = ensureDraftTriggers(); if (!tr) return; tr.schedule.minutes = Number(e.target.value); markDirty(); });
+    if (schDay) schDay.addEventListener('change', (e) => { const tr = ensureDraftTriggers(); if (!tr) return; tr.schedule.weekday = Number(e.target.value); markDirty(); });
+    if (schTime) schTime.addEventListener('change', (e) => { const tr = ensureDraftTriggers(); if (!tr) return; tr.schedule.at = e.target.value; markDirty(); });
+
+    const evOn = $('#cmdTrEventOn');
+    const evType = $('#cmdTrEventType');
+    const evName = $('#cmdTrEventName');
+    const evMatch = $('#cmdTrEventMatch');
+    const evCooldown = $('#cmdTrEventCooldown');
+    if (evOn) evOn.addEventListener('change', (e) => { const tr = ensureDraftTriggers(); if (!tr) return; tr.event.enabled = e.target.checked; markDirty(); });
+    if (evType) evType.addEventListener('change', (e) => { const tr = ensureDraftTriggers(); if (!tr) return; tr.event.eventType = e.target.value; syncTriggerVisibility(); markDirty(); });
+    if (evName) evName.addEventListener('input', (e) => { const tr = ensureDraftTriggers(); if (!tr) return; tr.event.eventName = e.target.value.trim() || null; markDirty(); });
+    if (evMatch) evMatch.addEventListener('input', (e) => { const tr = ensureDraftTriggers(); if (!tr) return; tr.event.match = e.target.value.trim() || null; markDirty(); });
+    if (evCooldown) evCooldown.addEventListener('input', (e) => { const tr = ensureDraftTriggers(); if (!tr) return; tr.event.cooldownSec = Number(e.target.value); markDirty(); });
+  }
+
+  const LVIEW = {
+    commands: [],
+    log: [],
+    hotkeyStatus: {},
+    filters: { commandId: 'all', trigger: 'all', status: 'all' },
+  };
+
+  async function loadLaunchOverview() {
+    const countEl = $('#launchCount');
+    if (!has('getCommandLaunches')) {
+      LVIEW.commands = K.list.slice();
+      LVIEW.log = [];
+      LVIEW.hotkeyStatus = {};
+      if (countEl) countEl.textContent = '0';
+      if (cmdTab === 'launches') renderLaunchPanel();
+      return;
+    }
+    try {
+      const res = await call('getCommandLaunches', { limit: 150 });
+      if (res && res.ok !== false) {
+        LVIEW.commands = Array.isArray(res.commands) ? res.commands : [];
+        LVIEW.log = Array.isArray(res.log) ? res.log : [];
+        LVIEW.hotkeyStatus = (res.hotkeyStatus && typeof res.hotkeyStatus === 'object') ? res.hotkeyStatus : {};
+        if (countEl) countEl.textContent = String(LVIEW.log.length);
+      }
+    } catch (e) {
+      if (cmdTab === 'launches') toast('Журнал запусков не загрузился: ' + errText(e), 'error');
+    }
+    if (cmdTab === 'launches') renderLaunchPanel();
+  }
+
+  async function toggleTriggerSwitch(row, kind, sw) {
+    if (!has('updateCommandTriggers')) { sw.checked = !sw.checked; return; }
+    const nextEnabled = sw.checked;
+    const triggers = window.CmdSteps.normalizeTriggersModel(row.triggers, null);
+    if (kind === 'hotkey' && nextEnabled && !triggers.hotkey.key) {
+      sw.checked = false;
+      toast('Сначала укажите горячую клавишу в редакторе команды', 'error');
+      await selectCommand(row.id);
+      setTimeout(() => $('#cmdHotkey')?.focus(), 50);
+      return;
+    }
+    triggers[kind].enabled = nextEnabled;
+    sw.disabled = true;
+    try {
+      const r = await call('updateCommandTriggers', row.id, triggers);
+      if (!r || r.ok === false) throw new Error((r && r.error) || 'не удалось сохранить настройку');
+      toast(`Способ запуска «${window.CmdSteps.TRIGGER_KIND_LABELS[kind] || kind}» ${nextEnabled ? 'включён' : 'выключен'}`, 'ok');
+      await loadLaunchOverview();
+      if (has('listCommands')) await loadCommands();
+    } catch (e) {
+      sw.checked = !nextEnabled;
+      toast('Не получилось обновить способ запуска: ' + errText(e), 'error');
+    } finally {
+      sw.disabled = false;
+    }
+  }
+
+  async function testCommandTrigger(row, kind, btn) {
+    if (!has('triggerCommandLaunch')) return;
+    if (btn) btn.disabled = true;
+    try {
+      const res = await call('triggerCommandLaunch', { id: row.id, trigger: kind });
+      const msg = (res && res.reason) || (res && res.error) || (res && res.ok ? 'выполнена' : 'не выполнена');
+      toast(`«${row.name}» (${window.CmdSteps.TRIGGER_KIND_LABELS[kind] || kind}): ${msg}`, res && res.ok ? 'ok' : 'error');
+      await loadLaunchOverview();
+      if (has('listCommands')) await loadCommands();
+    } catch (e) {
+      toast('Ошибка проверки запуска: ' + errText(e), 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function renderLaunchMethodCell(row, kind) {
+    const info = row[kind];
+    const hkInfo = kind === 'hotkey' ? LVIEW.hotkeyStatus[row.id] : null;
+    const label = window.CmdSteps.TRIGGER_KIND_LABELS[kind] || kind;
+    const sw = el('input', {
+      type: 'checkbox',
+      role: 'switch',
+      class: 'switch',
+      'aria-label': `${label} для «${row.name}»`,
+      disabled: !has('updateCommandTriggers'),
+    });
+    sw.checked = Boolean(info.enabled);
+    sw.addEventListener('change', () => toggleTriggerSwitch(row, kind, sw));
+
+    const testBtn = el('button', {
+      type: 'button',
+      class: 'launch-mini-btn',
+      text: 'Проверить',
+      title: `Проверить запуск (${label}) по тем же правилам доступа`,
+      disabled: !has('triggerCommandLaunch'),
+      onclick: (e) => { e.stopPropagation(); testCommandTrigger(row, kind, e.currentTarget); },
+    });
+
+    const notes = [];
+    if (kind === 'hotkey' && hkInfo && hkInfo.enabled && hkInfo.error) {
+      notes.push(el('span', { class: 'launch-warn', text: hkInfo.error }));
+    }
+    if (kind === 'schedule' && row.nextRunAt) {
+      notes.push(el('span', { class: 'launch-next', text: 'След.: ' + U.absTime(row.nextRunAt) }));
+    }
+    if (!info.enabled && info.configured) {
+      notes.push(el('span', { class: 'launch-off-note', text: 'Выключено' }));
+    }
+
+    return el('div', { class: 'launch-cell' + (info.active ? ' is-active' : '') },
+      el('div', { class: 'launch-cell-head' },
+        el('label', { class: 'launch-cell-title' }, sw, el('span', { text: label })),
+        testBtn),
+      el('p', { class: 'launch-cell-desc', text: info.summary }),
+      notes.length ? el('div', { class: 'launch-cell-notes' }, notes) : null);
+  }
+
+  function renderLaunchPanel() {
+    populateTriggerSelects();
+    const matrixData = window.CmdSteps.buildLaunchMatrix(LVIEW.commands, LVIEW.log);
+    const stats = $('#launchStats');
+    if (stats) {
+      stats.replaceChildren(...[
+        el('span', { class: 'launch-pill', text: `Команд: ${matrixData.summary.totalCommands}` }),
+        el('span', { class: 'launch-pill', text: `Горячих клавиш: ${matrixData.summary.withHotkey}` }),
+        el('span', { class: 'launch-pill', text: `По расписанию: ${matrixData.summary.withSchedule}` }),
+        el('span', { class: 'launch-pill', text: `По событию: ${matrixData.summary.withEvent}` }),
+        matrixData.summary.recentProblems > 0
+          ? el('span', { class: 'launch-pill is-warn', text: `Пропусков/ошибок: ${matrixData.summary.recentProblems}` })
+          : null,
+      ].filter(Boolean));
+    }
+
+    const cmdFilter = $('#launchFilterCmd');
+    if (cmdFilter) {
+      const prev = LVIEW.filters.commandId || 'all';
+      cmdFilter.replaceChildren(
+        el('option', { value: 'all', text: 'Все команды' }),
+        ...matrixData.rows.map((r) => el('option', { value: r.id, text: r.name })));
+      cmdFilter.value = matrixData.rows.some((r) => r.id === prev) ? prev : 'all';
+      LVIEW.filters.commandId = cmdFilter.value;
+    }
+
+    const matrixEl = $('#launchMatrix');
+    const matrixEmpty = $('#launchMatrixEmpty');
+    if (matrixEl) {
+      matrixEl.replaceChildren(...matrixData.rows.map((row) => {
+        const lastTime = row.lastTriggeredAt ? U.absTime(row.lastTriggeredAt) : '';
+        const statusEl = el('span', { class: 'launch-badge', dataset: { tone: row.lastStatusTone }, text: row.lastStatusLabel });
+        return el('li', { class: 'launch-card' + (row.commandEnabled ? '' : ' is-disabled') },
+          el('div', { class: 'launch-card-head' },
+            el('div', { class: 'launch-card-id' },
+              el('button', {
+                type: 'button', class: 'launch-cmd-name', text: row.name, title: 'Настроить шаги и способы запуска',
+                onclick: () => selectCommand(row.id),
+              }),
+              row.folder ? el('span', { class: 'launch-folder', text: row.folder }) : null,
+              !row.commandEnabled ? el('span', { class: 'launch-badge', dataset: { tone: 'muted' }, text: 'Команда выключена' }) : null),
+            el('div', { class: 'launch-card-actions' },
+              el('button', {
+                type: 'button', class: 'launch-mini-btn', text: 'Настроить',
+                onclick: () => selectCommand(row.id),
+              }),
+              el('button', {
+                type: 'button', class: 'launch-mini-btn is-primary', text: 'Запустить',
+                disabled: !has('triggerCommandLaunch') || !row.commandEnabled,
+                onclick: (e) => testCommandTrigger(row, 'manual', e.currentTarget),
+              }))),
+          el('div', { class: 'launch-triggers-grid' },
+            renderLaunchMethodCell(row, 'hotkey'),
+            renderLaunchMethodCell(row, 'schedule'),
+            renderLaunchMethodCell(row, 'event')),
+          el('div', { class: 'launch-card-foot' },
+            statusEl,
+            row.lastTriggerLabel ? el('span', { class: 'launch-foot-meta', text: row.lastTriggerLabel }) : null,
+            lastTime ? el('span', { class: 'launch-foot-meta', text: lastTime }) : null,
+            row.lastReason ? el('span', { class: 'launch-foot-reason', text: row.lastReason }) : null));
+      }));
+      if (matrixEmpty) matrixEmpty.hidden = matrixData.rows.length > 0;
+    }
+
+    const logList = $('#launchLogList');
+    const logEmpty = $('#launchLogEmpty');
+    if (logList) {
+      const filtered = window.CmdSteps.filterLaunchLog(LVIEW.log, LVIEW.filters);
+      logList.replaceChildren(...filtered.map((row) => el('li', { class: 'launch-log-row', dataset: { status: row.status, tone: row.statusTone } },
+        el('div', { class: 'launch-log-main' },
+          el('span', { class: 'launch-badge', dataset: { tone: row.statusTone }, text: row.statusLabel }),
+          el('strong', { class: 'launch-log-name', text: row.commandName }),
+          el('span', { class: 'launch-log-kind', text: row.triggerDetail ? `${row.triggerLabel} · ${row.triggerDetail}` : row.triggerLabel }),
+          row.stepsText && row.stepsText !== '—' ? el('span', { class: 'launch-log-steps', text: `шаги ${row.stepsText}` }) : null,
+          row.durationText && row.durationText !== '—' ? el('span', { class: 'launch-log-steps', text: row.durationText }) : null,
+          el('span', { class: 'launch-log-time', text: row.ts ? U.absTime(row.ts) : '' })),
+        row.reason ? el('p', { class: 'launch-log-reason', text: row.reason }) : null)));
+      if (logEmpty) logEmpty.hidden = filtered.length > 0;
+    }
+  }
+
+  function initLaunchPanel() {
+    populateTriggerSelects();
+    $('#launchReload')?.addEventListener('click', () => loadLaunchOverview());
+    $('#launchFilterCmd')?.addEventListener('change', (e) => { LVIEW.filters.commandId = e.target.value; renderLaunchPanel(); });
+    $('#launchFilterTrigger')?.addEventListener('change', (e) => { LVIEW.filters.trigger = e.target.value; renderLaunchPanel(); });
+    $('#launchFilterStatus')?.addEventListener('change', (e) => { LVIEW.filters.status = e.target.value; renderLaunchPanel(); });
+    const evTypeSel = $('#launchEventType');
+    const evNameInput = $('#launchEventName');
+    if (evTypeSel && evNameInput) {
+      const syncEvName = () => { evNameInput.hidden = evTypeSel.value !== 'user:custom'; };
+      evTypeSel.addEventListener('change', syncEvName);
+      syncEvName();
+    }
+    $('#launchFireEvent')?.addEventListener('click', async () => {
+      if (!has('fireCommandEvent')) return;
+      const eventType = ($('#launchEventType') && $('#launchEventType').value) || 'user:custom';
+      const eventName = ($('#launchEventName') && $('#launchEventName').value.trim()) || '';
+      const btn = $('#launchFireEvent');
+      if (btn) btn.disabled = true;
+      try {
+        const res = await call('fireCommandEvent', { eventType, eventName });
+        const matched = (res && res.matched) || 0;
+        const ran = (res && res.ran) || 0;
+        toast(matched ? `Событие отправлено: сработало команд ${ran} из ${matched}` : 'Нет включённых команд для этого события', matched && ran > 0 ? 'ok' : undefined);
+        await loadLaunchOverview();
+        if (has('listCommands')) await loadCommands();
+      } catch (e) {
+        toast('Не удалось отправить событие: ' + errText(e), 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+    $('#launchClear')?.addEventListener('click', async () => {
+      if (!has('clearCommandLaunchLog')) return;
+      const commandId = LVIEW.filters.commandId && LVIEW.filters.commandId !== 'all' ? LVIEW.filters.commandId : null;
+      await call('clearCommandLaunchLog', commandId);
+      toast('Журнал запусков очищен', 'ok');
+      await loadLaunchOverview();
+    });
   }
 
   function initMemoryAndReminders() {
@@ -5032,7 +5537,61 @@
     }
   }
 
+  let noticeVoiceDirty = false;
+  let noticeVoiceSaving = false;
+
+  function renderNotificationVoice(value) {
+    if (!value || noticeVoiceDirty || noticeVoiceSaving) return;
+    for (const el of $$('#notificationVoiceSettings [data-notice-option]')) {
+      const key = el.dataset.noticeOption;
+      if (el.type === 'checkbox') el.checked = value[key] === true;
+      else el.value = key === 'volume' ? Math.round(value.volume * 100) : value[key];
+    }
+    for (const el of $$('#notificationVoiceSettings [data-notice-category]')) {
+      el.checked = value.categories.includes(el.dataset.noticeCategory);
+    }
+    $('#noticeVolumeHint').textContent = Math.round(value.volume * 100) + ' %';
+  }
+
+  function initNotificationVoice() {
+    const panel = $('#notificationVoiceSettings');
+    const button = $('#saveNotificationVoice');
+    if (!panel || !button) return;
+    const options = [...panel.querySelectorAll('[data-notice-option]')];
+    const categories = [...panel.querySelectorAll('[data-notice-category]')];
+    panel.addEventListener('input', (event) => {
+      if (!event.target.matches('[data-notice-option], [data-notice-category]')) return;
+      if (event.target.dataset.noticeOption === 'volume') $('#noticeVolumeHint').textContent = event.target.value + ' %';
+      noticeVoiceDirty = true;
+      button.disabled = false;
+    });
+    button.addEventListener('click', async () => {
+      if (noticeVoiceSaving) return;
+      const value = { categories: categories.filter((el) => el.checked).map((el) => el.dataset.noticeCategory) };
+      for (const el of options) {
+        const key = el.dataset.noticeOption;
+        value[key] = el.type === 'checkbox' ? el.checked : key === 'volume' ? Number(el.value) / 100 : el.value;
+      }
+      noticeVoiceSaving = true;
+      button.disabled = true;
+      for (const el of [...options, ...categories]) el.disabled = true;
+      try {
+        const result = await call('setSetting', 'notificationVoice', value);
+        if (!result?.ok) throw new Error(result?.error || 'Не удалось сохранить настройки уведомлений');
+        noticeVoiceDirty = false;
+        toast('Настройки озвучки сохранены', 'ok');
+      } catch (err) {
+        toast(errText(err), 'error');
+      } finally {
+        noticeVoiceSaving = false;
+        button.disabled = !noticeVoiceDirty;
+        for (const el of [...options, ...categories]) el.disabled = false;
+      }
+    });
+  }
+
   function initVoiceOptions() {
+    initNotificationVoice();
     const vol = $('#voiceVolume');
     const rate = $('#voiceRate');
     const sel = $('#voiceSpeaker');
@@ -5105,6 +5664,22 @@
     safe('связь', renderLink);
     safe('статус', renderStatus);
     safe('быстрые фразы', renderQuickChips);
+    if (has('quickHotkey') && has('setQuickHotkey')) {
+      const input = $('#quickHotkeyInput');
+      const status = $('#quickHotkeyStatus');
+      const refreshQuickHotkey = async () => {
+        const value = await call('quickHotkey');
+        if (!value) return;
+        input.value = value.configured;
+        status.textContent = value.registered ? 'Сочетание работает' : 'Сочетание занято или недоступно. Выберите другое.';
+      };
+      $('#quickHotkeySave').addEventListener('click', async () => {
+        const result = await call('setQuickHotkey', input.value);
+        if (result && result.ok) await refreshQuickHotkey();
+        else status.textContent = result && result.error || 'Не удалось зарегистрировать сочетание';
+      });
+      safe('сочетание быстрого чата', refreshQuickHotkey);
+    }
 
     if (has('onEvent')) {
       safe('подписка на события', () => window.jarvis.onEvent(onEvent));

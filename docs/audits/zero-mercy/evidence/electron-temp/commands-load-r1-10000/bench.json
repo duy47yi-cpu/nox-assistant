@@ -1,0 +1,78 @@
+{
+  "size": 10000,
+  "bridgeCount": 10011,
+  "sizes": {
+    "width": 1200,
+    "height": 720,
+    "dpr": 1
+  },
+  "bootMs": 1386.4107999999999,
+  "firstRows": true,
+  "listReadyMs": 2472.6933,
+  "first": {
+    "noMatch": {
+      "syncMs": 132,
+      "twoFramesMs": 145.5,
+      "rows": 0
+    },
+    "oneMatch": {
+      "syncMs": 1.3999999985098839,
+      "twoFramesMs": 10.700000002980232,
+      "rows": 1
+    },
+    "all": {
+      "syncMs": 369.5,
+      "twoFramesMs": 1941.2999999970198,
+      "rows": 10000
+    },
+    "reset": {
+      "syncMs": 434.20000000298023,
+      "twoFramesMs": 2381.9000000059605,
+      "rows": 10011
+    }
+  },
+  "openEditor": {
+    "syncMs": 0.10000000149011612,
+    "twoFramesMs": 475,
+    "rows": 10011,
+    "visible": true
+  },
+  "cycles": [
+    {
+      "chat": {
+        "syncMs": 268.3999999985099,
+        "twoFramesMs": 356.6000000014901,
+        "rows": 10011
+      },
+      "commandsMs": 5187.368700000001
+    },
+    {
+      "chat": {
+        "syncMs": 243.89999999850988,
+        "twoFramesMs": 336.59999999403954,
+        "rows": 10011
+      },
+      "commandsMs": 4675.681099999998
+    },
+    {
+      "chat": {
+        "syncMs": 285.6000000014901,
+        "twoFramesMs": 386.79999999701977,
+        "rows": 10011
+      },
+      "commandsMs": 4319.243399999999
+    },
+    {
+      "chat": {
+        "syncMs": 227.80000000447035,
+        "twoFramesMs": 306.8999999985099,
+        "rows": 10011
+      },
+      "commandsMs": 4439.3308
+    }
+  ],
+  "transfer": {},
+  "electron": "44.9.3",
+  "os": "10.0.26300",
+  "errors": []
+}

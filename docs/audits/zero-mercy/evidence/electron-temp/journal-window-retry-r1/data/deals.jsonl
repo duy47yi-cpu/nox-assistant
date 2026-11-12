@@ -1,0 +1,2 @@
+{"seq":1,"ts":"2026-11-10T17:47:13.962Z","ref":"turn:6d903f54","title":"Сохрани отчёт аудита, затем проверь следующий пункт.","source":"turn","state":"started","reason":"","due":null,"since":"2026-11-10T17:47:13.962Z","cleared":false}
+{"seq":2,"ts":"2026-11-10T17:47:14.004Z","ref":"turn:6d903f54","forget":true}
