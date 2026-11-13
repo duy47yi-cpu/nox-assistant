@@ -131,6 +131,8 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | `renderer/nox-screen.css` | Экран Nox: токены реконструкции, сетка окна 1200×720 (рейка 52 / история 244 / чат 1fr / сфера 360 / зазор 8), панели, лента, поле ввода, сфера. Подключается последним и ограничен `body[data-view="nox"]` / `.view-nox` |
 | `renderer/nox-screen.js` | Экран Nox: список чатов «Сегодня/Ранее», перенос беседы и поля ввода между экраном Nox и классическим, живая строка «Ход работы», кнопки окна, сфера и её вариант (`window.NoxScreen.setVariant`, `localStorage noxOrb`, `#orb=wire`; в интерфейсе переключателя нет) |
 | `renderer/orb-nox.js` | Сфера экрана Nox: вариант «проволока» (как в референсе) и «точки с ядром» (Nox Identity), состояния, дыхание, деформация, DPR, пауза в фоне |
+| `renderer/nox-signature.css` | Фирменный слой «Затвор»: вкладки в шапке вместо левой рейки, колонки без карточек, лента-журнал со строкой команды и линией времени, прибор справа (затвор, слово состояния, режим), командная строка; последний слой, цвета из токенов темы `signal` |
+| `renderer/orb-shutter.js` | Вид шара «Затвор» для `NoxOrb` (девять лепестков в оправе со шкалой, свет за отверстием; раскрытие и ход шагами по состояниям); подключается после `orb-nox.js`, вид по умолчанию на экране Nox |
 | `renderer/nox-commands.css` | Раздел «Команды» в системе Nox: токены и каркас окна для `body[data-view="commands"]`, каталог (шапка, вкладки, поиск, строки 64, панель паков, запись), редактор (поля, шаги, «Результат проверки», нижняя панель), диалоги выбора действия и импорта; последний слой, чат и другие разделы не трогает |
 | `renderer/presence.css` | Вид настольного ассистента: рейка с подписями, крошки в шапке, мягкие панели, чат и сцена с шаром, команды и настройки с правой колонкой; последний слой, цвета из тем |
 | `renderer/accent.js` | Настройки → Вид: строка «Цвет акцента» (7 кружков и поле HEX), цвет поверх темы через `theme-boot.js`; если контраст ниже 4,5:1, цвет сдвигается и строка под названием говорит, какой взят |
@@ -152,6 +154,10 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | `renderer/dev-stub.js` | Подмена ядра для проверки в браузере |
 | `renderer/region.html`, `renderer/region.js` | Рамка «Объясни, что я обвёл» поверх основного экрана: выделение мышью, Esc — отмена; итог уходит заголовком страницы в `region:pick` (`main.js`) |
 | `renderer/hands.html`, `renderer/hands.css` | Надпись «Nox работает на вашем ПК · Esc — остановить»: плашка поверх окон и `#handsBanner` в главном окне, включает `showHands` в `main.js` |
+| `renderer/aether/index.html`, `renderer/aether/aether.css`, `renderer/aether/aether.js`, `renderer/aether/aether-boot.js` | Оболочка Nox Aether (Концепция B): чистая точка входа, стили, предзагрузка темы/подписи и связка маршрутов |
+| `renderer/aether/orb-library.js`, `renderer/aether/icons.js`, `renderer/aether/markdown.js`, `renderer/aether/bridge.js`, `renderer/aether/store.js` | Единая библиотека обеих систем сфер, векторные иконки без эмодзи, безопасный Markdown+Math, мост IPC и реактивное состояние (черновики чатов, R3-01 подтверждения) |
+| `renderer/aether/components/topbar.js`, `renderer/aether/components/history-drawer.js`, `renderer/aether/components/orb-stage.js`, `renderer/aether/components/approval-card.js`, `renderer/aether/components/composer.js`, `renderer/aether/components/chat-view.js` | Шапка на 5 разделов, сворачиваемая история с пространствами, живая сцена сферы с «The Nox», защищённая карточка подтверждения, композер и экран чата |
+| `renderer/aether/components/commands-view.js`, `renderer/aether/components/mcp-view.js`, `renderer/aether/components/personal-view.js`, `renderer/aether/components/settings-view.js` | Вторичные разделы Aether: команды и паки, MCP-подключения (7 состояний + drift), личное пространство (столы, память, аккаунт, журнал) и Настройки с Мастерской Nox |
 
 ### Ядро: `src/`
 
@@ -196,6 +202,7 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | `src/mail/` | `src/mail/gmail.js` зашифрованный доступ и Gmail API; `src/mail/oauth-loopback.js` — вход через системный браузер и локальный callback; учётные данные `NOX_GMAIL_CLIENT_ID`, `NOX_GMAIL_CLIENT_SECRET` |
 | `src/weather/` | `src/weather/open-meteo.js` погода open-meteo без ключей, кэш 30 минут |
 | `src/news/` | `src/news/rss.js` лента RSS для виджета «Новости»: разбор без внешних пакетов, таймаут, кэш 30 минут, честные ошибки |
+| `src/browser-bridge/` | `src/browser-bridge/service.js` безопасная интеграция с расширением Chrome через локальный мост `nox-bridge-2` (выключена по умолчанию, секреты только в main process, метаданные вкладки без текста страницы) |
 
 ### Инструменты: `src/tools/`
 
@@ -224,6 +231,7 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | `src/tools/media.js` | `media_control`: плеер Windows (играть, пауза, следующий) |
 | `src/tools/ocr.js` | `image_read_text`: текст с картинки в рабочей папке (встроенное распознавание Windows); `image_look`: картинка целиком уходит модели — фото, схемы, графики, ошибки на экране (PNG, JPG, WebP, GIF; BMP/TIFF переводятся в JPEG) |
 | `src/tools/browser.js` | `browser_*`: скрытый Chromium с постоянными входами |
+| `src/tools/browser-bridge.js` | `browser_tab_read`: чтение только разрешённой владельцем вкладки через расширение Chrome (за feature flag, только T1 с вопросом) |
 | `src/tools/web.js` | `web_search`, `web_wiki`, `web_fetch`, `web_research` (несколько запросов и чтение найденных страниц), `web_check_claims`: сверка утверждений с дословными цитатами по собранным источникам (не доказывает истинность, только совпадение), защита от локальных адресов |
 | `src/tools/workspace.js` | `workspace_*`: чтение, запись, поиск, перенос, копия, папки; перед перезаписью файла кладёт прежнюю версию в `backups/` (до 50 копий всего, не больше 20 на файл; ссылки и junction отклоняются), вернуть её — `workspace_restore` (`list: true` показывает копии, восстановление сначала сохраняет текущую версию); `backups/` не показывается в списке |
 | `src/tools/project.js` | `project_brief`: разбор папки проекта, типов файлов, недавних изменений и подсказка про тесты; `project_commands`: какие команды сборки и тестов ждать по файлам проекта; `project_run`: запуск одной из найденных команд в папке проекта с кодом выхода и хвостом вывода (T2, только в чате; в фоне, миссиях и мандате не даётся); `project_diagnostics`: ошибки из указанного журнала .log/.txt, без запуска сборки; в обычных режимах — внутри рабочей папки, в «Полном доступе» можно указать другую папку |
@@ -244,6 +252,13 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | `src/tools/currency.js` | `currency_rate`: курс валют ЦБ к рублю (USD, EUR, CNY и другие), кэш 15 минут; короткая просьба про курс отвечается без модели и браузера |
 | `src/missions/long.js` | `long_task_*` |
 | `src/tasks/tools.js` | `task_*` |
+| `src/link/errors.js` | Ошибки, валидация UUIDv4 и имён, санитизация секретов и атомарная запись Nox Link |
+| `src/link/pki.js` | Двухуровневый PKI Nox Link (Device Root CA + Leaf ECDSA P-256 на `pkijs` / `asn1js`), проверка SAN/KU/EKU/NameConstraints и подпись PoP |
+| `src/link/identity.js` | Удостоверение устройства Nox Link и fail-closed хранение приватных ключей через Electron `safeStorage` |
+| `src/link/peers.js` | Доверенные устройства Nox Link: пиннинг CA+Leaf, отзыв (tombstone) и явная замена сертификата |
+| `src/link/tls.js` | Взаимный TLS 1.3 Nox Link: пиннинг, проверка `deviceId`, таймауты, half-open сокеты и чистое завершение |
+| `src/link/pairing.js` | Сопряжение Nox Link: Commit-then-Reveal + mTLS 1.3 + PoP + транскрипт-привязанный SAS с обязательным подтверждением обоих владельцев |
+| `src/link/index.js` | Точка входа изолированного криптографического ядра Nox Link |
 
 ### Данные: `NOX_DATA_DIR`, по умолчанию `data/` в корне
 

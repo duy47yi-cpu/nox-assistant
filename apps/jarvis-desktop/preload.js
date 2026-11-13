@@ -138,6 +138,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   downloadsRemove: (payload, confirm) => ipcRenderer.invoke('downloads:remove', payload, confirm === true),
   diskFree: () => ipcRenderer.invoke('disk:free'),
   toolCatalog: () => ipcRenderer.invoke('tools:catalog'),
+  browserBridgeState: () => ipcRenderer.invoke('browser-bridge:state'),
   libraryList: () => ipcRenderer.invoke('library:list'),
   libraryRun: (id, values) => ipcRenderer.invoke('library:run', id, values),
   onEvent: (callback) => {

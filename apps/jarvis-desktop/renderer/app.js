@@ -2404,6 +2404,21 @@
     U.fillIcons(act.sum);
   }
 
+  function safeActSource(source) {
+    if (!source || typeof source.url !== 'string') return null;
+    try {
+      const url = new URL(source.url);
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+      return {
+        title: String(source.title || source.host || url.hostname).slice(0, 120),
+        url: source.url.slice(0, 2048),
+        host: String(source.host || url.hostname).slice(0, 120),
+      };
+    } catch {
+      return null;
+    }
+  }
+
   function fillActRow(li, e) {
     li.dataset.status = e.status;
     const brief = U.argsBrief(e.args, 120);
@@ -2411,10 +2426,18 @@
     // Чем подтверждено — видно прямо в строке; у «не проверено» и «провалено» причина уже в итоге.
     const sum = e.status === 'confirmed' && e.evidence ? `${base} · ${U.cleanSummary(e.evidence)}` : base;
     const showSum = sum && !(e.status === 'refused' && /^(отклонено|отказано)$/i.test(sum));
+    const actSources = Array.isArray(e.sources) ? e.sources.map(safeActSource).filter(Boolean).slice(0, 3) : [];
     fill(li,
       U.statusBadge(e.status),
       el('span', { class: 'act-name', text: U.toolTitle(e.tool) }),
       brief ? el('span', { class: 'act-args', title: U.argsBrief(e.args, 1000), text: brief }) : null,
+      ...actSources.map((src) => el('button', {
+        class: 'btn btn-secondary btn-sm act-source',
+        type: 'button',
+        title: src.url,
+        text: src.title === src.host ? src.host : `${src.title} · ${src.host}`,
+        onclick: () => call('openSource', src.url).catch(() => null),
+      })),
       showSum ? el('span', { class: 'act-sum', title: sum, text: U.clip(sum, 160) }) : null,
       e.status === 'pending' ? el('button', { class: 'btn btn-secondary btn-sm', type: 'button', text: 'Решить', onclick: () => openApproval(e.approvalId || e.id) }) : null);
   }

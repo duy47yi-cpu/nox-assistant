@@ -116,10 +116,10 @@ test('битое сохранённое значение падает на бе�
   assert.equal(clean.glow, true);
 });
 
-test('неизвестная тема — «Ночь», «Как в системе» следует системной схеме', () => {
+test('неизвестная тема — «Затвор», «Как в системе» следует системной схеме', () => {
   const { T, root } = boot();
   T.apply('нет-такой');
-  assert.equal(root.dataset.theme, 'dark');
+  assert.equal(root.dataset.theme, 'signal');
   const light = boot({}, { systemLight: true });
   light.T.apply('system');
   assert.equal(light.root.dataset.theme, 'light');
@@ -169,10 +169,10 @@ test('свой акцент читается на каждой теме: тек�
   }
 });
 
-test('убранная тема (archive, tablet, acrylic) тихо открывает «Ночь»', () => {
+test('убранная тема (archive, tablet, acrylic) тихо открывает «Затвор»', () => {
   for (const id of ['archive', 'archiveday', 'tablet', 'tabletday', 'acrylic', 'acrylicday']) {
     const { T, root } = boot({ 'jarvis.theme': JSON.stringify(id) });
-    assert.equal(root.dataset.theme, 'dark', id);
+    assert.equal(root.dataset.theme, 'signal', id);
     assert.ok(!T.IDS.includes(id), id);
   }
 });

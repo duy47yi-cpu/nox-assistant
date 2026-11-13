@@ -146,7 +146,7 @@
       this.ctx = canvas.getContext('2d');
       if (!this.ctx) throw new Error('NoxOrb: canvas 2D недоступен');
 
-      this.variant = o.variant === 'wire' ? 'wire' : 'nox';
+      this.variant = o.variant === 'wire' ? 'wire' : (o.variant === 'shutter' ? 'shutter' : 'nox');
       this.state = STATES.includes(o.state) ? o.state : (ALIAS[o.state] || 'idle');
       this.animated = o.animated !== false;
       this.scale = Number.isFinite(Number(o.scale)) && Number(o.scale) > 0 ? Math.min(6, Math.max(0.05, Number(o.scale))) : 1;
@@ -198,7 +198,7 @@
     // ── Публичный API ────────────────────────────────────────────────────
 
     setVariant(variant) {
-      const next = variant === 'wire' ? 'wire' : 'nox';
+      const next = variant === 'wire' ? 'wire' : (variant === 'shutter' ? 'shutter' : 'nox');
       if (next === this.variant) return;
       this.variant = next;
       this.waves.length = 0;
@@ -613,9 +613,13 @@
       const cx = this.w / 2 + Math.sin(this.shakePhase) * shakeAmp;
       const cy = this.h / 2 + Math.cos(this.shakePhase * 1.37) * shakeAmp * 0.5;
 
-      this._drawHalo(ctx, cx, cy, R0, half);
-      if (this.variant === 'wire') this._drawWire(ctx, t, cx, cy, R0, bodyLimit);
-      else this._drawNox(ctx, t, cx, cy, R0, bodyLimit);
+      if (this.variant === 'shutter' && this._drawShutter) {
+        this._drawShutter(ctx, t, cx, cy, R0, bodyLimit);
+      } else {
+        this._drawHalo(ctx, cx, cy, R0, half);
+        if (this.variant === 'wire') this._drawWire(ctx, t, cx, cy, R0, bodyLimit);
+        else this._drawNox(ctx, t, cx, cy, R0, bodyLimit);
+      }
 
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;

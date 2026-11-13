@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'">
+  <title>Nox</title>
+  <script src="../theme-boot.js"></script>
+  <script src="aether-boot.js"></script>
+  <link rel="stylesheet" href="../themes.css">
+  <link rel="stylesheet" href="../backdrop.css">
+  <link rel="stylesheet" href="aether.css">
+</head>
+<body class="ae-body">
+  <div class="theme-bg" aria-hidden="true"></div>
+  <div class="theme-fx" aria-hidden="true"></div>
+  <div id="aeAppRoot" class="ae-shell"></div>
+
+  <script defer src="../dev-stub.js"></script>
+  <script defer src="../backdrop.js"></script>
+  <script defer src="../shared.js"></script>
+  <script defer src="../math.js"></script>
+  <script defer src="../cmd-steps.js"></script>
+
+  <!-- Обе существующие системы сфер подключены целиком без правки исходников -->
+  <script defer src="../orb.js"></script>
+  <script defer src="../orb-variants.js"></script>
+  <script defer src="../orb-tune.js"></script>
+  <script defer src="../orb-nox.js"></script>
+  <script defer src="../orb-shutter.js"></script>
+  <script defer src="orb-library.js"></script>
+
+  <!-- Ядро, компоненты и вход Nox Aether -->
+  <script defer src="icons.js"></script>
+  <script defer src="markdown.js"></script>
+  <script defer src="bridge.js"></script>
+  <script defer src="store.js"></script>
+  <script defer src="components/topbar.js"></script>
+  <script defer src="components/history-drawer.js"></script>
+  <script defer src="components/orb-stage.js"></script>
+  <script defer src="components/approval-card.js"></script>
+  <script defer src="components/composer.js"></script>
+  <script defer src="components/chat-view.js"></script>
+  <script defer src="components/commands-view.js"></script>
+  <script defer src="components/mcp-view.js"></script>
+  <script defer src="components/personal-view.js"></script>
+  <script defer src="components/settings-view.js"></script>
+  <script defer src="aether.js"></script>
+</body>
+</html>

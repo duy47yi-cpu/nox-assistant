@@ -25,7 +25,8 @@ function near(actual, expected) {
 
 function tmpDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-cost-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  // Windows: сканер защиты может ещё держать файл — уборка с ограниченными повторами, как в fs.rm.
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 25 }));
   return dir;
 }
 
@@ -265,6 +266,73 @@ test('сбой rename: исходный файл цел, временный фа
 
   assert.equal(fs.readFileSync(file, 'utf8'), before);
   assert.deepEqual(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp')), []);
+});
+
+// Windows: rename поверх файла учёта даёт EPERM, пока файл открыт кем-то ещё. Короткая блокировка
+// переживается повторами; постоянная — честная ошибка после ограниченного числа попыток.
+test('rename: временный EPERM переживается, постоянный — ошибка без порчи файла', (t) => {
+  const dir = tmpDir(t);
+  const file = path.join(dir, 'cost.json');
+  const meter = new Meter({ file });
+  meter.record({ purpose: 'chat', model: MODEL, usage: USAGE });
+
+  const real = fs.renameSync;
+  let left = 2;
+  let attempts = 0;
+  t.mock.method(fs, 'renameSync', (from, to) => {
+    attempts += 1;
+    if (left > 0) {
+      left -= 1;
+      throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' });
+    }
+    return real(from, to);
+  });
+  meter.record({ purpose: 'chat', model: MODEL, usage: USAGE });
+  assert.equal(attempts, 3, 'две неудачи и третья успешная');
+  assert.equal(readState(file).calls.length, 2);
+  assert.deepEqual(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp')), []);
+  t.mock.restoreAll();
+
+  const before = fs.readFileSync(file, 'utf8');
+  let permanentAttempts = 0;
+  t.mock.method(fs, 'renameSync', () => {
+    permanentAttempts += 1;
+    throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' });
+  });
+  assert.throws(() => meter.record({ purpose: 'chat', model: MODEL, usage: USAGE }), (err) => err.code === 'EPERM');
+  t.mock.restoreAll();
+  assert.ok(permanentAttempts > 1 && permanentAttempts <= 9, `попыток ${permanentAttempts}`);
+  assert.equal(fs.readFileSync(file, 'utf8'), before, 'исходный файл цел');
+  assert.deepEqual(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp')), []);
+});
+
+test('Windows: читатель в другом процессе держит файл — запись ждёт и проходит', { skip: process.platform !== 'win32', timeout: 20000 }, async (t) => {
+  const { spawn } = require('child_process');
+  const dir = tmpDir(t);
+  const file = path.join(dir, 'cost.json');
+  const meter = new Meter({ file });
+  meter.record({ purpose: 'chat', model: MODEL, usage: USAGE });
+
+  const holder = spawn(process.execPath, ['-e', `
+    const fs = require('fs');
+    const fd = fs.openSync(process.argv[1], 'r');
+    process.stdout.write('held\\n');
+    setTimeout(() => fs.closeSync(fd), 150);
+  `, file], { stdio: ['ignore', 'pipe', 'ignore'] });
+  const exited = new Promise((resolve) => holder.once('exit', resolve));
+  try {
+    await new Promise((resolve, reject) => {
+      holder.stdout.once('data', resolve);
+      holder.once('exit', () => reject(new Error('держатель файла завершился раньше времени')));
+    });
+    // Пишем, пока файл открыт читателем: rename получает EPERM и повторяется, пока читатель не отпустит.
+    meter.record({ purpose: 'chat', model: MODEL, usage: USAGE });
+    assert.equal(readState(file).calls.length, 2);
+    assert.deepEqual(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp')), []);
+  } finally {
+    holder.kill();
+    await exited;
+  }
 });
 
 test('битый файл не сбрасывает счёт: копия в .corrupt-<время>, учёт заблокирован до решения человека', (t) => {
@@ -642,9 +710,11 @@ test('два процесса на одном файле: остаток дня 
   const { execFile, spawn } = require('child_process');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-meter-proc-'));
   const children = [];
-  t.after(() => {
-    for (const c of children) c.kill();
-    fs.rmSync(dir, { recursive: true, force: true });
+  t.after(async () => {
+    const running = children.filter((c) => c.exitCode === null && c.signalCode === null);
+    for (const c of running) c.kill();
+    await Promise.all(running.map((c) => new Promise((resolve) => c.once('exit', resolve))));
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 25 });
   });
   const file = path.join(dir, 'budget.json');
   const meterPath = path.join(__dirname, '..', 'src', 'cost', 'meter.js');

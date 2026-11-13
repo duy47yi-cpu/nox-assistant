@@ -6,9 +6,9 @@
 NOX_FAST_KEY=ключ-быстрой NOX_SMART_KEY=ключ-умной NOX_ADMIN_KEY=длинный-служебный-ключ node index.js
 ```
 
-Настройки в окружении: `PORT`, `HOST`, `NOX_DB`, `NOX_MODELS_FILE` (провайдеры, модели и цены, образец в `models.js`), `NOX_PLANS_FILE`, `NOX_GLOBAL_DAILY_USD`, `NOX_TRUST_PROXY`, `NOX_SESSION_TTL_DAYS` (срок сессии в днях, по умолчанию 30), `NOX_UPSTREAM_TIMEOUT_MS` (сколько ждать модель, по умолчанию 120000). Имена переменных без значений — в `.env.example`.
+Настройки в окружении: `PORT`, `HOST`, `NOX_DB`, `NOX_MODELS_FILE` (провайдеры, модели и цены, образец в `models.js`), `NOX_PLANS_FILE`, `NOX_GLOBAL_DAILY_USD`, `NOX_TRUST_PROXY`, `NOX_TRUSTED_PROXIES` (список IP/CIDR доверенных прокси через запятую; при `NOX_TRUST_PROXY=1` без него доверяется только loopback), `NOX_SESSION_TTL_DAYS` (срок сессии в днях, по умолчанию 30), `NOX_UPSTREAM_TIMEOUT_MS` (сколько ждать модель, по умолчанию 120000). Имена переменных без значений — в `.env.example`.
 
-Сервер слушает только локальный адрес. Наружу он выходит через прокси с HTTPS; за прокси поставьте `NOX_TRUST_PROXY=1` (прокси должен сам выставлять `X-Forwarded-For`, иначе ограничения по адресу обходятся).
+Сервер слушает только локальный адрес. Наружу он выходит через прокси с HTTPS; за прокси поставьте `NOX_TRUST_PROXY=1` и при внешнем адресе прокси укажите `NOX_TRUSTED_PROXIES` (forwarded-заголовки принимаются только от доверенных прокси).
 
 ## Аккаунты и сессии
 

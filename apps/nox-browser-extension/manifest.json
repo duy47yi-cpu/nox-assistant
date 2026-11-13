@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "minimum_chrome_version": "116",
+  "name": "Nox Assistant — браузер",
+  "version": "0.1.0",
+  "description": "Чтение выбранной вкладки с вашего разрешения.",
+  "permissions": ["activeTab", "scripting"],
+  "background": { "service_worker": "background.mjs", "type": "module" },
+  "action": { "default_title": "Nox Assistant", "default_popup": "popup.html" },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'; connect-src ws://127.0.0.1:*" }
+}

@@ -10,10 +10,15 @@
 // это исполнение чужого кода, а владельца рядом в фоне нет. Поэтому он тоже выключен в автономных
 // задачах; в чате project_run работает по обычной политике риска T2 (см. policy/modes.js).
 const AUTONOMY_EXCLUDED = ['shell_run', 'library_run', 'project_run'];
+const CHAT_ONLY_EXTENSION_TOOLS = new Set(['browser_tab_read']);
 const AUTONOMY_EXCLUDED_PREFIXES = ['lib_'];
 
 function excludedFromAutonomy(name) {
-  return AUTONOMY_EXCLUDED.includes(name) || AUTONOMY_EXCLUDED_PREFIXES.some((p) => String(name).startsWith(p));
+  return (
+    AUTONOMY_EXCLUDED.includes(name) ||
+    CHAT_ONLY_EXTENSION_TOOLS.has(name) ||
+    AUTONOMY_EXCLUDED_PREFIXES.some((p) => String(name).startsWith(p))
+  );
 }
 
 function autonomousTools(list) {

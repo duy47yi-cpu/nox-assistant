@@ -1,0 +1,388 @@
+{
+  "ok": true,
+  "elapsedMs": 17992,
+  "pass": 14,
+  "fail": 0,
+  "checks": [
+    {
+      "name": "topbar-clean-5-items",
+      "ok": true,
+      "detail": {
+        "labels": [
+          "Чат",
+          "Готовые команды",
+          "MCP-подключения",
+          "Личное пространство",
+          "Настройки"
+        ],
+        "hasLegacyGarbage": false,
+        "isEmpty": true,
+        "composerCentered": true,
+        "orbOk": true,
+        "overflow": false,
+        "sig": "The Nox"
+      }
+    },
+    {
+      "name": "empty-chat-centered-and-orb-1200",
+      "ok": true,
+      "detail": {
+        "labels": [
+          "Чат",
+          "Готовые команды",
+          "MCP-подключения",
+          "Личное пространство",
+          "Настройки"
+        ],
+        "hasLegacyGarbage": false,
+        "isEmpty": true,
+        "composerCentered": true,
+        "orbOk": true,
+        "overflow": false,
+        "sig": "The Nox"
+      }
+    },
+    {
+      "name": "empty-chat-narrow-864",
+      "ok": true,
+      "detail": {
+        "overflow": false,
+        "overflowTriggerVisible": true,
+        "isEmpty": true,
+        "orbW": 193,
+        "cmpBottom": 383,
+        "winH": 520
+      }
+    },
+    {
+      "name": "model-picker-bounds-864-no-leak",
+      "ok": true,
+      "detail": {
+        "fits": true,
+        "leak": false,
+        "r": {
+          "l": 101,
+          "t": 126.8125,
+          "r": 411,
+          "b": 336.8125
+        }
+      }
+    },
+    {
+      "name": "first-send-focus-and-dock",
+      "ok": true,
+      "detail": {
+        "focusKeep": {
+          "activeSame": true,
+          "docked": true
+        },
+        "afterGreeting": {
+          "turns": 2,
+          "answer": "Привет! Готов помочь по проекту и файлам рабочей папки. Чем займёмся?",
+          "inputCleared": true,
+          "docked": true
+        }
+      }
+    },
+    {
+      "name": "chat-switch-immediate-dock-and-drafts",
+      "ok": true,
+      "detail": {
+        "switchedPlans": {
+          "dockedImmediate": true,
+          "inputAfterSwitch": "",
+          "plansMsg": true
+        },
+        "restoredDraft": "Неотправленный черновик 42"
+      }
+    },
+    {
+      "name": "long-markdown-math-and-scroll",
+      "ok": true,
+      "detail": {
+        "hasTable": true,
+        "hasCode": true,
+        "hasMath": true,
+        "shownOnScrollUp": true,
+        "gapAfter": 0
+      }
+    },
+    {
+      "name": "tool-work-minimal-noise-and-details",
+      "ok": true,
+      "detail": {
+        "liveSeen": {
+          "count": 1,
+          "text": "Ход работы · Выполняется 0.0 с",
+          "orbState": "thinking"
+        },
+        "detailsCheck": {
+          "found": true,
+          "collapsedBefore": true,
+          "expandedAfter": true,
+          "focusPreserved": true,
+          "drawerText": "Список файлов\nГотово\nв «.»: 6\n(без аргументов)"
+        }
+      }
+    },
+    {
+      "name": "approval-r301-and-file-write",
+      "ok": true,
+      "detail": {
+        "approvalInit": {
+          "onceDisabledEarly": true,
+          "rejectEnabledEarly": true,
+          "countdown": "Автоотмена через 30 с",
+          "preview": "{\n  \"path\": \"qa-check.txt\",\n  \"content\": \"Проверка подтверждения R3-01 в Nox Aether.\\n\"\n}"
+        },
+        "approvalArmed": true,
+        "fileWritten": true
+      }
+    },
+    {
+      "name": "error-and-retry-recovery",
+      "ok": true,
+      "detail": {
+        "errCard": {
+          "found": true,
+          "hasRetry": true,
+          "techClosed": true
+        },
+        "recovered": true
+      }
+    },
+    {
+      "name": "orb-library-both-systems-and-slider-stability",
+      "ok": true,
+      "detail": {
+        "workshopInfo": {
+          "cards": [
+            "aeOrbCard_nox_nox",
+            "aeOrbCard_nox_wire",
+            "aeOrbCard_nox_shutter",
+            "aeOrbCard_jarvis_core",
+            "aeOrbCard_jarvis_sphere",
+            "aeOrbCard_jarvis_iris"
+          ],
+          "hasBothSystems": true
+        },
+        "sliderPreserve": {
+          "found": true,
+          "sameDom": true,
+          "active": "jarvis:core",
+          "coreScale": {
+            "opacity": 1,
+            "aura": 1,
+            "glow": 1.6,
+            "speed": 1,
+            "motion": 1,
+            "depth": 1,
+            "voice": true,
+            "voiceGain": 1,
+            "animated": true
+          }
+        },
+        "presetAndFont": {
+          "presetCount": 3,
+          "presetIdAfterClick": "vivid",
+          "presetIdAfterReset": "default",
+          "fontSelected": "times"
+        },
+        "jarvisActiveOnChat": {
+          "orbId": "jarvis:core",
+          "sigFont": "\"Times New Roman\", \"Liberation Serif\", Georgia, serif"
+        },
+        "bothPreserved": {
+          "nowActive": "nox:nox",
+          "noxStageId": "nox:nox",
+          "jarvisCoreStillCustom": {
+            "opacity": 1,
+            "aura": 1,
+            "glow": 1.35,
+            "speed": 1.35,
+            "motion": 1.25,
+            "depth": 1.25,
+            "voice": true,
+            "voiceGain": 1.4,
+            "animated": true,
+            "presetId": "vivid"
+          }
+        },
+        "reducedOff": "off",
+        "dictCheck": {
+          "btnVisible": true,
+          "btnRecording": true,
+          "chipVisible": true,
+          "stageState": "listening"
+        }
+      }
+    },
+    {
+      "name": "personal-space-desks-loaded",
+      "ok": true,
+      "detail": {
+        "personalLoaded": {
+          "len": 242,
+          "text": "Пустой\n+ Виджет…\nЗадачи\nСегодня\nМузыка\nПогода\nКурсы валют\nКомпьютер\nПрограммы\nАватар\nКоманды\nЦели\nМиссии\nНапоминания\nЗаметки\nЗагрузки\nMCP\nКа"
+        }
+      }
+    },
+    {
+      "name": "narrow-864-nav-history-workshop",
+      "ok": true,
+      "detail": {
+        "narrowMenuOpen": {
+          "open": true,
+          "fits": true
+        },
+        "narrowSettingsOverflow": false,
+        "dictCheck": {
+          "btnVisible": true,
+          "btnRecording": true,
+          "chipVisible": true,
+          "stageState": "listening"
+        }
+      }
+    },
+    {
+      "name": "no-console-or-page-errors-and-no-leaks",
+      "ok": true,
+      "detail": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "rendererErrors": [],
+        "leaks": false
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "01-empty-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\01-empty-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 242349
+    },
+    {
+      "name": "01-empty-864x520.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\01-empty-864x520.png",
+      "width": 864,
+      "height": 520,
+      "bytes": 124435
+    },
+    {
+      "name": "02-dialog-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\02-dialog-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 231656
+    },
+    {
+      "name": "03-long-reply-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\03-long-reply-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 309048
+    },
+    {
+      "name": "04-tool-live-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\04-tool-live-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 303052
+    },
+    {
+      "name": "04b-tool-details-open-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\04b-tool-details-open-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 289530
+    },
+    {
+      "name": "05-approval-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\05-approval-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 270159
+    },
+    {
+      "name": "05-approval-864x520.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\05-approval-864x520.png",
+      "width": 864,
+      "height": 520,
+      "bytes": 141387
+    },
+    {
+      "name": "06-error-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\06-error-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 257475
+    },
+    {
+      "name": "07-dictation-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\07-dictation-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 274563
+    },
+    {
+      "name": "08-workshop-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\08-workshop-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 116488
+    },
+    {
+      "name": "09-orb-jarvis-core-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\09-orb-jarvis-core-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 211042
+    },
+    {
+      "name": "10-commands-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\10-commands-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 64194
+    },
+    {
+      "name": "11-mcp-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\11-mcp-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 115956
+    },
+    {
+      "name": "12-personal-1200x720.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\12-personal-1200x720.png",
+      "width": 1200,
+      "height": 720,
+      "bytes": 36204
+    },
+    {
+      "name": "13-narrow-nav-864x520.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\13-narrow-nav-864x520.png",
+      "width": 864,
+      "height": 520,
+      "bytes": 142471
+    },
+    {
+      "name": "14-narrow-history-864x520.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\14-narrow-history-864x520.png",
+      "width": 864,
+      "height": 520,
+      "bytes": 105209
+    },
+    {
+      "name": "15-narrow-workshop-864x520.png",
+      "file": "D:\\nox-release\\docs\\design\\nox-aether\\screenshots-competitor\\15-narrow-workshop-864x520.png",
+      "width": 864,
+      "height": 520,
+      "bytes": 98503
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": []
+}

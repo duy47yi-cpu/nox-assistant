@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru" data-concept="B" data-balance="even">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nox — концепция B · Fluid Workspace</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+/* B / Fluid Workspace. Две зоны: лист разговора и открытое поле присутствия. Баланс между ними
+   переключается сверху и тянется за границу. Подробности хода задачи — временный слой у сферы. */
+:root { --t: 54; --p: 46; --gx: 76%; --gy: 46%; }
+html[data-balance="talk"] { --t: 70; --p: 30; --gx: 86%; }
+html[data-balance="presence"] { --t: 37; --p: 63; --gx: 68%; }
+.app { display: flex; flex-direction: column; }
+.top { flex: 0 0 44px; display: flex; align-items: center; gap: 6px; padding: 0 12px 0 16px; }
+.brand { display: flex; align-items: center; gap: 9px; font: 400 17px var(--serif); margin-right: 8px; }
+.balance { display: flex; gap: 2px; padding: 3px; margin-left: 10px; background: var(--surface); border-radius: 11px; }
+.balance button { padding: 4px 11px; border-radius: 8px; color: var(--text-2); }
+.balance button:hover { color: var(--text); }
+.balance button[aria-checked="true"] { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
+.pop.hist { top: 42px; left: 74px; }
+
+.zones { flex: 1; min-height: 0; display: flex; padding: 0 12px 12px; }
+.talk { flex: var(--t) 1 0; min-width: 380px; display: flex; flex-direction: column; gap: 12px; padding: 20px 22px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; transition: flex-grow var(--dur) var(--ease); }
+.talk > * { width: 100%; max-width: var(--chat-w); margin-inline: auto; }
+.talk .thread { flex: 1; }
+.talk .composer { background: var(--bg); }
+html[data-msg="cards"] .talk .msg.nox, html:is([data-msg="cards"], [data-msg="hybrid"]) .talk .trail { background: var(--bg); }
+html[data-mode="empty"] .talk { justify-content: center; gap: 26px; }
+.split { flex: 0 0 12px; cursor: col-resize; position: relative; border-radius: 6px; }
+.split::after { content: ""; position: absolute; inset: 42% 5px; border-radius: 2px; background: var(--border); transition: background .2s; }
+.split:hover::after, .split:focus-visible::after { background: var(--hue); }
+.pres { flex: var(--p) 1 0; min-width: 0; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 12px; transition: flex-grow var(--dur) var(--ease); overflow: hidden; }
+.orbwrap { width: calc(min(78%, 54vh) * var(--orb-k)); transition: width var(--dur) var(--ease); }
+.pres .state { font-size: 22px; }
+.now { margin: 0; min-height: 1.45em; color: var(--text-3); text-align: center; }
+.layer { align-self: stretch; flex: 0 1 auto; min-height: 0; margin: auto 0 -6px; display: flex; flex-direction: column; background: var(--surface-2); border: 1px solid var(--border); border-radius: 18px; box-shadow: 0 -12px 40px rgba(0, 0, 0, .35); animation: rise var(--dur) var(--ease); }
+@keyframes rise { from { transform: translateY(24px); opacity: 0; } }
+.layer > header { display: flex; justify-content: space-between; align-items: center; padding: 8px 8px 2px 14px; font-weight: 600; }
+.layer-body { overflow-y: auto; font-size: 13.5px; margin-bottom: 8px; }
+html[data-layer="open"] .pres { justify-content: flex-start; }
+html[data-layer="open"] .orbwrap { width: calc(min(34%, 21vh) * var(--orb-k)); }
+html[data-layer="open"] .pres .state { font-size: 17px; }
+html[data-layer="open"] .now { display: none; }
+
+html[data-orb-pos="left"] .zones { flex-direction: row-reverse; }
+html[data-orb-pos="left"] { --gx: 24%; }
+html[data-orb-pos="compact"] .pres { flex: 0 0 132px; }
+html[data-orb-pos="compact"] .now { display: none; }
+html[data-orb-pos="hidden"] .pres { flex: 0 0 96px; justify-content: flex-start; padding-top: 22px; }
+html:is([data-orb-pos="compact"], [data-orb-pos="hidden"]) :is(.split, .balance) { display: none; }
+html:is([data-orb-pos="compact"], [data-orb-pos="hidden"]) .pres .state { font-size: 15px; }
+
+@media (max-width: 900px) {
+  .talk { padding: 14px 14px 10px; border-radius: 16px; }
+  .zones { padding: 0 8px 8px; }
+  .brand { margin-right: 0; }
+  .balance { margin-left: 2px; }
+  .hello { font-size: 26px; }
+}
+@media (max-height: 580px) {
+  html[data-layer="open"] .pres { padding: 8px 10px; gap: 3px; }
+  html[data-layer="open"] .orbwrap { width: calc(min(28%, 17vh) * var(--orb-k)); }
+  .layer > header { padding: 6px 8px 2px 12px; }
+  .layer .step { padding: 3px 0; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="ring"></span>Nox</div>
+    <button class="tbtn" data-hist-toggle aria-expanded="false">Разговоры <svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg></button>
+    <div class="balance" role="radiogroup" aria-label="Чему отдать больше места">
+      <button role="radio" data-balance="talk">Разговор</button>
+      <button role="radio" data-balance="even">Поровну</button>
+      <button role="radio" data-balance="presence">Присутствие</button>
+    </div>
+  </header>
+  <div class="pop hist" hidden data-history></div>
+  <div class="zones">
+    <section class="talk">
+      <h1 class="hello">С чего начнём?</h1>
+      <main id="thread" class="thread" tabindex="0" aria-label="Разговор"></main>
+      <div data-composer></div>
+    </section>
+    <div class="split" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Граница между разговором и сферой: тяните или двигайте стрелками"></div>
+    <section class="pres" aria-label="Nox">
+      <div class="orbwrap"><div id="orbMount" class="orb"></div></div>
+      <p class="state" data-state-label></p>
+      <p class="now" data-now></p>
+      <div class="layer" id="layer" hidden>
+        <header><span>Ход задачи</span><button class="ib" data-layer-close aria-label="Закрыть слой"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.500 4.500l7 7M11.500 4.500l-7 7"/></svg></button></header>
+        <div class="layer-body"></div>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+(() => {
+  const root = document.documentElement;
+  // Баланс зон: три готовых положения и свободное (граница). Сценарий предлагает своё, человек может поменять.
+  const setBalance = (name, t) => {
+    root.dataset.balance = name;
+    if (t == null) { root.style.removeProperty('--t'); root.style.removeProperty('--p'); }
+    else { root.style.setProperty('--t', t); root.style.setProperty('--p', 100 - t); }
+    document.querySelectorAll('.balance button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.balance === name)));
+  };
+  const pick = (n, S) => ({ 1: 'presence', 3: S.autoshift ? 'talk' : 'even', 6: 'presence' }[n] || 'even');
+  window.NOX_PROTO = {
+    concept: 'B',
+    defaults: { msg: 'hybrid', autoshift: true },
+    layer: () => (['compact', 'hidden'].includes(root.dataset.orbPos) ? null : document.getElementById('layer')),
+    onScenario: (n, S) => setBalance(pick(n, S)),
+    onSetting: (k, S) => { if (k === 'autoshift' && root.dataset.scenario === '3') setBalance(pick(3, S)); },
+  };
+  document.addEventListener('click', (e) => { const b = e.target.closest('.balance button'); if (b) setBalance(b.dataset.balance); });
+  const split = document.querySelector('.split'), zones = document.querySelector('.zones');
+  const share = (x) => { // доля разговора по положению границы, в разумных пределах
+    const r = zones.getBoundingClientRect(), left = root.dataset.orbPos === 'left';
+    const t = Math.round(((left ? r.right - x : x - r.left) / r.width) * 100);
+    setBalance('custom', Math.min(76, Math.max(30, t)));
+  };
+  split.addEventListener('pointerdown', (e) => { split.setPointerCapture(e.pointerId); split.onpointermove = (m) => share(m.clientX); });
+  split.addEventListener('pointerup', () => { split.onpointermove = null; });
+  split.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const dir = (e.key === 'ArrowRight' ? 1 : -1) * (root.dataset.orbPos === 'left' ? -1 : 1);
+    const cur = +getComputedStyle(root).getPropertyValue('--t');
+    setBalance('custom', Math.min(76, Math.max(30, cur + dir * 4)));
+  });
+})();
+</script>
+<script src="../../../../../apps/jarvis-desktop/renderer/orb-nox.js"></script>
+<script src="../../../../../apps/jarvis-desktop/renderer/orb.js"></script>
+<script src="../../../../../apps/jarvis-desktop/renderer/orb-variants.js"></script>
+<script src="../shared/proto.js"></script>
+</body>
+</html>

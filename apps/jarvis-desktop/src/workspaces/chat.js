@@ -72,7 +72,7 @@ function loadChats(file) {
     if (data.activeId !== undefined && data.chats.length && !ids.has(data.activeId)) throw new Error('файл разговоров повреждён');
   } else if (!validHistory(data.history)) throw new Error('файл разговоров повреждён');
   const chats = new ChatBook(data);
-  for (const chat of chats.chats) chat.history = repairToolHistory(trimHistory(chat.history));
+  for (const chat of chats.chats) chat.history = maskHistory(repairToolHistory(trimHistory(chat.history)));
   return chats;
 }
 

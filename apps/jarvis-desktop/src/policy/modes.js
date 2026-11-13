@@ -26,7 +26,7 @@ const RISKS = new Set(['T0', 'T1', 'T2', 'T3']);
 const UNBOUNDED_TOOLS = new Set(['shell_run', 'library_run']);
 // Необратимо или за пределами владельца: каждый вызов — отдельное согласие, без «на сессию».
 // Нажатие и ввод в браузере тоже: номер элемента на другой странице значит другое.
-const ONE_SHOT_TOOLS = /(^|_)(send|publish|delete|remove|post|upload|push)(_|$)|^browser_(click|type)$/i;
+const ONE_SHOT_TOOLS = /(^|_)(send|publish|delete|remove|post|upload|push)(_|$)|^browser_(click|type|tab_read)$/i;
 
 // Оплата: запрещена всегда. Признак — слово в названии инструмента: у инструментов из внешних сервисов
 // другого признака нет. В команде PowerShell те же слова опаснее: 'subscribe' и 'order' там обычные слова
@@ -383,9 +383,10 @@ function hasSecretEgress({ name, args } = {}) {
 // «Спрашивать» — как ручной режим Claude Code: чтение и поиск сразу, любое действие, которое что-то меняет,
 // спрашиваем (кроме уже разрешённого «на сессию»).
 // «Авто» — как авторежим Claude Code: чтение и правки внутри рабочей папки сразу, остальное спрашиваем.
-function decide({ mode, name, risk, args, workspace, sessionAllow, hasPathParam = true, source, ownerAllowed = false, ownerText = '', ownerCommand = false, tainted = false, handsTainted = false, installEvidence = null } = {}) {
+function decide({ mode, name, risk, args, workspace, sessionAllow, hasPathParam = true, source, ownerAllowed = false, ownerText = '', ownerCommand = false, tainted = false, handsTainted = false, browserTainted = false, installEvidence = null } = {}) {
   // Оплата запрещена всегда: платит владелец сам.
   if (isPayment({ name, args })) return 'deny';
+  if (browserTainted && name === 'remember') return 'ask';
   // Для удаления и установки без прямой просьбы владельца требуется подтверждение.
   if (isDeletion({ name, args }) && !(mode === 'full' && (ownerCommand || (ownerAsked('delete', ownerText) && ownerNamedWorkspaceTarget(ownerText, args && args.path, workspace))))) return 'ask';
   // Установка в «Полном доступе» — по прямой просьбе «установи <программа>»: программа должна совпасть с названной
@@ -416,6 +417,8 @@ function decide({ mode, name, risk, args, workspace, sessionAllow, hasPathParam 
   // спрашивается в любом режиме и каждый раз: иначе текст сайта мог бы закрепиться в памяти навсегда.
   // Исключение (03.11.2026): текст записи целиком из сообщения владельца в этом ходу — это его слова, не сайта.
   if (name === 'remember' && PINNED_MEMORY_KINDS.has(args && args.kind) && !saidByOwner(args.text, ownerText)) return 'ask';
+  // Чтение вкладки через расширение Chrome всегда требует явного согласия владельца в любом режиме.
+  if (name === 'browser_tab_read') return 'ask';
   // Решение владельца (05.11.2026): в «Полном доступе» выключение, перезагрузка и удаление командой спрашиваются,
   // кроме случая, когда владелец сам прямо попросил это в своём сообщении этого хода (ownerText — только его слова из чата).
   if (mode === 'full') {

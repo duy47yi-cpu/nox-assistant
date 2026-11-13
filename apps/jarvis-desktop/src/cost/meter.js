@@ -337,6 +337,23 @@ const LOCK_STALE_MS = 10000;
 const LOCK_POLL_MS = 10;
 const sleepCell = new Int32Array(new SharedArrayBuffer(4));
 
+// Windows: rename поверх существующего файла не проходит, пока этот файл открыт кем-то ещё — сканером защиты,
+// индексатором или читателем из другого процесса (проверено: держатель read-дескриптора даёт EPERM). Блокировка
+// временная: несколько коротких попыток, дальше исходная ошибка наверх — постоянная блокировка не скрывается.
+const RENAME_RETRY_DELAYS_MS = [5, 10, 20, 40, 80, 160, 200, 200];
+const RENAME_RETRY_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+function renameSyncRetry(from, to) {
+  for (let i = 0; ; i += 1) {
+    try {
+      return fs.renameSync(from, to);
+    } catch (err) {
+      if (i >= RENAME_RETRY_DELAYS_MS.length || !RENAME_RETRY_CODES.has(err.code)) throw err;
+      Atomics.wait(sleepCell, 0, 0, RENAME_RETRY_DELAYS_MS[i]);
+    }
+  }
+}
+
 function acquireLock(lockFile) {
   const deadline = Date.now() + LOCK_WAIT_MS;
   for (;;) {
@@ -442,7 +459,8 @@ class Meter {
     } finally {
       this._held = false;
       fs.closeSync(fd);
-      fs.rmSync(lockFile, { force: true });
+      // Пустой файл замка тоже может быть занят сканером: та же временная блокировка, ограниченные повторы.
+      fs.rmSync(lockFile, { force: true, maxRetries: 5, retryDelay: 10 });
     }
   }
 
@@ -736,7 +754,7 @@ class Meter {
     const tmp = path.join(dir, `.${path.basename(this.file)}.${crypto.randomUUID()}.bak.tmp`);
     try {
       fs.copyFileSync(this.file, tmp, fs.constants.COPYFILE_EXCL);
-      fs.renameSync(tmp, target);
+      renameSyncRetry(tmp, target);
     } catch (err) {
       throw migrationError('резервная копия', err, null);
     } finally {
@@ -786,7 +804,7 @@ class Meter {
     const tmp = path.join(dir, `.${path.basename(this.file)}.${crypto.randomUUID()}.tmp`);
     try {
       fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
-      fs.renameSync(tmp, this.file);
+      renameSyncRetry(tmp, this.file);
     } finally {
       // После удачного rename временного файла уже нет; после сбоя убираем остаток.
       try {

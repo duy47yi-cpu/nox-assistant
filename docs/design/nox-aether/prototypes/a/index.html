@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru" data-concept="A">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nox — концепция A · Minimal Presence</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+/* A / Minimal Presence. Камерно: тонкая рейка, одна колонка текста и сфера в своём поле.
+   Пустой экран — сфера в центре; в диалоге она отходит вправо, и главным становится текст. */
+:root { --side: 0%; --o: min(50vh, 400px); --ox: 50%; --oy: 37%; --gx: 50%; --gy: 37%; }
+.app { display: flex; }
+.rail { flex: 0 0 56px; display: flex; flex-direction: column; gap: 3px; padding: 10px 8px; overflow: hidden; border-right: 1px solid transparent; transition: flex-basis var(--dur) var(--ease), border-color var(--dur); }
+.rail[data-open] { flex-basis: 248px; border-color: var(--border); }
+.rail-btn { display: flex; align-items: center; gap: 13px; height: 40px; padding: 0 12px; border-radius: 11px; color: var(--text-2); white-space: nowrap; flex: none; }
+.rail-btn:hover { background: var(--surface-2); color: var(--text); }
+.rail-btn b { font: 400 17px var(--serif); color: var(--text); }
+.rail-btn > span:not(.ring), .rail-btn b, .rail-list { opacity: 0; transition: opacity .25s; }
+.rail[data-open] .rail-btn > span, .rail[data-open] .rail-btn b, .rail[data-open] .rail-list { opacity: 1; }
+.rail-list { flex: 1; overflow-y: auto; min-height: 0; width: 230px; }
+.rail:not([data-open]) .rail-list { visibility: hidden; }
+.rail-btn .ring { margin: 0 1px; }
+.rail-list .h-item:first-child { display: none; } /* «Новый разговор» уже есть кнопкой рейки */
+
+.stage { position: relative; flex: 1; min-width: 0; }
+.col { position: absolute; inset: 0 var(--side) 0 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; padding: 46px 34px 22px; transition: inset var(--dur) var(--ease); }
+.col > * { width: 100%; max-width: var(--chat-w); margin-inline: auto; }
+.thread { flex: 1; }
+.orbbox { position: absolute; left: var(--ox); top: var(--oy); width: calc(var(--o) * var(--orb-k)); transform: translate(-50%, -50%); text-align: center; transition: left var(--dur) var(--ease), top var(--dur) var(--ease), width var(--dur) var(--ease); }
+.orbbox .state { margin-top: 2px; }
+
+html[data-mode="empty"] .col > * { max-width: min(var(--chat-w), 600px); }
+html[data-mode="empty"] .hello { margin-bottom: 4vh; }
+html[data-mode="dialog"], html[data-mode="long"] { --side: 37%; --ox: 81.500%; --oy: 44%; --o: min(46vh, 300px, 25vw); --gx: 82%; --gy: 44%; }
+html[data-mode="long"][data-autoshift="true"] { --side: 25%; --ox: 87.500%; --oy: 32%; --o: min(30vh, 190px, 17vw); }
+html[data-mode="voice"] { --o: min(42vh, 330px); --oy: 31%; }
+html[data-mode="voice"] .thread { flex: 0 1 auto; }
+
+html[data-orb-pos="left"] .col { inset: 0 0 0 var(--side); }
+html[data-orb-pos="left"] .orbbox { left: calc(100% - var(--ox)); }
+html[data-orb-pos="left"] { --gx: 22%; }
+@media (max-width: 900px) {
+  .col { padding: 44px 20px 14px; gap: 10px; }
+  html[data-mode="dialog"], html[data-mode="long"] { --side: 31%; --ox: 84.500%; --o: min(40vh, 24vw); }
+  .hello { font-size: 28px; }
+}
+/* Компактная и скрытая: сфера (или только подпись) в углу, текст во всю ширину. */
+html[data-concept]:is([data-orb-pos="compact"], [data-orb-pos="hidden"]) { --side: 0%; --o: 84px; --ox: calc(100% - 74px); --oy: 96px; }
+html[data-concept]:is([data-orb-pos="compact"], [data-orb-pos="hidden"]) .col { padding-right: 150px; }
+html[data-concept]:is([data-orb-pos="compact"], [data-orb-pos="hidden"]) .state { font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail" id="rail" aria-label="Навигация">
+    <button class="rail-btn" data-rail-toggle aria-expanded="false" aria-label="Разговоры: показать или скрыть"><span class="ring"></span><b>Nox</b></button>
+    <button class="rail-btn" data-go="1" aria-label="Новый разговор"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg><span>Новый разговор</span></button>
+    <div class="rail-list" data-history></div>
+    <button class="rail-btn" data-open-ws aria-label="Мастерская Nox"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5h6M12 5h1M3 11h1M7 11h6M10.500 3.500v3M5.500 9.500v3"/></svg><span>Мастерская</span></button>
+  </aside>
+  <section class="stage">
+    <div class="orbbox"><div id="orbMount" class="orb"></div><p class="state" data-state-label></p></div>
+    <div class="col">
+      <h1 class="hello">С чего начнём?</h1>
+      <main id="thread" class="thread" tabindex="0" aria-label="Разговор"></main>
+      <div data-composer></div>
+    </div>
+  </section>
+</div>
+<script>window.NOX_PROTO = { concept: 'A', defaults: { msg: 'minimal', autoshift: false } };</script>
+<script src="../../../../../apps/jarvis-desktop/renderer/orb-nox.js"></script>
+<script src="../../../../../apps/jarvis-desktop/renderer/orb.js"></script>
+<script src="../../../../../apps/jarvis-desktop/renderer/orb-variants.js"></script>
+<script src="../shared/proto.js"></script>
+</body>
+</html>

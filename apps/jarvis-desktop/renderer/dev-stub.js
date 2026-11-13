@@ -786,6 +786,16 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       }
     },
     toolCatalog: async () => { await failCmd(); return JSON.parse(JSON.stringify(CATALOG)); },
+    browserBridgeState: async () => ({
+      enabled: false,
+      running: false,
+      connected: false,
+      sessionCount: 0,
+      connectionId: null,
+      sessionExpires: null,
+      activeTab: null,
+      lastError: null,
+    }),
     updateCommandTriggers: async (id, triggers) => {
       await failCmd();
       const cmd = commands.find((c) => c.id === id);

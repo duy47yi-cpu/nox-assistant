@@ -5,7 +5,7 @@
 // спрашиваем, а не выполняем молча. Это не запрет: владелец подтверждает, если так и задумано.
 const TAINT_SOURCES = new Set([
   'web_search', 'web_wiki', 'web_fetch', 'web_research', 'agents_parallel',
-  'browser_open', 'browser_read',
+  'browser_open', 'browser_read', 'browser_tab_read',
   'screen_look', 'screen_region_look', 'desktop_observe', 'ui_elements', 'image_read_text', 'image_look',
   'workspace_read', 'workspace_search', 'document_read', 'code_read', 'clipboard_get',
   'project_brief', 'project_diagnostics', 'mail_unread',
@@ -30,16 +30,16 @@ const HAND_ACTIONS = new Set([
 // спрашивало бы и руки встали бы. Руки спрашиваются только после текстовых источников ниже.
 const SCENE_SOURCES = new Set(['screen_look', 'screen_region_look', 'desktop_observe', 'ui_elements']);
 
-// source — метка инструмента: mcp-инструменты приходят с чужого сервера, их ответы тоже недоверенные.
+// source — метка инструмента: mcp-инструменты и расширение браузера приходят извне, их ответы недоверенные.
 function isTaintSource(name, source) {
-  if (source === 'mcp') return true;
+  if (source === 'mcp' || source === 'browser_extension') return true;
   return TAINT_SOURCES.has(String(name || ''));
 }
 
 // Чужой текст (страница, файл, буфер, чужой сервер), после которого руки идут с вопросом.
 // Снимки экрана сюда не входят (см. SCENE_SOURCES выше).
 function isForeignTextSource(name, source) {
-  if (source === 'mcp') return true;
+  if (source === 'mcp' || source === 'browser_extension') return true;
   if (!TAINT_SOURCES.has(String(name || ''))) return false;
   return !SCENE_SOURCES.has(String(name || ''));
 }

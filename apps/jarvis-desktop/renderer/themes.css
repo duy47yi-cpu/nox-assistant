@@ -104,6 +104,16 @@ select.input option {
 }
 
 /* ── Монохромные: цвет раздела выключен, янтарь единственное цветное пятно ── */
+[data-theme="signal"] {
+  color-scheme: dark;
+  --theme-font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --bg: #0E0D0B; --surface: #151310; --surface-2: #1C1A16; --surface-3: #26231D; --border: #302C25;
+  --text: #EEE7D6; --text-2: #BDB4A3; --text-3: #9C9382;
+  --hue: #FF6A3D; --accent-ink: #17100C;
+  --contour: #1E1B16; --contour-index: #2E2A23;
+  --ok: #8FD694; --warn: #F0C24B; --err: #FF6B88; --on-stop: #17100C;
+}
 [data-theme="graphite"] {
   color-scheme: dark;
   --theme-font: "Bahnschrift", "Segoe UI Variable Text", system-ui, sans-serif;

@@ -242,6 +242,7 @@
     weather_now: 'Погода',
     browser_open: 'Открыть страницу',
     browser_read: 'Чтение страницы в браузере',
+    browser_tab_read: 'Чтение вкладки браузера',
     browser_scroll: 'Прокрутка страницы',
     browser_click: 'Нажатие на странице',
     browser_type: 'Ввод на странице',

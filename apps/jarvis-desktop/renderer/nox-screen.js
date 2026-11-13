@@ -528,6 +528,7 @@
       ro.observe(refs.orbStage);
     }
     applyStageState();
+    bindReadout();
     window.addEventListener('jarvis:orbtune', () => { if (S.orb) S.orb.setAnimated(motionOn()); });
   }
 
@@ -537,10 +538,26 @@
     const mapped = S.composerFocus && raw === 'idle' ? 'attentive' : (STAGE_TO_ORB[raw] || 'idle');
     S.orbState = mapped;
     try { S.orb.setState(mapped); } catch { /* старый модуль без состояния */ }
+    const word = document.getElementById('noxReadState');
+    if (word) word.textContent = READ_WORD[mapped] || 'готов';
+  }
+
+  // Подпись состояния рядом с затвором: только слова, ничего не считаем и не выдумываем.
+  const READ_WORD = {
+    idle: 'готов', attentive: 'готов', listening: 'слушаю', thinking: 'работает', speaking: 'отвечаю',
+    waiting_approval: 'ждёт вас', error: 'ошибка', success: 'готово',
+  };
+  function bindReadout() {
+    const src = document.getElementById('modePillText');
+    const out = document.getElementById('noxReadMode');
+    if (!src || !out) return;
+    const copy = () => { out.textContent = (src.textContent || '').trim().toLowerCase() || '…'; };
+    copy();
+    new MutationObserver(copy).observe(src, { childList: true, characterData: true, subtree: true });
   }
 
   function setVariant(variant, save = true) {
-    const value = variant === 'wire' ? 'wire' : 'nox';
+    const value = variant === 'wire' || variant === 'nox' ? variant : 'shutter';
     S.variant = value;
     if (save) { try { localStorage.setItem('noxOrb', value); } catch { /* приватный режим */ } }
     if (S.orb) { try { S.orb.setVariant(value); } catch (err) { console.warn('[nox] вариант сферы:', err); } }
@@ -553,9 +570,9 @@
     if (fromHash) return fromHash[1];
     try {
       const saved = localStorage.getItem('noxOrb');
-      if (saved === 'wire' || saved === 'nox') return saved;
+      if (saved === 'wire' || saved === 'nox' || saved === 'shutter') return saved;
     } catch { /* хранилище недоступно */ }
-    return 'nox'; // продакшн-вариант — точечная сфера с ядром
+    return 'shutter'; // фирменный вид — затвор; сфера и проволока остаются в разработке
   }
 
   // ── Кнопки окна классического экрана (у разделов Nox — общая шапка, nox-shell.js) ──
@@ -654,7 +671,7 @@
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.altKey && !e.shiftKey && (e.key === 'o' || e.key === 'O' || e.key === 'щ' || e.key === 'Щ')) {
         e.preventDefault();
-        setVariant(S.variant === 'wire' ? 'nox' : 'wire');
+        setVariant(S.variant === 'shutter' ? 'nox' : S.variant === 'nox' ? 'wire' : 'shutter');
       }
     });
   }

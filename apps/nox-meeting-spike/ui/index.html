@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nox C7 — Прототип субтитров и конспекта созвонов</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar" aria-label="Состояние тестовой сессии">
+        <div class="brand-block">
+          <div class="brand-title">Nox C7 · Прототип созвонов</div>
+          <div class="brand-sub">Изолированный стенд · реальный микрофон и системный звук не включены</div>
+        </div>
+        <div class="status-group">
+          <span id="statusPill" class="pill pill-idle" data-state="idle" role="status" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="statusText">Не записывает</span>
+          </span>
+          <span class="pill pill-honesty" title="На первом этапе используется только синтетический поток">
+            Синтетический поток · Микрофон выкл · Без сети
+          </span>
+          <span id="timerBadge" class="pill pill-mono">00:00</span>
+          <span id="queueBadge" class="pill pill-mono">Очередь: 0/64</span>
+        </div>
+      </header>
+
+      <div id="alertBanner" class="banner hidden" role="alert" aria-live="assertive"></div>
+
+      <main class="workspace">
+        <section class="panel controls-panel" aria-label="Управление и согласие">
+          <h2 class="panel-title">Управление сессией</h2>
+
+          <label class="field-label" for="scenarioSelect">Синтетический сценарий</label>
+          <select id="scenarioSelect" class="select-input">
+            <option value="standup">Рабочая встреча (нормальный поток)</option>
+            <option value="fault_recovery">Сбой провайдера ASR и автовосстановление</option>
+            <option value="edge_cases">Поздние ответы, дубликаты и битые метки</option>
+            <option value="storage_error">Проверка ошибки сохранения на диск</option>
+          </select>
+
+          <fieldset id="consentBox" class="consent-box">
+            <legend>Явное согласие до старта</legend>
+            <label class="check-row">
+              <input id="captureConsentCheck" type="checkbox" />
+              <span>Разрешить обработку тестового аудиопотока в этой сессии</span>
+            </label>
+            <label class="check-row">
+              <input id="storageConsentCheck" type="checkbox" />
+              <span>Разрешить сохранение итогов только в изолированную папку прототипа</span>
+            </label>
+            <p class="consent-note">
+              Без отметки первого пункта запуск будет отклонён. Данные не попадают в историю Nox.
+            </p>
+          </fieldset>
+
+          <div class="btn-grid">
+            <button id="btnStart" class="btn btn-primary" type="button">Начать созвон</button>
+            <button id="btnPause" class="btn" type="button" disabled>Пауза</button>
+            <button id="btnResume" class="btn" type="button" disabled>Продолжить</button>
+            <button id="btnFinish" class="btn btn-ok" type="button" disabled>Завершить</button>
+            <button id="btnCancel" class="btn btn-warn" type="button" disabled>Прервать</button>
+            <button id="btnDelete" class="btn btn-danger" type="button">Удалить тестовую сессию</button>
+          </div>
+
+          <div class="fault-box">
+            <div class="fault-title">Симуляция отказов во время работы</div>
+            <div class="fault-actions">
+              <button id="btnFaultDrop" class="btn btn-small" type="button" disabled>
+                Сбой провайдера
+              </button>
+              <button id="btnRevokeConsent" class="btn btn-small" type="button" disabled>
+                Отозвать согласие
+              </button>
+            </div>
+          </div>
+
+          <div class="meta-card">
+            <div><strong>Сессия:</strong> <span id="sessionIdLabel" class="mono">—</span></div>
+            <div><strong>Хранение:</strong> <span id="persistenceLabel">Только в памяти</span></div>
+            <div><strong>Фрагменты:</strong> <span id="chunksLabel" class="mono">0 получ. / 0 обраб.</span></div>
+          </div>
+        </section>
+
+        <section class="panel captions-panel" aria-label="Потоковые субтитры">
+          <div class="panel-header">
+            <h2 class="panel-title">Субтитры в реальном времени</h2>
+            <span id="captionsStats" class="muted-meta mono">Сегментов: 0 · Дублей снято: 0</span>
+          </div>
+
+          <div id="finalsList" class="finals-list" aria-live="polite">
+            <div class="empty-state">
+              Сейчас ничего не записывается. Отметьте согласие и запустите синтетический сценарий.
+            </div>
+          </div>
+
+          <div id="partialBox" class="partial-box partial-idle" aria-live="polite">
+            <span class="partial-tag">Частичные субтитры</span>
+            <span id="partialText" class="partial-text">Ожидание активного потока…</span>
+          </div>
+        </section>
+
+        <section class="panel summary-panel" aria-label="Конспект и аналитика">
+          <div class="tabs" role="tablist">
+            <button class="tab-btn active" data-tab="summary" role="tab" aria-selected="true" type="button">
+              Конспект
+            </button>
+            <button class="tab-btn" data-tab="speakers" role="tab" aria-selected="false" type="button">
+              Спикеры
+            </button>
+            <button class="tab-btn" data-tab="metrics" role="tab" aria-selected="false" type="button">
+              Задержки
+            </button>
+          </div>
+
+          <div id="tabSummary" class="tab-pane active">
+            <div id="summaryContent" class="summary-content">
+              <div class="empty-state">
+                Итоговый конспект появится после завершения сессии.
+              </div>
+            </div>
+          </div>
+
+          <div id="tabSpeakers" class="tab-pane">
+            <div id="speakersContent" class="summary-content">
+              <div class="empty-state">
+                Участники появятся по ходу распознавания. Имена из текста не выдумываются.
+              </div>
+            </div>
+          </div>
+
+          <div id="tabMetrics" class="tab-pane">
+            <div id="metricsContent" class="summary-content">
+              <div class="empty-state">Метрики конвейера обновляются во время и после сессии.</div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

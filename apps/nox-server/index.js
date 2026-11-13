@@ -23,6 +23,7 @@ const { server } = createServer({
   sessionTtlMs: positive('NOX_SESSION_TTL_DAYS', 30) * DAY,
   upstreamTimeoutMs: positive('NOX_UPSTREAM_TIMEOUT_MS', 120000),
   trustProxy: env.NOX_TRUST_PROXY === '1',
+  trustedProxies: env.NOX_TRUSTED_PROXIES ? env.NOX_TRUSTED_PROXIES : undefined,
 });
 
 const port = num('PORT', 8787);

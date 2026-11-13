@@ -1,0 +1,91 @@
+{
+  "ok": true,
+  "chrome": {
+    "binary": "C:\\Users\\abdut\\.cache\\puppeteer\\chrome\\win64-156.0.8078.47\\chrome-win64\\chrome.exe",
+    "product": "Chrome/156.0.8078.47"
+  },
+  "manifest": {
+    "hash": "c63e10c17cd2860d895ad369c8e1bdce2eb4a6f49835d5c4bcba04670d6c7d44",
+    "permissions": [
+      "activeTab",
+      "scripting"
+    ],
+    "hostPermissions": null,
+    "contentScripts": null,
+    "modifiedBeforeLoad": false
+  },
+  "extensionOrigin": "chrome-extension://ifjfoloepdopfbffmdbfbomhddipjcbp",
+  "pairing": {
+    "connection": "Мост подтверждён",
+    "secretCleared": true
+  },
+  "popup": {
+    "ok": true,
+    "characters": 9305,
+    "bytes": 16694,
+    "capped": false
+  },
+  "bridgeRead": {
+    "ok": true,
+    "characters": 9305,
+    "bytes": 16694
+  },
+  "markers": {
+    "visible": {
+      "VISIBLE_MARKER": true,
+      "BOTTOM_MARKER": true,
+      "VISIBLE_GRADIENT": true,
+      "VISIBLE_STROKE": true,
+      "VISIBLE_SHADOW": true,
+      "VISIBLE_SUMMARY": true
+    },
+    "hidden": {
+      "HID_OPACITY": false,
+      "HID_FONT0": false,
+      "HID_COLOR": false,
+      "HID_OFFSCREEN": false,
+      "HID_HEIGHT0": false,
+      "HID_CLIP": false,
+      "HID_VISIBILITY": false,
+      "HID_DISPLAY": false,
+      "HID_ARIA": false,
+      "HID_FILL_TRANSPARENT": false,
+      "HID_FILTER": false,
+      "HID_DETAILS": false,
+      "HID_SECURITY": false
+    },
+    "private": {
+      "SEC_PASSWORD": false,
+      "SEC_EDIT": false,
+      "SEC_PRIVATE": false
+    }
+  },
+  "performance": {
+    "largeVisible": {
+      "times": [
+        7.1,
+        6,
+        5.1
+      ],
+      "best": 5.1,
+      "textNodes": 12005,
+      "paragraphs": 6001,
+      "extractedCharacters": 28267,
+      "extractedBytes": 49279,
+      "capped": true
+    },
+    "largeHidden": {
+      "times": [
+        30.9,
+        31.8
+      ],
+      "best": 30.9,
+      "textNodes": 6005,
+      "paragraphs": 3001,
+      "extractedCharacters": 28,
+      "extractedBytes": 43,
+      "capped": false
+    }
+  },
+  "failures": []
+}

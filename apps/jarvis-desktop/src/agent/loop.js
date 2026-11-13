@@ -507,7 +507,7 @@ class Agent {
       this._status('thinking', {
         status: round === 1 ? 'planning' : 'running',
         step: this._step,
-        label: round === 1 ? 'принял просьбу, планирую шаги' : 'обдумываю следующий шаг',
+        label: round === 1 ? 'Ход работы · Выполняется' : 'Ход работы · Выполняется',
         startedAt: this._startedAt,
       });
       const res = await this._callModel(round, answerOnly, signal);
@@ -759,7 +759,7 @@ class Agent {
         waitMs = Date.now() - askStarted;
         if (`${call.name}:${stableKey(call.args || {})}` !== approvedAction) resolution = 'reject';
         // Отправка, публикация и удаление: «на сессию» не выдаём, каждое действие — отдельное согласие.
-        if (resolution === 'session' && isOneShot(tool.name)) resolution = 'once';
+        if (resolution === 'session' && (isOneShot(tool.name) || (tool.name === 'remember' && this._hasBrowserContext()))) resolution = 'once';
         // Стоп пришёл, пока ждали ответ: одобрение «на сессию» не сохраняем, стоп его уже отозвал.
         if (resolution === 'session' && !this._stopped() && !signal.aborted && !this._runClosed) {
           this.sessionAllow.add(allowKey(tool.name, call.args));
@@ -964,12 +964,19 @@ class Agent {
         installEvidence: this._installEvidence,
         tainted: this._tainted === true,
         handsTainted: this._foreign === true,
+        browserTainted: this._hasBrowserContext(),
       });
     } catch {
       verdict = 'deny'; // сбой политики = отказ по умолчанию
     }
     // Открыть доступ можно только явным 'allow' или 'ask'.
     return verdict === 'allow' || verdict === 'ask' ? verdict : 'deny';
+  }
+
+  // Считаем чтение недоверенным даже при повреждённом или обрезанном результате.
+  _hasBrowserContext() {
+    return this.history.some((m) => m && Array.isArray(m.tool_calls)
+      && m.tool_calls.some((c) => c && c.function && c.function.name === 'browser_tab_read'));
   }
 
   // Причина ограничения от политики: «отклонено» без причины владельцу ничего не говорит.
@@ -1032,7 +1039,7 @@ class Agent {
       risk: tool.risk,
       reason: reasonParts.join('; ') || 'действие требует вашего разрешения',
       // Для отправки, публикации и удаления «до перезапуска» не предлагаем: каждое действие — отдельное согласие.
-      allowSession: !isOneShot(tool.name),
+      allowSession: !isOneShot(tool.name) && !(tool.name === 'remember' && this._hasBrowserContext()),
       ...(preview ? { preview } : {}),
     };
     this._status('waiting_approval', {

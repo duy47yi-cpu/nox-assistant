@@ -4,12 +4,12 @@
 (() => {
   'use strict';
 
-  const IDS = ['dark', 'light', 'graphite', 'lime', 'paper', 'forest', 'wine', 'cobalt', 'aurora', 'ember', 'dawn', 'glass',
+  const IDS = ['signal', 'dark', 'light', 'graphite', 'lime', 'paper', 'forest', 'wine', 'cobalt', 'aurora', 'ember', 'dawn', 'glass',
     'liquid', 'liquidday', 'frost', 'gradient', 'gradientday', 'midnight', 'neon', 'starry', 'moonlight', 'sunrise', 'system'];
   const resolve = (id) => {
     // Убранные темы (archive, tablet, acrylic и их дневные) и мусор тихо открывают «Ночь».
-    if (id !== 'system') return IDS.includes(id) ? id : 'dark';
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    if (id !== 'system') return IDS.includes(id) ? id : 'signal';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'signal';
   };
   const apply = (id) => { document.documentElement.dataset.theme = resolve(id); applyAccent(); applyFx(); };
 
@@ -124,12 +124,14 @@
       candara: ['Candara', `"Candara", ${SANS}`],
       century: ['Century Gothic', `"Century Gothic", ${SANS}`],
       book: ['Книжный Sitka', `"Sitka Text", "Sitka Small"${SERIF_END}`],
+      times: ['Классический (Times New Roman)', `"Times New Roman", "Liberation Serif", Georgia, serif`],
     },
     head: {
       theme: ['Как в теме', null],
       sitka: ['Sitka', `"Sitka Heading", "Sitka Text"${SERIF_END}`],
       plex: ['IBM Plex Serif', `"IBM Plex Serif"${SERIF_END}`],
       georgia: ['Georgia', `Georgia, "Times New Roman", serif`],
+      times: ['Классический (Times New Roman)', `"Times New Roman", "Liberation Serif", Georgia, serif`],
       cambria: ['Cambria', `"Cambria"${SERIF_END}`],
       constantia: ['Constantia', `"Constantia"${SERIF_END}`],
       ui: ['Тот же, что в интерфейсе', 'ui'],
@@ -261,8 +263,8 @@
   try { look = sanitizeLook(JSON.parse(localStorage.getItem('jarvis.look'))); } catch { look = { ...LOOK_DEFAULT }; }
   applyLook();
 
-  let saved = 'dark';
-  try { saved = JSON.parse(localStorage.getItem('jarvis.theme')) || 'dark'; } catch { /* нет хранилища или мусор */ }
+  let saved = 'signal';
+  try { saved = JSON.parse(localStorage.getItem('jarvis.theme')) || 'signal'; } catch { /* нет хранилища или мусор */ }
   try { accent = normAccent(JSON.parse(localStorage.getItem('jarvis.accent'))); } catch { /* нет хранилища или мусор */ }
   apply(saved);
   // Мини-окно и главное окно живут в одном хранилище: смена в Настройках доходит и сюда.
@@ -274,7 +276,7 @@
       return;
     }
     if (e.key !== 'jarvis.theme') return;
-    try { apply(JSON.parse(e.newValue)); } catch { apply('dark'); }
+    try { apply(JSON.parse(e.newValue)); } catch { apply('signal'); }
   });
 
   window.JarvisTheme = {

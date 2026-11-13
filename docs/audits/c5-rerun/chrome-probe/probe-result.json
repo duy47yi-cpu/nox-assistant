@@ -1,0 +1,26 @@
+[
+  {
+    "listening": "127.0.0.1:28417",
+    "at": "2026-11-13T05:38:36.164Z"
+  },
+  {
+    "at": "2026-11-13T05:38:38.776Z",
+    "url": "/nox",
+    "origin": "chrome-extension://ehnphehgpddhdlaapflmmpkglmmkcflc",
+    "host": "127.0.0.1:28417",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+  },
+  {
+    "message": "{\"probe\":\"sw-start\",\"url\":\"chrome-extension://ehnphehgpddhdlaapflmmpkglmmkcflc/\"}"
+  },
+  {
+    "at": "2026-11-13T05:38:38.801Z",
+    "url": "/nox",
+    "origin": "chrome-extension://ehnphehgpddhdlaapflmmpkglmmkcflc",
+    "host": "127.0.0.1:28417",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+  },
+  {
+    "message": "{\"probe\":\"installed\",\"url\":\"chrome-extension://ehnphehgpddhdlaapflmmpkglmmkcflc/\"}"
+  }
+]

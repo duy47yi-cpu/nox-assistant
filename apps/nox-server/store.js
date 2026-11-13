@@ -35,19 +35,112 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString('hex'), a
   };
 }
 
+const DEFAULT_BUSY_TIMEOUT_MS = 5000;
+const SQLITE_BUSY_BACKOFF_MS = [5, 10, 15, 20, 25];
+const MAX_BUSY_RETRY_WALL_MS = 200;
+const BUSY_SLEEP_CELL = new Int32Array(new SharedArrayBuffer(4));
+
+function isSqliteBusyError(err) {
+  if (!err) return false;
+  const code = String(err.errstr || err.code || '');
+  const msg = String(err.message || '');
+  return code === 'SQLITE_BUSY' || err.errcode === 5 || /SQLITE_BUSY|database is locked/i.test(msg);
+}
+
+function pauseBusyMs(ms) {
+  if (ms > 0) {
+    try { Atomics.wait(BUSY_SLEEP_CELL, 0, 0, ms); } catch { /* noop */ }
+  }
+}
+
 class Store {
   // sessionTtlMs — сколько живёт пропуск; старые пропуска при миграции получают срок от своей выдачи.
-  constructor(file, { sessionTtlMs = DEFAULT_SESSION_TTL_MS } = {}) {
+  constructor(file, { sessionTtlMs = DEFAULT_SESSION_TTL_MS, busyTimeoutMs = DEFAULT_BUSY_TIMEOUT_MS } = {}) {
     this.sessionTtlMs = Number.isFinite(sessionTtlMs) && sessionTtlMs > 0 ? sessionTtlMs : DEFAULT_SESSION_TTL_MS;
+    this.busyTimeoutMs = Number.isFinite(busyTimeoutMs) && busyTimeoutMs >= 0 ? Math.floor(busyTimeoutMs) : DEFAULT_BUSY_TIMEOUT_MS;
+    this._tokenRevokedListeners = new Set();
+    this._accountDisabledListeners = new Set();
+    this._txDepth = 0;
+    this._txSeq = 0;
+    this._closed = false;
     try {
       this.db = new DatabaseSync(file);
-      this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+      this.db.exec(`PRAGMA busy_timeout = ${this.busyTimeoutMs}; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;`);
       this._migrate();
     } catch (err) {
       try { if (this.db) this.db.close(); } catch { /* уже закрыта */ }
       const error = new Error(`база Nox не открылась: файл повреждён, это не база SQLite или нет доступа. Восстановите её из резервной копии (apps/nox-server/README.md).`);
       error.cause = err;
       throw error;
+    }
+  }
+
+  _inTx(fn) {
+    if (this._txDepth > 0) {
+      const savepoint = `nox_sp_${++this._txSeq}`;
+      this.db.exec(`SAVEPOINT ${savepoint}`);
+      this._txDepth += 1;
+      try {
+        const result = fn();
+        this.db.exec(`RELEASE SAVEPOINT ${savepoint}`);
+        return result;
+      } catch (err) {
+        try { this.db.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`); } catch { /* уже откачена */ }
+        try { this.db.exec(`RELEASE SAVEPOINT ${savepoint}`); } catch { /* уже снята */ }
+        throw err;
+      } finally {
+        this._txDepth -= 1;
+      }
+    }
+    const startedAt = Date.now();
+    const maxAttempts = SQLITE_BUSY_BACKOFF_MS.length + 1;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let begun = false;
+      try {
+        this.db.exec('BEGIN IMMEDIATE');
+        begun = true;
+        this._txDepth = 1;
+        const result = fn();
+        this.db.exec('COMMIT');
+        return result;
+      } catch (err) {
+        if (begun) {
+          try { this.db.exec('ROLLBACK'); } catch { /* уже откачена */ }
+        }
+        // Короткая повторная попытка только при быстрых конфликтах блокировки, чтобы не морозить event loop надолго.
+        const elapsed = Date.now() - startedAt;
+        if (attempt < maxAttempts && isSqliteBusyError(err) && elapsed < MAX_BUSY_RETRY_WALL_MS) {
+          pauseBusyMs(SQLITE_BUSY_BACKOFF_MS[attempt - 1]);
+          continue;
+        }
+        throw err;
+      } finally {
+        this._txDepth = 0;
+      }
+    }
+  }
+
+  onTokenRevoked(listener) {
+    if (typeof listener !== 'function') return () => {};
+    this._tokenRevokedListeners.add(listener);
+    return () => this._tokenRevokedListeners.delete(listener);
+  }
+
+  onAccountDisabled(listener) {
+    if (typeof listener !== 'function') return () => {};
+    this._accountDisabledListeners.add(listener);
+    return () => this._accountDisabledListeners.delete(listener);
+  }
+
+  _emitTokenRevoked(tokenHash) {
+    for (const listener of [...this._tokenRevokedListeners]) {
+      try { listener(tokenHash); } catch { /* не срываем отзыв */ }
+    }
+  }
+
+  _emitAccountDisabled(accountId) {
+    for (const listener of [...this._accountDisabledListeners]) {
+      try { listener(accountId); } catch { /* не срываем блокировку */ }
     }
   }
 
@@ -98,7 +191,11 @@ class Store {
   }
 
   close() {
-    this.db.close();
+    if (this._closed) return;
+    this._closed = true;
+    this._tokenRevokedListeners.clear();
+    this._accountDisabledListeners.clear();
+    try { this.db.close(); } catch { /* уже закрыта */ }
   }
 
   createAccount({ email, password, plan, trialUntil, now }) {
@@ -146,38 +243,90 @@ class Store {
   }
 
   setPlan(id, plan) {
-    return this.db.prepare('UPDATE accounts SET plan = ? WHERE id = ?').run(plan, id).changes > 0;
+    return this._inTx(() =>
+      this.db.prepare('UPDATE accounts SET plan = ? WHERE id = ?').run(plan, id).changes > 0,
+    );
   }
 
   setDisabled(id, disabled) {
-    if (disabled) this.revokeAllTokens(id);
-    return this.db.prepare('UPDATE accounts SET disabled = ? WHERE id = ?').run(disabled ? 1 : 0, id).changes > 0;
+    const flag = Boolean(disabled);
+    const { changed, revokedHashes } = this._inTx(() => {
+      const updated = this.db.prepare('UPDATE accounts SET disabled = ? WHERE id = ?').run(flag ? 1 : 0, id).changes > 0;
+      let hashes = [];
+      if (flag) {
+        const rows = this.db.prepare('SELECT hash FROM tokens WHERE account_id = ? AND revoked = 0').all(id);
+        hashes = rows.map((r) => r.hash);
+        if (hashes.length > 0) {
+          this.db.prepare('UPDATE tokens SET revoked = 1 WHERE account_id = ? AND revoked = 0').run(id);
+        }
+      }
+      return { changed: updated, revokedHashes: hashes };
+    });
+    if (flag && changed) this._emitAccountDisabled(id);
+    for (const hash of revokedHashes) this._emitTokenRevoked(hash);
+    return changed;
   }
 
   // В базе только хеш: украденная база не даёт войти чужими пропусками.
   issueToken(accountId, now) {
-    this.pruneTokens(now);
     const token = `nox_${crypto.randomBytes(32).toString('base64url')}`;
-    this.db.prepare('INSERT INTO tokens (hash, account_id, created_at, expires_at) VALUES (?, ?, ?, ?)').run(sha256(token), accountId, now, now + this.sessionTtlMs);
+    this._inTx(() => {
+      this.pruneTokens(now);
+      this.db.prepare('INSERT INTO tokens (hash, account_id, created_at, expires_at) VALUES (?, ?, ?, ?)').run(sha256(token), accountId, now, now + this.sessionTtlMs);
+    });
     return token;
   }
 
-  accountByToken(token, now = Date.now()) {
+  sessionByToken(token, now = Date.now()) {
     if (!token) return null;
-    return this.db.prepare('SELECT a.* FROM tokens t JOIN accounts a ON a.id = t.account_id WHERE t.hash = ? AND t.revoked = 0 AND a.disabled = 0 AND (t.expires_at IS NULL OR t.expires_at > ?)').get(sha256(String(token)), now) || null;
+    const tokenHash = sha256(String(token));
+    const row = this.db.prepare(
+      'SELECT a.*, t.expires_at AS token_expires_at FROM tokens t JOIN accounts a ON a.id = t.account_id WHERE t.hash = ? AND t.revoked = 0 AND a.disabled = 0 AND (t.expires_at IS NULL OR t.expires_at > ?)',
+    ).get(tokenHash, now);
+    if (!row) return null;
+    const { token_expires_at: expiresAt = null, ...account } = row;
+    return { account, tokenHash, expiresAt };
+  }
+
+  isTokenActive(tokenHash, now = Date.now()) {
+    if (!tokenHash) return false;
+    const row = this.db.prepare(
+      'SELECT 1 FROM tokens t JOIN accounts a ON a.id = t.account_id WHERE t.hash = ? AND t.revoked = 0 AND a.disabled = 0 AND (t.expires_at IS NULL OR t.expires_at > ?)',
+    ).get(String(tokenHash), now);
+    return Boolean(row);
+  }
+
+  accountByToken(token, now = Date.now()) {
+    return this.sessionByToken(token, now)?.account || null;
   }
 
   revokeToken(token) {
-    this.db.prepare('UPDATE tokens SET revoked = 1 WHERE hash = ?').run(sha256(String(token)));
+    if (!token) return false;
+    const hash = sha256(String(token));
+    const changed = this._inTx(() =>
+      this.db.prepare('UPDATE tokens SET revoked = 1 WHERE hash = ? AND revoked = 0').run(hash).changes > 0,
+    );
+    if (changed) this._emitTokenRevoked(hash);
+    return changed;
   }
 
   revokeAllTokens(accountId) {
-    this.db.prepare('UPDATE tokens SET revoked = 1 WHERE account_id = ? AND revoked = 0').run(accountId);
+    const hashes = this._inTx(() => {
+      const rows = this.db.prepare('SELECT hash FROM tokens WHERE account_id = ? AND revoked = 0').all(accountId);
+      if (rows.length > 0) {
+        this.db.prepare('UPDATE tokens SET revoked = 1 WHERE account_id = ? AND revoked = 0').run(accountId);
+      }
+      return rows.map((r) => r.hash);
+    });
+    for (const hash of hashes) this._emitTokenRevoked(hash);
+    return hashes.length;
   }
 
   // Просроченные пропуска удаляем: иначе таблица растёт вечно.
   pruneTokens(now) {
-    this.db.prepare('DELETE FROM tokens WHERE expires_at IS NOT NULL AND expires_at <= ?').run(now);
+    this._inTx(() => {
+      this.db.prepare('DELETE FROM tokens WHERE expires_at IS NOT NULL AND expires_at <= ?').run(now);
+    });
   }
 
   // Окно начинается с первого запроса после конца прошлого, как у Claude Code.
@@ -189,25 +338,22 @@ class Store {
 
   // Окно отсчитывается от начала запроса, даже если расход записан позже.
   openWindows(accountId, now) {
-    for (const kind of Object.keys(WINDOW_MS)) {
-      if (!this.window(accountId, kind, now).active) {
-        this.db.prepare('INSERT INTO windows (account_id, kind, started_at, used_usd) VALUES (?, ?, ?, 0) ON CONFLICT(account_id, kind) DO UPDATE SET started_at = excluded.started_at, used_usd = 0')
-          .run(accountId, kind, now);
+    this._inTx(() => {
+      for (const kind of Object.keys(WINDOW_MS)) {
+        if (!this.window(accountId, kind, now).active) {
+          this.db.prepare('INSERT INTO windows (account_id, kind, started_at, used_usd) VALUES (?, ?, ?, 0) ON CONFLICT(account_id, kind) DO UPDATE SET started_at = excluded.started_at, used_usd = 0')
+            .run(accountId, kind, now);
+        }
       }
-    }
+    });
   }
 
   charge(accountId, { usd, weight = 1, prompt = null, cached = null, completion = null, estimated, now }) {
-    this.db.exec('BEGIN IMMEDIATE');
-    try {
+    this._inTx(() => {
       this.db.prepare('INSERT INTO usage (account_id, at, usd, prompt, cached, completion, estimated) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(accountId, now, usd, prompt, cached, completion, estimated ? 1 : 0);
       this.db.prepare('UPDATE windows SET used_usd = used_usd + ? WHERE account_id = ?').run(usd * weight, accountId);
-      this.db.exec('COMMIT');
-    } catch (err) {
-      this.db.exec('ROLLBACK');
-      throw err;
-    }
+    });
   }
 
   // Расход всего сервера с момента since: предохранитель кошелька владельца.
@@ -217,11 +363,13 @@ class Store {
 
   // true — попытка учтена, false — лимит превышен. Для входа и регистрации.
   allowAttempt(key, { max, perMs, now }) {
-    this.db.prepare('DELETE FROM attempts WHERE at < ?').run(now - DAY);
-    const { n } = this.db.prepare('SELECT COUNT(*) AS n FROM attempts WHERE key = ? AND at >= ?').get(key, now - perMs);
-    if (n >= max) return false;
-    this.db.prepare('INSERT INTO attempts (key, at) VALUES (?, ?)').run(key, now);
-    return true;
+    return this._inTx(() => {
+      this.db.prepare('DELETE FROM attempts WHERE at < ?').run(now - DAY);
+      const { n } = this.db.prepare('SELECT COUNT(*) AS n FROM attempts WHERE key = ? AND at >= ?').get(key, now - perMs);
+      if (n >= max) return false;
+      this.db.prepare('INSERT INTO attempts (key, at) VALUES (?, ?)').run(key, now);
+      return true;
+    });
   }
 
   // Проверка без учёта: нужно служебным запросам, где считать надо только неудачные попытки.
@@ -230,8 +378,10 @@ class Store {
   }
 
   recordAttempt(key, now) {
-    this.db.prepare('DELETE FROM attempts WHERE at < ?').run(now - DAY);
-    this.db.prepare('INSERT INTO attempts (key, at) VALUES (?, ?)').run(key, now);
+    this._inTx(() => {
+      this.db.prepare('DELETE FROM attempts WHERE at < ?').run(now - DAY);
+      this.db.prepare('INSERT INTO attempts (key, at) VALUES (?, ?)').run(key, now);
+    });
   }
 
   // Резервная копия. VACUUM INTO делает цельный снимок вместе с WAL: копировать файлы вручную нельзя.
@@ -245,4 +395,4 @@ class Store {
   }
 }
 
-module.exports = { Store, sha256, hashPassword, SCHEMA_VERSION, DEFAULT_SESSION_TTL_MS };
+module.exports = { Store, sha256, hashPassword, isSqliteBusyError, SCHEMA_VERSION, DEFAULT_SESSION_TTL_MS };

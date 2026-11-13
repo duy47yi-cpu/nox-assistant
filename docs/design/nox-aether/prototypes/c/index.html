@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru" data-concept="C">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nox — концепция C · Spatial Dialogue</title>
+<link rel="stylesheet" href="../shared/base.css">
+<style>
+/* C / Spatial Dialogue. Одна сцена без перегородок: сфера — свет позади текста. В диалоге она крупная
+   и уходит за край окна, при длинном ответе садится маленьким спутником к полю ввода.
+   Читаемость держит затемнение под текстом, а не рамки. */
+:root { --o: min(88vh, 60vw); --ox: 50%; --oy: 43%; --gx: 50%; --gy: 43%; --colw: min(var(--chat-w), 100vw - 64px); }
+.orbbox { position: absolute; z-index: 0; left: var(--ox); top: var(--oy); width: calc(var(--o) * var(--orb-k)); transform: translate(-50%, -50%); text-align: center; transition: left var(--dur) var(--ease), top var(--dur) var(--ease), width var(--dur) var(--ease); }
+.scrim { position: absolute; z-index: 1; inset: 0; pointer-events: none; background: radial-gradient(70% 62% at 50% 108%, var(--bg) 42%, transparent); transition: opacity var(--dur); }
+.top { position: absolute; z-index: 3; top: 6px; left: 12px; display: flex; align-items: center; gap: 4px; }
+.top .brand { font: 400 17px var(--serif); margin: 0 8px 0 6px; }
+.pop.hist { top: 42px; left: 12px; }
+.col { position: absolute; z-index: 2; top: 0; bottom: 0; left: var(--cl, calc(50% - var(--colw) / 2)); width: var(--colw); display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; padding: 48px 0 20px; transition: left var(--dur) var(--ease), width var(--dur) var(--ease); }
+.thread { flex: 1; }
+.composer { background: color-mix(in srgb, var(--surface) 94%, transparent); border-radius: 24px; box-shadow: 0 10px 40px rgba(0, 0, 0, .35); transition: margin var(--dur) var(--ease); }
+.orbbox .state { margin-top: -2vh; }
+
+html[data-mode="empty"] { --colw: min(var(--chat-w), 600px, 100vw - 64px); }
+html[data-mode="empty"] .hello { margin-bottom: 1vh; }
+html[data-mode="empty"] .orbbox .state { display: none; }
+/* Диалог: текст слева, сфера — большая, справа, наполовину за краем. */
+html:is([data-mode="dialog"], [data-mode="long"]) { --o: min(78vh, 50vw); --ox: 80%; --oy: 46%; --gx: 80%; --gy: 46%; --cl: 7vw; --colw: min(var(--chat-w), 52vw); }
+html:is([data-mode="dialog"], [data-mode="long"]) .scrim { background: linear-gradient(90deg, var(--bg) 56%, transparent 78%); }
+html[data-mode="voice"] { --o: min(64vh, 48vw); --oy: 33%; }
+html[data-mode="voice"] .thread { flex: 0 1 auto; }
+html[data-mode="voice"] .orbbox .state { display: none; }
+
+html[data-orb-pos="left"]:is([data-mode="dialog"], [data-mode="long"]) { --ox: 20%; --gx: 20%; --cl: calc(93vw - var(--colw)); }
+html[data-orb-pos="left"]:is([data-mode="dialog"], [data-mode="long"]) .scrim { background: linear-gradient(270deg, var(--bg) 52%, transparent 76%); }
+/* Спутник: длинный ответ (если включено), «компактная» и «скрыта». Сфера у поля ввода, текст — в центре. */
+html:is([data-mode="long"][data-autoshift="true"], [data-orb-pos="compact"], [data-orb-pos="hidden"]):not([data-mode="empty"], [data-mode="voice"]) {
+  --o: 46px; --ox: calc(50% - var(--colw) / 2 + 27px); --oy: calc(100% - 49px); --cl: initial; --colw: min(var(--chat-w), 100vw - 64px); --gx: 50%; --gy: 110%;
+}
+html:is([data-mode="long"][data-autoshift="true"], [data-orb-pos="compact"], [data-orb-pos="hidden"]):not([data-mode="empty"], [data-mode="voice"]) :is(.orbbox) { z-index: 3; width: 46px; }
+html:is([data-mode="long"][data-autoshift="true"], [data-orb-pos="compact"], [data-orb-pos="hidden"]):not([data-mode="empty"], [data-mode="voice"]) .scrim { opacity: 0; }
+html:is([data-mode="long"][data-autoshift="true"], [data-orb-pos="compact"], [data-orb-pos="hidden"]):not([data-mode="empty"], [data-mode="voice"]) .composer { margin-left: 62px; }
+html:is([data-mode="long"][data-autoshift="true"], [data-orb-pos="compact"], [data-orb-pos="hidden"]):not([data-mode="empty"], [data-mode="voice"]) .state { margin: 0 -14px; font-size: 12px; font-family: var(--sans); white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .col { padding: 44px 0 14px; gap: 10px; }
+  html:is([data-mode="dialog"], [data-mode="long"]) { --cl: 24px; --colw: min(var(--chat-w), 58vw); --ox: 84%; --o: min(80vh, 46vw); }
+  html:is([data-mode="dialog"], [data-mode="long"]) .scrim { background: linear-gradient(90deg, var(--bg) 62%, transparent 86%); }
+  .hello { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="orbbox"><div id="orbMount" class="orb"></div><p class="state" data-state-label></p></div>
+  <div class="scrim"></div>
+  <header class="top">
+    <span class="brand">Nox</span>
+    <button class="tbtn" data-hist-toggle aria-expanded="false"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 5h10M3 8h10M3 11h10"/></svg> Разговоры</button>
+  </header>
+  <div class="pop hist" hidden data-history></div>
+  <section class="col">
+    <h1 class="hello">С чего начнём?</h1>
+    <main id="thread" class="thread" tabindex="0" aria-label="Разговор"></main>
+    <div data-composer></div>
+  </section>
+</div>
+<script>window.NOX_PROTO = { concept: 'C', defaults: { msg: 'minimal', autoshift: true } };</script>
+<script src="../../../../../apps/jarvis-desktop/renderer/orb-nox.js"></script>
+<script src="../../../../../apps/jarvis-desktop/renderer/orb.js"></script>
+<script src="../../../../../apps/jarvis-desktop/renderer/orb-variants.js"></script>
+<script src="../shared/proto.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "nox-meeting-spike",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Isolated C7 Real-Time Meeting Intelligence Engine prototype (synthetic audio & ASR only)",
+  "license": "Apache-2.0",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "demo": "node scripts/demo-scenario.js",
+    "bench": "node scripts/benchmark-latency.js",
+    "bench:real": "node scripts/benchmark-real-asr.js",
+    "bench:real-dry": "node scripts/benchmark-real-asr.js --mock",
+    "verify-offline": "node scripts/verify-offline.js",
+    "ui": "node src/server/spike-server.js",
+    "verify-ui": "node scripts/verify-ui.js"
+  }
+}

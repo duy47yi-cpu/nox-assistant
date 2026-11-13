@@ -22,17 +22,85 @@ function maskArgs(tool, args) {
   return { ...args, text: `[скрыто, ${text.length} симв.]` };
 }
 
-// Копия истории для файла разговора: без набранного текста и содержимого буфера.
+function redactTabToolContent(rawContent) {
+  let parsed = null;
+  try {
+    parsed = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+  } catch {
+    parsed = null;
+  }
+  const d = parsed && typeof parsed.data === 'object' && parsed.data ? parsed.data : {};
+  const origin = typeof d.origin === 'string' ? d.origin : null;
+  const title = typeof d.title === 'string' ? d.title.slice(0, 160) : null;
+  const length = Number.isFinite(d.length) ? d.length : null;
+  const status = typeof d.status === 'string' ? d.status : (parsed?.ok ? 'read' : 'denied');
+  const label = title && origin ? `${title} (${origin})` : (origin || 'вкладка браузера');
+  const summary = parsed?.ok
+    ? `прочитана вкладка ${label}${length !== null ? `, ${length} байт` : ''} [текст вкладки скрыт]`
+    : '[текст вкладки скрыт]';
+  return JSON.stringify({
+    ok: Boolean(parsed?.ok),
+    summary,
+    ...(parsed?.verified !== undefined ? { verified: parsed.verified } : {}),
+    ...(parsed?.evidence !== undefined ? { evidence: parsed.evidence } : {}),
+    data: {
+      ...(origin ? { origin } : {}),
+      ...(title ? { title } : {}),
+      ...(length !== null ? { length } : {}),
+      ...(d.truncated !== undefined ? { truncated: Boolean(d.truncated) } : {}),
+      status,
+      sourceType: 'chrome_extension_tab',
+      textRedacted: true,
+    },
+  });
+}
+
+function isTabToolContent(rawContent) {
+  if (typeof rawContent !== 'string' || !rawContent.includes('chrome_extension_tab')) return false;
+  try {
+    const parsed = JSON.parse(rawContent);
+    return parsed?.data?.sourceType === 'chrome_extension_tab';
+  } catch {
+    return false;
+  }
+}
+
+function stripTabRecordFields(entry) {
+  if (!entry || typeof entry !== 'object') return entry;
+  if (entry.tool !== 'browser_tab_read' && entry.source !== 'browser_extension') return entry;
+  const out = { ...entry };
+  delete out.content;
+  delete out.text;
+  if (out.data && typeof out.data === 'object') {
+    const { content: _c, text: _t, ...restData } = out.data;
+    out.data = { ...restData, textRedacted: true };
+  }
+  return out;
+}
+
+// Копия истории для файла разговора: без набранного текста, содержимого буфера и текста вкладок Chrome.
 function maskHistory(history) {
   const clipboardReads = new Set();
+  const tabReads = new Set();
   return history.map((m) => {
-    if (m.role === 'tool' && clipboardReads.has(m.tool_call_id)) return { ...m, content: JSON.stringify({ ok: true, summary: '[содержимое буфера скрыто]' }) };
+    if (!m || typeof m !== 'object') return m;
+    // Размышления нужны провайдеру в текущем ходе, но не должны попадать в файл чата.
+    if (Object.prototype.hasOwnProperty.call(m, 'reasoning_content')) {
+      const { reasoning_content: _reasoning, ...safe } = m;
+      m = safe;
+    }
+    if (m.role === 'tool') {
+      if (clipboardReads.has(m.tool_call_id)) return { ...m, content: JSON.stringify({ ok: true, summary: '[содержимое буфера скрыто]' }) };
+      if (tabReads.has(m.tool_call_id) || isTabToolContent(m.content)) return { ...m, content: redactTabToolContent(m.content) };
+      return m;
+    }
     if (!Array.isArray(m.tool_calls)) return m;
     return {
       ...m,
       tool_calls: m.tool_calls.map((c) => {
         const name = c.function && c.function.name;
         if (name === 'clipboard_get') clipboardReads.add(c.id);
+        if (name === 'browser_tab_read') tabReads.add(c.id);
         try {
           return { ...c, function: { ...c.function, arguments: JSON.stringify(maskArgs(name, JSON.parse(c.function.arguments))) } };
         } catch {
@@ -131,7 +199,8 @@ class Journal {
   append(entry = {}) {
     const ts = new Date().toISOString();
     // Маскировка здесь, а не в вызывающем коде: все места записи (чат, команды, задачи, миссии, Telegram) идут через этот метод.
-    const safe = 'args' in entry ? { ...entry, args: maskArgs(entry.tool, entry.args) } : entry;
+    const cleanEntry = stripTabRecordFields(entry);
+    const safe = 'args' in cleanEntry ? { ...cleanEntry, args: maskArgs(cleanEntry.tool, cleanEntry.args) } : cleanEntry;
     const record = { ts, ...safe };
     record.ts = ts; // время ставит журнал, а не вызывающий код
     // Секреты маскируются до записи на диск: в файле их не должно быть ни в аргументах, ни в итоге.

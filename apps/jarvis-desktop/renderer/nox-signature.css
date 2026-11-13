@@ -1,0 +1,317 @@
+/* Nox — фирменный слой «Затвор». Подключается последним, цвета только из токенов темы.
+ *
+ * Что меняет по сравнению с экраном-образцом (рейка слева, три карточки, шар справа):
+ *   1. Разделы переключаются вкладками в шапке, левой рейки нет.
+ *   2. Панели — открытые колонки с тонкими линиями, без карточек, рамок и скруглений.
+ *   3. Запрос владельца — строка команды со знаком «›», ответ Джарвиса — запись журнала на вертикальной линии времени.
+ *   4. Справа не карточка с шаром, а прибор: затвор, слово состояния и режим доступа.
+ *   5. Поле ввода — прямоугольная командная строка, без свечения и капсулы.
+ * Остальные разделы получают только вкладки; их внутренний вид меняется отдельно. */
+
+/* ── Токены слоя ─────────────────────────────────────────────── */
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) {
+  --rail-w: 0px;
+  --sig-hair: color-mix(in srgb, var(--text) 11%, transparent);
+  --sig-hair-strong: color-mix(in srgb, var(--text) 22%, transparent);
+  --sig-mono: var(--mono, "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace);
+}
+
+/* ── 1. Каркас: шапка с вкладками, ниже раздел на всю ширину ─── */
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .app {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 44px minmax(0, 1fr);
+  row-gap: 0;
+  column-gap: 0;
+  padding: 0;
+  border-radius: 10px;
+}
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .nox-topbar {
+  grid-row: 1;
+  grid-column: 1;
+  padding: 0 4px 0 18px;
+  border-bottom: 1px solid var(--sig-hair);
+}
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .main {
+  grid-row: 2;
+  grid-column: 1;
+  padding: 0;
+}
+.nox-top-word { letter-spacing: 0.34em; font-weight: 500; }
+.nox-top-mark { border-color: var(--hue); }
+
+/* Рейка превращается в строку вкладок поверх шапки. */
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail {
+  grid-row: 1;
+  grid-column: 1;
+  justify-self: start;
+  align-self: stretch;
+  z-index: 6;
+  flex-direction: row;
+  align-items: stretch;
+  width: auto;
+  height: auto;
+  margin: 0 0 0 118px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+  box-shadow: none;
+  -webkit-app-region: no-drag;
+}
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail-list {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  width: auto;
+}
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail-list > li { display: flex; }
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail-item {
+  position: relative;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  width: auto;
+  height: 100%;
+  padding: 0 15px;
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-3);
+  font: 500 13px/1 var(--font);
+  letter-spacing: 0.01em;
+  transform: none;
+}
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail-item:hover {
+  background: transparent;
+  color: var(--text);
+}
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail-item[aria-current="page"] {
+  background: transparent;
+  color: var(--text);
+}
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 15px; right: 15px; top: auto; bottom: -1px;
+  width: auto; height: 2px;
+  border-radius: 0;
+  background: var(--hue);
+}
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail-icon { display: none; }
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail-label { display: inline; }
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) .rail-count {
+  position: static;
+  min-width: 16px; height: 16px;
+  margin: 0;
+  border-radius: 3px;
+  font-size: 11px;
+}
+body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) :is(.rail-foot, .rail-brand) { display: none; }
+
+/* ── 2. Экран чата: три открытые колонки ─────────────────────── */
+body[data-view="nox"] .view-nox .nox-grid { gap: 0; }
+body[data-view="nox"] .view-nox .nox-panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+body[data-view="nox"] .view-nox .nox-history {
+  width: 212px;
+  padding: 20px 16px 14px 20px;
+  border-right: 1px solid var(--sig-hair);
+}
+body[data-view="nox"] .view-nox .nox-chat { border: 0; border-radius: 0; }
+body[data-view="nox"] .view-nox .nox-sphere {
+  width: 304px;
+  padding: 0;
+  border-left: 1px solid var(--sig-hair);
+}
+body[data-view="nox"]:has(.nox-grid.is-empty) .nox-chat { border: 0; border-radius: 0; }
+
+/* История: список без кнопок-пилюль, активная строка отмечена чертой слева. */
+.view-nox .nox-hist-head { gap: 14px; padding: 0 0 8px; }
+.view-nox .nox-hist-title {
+  font: 400 11px/14px var(--sig-mono);
+  letter-spacing: 0.02em;
+  color: var(--text-3);
+}
+.view-nox .nox-new-chat {
+  align-self: stretch;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--sig-hair-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: 400 12.5px/16px var(--sig-mono);
+}
+.view-nox .nox-new-chat:hover { border-color: var(--hue); color: var(--hue); }
+.view-nox .nox-hist-label {
+  padding: 14px 0 6px;
+  text-transform: none;
+  letter-spacing: 0;
+  font: 400 11px/14px var(--sig-mono);
+  color: var(--text-3);
+}
+.view-nox .nox-hist-item {
+  height: 32px;
+  padding: 0 4px 0 10px;
+  border-radius: 0;
+  border-left: 2px solid transparent;
+  font-size: 13px;
+}
+.view-nox .nox-hist-item:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.view-nox .nox-hist-item[data-active="true"] {
+  background: transparent;
+  box-shadow: none;
+  border-left-color: var(--hue);
+  color: var(--text);
+}
+
+/* ── 3. Лента: журнал на линии времени ───────────────────────── */
+.view-nox .feed { padding: 28px 40px 16px; }
+.view-nox .feed-col { max-width: 760px; }
+.view-nox .feed-list { gap: 26px; }
+
+/* Запрос владельца: строка команды, не пузырь. */
+.view-nox .msg-user {
+  align-self: stretch;
+  max-width: none;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.view-nox .msg-user::before {
+  content: "›";
+  flex: none;
+  width: 14px;
+  color: var(--hue);
+  font: 500 16px/20px var(--sig-mono);
+}
+.view-nox .msg-user-text {
+  font: 400 14px/21px var(--sig-mono);
+  color: var(--text);
+  letter-spacing: -0.005em;
+}
+
+/* Ответ: запись журнала. Точка и линия слева — «лента времени» хода. */
+.view-nox .turn {
+  align-self: stretch;
+  max-width: none;
+  margin-left: 6px;
+  padding: 0 0 4px 26px;
+  border-left: 1px solid var(--sig-hair-strong);
+  background: radial-gradient(circle, var(--hue) 3.4px, transparent 3.9px) -4px 4px / 8px 8px no-repeat;
+}
+.view-nox .turn::before {
+  content: "джарвис";
+  text-transform: none;
+  letter-spacing: 0;
+  font: 400 11px/14px var(--sig-mono);
+  color: var(--text-3);
+}
+.view-nox .turn > .md,
+.view-nox .md {
+  font-family: var(--font-head);
+  font-size: 15.5px;
+  line-height: 24px;
+  letter-spacing: 0;
+}
+.view-nox .md code { font-family: var(--sig-mono); border-radius: 3px; }
+/* У Plex Serif одно начертание: выделение подчёркиванием сигнального цвета, а не искусственным жирным. */
+.view-nox .md :is(strong, b) { font-weight: 400; text-decoration: underline; text-decoration-color: var(--hue); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.view-nox .md pre { border-radius: 4px; }
+.view-nox .nox-working {
+  margin: 0 40px 6px;
+  border-radius: 4px;
+  border-color: var(--sig-hair-strong);
+  background: transparent;
+  font-family: var(--sig-mono);
+}
+.view-nox .file-chip { border-radius: 4px; }
+
+/* Пустой чат: крупный заголовок серифом, слева, под ним спокойная строка команды. */
+.view-nox .chat-empty {
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 0 40px 28px;
+  text-align: left;
+}
+.view-nox .chat-empty h2 {
+  font-family: var(--font-head);
+  font-weight: 400;
+  font-size: 44px;
+  line-height: 50px;
+  letter-spacing: -0.02em;
+}
+
+/* ── 5. Командная строка ──────────────────────────────────────── */
+.view-nox .nox-composer { padding: 0 40px 22px; }
+.view-nox #composer {
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--sig-hair-strong);
+  background: var(--surface);
+}
+.view-nox #composer:focus-within {
+  border-color: var(--hue);
+  box-shadow: none;
+}
+.view-nox #composer .composer-input {
+  font: 400 14px/20px var(--sig-mono);
+}
+.view-nox #composer #chatSend {
+  border-radius: 3px;
+  background: var(--hue);
+  color: var(--accent-ink);
+}
+
+/* ── 4. Прибор справа: затвор, слово состояния, режим ─────────── */
+body[data-view="nox"] .view-nox .nox-orb-stage {
+  flex: none;
+  padding: 44px 0 0;
+  place-items: start center;
+}
+body[data-view="nox"] .view-nox #noxOrb {
+  --nox-orb-size: 252px;
+  width: var(--nox-orb-size);
+  height: var(--nox-orb-size);
+}
+.nox-readout {
+  margin: 30px 0 0;
+  padding: 22px 28px 0;
+  border-top: 1px solid var(--sig-hair);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.nox-readout > div { display: flex; flex-direction: column; gap: 4px; }
+.nox-readout dt { font: 400 11px/14px var(--sig-mono); color: var(--text-3); }
+.nox-readout dd { margin: 0; font: 400 13px/18px var(--sig-mono); color: var(--text-2); }
+.nox-readout .nox-read-state dd {
+  font-family: var(--font-head);
+  font-size: 34px;
+  line-height: 40px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.nox-grid.is-empty .nox-readout { display: flex; }
+
+/* Узкое окно: правая колонка уже, история тоньше. */
+@media (max-width: 1000px) {
+  body[data-view="nox"] .view-nox .nox-sphere { width: 232px; }
+  body[data-view="nox"] .view-nox #noxOrb { --nox-orb-size: 196px; }
+  body[data-view="nox"] .view-nox .nox-history { width: 168px; }
+  .view-nox .feed { padding: 20px 22px 12px; }
+  .view-nox .nox-composer { padding: 0 22px 16px; }
+  .view-nox .chat-empty { padding: 0 22px 20px; }
+  .view-nox .chat-empty h2 { font-size: 34px; line-height: 40px; }
+  .nox-readout { padding: 18px 20px 0; }
+  .nox-readout .nox-read-state dd { font-size: 28px; line-height: 34px; }
+}

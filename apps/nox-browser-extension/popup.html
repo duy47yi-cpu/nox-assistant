@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <link rel="stylesheet" href="popup.css">
+  <title>Nox Assistant</title>
+</head>
+<body>
+  <h1>Nox Assistant</h1>
+  <p class="hint">Доступ только к выбранной вкладке. Поля ввода и пароли не читаются.</p>
+  <section>
+    <h2>Подключение</h2>
+    <p>Передайте данные одноразового сопряжения из локального моста защищённым способом. Секрет сессии хранится только в памяти фонового процесса и стирается при остановке или отзыве.</p>
+    <label>Порт <input id="port" inputmode="numeric" autocomplete="off"></label>
+    <label>ID <input id="pair-id" autocomplete="off" spellcheck="false"></label>
+    <label>Секрет <input id="secret" type="password" autocomplete="off" spellcheck="false"></label>
+    <label>Действует до (время Unix, мс) <input id="expires" inputmode="numeric" autocomplete="off"></label>
+    <button id="connect">Подключить</button>
+    <button id="disconnect" disabled>Отключить</button>
+    <p id="connection" role="status">Не подключено</p>
+  </section>
+  <section>
+    <h2>Выбранная вкладка</h2>
+    <p class="notice" id="privacy-notice"><strong>Передача модели:</strong> после нажатия «Разрешить и прочитать» видимое содержимое выбранной вкладки будет передано модели Nox по запросу (однократно, не дольше 60 секунд, только для текущего сайта).</p>
+    <p id="grant">Доступ не предоставлен</p>
+    <button id="allow">Разрешить и прочитать</button>
+    <button id="revoke" disabled>Отозвать доступ</button>
+    <pre id="output"></pre>
+  </section>
+  <p class="hint">Разрешение автоматически отзывается при смене вкладки, переходе на другой сайт, закрытии вкладки или через 60 секунд. Клики и ввод отключены.</p>
+  <script type="module" src="popup.mjs"></script>
+</body>
+</html>

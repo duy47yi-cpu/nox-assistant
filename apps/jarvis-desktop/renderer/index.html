@@ -23,6 +23,8 @@
   <link rel="stylesheet" href="nox-shell.css">
   <!-- Фон окна: своя картинка и эффекты под панелями всех разделов. Последний слой. -->
   <link rel="stylesheet" href="backdrop.css">
+  <!-- Фирменный слой «Затвор»: вкладки вместо рейки, колонки без карточек, лента-журнал. Последний слой. -->
+  <link rel="stylesheet" href="nox-signature.css">
   <!-- Без defer: тема ставится до первой отрисовки -->
   <script src="theme-boot.js"></script>
   <!-- dev-stub.js здесь не подключается: shared.js догружает его сам и только в обычном браузере без window.jarvis. -->
@@ -45,6 +47,7 @@
   <script src="settings-nav.js" defer></script>
   <!-- Экран Nox: свой модуль сферы (проволока и точки) и слой оболочки -->
   <script src="orb-nox.js" defer></script>
+  <script src="orb-shutter.js" defer></script>
   <script src="nox-screen.js" defer></script>
   <script src="nox-settings.js" defer></script>
   <script src="nox-shell.js" defer></script>
@@ -174,6 +177,10 @@
               <div class="nox-orb-stage" id="noxOrbStage">
                 <canvas id="noxOrb" role="img" aria-label="Шар состояния Nox" tabindex="-1"></canvas>
               </div>
+              <dl class="nox-readout" id="noxReadout" aria-live="polite">
+                <div class="nox-read-state"><dt>состояние</dt><dd id="noxReadState">готов</dd></div>
+                <div><dt>доступ</dt><dd id="noxReadMode">…</dd></div>
+              </dl>
             </section>
           </div>
         </section>
@@ -1055,6 +1062,7 @@
                 <div class="theme-pick" id="themeSeg" role="radiogroup" aria-labelledby="themeLabel">
                   <button type="button" class="theme-opt" role="radio" data-theme-opt="dark" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="dark" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Ночь</button>
                   <button type="button" class="theme-opt" role="radio" data-theme-opt="light" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="light" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>День</button>
+                  <button type="button" class="theme-opt" role="radio" data-theme-opt="signal" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="signal" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Затвор</button>
                   <button type="button" class="theme-opt" role="radio" data-theme-opt="graphite" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="graphite" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Графит</button>
                   <button type="button" class="theme-opt" role="radio" data-theme-opt="lime" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="lime" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Известь</button>
                   <button type="button" class="theme-opt" role="radio" data-theme-opt="paper" aria-checked="false" tabindex="-1"><span class="theme-mini" data-theme="paper" aria-hidden="true"><i class="tm-rail"></i><i class="tm-panel"><i class="tm-line"></i><i class="tm-line tm-short"></i><i class="tm-you"></i></i><canvas></canvas></span>Бумага</button>

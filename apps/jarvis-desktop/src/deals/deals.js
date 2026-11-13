@@ -283,7 +283,7 @@ const TOOL_WORDS = {
   task_note: 'Запись к делу',
   command_build: 'Сборка сценария по описанию',
   goal_create: 'План цели', goal_list: 'Цели', goal_next: 'Следующий шаг цели', goal_step: 'Шаг цели', goal_close: 'Закрытие цели',
-  workspace_list: 'Список файлов', workspace_read: 'Чтение файла', workspace_search: 'Поиск в папке', project_diagnostics: 'Разбор журнала проекта', web_search: 'Поиск в интернете', web_fetch: 'Чтение страницы', web_research: 'Сбор и чтение источников', weather_now: 'погода', browser_open: 'Открыть страницу', browser_read: 'Чтение страницы в браузере', browser_scroll: 'Прокрутка страницы', browser_click: 'Нажатие на странице', browser_type: 'Ввод на странице', code_test: 'Запуск тестов', memory_about: 'Память о человеке или деле', mail_send: 'Отправка письма', mail_unread: 'Непрочитанные письма',
+  workspace_list: 'Список файлов', workspace_read: 'Чтение файла', workspace_search: 'Поиск в папке', project_diagnostics: 'Разбор журнала проекта', web_search: 'Поиск в интернете', web_fetch: 'Чтение страницы', web_research: 'Сбор и чтение источников', weather_now: 'погода', browser_open: 'Открыть страницу', browser_read: 'Чтение страницы в браузере', browser_tab_read: 'Чтение вкладки браузера', browser_scroll: 'Прокрутка страницы', browser_click: 'Нажатие на странице', browser_type: 'Ввод на странице', code_test: 'Запуск тестов', memory_about: 'Память о человеке или деле', mail_send: 'Отправка письма', mail_unread: 'Непрочитанные письма',
 };
 // Имя инструмента без подписи — «действие»; обычный текст (название дела, цели) остаётся как есть.
 const word = (title) => TOOL_WORDS[title] || (/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(String(title)) ? 'действие' : title);

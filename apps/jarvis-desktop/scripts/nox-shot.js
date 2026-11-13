@@ -401,7 +401,7 @@ app.on('browser-window-created', (_event, win) => {
   win.webContents.once('did-finish-load', () => {
     if (mainWin) return;
     const url = win.webContents.getURL();
-    if (!/renderer[\\/]index\.html/i.test(url)) return;
+    if (!/renderer[\\/](?:aether[\\/])?index\.html/i.test(url)) return;
     mainWin = win;
     capture(win).catch((err) => finish({ ok: false, error: err && err.message ? err.message : String(err) }));
   });
