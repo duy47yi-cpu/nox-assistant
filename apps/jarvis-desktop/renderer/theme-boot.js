@@ -5,7 +5,7 @@
   'use strict';
 
   const IDS = ['signal', 'dark', 'light', 'graphite', 'lime', 'paper', 'forest', 'wine', 'cobalt', 'aurora', 'ember', 'dawn', 'glass',
-    'liquid', 'liquidday', 'frost', 'gradient', 'gradientday', 'midnight', 'neon', 'starry', 'moonlight', 'sunrise', 'system'];
+    'liquid', 'liquidday', 'frost', 'gradient', 'gradientday', 'midnight', 'neon', 'starry', 'moonlight', 'sunrise', 'blue-hour', 'eclipse', 'system'];
   const resolve = (id) => {
     // Убранные темы (archive, tablet, acrylic и их дневные) и мусор тихо открывают «Ночь».
     if (id !== 'system') return IDS.includes(id) ? id : 'signal';

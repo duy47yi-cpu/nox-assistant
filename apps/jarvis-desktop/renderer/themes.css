@@ -185,6 +185,27 @@ select.input option {
   --ok: #A5F0C4; --warn: #FFC93D; --err: #FFBDB5; --on-stop: #0E2A9A;
 }
 
+[data-theme="blue-hour"] {
+  color-scheme: dark;
+  --theme-font: "Inter", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, serif;
+  --ok: #8DDBB0; --warn: #FFCC83; --err: #FFACA4;
+  --accent-ink: #0B1423; --on-stop: #191018;
+  --bg: #101725; --surface: #141E30; --surface-2: #1A2941; --surface-3: #233651; --border: #3B5173;
+  --text: #EAF1FF; --text-2: #BECDE4; --text-3: #99ADCC;
+  --hue: #8AB8FF; --contour: #203554; --contour-index: #3A5F95;
+}
+[data-theme="eclipse"] {
+  color-scheme: dark;
+  --theme-font: "Inter", "Segoe UI Variable Text", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, serif;
+  --ok: #8DDBB0; --warn: #FFCC83; --err: #FFACA4;
+  --accent-ink: #0B1423; --on-stop: #191018;
+  --bg: #101116; --surface: #181920; --surface-2: #20222C; --surface-3: #292D39; --border: #434957;
+  --text: #F1F2F7; --text-2: #CBCEDB; --text-3: #A3ABBC;
+  --hue: #B8C9F1; --contour: #232633; --contour-index: #555E74;
+}
+
 /* ── Градиентные: панели спокойные, цвет живёт в фоне ─────────── */
 [data-theme="aurora"] {
   color-scheme: dark;

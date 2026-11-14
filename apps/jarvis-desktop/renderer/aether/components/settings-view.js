@@ -31,6 +31,8 @@
     starry: 'Звёзды',
     moonlight: 'Лунный свет',
     sunrise: 'Восход',
+    'blue-hour': 'Синий час',
+    eclipse: 'Затмение',
     system: 'Как в системе',
   };
 

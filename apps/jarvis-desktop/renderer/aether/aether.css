@@ -1467,6 +1467,9 @@ html[data-ae-glow="off"] .ae-orb-canvas-wrap::before { opacity: 0; }
 .ae-section-heading { margin: 8px 0 0; font-size: 15px; font-weight: 600; }
 
 .ae-desk-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ae-new-desk { flex-wrap: wrap; justify-content: flex-start; }
+.ae-new-desk[hidden] { display: none; }
+.ae-new-desk [role="status"]:not(:empty) { flex-basis: 100%; color: var(--err); }
 .ae-mini-list { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--text-2); }
 .ae-inline-mini { display: flex; gap: 6px; margin-top: 4px; }
 .ae-list-row {

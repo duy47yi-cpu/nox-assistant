@@ -160,9 +160,65 @@
       newDeskBtn.type = 'button';
       newDeskBtn.className = 'ae-btn ae-btn-secondary ae-btn-sm';
       newDeskBtn.textContent = '+ Стол';
-      newDeskBtn.addEventListener('click', async () => {
-        await bridge.call('desksCreate', { name: `Стол ${desks.length + 1}` });
-        await loadTabData('desks');
+      const form = document.createElement('form');
+      form.className = 'ae-head-actions ae-new-desk';
+      form.hidden = true;
+      const name = document.createElement('input');
+      name.className = 'ae-input';
+      name.setAttribute('aria-label', 'Название стола');
+      name.placeholder = 'Название стола';
+      name.required = true;
+      const template = document.createElement('select');
+      template.className = 'ae-select';
+      template.setAttribute('aria-label', 'Шаблон стола');
+      for (const item of desksPayload.templates || []) template.add(new Option(item.title, item.id));
+      const create = document.createElement('button');
+      create.className = 'ae-btn ae-btn-secondary';
+      create.textContent = 'Создать';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'ae-btn ae-btn-secondary';
+      cancel.textContent = 'Отмена';
+      const status = document.createElement('span');
+      status.setAttribute('role', 'status');
+      form.append(name, template, create, cancel, status);
+      newDeskBtn.addEventListener('click', () => {
+        form.hidden = false;
+        newDeskBtn.disabled = true;
+        name.value = `Стол ${desks.length + 1}`;
+        name.focus();
+        name.select();
+      });
+      cancel.addEventListener('click', () => {
+        form.reset();
+        status.textContent = '';
+        form.hidden = true;
+        newDeskBtn.disabled = false;
+        newDeskBtn.focus();
+      });
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (create.disabled) return;
+        const title = name.value.trim();
+        if (!title) {
+          status.textContent = 'Введите название стола.';
+          name.focus();
+          return;
+        }
+        create.disabled = cancel.disabled = true;
+        status.textContent = '';
+        try {
+          const result = await bridge.call('desksCreate', { name: title, template: template.value || 'empty' });
+          if (result?.ok) {
+            await loadTabData('desks');
+            return;
+          }
+          status.textContent = result?.error || 'Не удалось создать стол.';
+        } catch {
+          status.textContent = 'Не удалось обновить рабочие столы.';
+        } finally {
+          create.disabled = cancel.disabled = false;
+        }
       });
 
       const types = Array.isArray(desksPayload.types) ? desksPayload.types : [];
@@ -192,7 +248,7 @@
       }
       addControls.append(newDeskBtn);
       top.append(tabsRow, addControls);
-      wrap.append(top);
+      wrap.append(top, form);
 
       // Виджеты активного стола
       const widgets = active && Array.isArray(active.widgets) ? active.widgets : [];

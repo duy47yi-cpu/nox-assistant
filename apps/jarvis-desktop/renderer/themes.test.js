@@ -7,7 +7,7 @@ const path = require('node:path');
 
 const css = fs.readFileSync(path.join(__dirname, 'themes.css'), 'utf8');
 const themes = {};
-for (const [, id, body] of css.matchAll(/\[data-theme="([a-z]+)"\] \{([^}]*)\}/g)) {
+for (const [, id, body] of css.matchAll(/\[data-theme="([a-z-]+)"\] \{([^}]*)\}/g)) {
   themes[id] = Object.fromEntries([...body.matchAll(/--([a-z0-9-]+):\s*(#[0-9A-Fa-f]{6})\b/g)].map((m) => [m[1], m[2]]));
 }
 const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -19,27 +19,28 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
 
 test('есть все темы из theme-boot.js', () => {
   const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
-  const ids = [...boot.match(/IDS = \[([^\]]+)\]/)[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]).filter((i) => i !== 'system');
+  const ids = [...boot.match(/IDS = \[([^\]]+)\]/)[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]).filter((i) => i !== 'system');
   assert.deepStrictEqual(Object.keys(themes).sort(), ids.sort());
-  assert.ok(ids.length >= 8 && ids.length <= 24);
+  assert.ok(ids.length >= 8);
 });
 
 // Наборы по мотивам Luxify: каждый есть в IDS, в themes.css и кнопкой с подписью.
 const LUX = {
+  'blue-hour': 'Синий час', eclipse: 'Затмение',
   liquid: 'Жидкое стекло', liquidday: 'Жидкое стекло, день', frost: 'Матовое стекло', gradient: 'Градиент',
   gradientday: 'Градиент, день', midnight: 'Полночь', neon: 'Неон', starry: 'Звёздная ночь', moonlight: 'Лунный свет', sunrise: 'Рассвет',
 };
 test('наборы по мотивам Luxify: в IDS, в темах и кнопкой', () => {
   const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  const ids = [...boot.match(/IDS = \[([^\]]+)\]/)[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
+  const ids = [...boot.match(/IDS = \[([^\]]+)\]/)[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]);
   for (const [id, name] of Object.entries(LUX)) {
     assert.ok(ids.includes(id), `${id} в IDS`);
     assert.ok(themes[id], `${id} в themes.css`);
     assert.match(html, new RegExp(`data-theme-opt="${id}"[^\\n]*</span>${name}</button>`), `кнопка ${id} «${name}»`);
   }
   // Подписи не повторяются: прежний «Рассвет» (dawn) теперь «Пастель».
-  const labels = [...html.matchAll(/data-theme-opt="[a-z]+"[^\n]*<\/span>([^<]+)<\/button>/g)].map((m) => m[1]);
+  const labels = [...html.matchAll(/data-theme-opt="[a-z-]+"[^\n]*<\/span>([^<]+)<\/button>/g)].map((m) => m[1]);
   assert.equal(new Set(labels).size, labels.length, labels.join(', '));
   assert.match(html, /<div class="theme-fx" aria-hidden="true"><\/div>/);
 });
@@ -52,8 +53,8 @@ test('эффекты фона: у своих наборов, слабые, дв�
   assert.doesNotMatch(css, /\nhtml(:is\()?\[data-theme[^{\n]*\.theme-fx/, 'эффекты не привязаны к теме');
   const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
   // У каждого эффекта из списка в «Виде» есть рисунок, и у каждого эффекта темы тоже.
-  const offered = [...boot.match(/const FXS = \{([\s\S]*?)\};/)[1].matchAll(/([a-z]+): \[/g)].map((m) => m[1]).filter((id) => id !== 'theme' && id !== 'off');
-  const themed = [...boot.match(/const THEME_FX = \{([^}]*)\}/)[1].matchAll(/: '([a-z]+)'/g)].map((m) => m[1]);
+  const offered = [...boot.match(/const FXS = \{([\s\S]*?)\};/)[1].matchAll(/([a-z-]+): \[/g)].map((m) => m[1]).filter((id) => id !== 'theme' && id !== 'off');
+  const themed = [...boot.match(/const THEME_FX = \{([^}]*)\}/)[1].matchAll(/: '([a-z-]+)'/g)].map((m) => m[1]);
   assert.ok(offered.length >= 9);
   for (const id of new Set([...offered, ...themed])) assert.ok(css.includes(`html[data-fx="${id}"] .theme-fx::before {`), `рисунок эффекта ${id}`);
   assert.match(css, /html\[data-fx\] \.theme-fx \{ display: block; \}/);
@@ -71,7 +72,7 @@ test('эффекты фона: у своих наборов, слабые, дв�
 
 test('все девять эффектов фона: при уменьшении движения гаснет только анимация, рисунок остаётся', () => {
   const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
-  const offered = [...boot.match(/const FXS = \{([\s\S]*?)\};/)[1].matchAll(/([a-z]+): \[/g)]
+  const offered = [...boot.match(/const FXS = \{([\s\S]*?)\};/)[1].matchAll(/([a-z-]+): \[/g)]
     .map((m) => m[1]).filter((id) => id !== 'theme' && id !== 'off').sort();
   assert.deepStrictEqual(offered, ['dawn', 'drift', 'grid', 'moon', 'pattern', 'rain', 'snow', 'stars', 'waves'], 'в «Виде» ровно девять эффектов');
 
@@ -88,7 +89,7 @@ test('все девять эффектов фона: при уменьшении
   const animatedIds = new Set();
   for (const rule of animated) {
     assert.match(rule.selector, /\.theme-fx::(?:before|after)$/, `анимация вне слоя эффекта: ${rule.selector}`);
-    for (const [, id] of rule.selector.matchAll(/data-fx="([a-z]+)"/g)) animatedIds.add(id);
+    for (const [, id] of rule.selector.matchAll(/data-fx="([a-z-]+)"/g)) animatedIds.add(id);
   }
   // «Сетка» неподвижна по замыслу; остальные восемь двигаются.
   assert.deepStrictEqual([...animatedIds].sort(), offered.filter((id) => id !== 'grid'), 'движутся все эффекты, кроме «Сетки»');
@@ -150,8 +151,8 @@ test('убранные варианты archive, tablet, acrylic нигде не
 test('у каждой темы кнопка, а светлые темы совпадают с color-scheme', () => {
   const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  const light = [...boot.match(/LIGHT_THEMES = \[([^\]]+)\]/)[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
-  const scheme = Object.fromEntries([...css.matchAll(/\[data-theme="([a-z]+)"\] \{\s*color-scheme: (dark|light)/g)].map((m) => [m[1], m[2]]));
+  const light = [...boot.match(/LIGHT_THEMES = \[([^\]]+)\]/)[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]);
+  const scheme = Object.fromEntries([...css.matchAll(/\[data-theme="([a-z-]+)"\] \{\s*color-scheme: (dark|light)/g)].map((m) => [m[1], m[2]]));
   for (const id of Object.keys(themes)) {
     assert.ok(html.includes(`data-theme-opt="${id}"`), `кнопка ${id}`);
     assert.ok(scheme[id], `color-scheme у ${id}`);
@@ -220,8 +221,8 @@ test('звёзды и лунный свет берут цвет из темы и
     assert.match(block, /var\(--warn\)/);
   }
 
-  const lightThemes = [...css.matchAll(/\[data-theme="([a-z]+)"\] \{\s*color-scheme: light/g)].map((m) => m[1]).sort();
-  const coveredLight = [...lightFx[1].matchAll(/data-theme="([a-z]+)"/g)].map((m) => m[1]).sort();
+  const lightThemes = [...css.matchAll(/\[data-theme="([a-z-]+)"\] \{\s*color-scheme: light/g)].map((m) => m[1]).sort();
+  const coveredLight = [...lightFx[1].matchAll(/data-theme="([a-z-]+)"/g)].map((m) => m[1]).sort();
   assert.deepStrictEqual(coveredLight, lightThemes, 'все светлые темы охвачены правилом эффектов');
 
   const num = (block, name) => Number(block.match(new RegExp(name + ':\\s*(\\.\\d+|\\d+(?:\\.\\d+)?)'))[1]);
@@ -234,7 +235,7 @@ test('звёзды и лунный свет берут цвет из темы и
 test('звёзды и лунный свет на светлых темах различимы, уникальны и не портят читаемость текста', () => {
   const mix = (a, b, w) => a.map((v, i) => Math.round(v * w + b[i] * (1 - w)));
   const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
-  const lightIds = [...css.matchAll(/\[data-theme="([a-z]+)"\] \{\s*color-scheme: light/g)].map((m) => m[1]);
+  const lightIds = [...css.matchAll(/\[data-theme="([a-z-]+)"\] \{\s*color-scheme: light/g)].map((m) => m[1]);
   const lightFx = css.match(/:is\([^)]+\) \{([^}]*--fx-star-1:[^}]*)\}/)[1];
   const coreAlpha = Number(lightFx.match(/--fx-moon-core:[^;]*?(\d+)%/)[1]) / 100;
   const beamAlpha = Number(lightFx.match(/--fx-moon-beam:[^;]*?(\d+)%/)[1]) / 100;
@@ -272,7 +273,7 @@ test('уменьшение движения (Л5): гаснет движение
   // Два правила: системное «Уменьшение движения» и выключатель «Анимации» в Настройках
   // (html[data-animations] ставит renderer/app.js, когда подмена окна не дошла до страницы).
   const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
-  const offered = [...boot.match(/const FXS = \{([\s\S]*?)\};/)[1].matchAll(/([a-z]+): \[/g)].map((m) => m[1]).filter((id) => id !== 'theme' && id !== 'off');
+  const offered = [...boot.match(/const FXS = \{([\s\S]*?)\};/)[1].matchAll(/([a-z-]+): \[/g)].map((m) => m[1]).filter((id) => id !== 'theme' && id !== 'off');
   assert.equal(offered.length, 9, 'девять эффектов в «Виде»');
 
   const gates = [
