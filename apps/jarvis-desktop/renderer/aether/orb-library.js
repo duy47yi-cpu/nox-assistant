@@ -21,7 +21,7 @@
   'use strict';
 
   const STORAGE_KEY = 'aether.orbLibrary';
-  const DEFAULT_ORB_ID = 'nox:nox';
+  const DEFAULT_ORB_ID = 'nox:wire';
 
   const STATE_TO_NOX = {
     idle: 'idle',
@@ -420,6 +420,7 @@
         if (w.NoxOrb) w.NoxOrb.ignoreSystemMotion = true;
         instance = new w.NoxOrb(canvas, {
           variant: spec.variant,
+          colorway: spec.variant === 'wire' ? 'green' : undefined,
           state: mapState('nox', opts.state || 'idle'),
           scale: cfg.scale || 1,
           animated: globalAnim && cfg.animated !== false,

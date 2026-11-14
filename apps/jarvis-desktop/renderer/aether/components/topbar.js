@@ -1,14 +1,13 @@
-/* Чистая шапка Nox Aether: 5 разделов (с адаптацией под узкое окно), история, режим доступа и управление окном.
- * Намеренно без прототипных пунктов «Разговор / Поровну / Присутствие / Демо-данные» и цифр 1–7. */
+/* Верхняя навигация, быстрые настройки и управление окном. */
 (() => {
   'use strict';
 
   const NAV_ITEMS = [
-    { id: 'chat', label: 'Чат', icon: 'chat', primary: true },
-    { id: 'commands', label: 'Готовые команды', icon: 'commands', primary: false },
-    { id: 'mcp', label: 'MCP-подключения', icon: 'mcp', primary: false },
-    { id: 'personal', label: 'Личное пространство', icon: 'personal', primary: false },
-    { id: 'settings', label: 'Настройки', icon: 'settings', primary: true },
+    { id: 'chat', label: 'Чат', icon: 'chat' },
+    { id: 'commands', label: 'Готовые команды', caption: 'Команды', icon: 'commands' },
+    { id: 'mcp', label: 'MCP-подключения', caption: 'Подключения', icon: 'mcp' },
+    { id: 'personal', label: 'Личное пространство', caption: 'Пространство', icon: 'personal' },
+    { id: 'settings', label: 'Настройки', icon: 'settings' },
   ];
 
   const MODE_INFO = [
@@ -24,22 +23,6 @@
     header.className = 'ae-topbar';
     header.id = 'aeTopbar';
 
-    // ── Левая зона: кнопка истории + сдержанное имя продукта ────
-    const left = document.createElement('div');
-    left.className = 'ae-top-left';
-
-    const histBtn = document.createElement('button');
-    histBtn.type = 'button';
-    histBtn.id = 'aeHistoryToggle';
-    histBtn.className = 'ae-icon-btn';
-    histBtn.title = 'История чатов (Ctrl+B)';
-    histBtn.setAttribute('aria-label', 'История чатов');
-    histBtn.append(icon('panelLeft'));
-    histBtn.addEventListener('click', () => {
-      if (store.state.route !== 'chat') store.setRoute('chat');
-      store.toggleHistory();
-    });
-
     const brandBtn = document.createElement('button');
     brandBtn.type = 'button';
     brandBtn.className = 'ae-brand-mark';
@@ -47,9 +30,7 @@
     brandBtn.textContent = 'Nox';
     brandBtn.addEventListener('click', () => store.setRoute('chat'));
 
-    left.append(histBtn, brandBtn);
-
-    // ── Центр: 5 разделов + выпадающее меню «Разделы» для узких окон ──
+    // ── Разделы окна ──
     const nav = document.createElement('nav');
     nav.className = 'ae-nav';
     nav.setAttribute('role', 'tablist');
@@ -59,71 +40,21 @@
     for (const item of NAV_ITEMS) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = item.primary ? 'ae-nav-btn ae-nav-primary' : 'ae-nav-btn ae-nav-secondary';
+      btn.className = 'ae-nav-btn';
       btn.id = `aeNav_${item.id}`;
       btn.dataset.route = item.id;
       btn.setAttribute('role', 'tab');
       btn.setAttribute('aria-selected', 'false');
+      btn.setAttribute('aria-label', item.label);
+      btn.title = item.label;
       btn.append(icon(item.icon, 'ae-nav-ico'));
       const txt = document.createElement('span');
-      txt.textContent = item.label;
+      txt.textContent = item.caption || item.label;
       btn.append(txt);
       btn.addEventListener('click', () => store.setRoute(item.id));
       nav.append(btn);
       tabBtns.set(item.id, btn);
     }
-
-    // Меню «Разделы» появляется только при узком окне (<= 980px через CSS) вместо скрытия или наезда текста
-    const overflowWrap = document.createElement('div');
-    overflowWrap.className = 'ae-nav-overflow';
-
-    const overflowBtn = document.createElement('button');
-    overflowBtn.type = 'button';
-    overflowBtn.className = 'ae-nav-btn ae-overflow-trigger';
-    overflowBtn.setAttribute('aria-haspopup', 'menu');
-    overflowBtn.setAttribute('aria-expanded', 'false');
-    const overflowLabel = document.createElement('span');
-    overflowLabel.textContent = 'Разделы';
-    overflowBtn.append(icon('more', 'ae-nav-ico'), overflowLabel, icon('chevronDown', 'ae-chev-sm'));
-
-    const overflowMenu = document.createElement('div');
-    overflowMenu.className = 'ae-menu-pop ae-overflow-menu';
-    overflowMenu.setAttribute('role', 'menu');
-    overflowMenu.hidden = true;
-
-    const overflowItems = new Map();
-    for (const item of NAV_ITEMS.filter((i) => !i.primary)) {
-      const mi = document.createElement('button');
-      mi.type = 'button';
-      mi.className = 'ae-menu-item';
-      mi.setAttribute('role', 'menuitem');
-      mi.dataset.route = item.id;
-      mi.append(icon(item.icon, 'ae-nav-ico'));
-      const sp = document.createElement('span');
-      sp.textContent = item.label;
-      mi.append(sp);
-      mi.addEventListener('click', () => {
-        closeMenus();
-        store.setRoute(item.id);
-      });
-      overflowMenu.append(mi);
-      overflowItems.set(item.id, mi);
-    }
-
-    overflowBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const open = overflowMenu.hidden;
-      closeMenus();
-      if (open) {
-        overflowMenu.hidden = false;
-        overflowBtn.setAttribute('aria-expanded', 'true');
-        const activeOrFirst = overflowMenu.querySelector('[aria-current="true"], button');
-        if (activeOrFirst) activeOrFirst.focus();
-      }
-    });
-
-    overflowWrap.append(overflowBtn, overflowMenu);
-    nav.append(overflowWrap);
 
     // Стрелки клавиатуры между видимыми вкладками
     nav.addEventListener('keydown', (e) => {
@@ -145,14 +76,6 @@
       } else if (e.key === 'End') {
         e.preventDefault();
         visible[visible.length - 1].focus();
-      }
-    });
-
-    overflowMenu.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        closeMenus();
-        overflowBtn.focus();
       }
     });
 
@@ -226,6 +149,76 @@
 
     modeWrap.append(modeBtn, modeMenu);
 
+    const quickWrap = document.createElement('div');
+    quickWrap.className = 'ae-mode-wrap';
+    const quickBtn = document.createElement('button');
+    quickBtn.type = 'button';
+    quickBtn.className = 'ae-icon-btn';
+    quickBtn.title = 'Быстрые настройки';
+    quickBtn.setAttribute('aria-label', quickBtn.title);
+    quickBtn.setAttribute('aria-haspopup', 'dialog');
+    quickBtn.setAttribute('aria-expanded', 'false');
+    quickBtn.append(icon('sliders'));
+    const quick = document.createElement('div');
+    quick.id = 'aeQuickSettings';
+    quickBtn.setAttribute('aria-controls', quick.id);
+    quick.className = 'ae-menu-pop ae-quick-settings';
+    quick.setAttribute('role', 'dialog');
+    quick.setAttribute('aria-label', quickBtn.title);
+    quick.hidden = true;
+    function quickField(label, input) {
+      const row = document.createElement('label');
+      row.className = 'ae-quick-field';
+      row.append(label, input);
+      quick.append(row);
+      return input;
+    }
+    function toggle(label, onChange) {
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.addEventListener('change', () => onChange(input.checked));
+      return quickField(label, input);
+    }
+    const quiet = toggle('Тихий режим', (v) => store.setSetting('quiet', v));
+    const named = toggle('Слушать имя «Джарвис»', (v) => store.setSetting('alwaysListen', v));
+    const pinned = toggle('Поверх других окон', (v) => store.setSetting('alwaysOnTop', v));
+    const volume = document.createElement('input');
+    volume.type = 'range';
+    volume.min = '0';
+    volume.max = '100';
+    volume.addEventListener('change', () => store.setSetting('voiceVolume', Number(volume.value) / 100));
+    quickField('Громкость голоса', volume);
+    const theme = window.JarvisTheme;
+    function lookSelect(label, key, options) {
+      const select = document.createElement('select');
+      select.className = 'ae-select';
+      for (const [id, [text]] of Object.entries(options)) select.add(new Option(text, id));
+      select.addEventListener('change', () => theme.setLook({ [key]: select.value }));
+      quickField(label, select);
+      return select;
+    }
+    const blur = lookSelect('Размытие панелей', 'blur', theme.BLURS);
+    const alpha = lookSelect('Прозрачность окна', 'winAlpha', theme.WIN_ALPHAS);
+    quickWrap.append(quickBtn, quick);
+    quickBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = quick.hidden;
+      closeMenus();
+      if (!open) return;
+      const look = theme.getLook();
+      blur.value = look.blur;
+      alpha.value = look.winAlpha;
+      quick.hidden = false;
+      quickBtn.setAttribute('aria-expanded', 'true');
+      quiet.focus();
+    });
+    quick.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      closeMenus();
+      quickBtn.focus();
+    });
+
     // Кнопки управления безрамочным окном Windows
     const winControls = document.createElement('div');
     winControls.className = 'ae-win-controls';
@@ -245,47 +238,40 @@
       winControls.append(b);
     }
 
-    right.append(attentionBtn, modeWrap, winControls);
-    header.append(left, nav, right);
+    right.append(attentionBtn, modeWrap, quickWrap, winControls);
+    header.append(brandBtn, nav, right);
 
     function closeMenus() {
-      overflowMenu.hidden = true;
-      overflowBtn.setAttribute('aria-expanded', 'false');
+      quick.hidden = true;
+      quickBtn.setAttribute('aria-expanded', 'false');
       modeMenu.hidden = true;
       modeBtn.setAttribute('aria-expanded', 'false');
     }
 
     document.addEventListener('click', (e) => {
-      if (!overflowWrap.contains(e.target) && !modeWrap.contains(e.target)) closeMenus();
+      if (!quickWrap.contains(e.target) && !modeWrap.contains(e.target)) closeMenus();
     });
 
     function render(st) {
-      histBtn.setAttribute('aria-expanded', String(Boolean(st.historyOpen && st.route === 'chat')));
-      histBtn.dataset.active = st.historyOpen && st.route === 'chat' ? 'true' : 'false';
-
       for (const item of NAV_ITEMS) {
         const btn = tabBtns.get(item.id);
         const active = st.route === item.id;
         btn.setAttribute('aria-selected', String(active));
         btn.classList.toggle('is-active', active);
-        btn.tabIndex = active ? 0 : -1;
+        btn.tabIndex = 0;
       }
 
-      const activeSec = NAV_ITEMS.find((i) => !i.primary && i.id === st.route);
-      overflowLabel.textContent = activeSec ? activeSec.label : 'Разделы';
-      overflowBtn.classList.toggle('is-active', Boolean(activeSec));
-      for (const [id, mi] of overflowItems.entries()) {
-        const active = st.route === id;
-        mi.classList.toggle('is-active', active);
-        if (active) mi.setAttribute('aria-current', 'true');
-        else mi.removeAttribute('aria-current');
-      }
+      quiet.checked = Boolean(st.settings.quiet);
+      named.checked = Boolean(st.settings.alwaysListen);
+      pinned.checked = Boolean(st.settings.alwaysOnTop);
+      if (document.activeElement !== volume) volume.value = String(Math.round((st.settings.voiceVolume ?? 1) * 100));
 
       const mode = st.mode || 'ask';
       const curMode = MODE_INFO.find((m) => m.id === mode) || MODE_INFO[0];
       modeLabel.textContent = curMode.label;
       modeBtn.dataset.mode = mode;
       modeBtn.title = `Режим доступа: ${curMode.label} — ${curMode.desc}`;
+      modeBtn.setAttribute('aria-label', modeBtn.title);
       for (const [id, opt] of modeBtns.entries()) {
         const checked = id === mode;
         opt.setAttribute('aria-checked', String(checked));

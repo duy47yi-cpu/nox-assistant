@@ -106,7 +106,7 @@
     function formatElapsedLabel(eff) {
       const base = STATE_LABELS[eff] || STATE_LABELS.idle;
       const turn = store.state.activeTurn;
-      if (store.state.busy && turn && Number.isFinite(turn.startedAt)) {
+      if (store.state.trackerBusy && turn && Number.isFinite(turn.startedAt)) {
         const sec = Math.max(0, (Date.now() - turn.startedAt) / 1000);
         return `${base} · ${sec.toFixed(1)} с`;
       }
@@ -119,7 +119,7 @@
       statusBadge.dataset.state = eff;
       statusText.textContent = formatElapsedLabel(eff);
 
-      if (st.busy) {
+      if (st.trackerBusy) {
         hintEl.textContent = 'Нажмите на сферу, чтобы остановить';
         canvasWrap.setAttribute('aria-label', 'Остановить выполнение запроса');
       } else if (st.dictation && st.dictation.recording) {
@@ -138,18 +138,11 @@
     async function handleOrbActivate() {
       const st = store.state;
       if (mounted && typeof mounted.pulse === 'function') mounted.pulse(0.85);
-      if (st.busy) {
-        await store.cancelActive();
+      if (st.trackerBusy) {
+        await store.stopRun();
         return;
       }
-      const bridge = window.NoxAetherBridge;
-      if (st.settings && st.settings.dictation && bridge) {
-        if (st.dictation && st.dictation.recording) {
-          await bridge.call('dictationStop').catch(() => {});
-        } else {
-          await bridge.call('dictationStart').catch(() => {});
-        }
-      }
+      if (st.settings?.dictation) await store.toggleDictation();
     }
 
     canvasWrap.addEventListener('click', handleOrbActivate);

@@ -521,3 +521,33 @@ test('stop(): зависшее действие не держит агента �
   const journal = readJournal(dir);
   assert.deepEqual(journal.map((j) => [j.ok, Boolean(j.hung), Boolean(j.late)]), [[false, true, false], [true, false, true]]);
 });
+
+test('run({ turnContext }): передаёт одноразовую заметку модели и не сохраняет её в agent.history', async (t) => {
+  const dir = setup(t);
+  const seenPrompts = [];
+  const brain = {
+    async chat({ messages }) {
+      seenPrompts.push(messages.map((m) => ({ role: m.role, content: m.content })));
+      return { content: 'Готово', toolCalls: [] };
+    },
+  };
+  const agent = new Agent({
+    brain,
+    tools: registry(),
+    journal: new Journal(path.join(dir, 'journal.jsonl')),
+    mode: 'full',
+    workspace: dir,
+    context: () => 'Память хода',
+  });
+
+  await agent.run('проверь себя', { ownerText: 'проверь себя', turnContext: 'Заметка режима Агент' });
+  await agent.run('обычный вопрос', { ownerText: 'обычный вопрос' });
+
+  const firstLastUser = seenPrompts[0].findLast((m) => m.role === 'user');
+  assert.match(firstLastUser.content, /Память хода/);
+  assert.match(firstLastUser.content, /Заметка режима Агент/);
+  assert.equal(agent.history[0].content, 'проверь себя');
+
+  const secondLastUser = seenPrompts[1].findLast((m) => m.role === 'user');
+  assert.doesNotMatch(secondLastUser.content, /Заметка режима Агент/);
+});

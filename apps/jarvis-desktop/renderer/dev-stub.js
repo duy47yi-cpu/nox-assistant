@@ -65,6 +65,12 @@
   RISK.windows_list = 'T0';
   RISK.web_search = 'T0';
   RISK.web_fetch = 'T0';
+  RISK.ui_keys = 'T1';
+  RISK.ui_click = 'T1';
+  RISK.ui_type = 'T1';
+  RISK.windows_minimize_all = 'T0';
+  RISK.windows_arrange = 'T0';
+  RISK.media_control = 'T0';
 
   const LIBRARY = [
     { id: 'sys_volume_mute', title: 'Выключить звук', category: 'Система', phrases: ['выключи звук', 'без звука'], risk: 'T0', description: 'Ставит громкость на ноль.', args: [] },
@@ -238,7 +244,7 @@
     return LIBRARY.find((e) => e.phrases.some((p) => p.toLowerCase() === t));
   }
 
-  async function runTurn(text, files) {
+  async function runTurn(text, files, opts = {}) {
     state.busy = true;
     state.aborted = false;
     const t = text.toLowerCase().trim();
@@ -298,6 +304,13 @@
         for (let i = 1; i <= 40 && !state.aborted; i++) { await say(`Абзац ${i}: длинный ответ, чтобы проверить кнопку «Стоп». `); await sleep(120); }
         did = true;
       }
+      if (!did && opts && opts.agentMode) {
+        await say('Выполняю по шагам в режиме агента.');
+        await tool('windows_list', {}, { delay: 300 });
+        if (state.aborted) return;
+        await tool('app_open', { name: 'notepad' }, { delay: 450 });
+        did = true;
+      }
       if (!did) {
         await say(`Принял: «${text}». Это **эмуляция**: мозг не подключён, поэтому отвечаю заглушкой.\n\nПопробуйте: \`демо\`, \`действие\`, \`открой github.com\`, \`громкость 30\`.`);
       }
@@ -352,12 +365,12 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
   ];
   const demoMail = { credentials: true, connected: false, readable: false };
   const api = {
-    send: async (text, files) => {
+    send: async (text, files, opts) => {
       if (state.busy) return { ok: false, error: 'busy' };
       if (typeof text !== 'string' || !text.trim()) return { ok: false, error: 'empty' };
       const paths = Array.isArray(files) ? files.filter((p) => typeof p === 'string').slice(0, 5) : [];
       history.push({ role: 'user', text: text.trim() });
-      runTurn(text.trim(), paths);
+      runTurn(text.trim(), paths, opts);
       return { ok: true, command: null };
     },
     stop: async () => {
@@ -741,6 +754,23 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       }
       return { ok: true, added };
     },
+    draftCommandFromTurn: async ({ phrase, actions, existingCommands } = {}) => {
+      await failCmd();
+      const storeMod = typeof window !== 'undefined' ? window.NoxAetherStore : null;
+      if (storeMod && typeof storeMod.buildClientCommandDraft === 'function') {
+        return storeMod.buildClientCommandDraft(phrase, actions, existingCommands || commands);
+      }
+      const p = String(phrase || '').trim();
+      if (!p) return { ok: false, reason: 'Нужна фраза запуска команды' };
+      const steps = (Array.isArray(actions) ? actions : [])
+        .filter((a) => a && (a.status === 'confirmed' || a.status === 'done') && a.ok !== false && a.tool && RISK[a.tool] && a.tool !== 'shell_run' && a.tool !== 'windows_list')
+        .map((a) => ({ tool: a.tool, args: a.args && typeof a.args === 'object' ? { ...a.args } : {} }));
+      if (!steps.length) return { ok: false, reason: 'Нет подходящих повторяемых действий для сохранения' };
+      return {
+        ok: true,
+        draft: { schemaVersion: 2, version: 2, kind: 'sequence', name: p.slice(0, 64), phrases: [p.toLowerCase()], steps, enabled: true, origin: 'ai' },
+      };
+    },
     listCommands: async () => { await failCmd(); return commands.map((c) => JSON.parse(JSON.stringify(c))); },
     saveCommand: async (cmd) => {
       await failCmd();
@@ -753,6 +783,7 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
         phrases: cmd.phrases.map((p) => String(p).trim()),
         steps: cmd.steps.map((s) => ({ tool: s.tool, args: { ...s.args } })),
         enabled: cmd.enabled !== false,
+        origin: cmd.origin || 'manual',
         folder: cmd.folder || null,
         triggers: cmd.triggers ? JSON.parse(JSON.stringify(cmd.triggers)) : undefined,
         hotkey: cmd.triggers && cmd.triggers.hotkey && cmd.triggers.hotkey.enabled ? cmd.triggers.hotkey.key : (cmd.hotkey || null),
@@ -853,7 +884,7 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
   };
 
   if (params.get('oldcore') === '1') {
-    for (const k of ['installPack', 'listCommands', 'saveCommand', 'deleteCommand', 'runCommand', 'toolCatalog', 'updateCommandTriggers', 'getCommandLaunches', 'triggerCommandLaunch', 'fireCommandEvent', 'clearCommandLaunchLog', 'openMini',
+    for (const k of ['draftCommandFromTurn', 'installPack', 'listCommands', 'saveCommand', 'deleteCommand', 'runCommand', 'toolCatalog', 'updateCommandTriggers', 'getCommandLaunches', 'triggerCommandLaunch', 'fireCommandEvent', 'clearCommandLaunchLog', 'openMini',
       'chatHistory', 'clearChat', 'chatList', 'chatNew', 'chatSelect', 'chatClose', 'pickFiles', 'openWorkspace', 'addFolder', 'removeFolder', 'setModelTier', 'libraryList', 'libraryRun']) delete api[k];
   }
 

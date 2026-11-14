@@ -29,116 +29,33 @@ const MINIMIZE_SCRIPT = '(New-Object -ComObject Shell.Application).MinimizeAll()
 const RESTORE_SCRIPT = '(New-Object -ComObject Shell.Application).UndoMinimizeALL()';
 
 // Пауза между шагами сценария: например, чтобы программа успела открыться.
-const wait = {
-  name: 'wait',
-  description: `Подождать указанное число миллисекунд (до ${MAX_WAIT_MS}). Нужно между шагами сценария, если программе нужно время.`,
-  risk: 'T0',
-  parameters: {
-    type: 'object',
-    properties: {
-      ms: { type: 'integer', minimum: 0, maximum: MAX_WAIT_MS },
+function makeWaitTool() {
+  return {
+    name: 'wait',
+    description: `Подождать указанное число миллисекунд (до ${MAX_WAIT_MS}). Нужно между шагами сценария, если программе нужно время.`,
+    risk: 'T0',
+    parameters: {
+      type: 'object',
+      properties: {
+        ms: { type: 'integer', minimum: 0, maximum: MAX_WAIT_MS },
+      },
+      required: ['ms'],
     },
-    required: ['ms'],
-  },
-  async run(args, ctx) {
-    const ms = Number(args.ms);
-    if (!Number.isInteger(ms) || ms < 0 || ms > MAX_WAIT_MS) {
-      return { ok: false, summary: `пауза от 0 до ${MAX_WAIT_MS} мс`, data: {} };
-    }
-    await new Promise((resolve) => {
-      const timer = setTimeout(resolve, ms);
-      if (ctx && ctx.signal) {
-        ctx.signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+    async run(args, ctx = {}) {
+      const ms = Number(args.ms);
+      if (!Number.isInteger(ms) || ms < 0 || ms > MAX_WAIT_MS) {
+        return { ok: false, summary: `пауза от 0 до ${MAX_WAIT_MS} мс`, data: {} };
       }
-    });
-    return { ok: !(ctx && ctx.signal && ctx.signal.aborted), summary: `пауза ${ms} мс`, data: {} };
-  },
-};
-
-// Win+D: свернуть все окна (рабочий стол).
-const windowsMinimizeAll = {
-  name: 'windows_minimize_all',
-  description: 'Свернуть все окна (Win+D), показать рабочий стол.',
-  risk: 'T1',
-  parameters: { type: 'object', properties: {} },
-  async run(args, ctx) {
-    const res = await runPowerShell(MINIMIZE_SCRIPT, {}, { signal: ctx.signal, timeoutMs: 15000 });
-    return { ...res, summary: res.ok ? 'окна свёрнуты' : res.summary };
-  },
-  verify: cannotVerify('состояние окон после команды не считывается'),
-};
-
-// Win+Shift+M: вернуть свёрнутые окна.
-const windowsRestoreAll = {
-  name: 'windows_restore_all',
-  description: 'Вернуть все свёрнутые окна (Win+Shift+M).',
-  risk: 'T1',
-  parameters: { type: 'object', properties: {} },
-  async run(args, ctx) {
-    const res = await runPowerShell(RESTORE_SCRIPT, {}, { signal: ctx.signal, timeoutMs: 15000 });
-    return { ...res, summary: res.ok ? 'окна возвращены' : res.summary };
-  },
-  verify: cannotVerify('состояние окон после команды не считывается'),
-};
-
-// Выключение монитора: WM_SYSCOMMAND с SC_MONITORPOWER, значение 2 — выключить. Монитор включается движением мыши.
-const monitorOff = {
-  name: 'monitor_off',
-  description: 'Выключить экран (монитор). Компьютер не выключается, экран гаснет; включается движением мыши.',
-  risk: 'T1',
-  parameters: { type: 'object', properties: {} },
-  async run(args, ctx) {
-    const script = [
-      '$sig = \'[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint Msg, UIntPtr wParam, IntPtr lParam);\'',
-      'Add-Type -MemberDefinition $sig -Name Monitor -Namespace Nox',
-      // PostMessage, а не SendMessage: вызов не блокирует поток, стоп остаётся отзывчивым.
-      '[Nox.Monitor]::PostMessage([IntPtr]0xffff, 0x0112, [UIntPtr]0xF170, [IntPtr]2) | Out-Null',
-    ].join('\n');
-    const res = await runPowerShell(script, {}, { signal: ctx.signal, timeoutMs: 15000 });
-    return { ...res, summary: res.ok ? 'экран выключен' : res.summary };
-  },
-  verify: cannotVerify('состояние монитора Windows не сообщает'),
-};
-
-// Закрыть программу по имени процесса, мягко: окно получает команду закрыться, как по крестику.
-// Несохранённое сохранит сама программа или спросит; принудительного завершения нет.
-const appClose = {
-  name: 'app_close',
-  description: 'Закрыть программу по имени процесса (например, Steam, chrome). Закрывает окна мягко, как по крестику; принудительно не убивает.',
-  risk: 'T2',
-  parameters: {
-    type: 'object',
-    properties: {
-      name: { type: 'string', minLength: 1, maxLength: 80 },
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, ms);
+        if (ctx && ctx.signal) {
+          ctx.signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+        }
+      });
+      return { ok: !(ctx && ctx.signal && ctx.signal.aborted), summary: `пауза ${ms} мс`, data: {} };
     },
-    required: ['name'],
-  },
-  async run(args, ctx) {
-    const name = String(args.name || '').trim().replace(/\.exe$/i, '');
-    if (!/^[\w .()-]{1,80}$/.test(name)) return { ok: false, summary: 'некорректное имя процесса', data: {} };
-    const script = [
-      '$procs = Get-Process -Name $env:JARVIS_PROC -ErrorAction SilentlyContinue',
-      'if (-not $procs) { Write-Output "none"; exit 0 }',
-      'foreach ($p in $procs) { [void]$p.CloseMainWindow() }',
-      'Write-Output "closed"',
-    ].join('\n');
-    const res = await runPowerShell(script, { JARVIS_PROC: name }, { signal: ctx.signal, timeoutMs: 15000 });
-    if (!res.ok) return { ...res, summary: res.summary };
-    const out = String((res.data && res.data.stdout) || '').trim();
-    return { ok: true, summary: out === 'closed' ? `закрываю: ${name}` : `${name} не запущена`, data: { process: name } };
-  },
-  // Закрытие мягкое, программа может спросить о сохранении или уйти в трей: ждём, пока процесс исчезнет.
-  async verify(args, result, ctx = {}) {
-    const proc = result.data && result.data.process;
-    if (!proc) return { status: 'unknown', evidence: 'не знаю имя процесса' };
-    const probe = ctx.probeProcess || ((p) => probeProcess(p, ctx));
-    let last = null;
-    const gone = await pollUntil(async () => { last = await probe(proc); return last === false; }, { timeoutMs: ctx.pollTimeoutMs || 5000, signal: ctx.signal });
-    if (gone) return { status: 'confirmed', evidence: `процесса ${proc} нет` };
-    if (last === true) return { status: 'failed', evidence: `процесс ${proc} ещё работает: программа могла спросить о сохранении или уйти в трей` };
-    return { status: 'unknown', evidence: 'не удалось опросить процессы' };
-  },
-};
+  };
+}
 
 // Произнести фразу голосом. Сам синтез подключает main.js (SpeechClient); без установленного голоса шаг не выполняется.
 let speaker = null;
@@ -147,53 +64,162 @@ function setSpeaker(fn) {
   speaker = typeof fn === 'function' ? fn : null;
 }
 
-const speak = {
-  name: 'speak',
-  description: 'Сказать фразу вслух голосом ассистента (например, «Спокойной ночи»). Короткие фразы, до 300 символов.',
-  risk: 'T0',
-  parameters: {
-    type: 'object',
-    properties: {
-      text: { type: 'string', minLength: 1, maxLength: 300 },
-    },
-    required: ['text'],
-  },
-  async run(args, ctx = {}) {
-    const text = String(args.text || '').trim();
-    if (!text) return { ok: false, summary: 'пустая фраза', data: {} };
-    if (!speaker) return { ok: false, summary: 'голос не подключён', data: {} };
-    try {
-      await speaker(text, ctx.signal);
-      return { ok: true, summary: 'сказано', data: {} };
-    } catch (err) {
-      return { ok: false, summary: `голос: ${err.message}`, data: {} };
-    }
-  },
-  verify: cannotVerify('синтез отработал, но услышан ли звук, узнать нельзя'),
-};
+function desktopToolsFactory({ runner = runPowerShell, speak: customSpeaker = null, fsImpl = fs } = {}) {
+  const activeSpeaker = () => customSpeaker || speaker;
+  const wait = makeWaitTool();
 
-// Выключение компьютера: отдельный инструмент, а не общая команда PowerShell. Задержка в секундах (0 — сразу).
-// Уровень T3 — необратимо. По решению владельца (31.10.2026) в режиме «Спрашивать» не спрашивается.
-const pcShutdown = {
-  name: 'pc_shutdown',
-  description: 'Выключить компьютер. delay_seconds — через сколько секунд (0–600, по умолчанию 0). Необратимо.',
-  risk: 'T3',
-  parameters: {
-    type: 'object',
-    properties: {
-      delay_seconds: { type: 'integer', minimum: 0, maximum: 600 },
+  // Win+D: свернуть все окна (рабочий стол).
+  const windowsMinimizeAll = {
+    name: 'windows_minimize_all',
+    description: 'Свернуть все окна (Win+D), показать рабочий стол.',
+    risk: 'T1',
+    parameters: { type: 'object', properties: {} },
+    async run(args, ctx = {}) {
+      const res = await runner(MINIMIZE_SCRIPT, {}, { signal: ctx.signal, timeoutMs: 15000 });
+      return { ...res, summary: res.ok ? 'окна свёрнуты' : res.summary };
     },
-  },
-  async run(args, ctx) {
-    const raw = args.delay_seconds === undefined ? 0 : Number(args.delay_seconds);
-    if (!Number.isInteger(raw) || raw < 0 || raw > 600) {
-      return { ok: false, summary: 'задержка от 0 до 600 секунд', data: {} };
+    verify: cannotVerify('состояние окон после команды не считывается'),
+  };
+
+  // Win+Shift+M: вернуть свёрнутые окна.
+  const windowsRestoreAll = {
+    name: 'windows_restore_all',
+    description: 'Вернуть все свёрнутые окна (Win+Shift+M).',
+    risk: 'T1',
+    parameters: { type: 'object', properties: {} },
+    async run(args, ctx = {}) {
+      const res = await runner(RESTORE_SCRIPT, {}, { signal: ctx.signal, timeoutMs: 15000 });
+      return { ...res, summary: res.ok ? 'окна возвращены' : res.summary };
+    },
+    verify: cannotVerify('состояние окон после команды не считывается'),
+  };
+
+  // Выключение монитора: WM_SYSCOMMAND с SC_MONITORPOWER, значение 2 — выключить. Монитор включается движением мыши.
+  const monitorOff = {
+    name: 'monitor_off',
+    description: 'Выключить экран (монитор). Компьютер не выключается, экран гаснет; включается движением мыши.',
+    risk: 'T1',
+    parameters: { type: 'object', properties: {} },
+    async run(args, ctx = {}) {
+      const script = [
+        '$sig = \'[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint Msg, UIntPtr wParam, IntPtr lParam);\'',
+        'Add-Type -MemberDefinition $sig -Name Monitor -Namespace Nox',
+        // PostMessage, а не SendMessage: вызов не блокирует поток, стоп остаётся отзывчивым.
+        '[Nox.Monitor]::PostMessage([IntPtr]0xffff, 0x0112, [UIntPtr]0xF170, [IntPtr]2) | Out-Null',
+      ].join('\n');
+      const res = await runner(script, {}, { signal: ctx.signal, timeoutMs: 15000 });
+      return { ...res, summary: res.ok ? 'экран выключен' : res.summary };
+    },
+    verify: cannotVerify('состояние монитора Windows не сообщает'),
+  };
+
+  // Закрыть программу по имени процесса, мягко: окно получает команду закрыться, как по крестику.
+  // Несохранённое сохранит сама программа или спросит; принудительного завершения нет.
+  const appClose = {
+    name: 'app_close',
+    description: 'Закрыть программу по имени процесса (например, Steam, chrome). Закрывает окна мягко, как по крестику; принудительно не убивает.',
+    risk: 'T2',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', minLength: 1, maxLength: 80 },
+      },
+      required: ['name'],
+    },
+    async run(args, ctx = {}) {
+      const name = String(args.name || '').trim().replace(/\.exe$/i, '');
+      if (!/^[\w .()-]{1,80}$/.test(name)) return { ok: false, summary: 'некорректное имя процесса', data: {} };
+      const script = [
+        '$procs = Get-Process -Name $env:JARVIS_PROC -ErrorAction SilentlyContinue',
+        'if (-not $procs) { Write-Output "none"; exit 0 }',
+        'foreach ($p in $procs) { [void]$p.CloseMainWindow() }',
+        'Write-Output "closed"',
+      ].join('\n');
+      const res = await runner(script, { JARVIS_PROC: name }, { signal: ctx.signal, timeoutMs: 15000 });
+      if (!res.ok) return { ...res, summary: res.summary };
+      const out = String((res.data && res.data.stdout) || '').trim();
+      return { ok: true, summary: out === 'closed' ? `закрываю: ${name}` : `${name} не запущена`, data: { process: name } };
+    },
+    // Закрытие мягкое, программа может спросить о сохранении или уйти в трей: ждём, пока процесс исчезнет.
+    async verify(args, result, ctx = {}) {
+      const proc = result.data && result.data.process;
+      if (!proc) return { status: 'unknown', evidence: 'не знаю имя процесса' };
+      const probe = ctx.probeProcess || ((p) => probeProcess(p, { signal: ctx.signal, runner }));
+      let last = null;
+      const gone = await pollUntil(async () => { last = await probe(proc); return last === false; }, { timeoutMs: ctx.pollTimeoutMs || 5000, signal: ctx.signal });
+      if (gone) return { status: 'confirmed', evidence: `процесса ${proc} нет` };
+      if (last === true) return { status: 'failed', evidence: `процесс ${proc} ещё работает: программа могла спросить о сохранении или уйти в трей` };
+      return { status: 'unknown', evidence: 'не удалось опросить процессы' };
+    },
+  };
+
+  const speak = {
+    name: 'speak',
+    description: 'Сказать фразу вслух голосом ассистента (например, «Спокойной ночи»). Короткие фразы, до 300 символов.',
+    risk: 'T0',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', minLength: 1, maxLength: 300 },
+      },
+      required: ['text'],
+    },
+    async run(args, ctx = {}) {
+      const text = String(args.text || '').trim();
+      if (!text) return { ok: false, summary: 'пустая фраза', data: {} };
+      const say = activeSpeaker();
+      if (!say) return { ok: false, summary: 'голос не подключён', data: {} };
+      try {
+        await say(text, ctx.signal);
+        return { ok: true, summary: 'сказано', data: {} };
+      } catch (err) {
+        return { ok: false, summary: `голос: ${err.message}`, data: {} };
+      }
+    },
+    verify: cannotVerify('синтез отработал, но услышан ли звук, узнать нельзя'),
+  };
+
+  // Выключение компьютера: отдельный инструмент, а не общая команда PowerShell. Задержка в секундах (0 — сразу).
+  // Уровень T3 — необратимо. По решению владельца (31.10.2026) в режиме «Спрашивать» не спрашивается.
+  const pcShutdown = {
+    name: 'pc_shutdown',
+    description: 'Выключить компьютер. delay_seconds — через сколько секунд (0–600, по умолчанию 0). Необратимо.',
+    risk: 'T3',
+    parameters: {
+      type: 'object',
+      properties: {
+        delay_seconds: { type: 'integer', minimum: 0, maximum: 600 },
+      },
+    },
+    async run(args, ctx = {}) {
+      const raw = args.delay_seconds === undefined ? 0 : Number(args.delay_seconds);
+      if (!Number.isInteger(raw) || raw < 0 || raw > 600) {
+        return { ok: false, summary: 'задержка от 0 до 600 секунд', data: {} };
+      }
+      const res = await runner('shutdown.exe /s /t $env:JARVIS_DELAY', { JARVIS_DELAY: String(raw) }, { signal: ctx.signal, timeoutMs: 15000 });
+      return { ...res, summary: res.ok ? `выключение через ${raw} с` : res.summary };
+    },
+    verify: cannotVerify('система приняла команду, само выключение после него не проверить'),
+  };
+
+  let localReader = null;
+  const activeReader = () => {
+    if (!customSpeaker) return getReader();
+    if (!localReader) {
+      localReader = createReader({ speak: (text, signal) => customSpeaker(text, signal) });
     }
-    const res = await runPowerShell('shutdown.exe /s /t $env:JARVIS_DELAY', { JARVIS_DELAY: String(raw) }, { signal: ctx.signal, timeoutMs: 15000 });
-    return { ...res, summary: res.ok ? `выключение через ${raw} с` : res.summary };
-  },
-  verify: cannotVerify('система приняла команду, само выключение после него не проверить'),
-};
+    return localReader;
+  };
+
+  const readClipboardAloud = createReadClipboardAloud({
+    runner,
+    activeSpeaker,
+    fsImpl,
+    readerProvider: activeReader,
+  });
+
+  return [wait, windowsMinimizeAll, windowsRestoreAll, monitorOff, appClose, speak, pcShutdown, readClipboardAloud];
+}
 
 // Чтение вслух: буфер обмена (текст, который владелец скопировал). Длинный текст режем по предложениям:
 // голос говорит короткими кусками, а не одним куском на минуту. Больше READ_LIMIT символов не читаем.
@@ -352,71 +378,78 @@ function readerSummary(snapshot) {
 const READ_ACTIONS = ['start', 'pause', 'resume', 'stop', 'status'];
 const READ_SOURCES = ['clipboard', 'selection', 'file'];
 
-const readClipboardAloud = {
-  name: 'read_clipboard_aloud',
-  description: `Прочитать вслух текст: из буфера обмена, выделенное сейчас или файл (txt, md, html, docx, json, csv, log). Читаю кусками по предложениям, в фоне, до ${MAX_READ} символов. Управление: action "pause" — пауза, "resume" — продолжить с того же места, "stop" — остановить, "status" — где сейчас. Для файла укажи path.`,
-  risk: 'T1',
-  parameters: {
-    type: 'object',
-    properties: {
-      action: { type: 'string', enum: READ_ACTIONS, description: 'start (по умолчанию), pause, resume, stop, status' },
-      source: { type: 'string', enum: READ_SOURCES, description: 'clipboard (по умолчанию), selection или file' },
-      path: { type: 'string', description: 'путь к файлу, когда source = file' },
+function createReadClipboardAloud({
+  runner = runPowerShell,
+  activeSpeaker = () => speaker,
+  fsImpl = fs,
+  readerProvider = getReader,
+} = {}) {
+  return {
+    name: 'read_clipboard_aloud',
+    description: `Прочитать вслух текст: из буфера обмена, выделенное сейчас или файл (txt, md, html, docx, json, csv, log). Читаю кусками по предложениям, в фоне, до ${MAX_READ} символов. Управление: action "pause" — пауза, "resume" — продолжить с того же места, "stop" — остановить, "status" — где сейчас. Для файла укажи path.`,
+    risk: 'T1',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: READ_ACTIONS, description: 'start (по умолчанию), pause, resume, stop, status' },
+        source: { type: 'string', enum: READ_SOURCES, description: 'clipboard (по умолчанию), selection или file' },
+        path: { type: 'string', description: 'путь к файлу, когда source = file' },
+      },
     },
-  },
-  async run(args = {}, ctx = {}) {
-    const action = String(args.action || 'start');
-    if (!READ_ACTIONS.includes(action)) return { ok: false, summary: `не знаю действие «${action}»`, data: {} };
-    const book = getReader();
-    if (action === 'status') return { ok: true, summary: readerSummary(book.snapshot()), data: book.snapshot() };
-    if (action === 'pause' || action === 'resume' || action === 'stop') {
-      const before = book.snapshot();
-      const after = action === 'pause' ? book.pause() : action === 'resume' ? book.resume() : book.stop();
-      // Ничего не делали — так и говорим, без выдумки.
-      if (before.state === after.state) return { ok: true, summary: readerSummary(after), data: after };
-      return { ok: true, summary: readerSummary(after), data: after };
-    }
+    async run(args = {}, ctx = {}) {
+      const action = String(args.action || 'start');
+      if (!READ_ACTIONS.includes(action)) return { ok: false, summary: `не знаю действие «${action}»`, data: {} };
+      const book = readerProvider();
+      if (action === 'status') return { ok: true, summary: readerSummary(book.snapshot()), data: book.snapshot() };
+      if (action === 'pause' || action === 'resume' || action === 'stop') {
+        const before = book.snapshot();
+        const after = action === 'pause' ? book.pause() : action === 'resume' ? book.resume() : book.stop();
+        // Ничего не делали — так и говорим, без выдумки.
+        if (before.state === after.state) return { ok: true, summary: readerSummary(after), data: after };
+        return { ok: true, summary: readerSummary(after), data: after };
+      }
 
-    const source = String(args.source || 'clipboard');
-    if (!READ_SOURCES.includes(source)) return { ok: false, summary: `не знаю источник «${source}»`, data: {} };
-    if (!speaker) return { ok: false, summary: 'голос не подключён', data: {} };
+      const source = String(args.source || 'clipboard');
+      if (!READ_SOURCES.includes(source)) return { ok: false, summary: `не знаю источник «${source}»`, data: {} };
+      if (!activeSpeaker()) return { ok: false, summary: 'голос не подключён', data: {} };
 
-    let text = '';
-    let label = null;
-    if (source === 'file') {
-      const file = String(args.path || '').trim();
-      if (!file) return { ok: false, summary: 'не указан файл', data: {} };
-      const doc = await readDocumentText(file, { signal: ctx.signal });
-      if (!doc.ok) return { ok: false, summary: doc.summary, data: {} };
-      text = doc.text;
-      label = path.basename(file);
-    } else if (source === 'selection') {
-      const res = await runPowerShell(SELECTION_SCRIPT, {}, { signal: ctx.signal, timeoutMs: 15000 });
-      if (!res.ok) return { ok: false, summary: res.summary, data: {} };
-      text = String((res.data && res.data.stdout) || '').trim();
-      if (!text) return { ok: false, summary: 'выделенного текста не видно: выделите фрагмент и попросите снова', data: {} };
-      label = 'выделенное';
-    } else {
-      const res = await runPowerShell(CLIPBOARD_READ, {}, { signal: ctx.signal, timeoutMs: 10000 });
-      if (!res.ok) return { ok: false, summary: res.summary, data: {} };
-      text = String((res.data && res.data.stdout) || '').trim();
-      if (!text) return { ok: false, summary: 'буфер пуст: скопируйте текст и попросите снова', data: {} };
-      label = 'буфер обмена';
-    }
+      let text = '';
+      let label = null;
+      if (source === 'file') {
+        const file = String(args.path || '').trim();
+        if (!file) return { ok: false, summary: 'не указан файл', data: {} };
+        const doc = await readDocumentText(file, { signal: ctx.signal, runner, fsImpl });
+        if (!doc.ok) return { ok: false, summary: doc.summary, data: {} };
+        text = doc.text;
+        label = path.basename(file);
+      } else if (source === 'selection') {
+        const res = await runner(SELECTION_SCRIPT, {}, { signal: ctx.signal, timeoutMs: 15000 });
+        if (!res.ok) return { ok: false, summary: res.summary, data: {} };
+        text = String((res.data && res.data.stdout) || '').trim();
+        if (!text) return { ok: false, summary: 'выделенного текста не видно: выделите фрагмент и попросите снова', data: {} };
+        label = 'выделенное';
+      } else {
+        const res = await runner(CLIPBOARD_READ, {}, { signal: ctx.signal, timeoutMs: 10000 });
+        if (!res.ok) return { ok: false, summary: res.summary, data: {} };
+        text = String((res.data && res.data.stdout) || '').trim();
+        if (!text) return { ok: false, summary: 'буфер пуст: скопируйте текст и попросите снова', data: {} };
+        label = 'буфер обмена';
+      }
 
-    const started = book.start(text, { label });
-    if (!started.total) return { ok: false, summary: 'нечего читать: текста нет', data: started };
-    // Чтение идёт в фоне: ход не занимается на минуты, пауза и стоп приходят следующим поручением.
-    return {
-      ok: true,
-      summary: `${readerSummary(started)}${started.truncated ? `, дальше не читаю (всего ${started.chars} символов)` : ''}`,
-      data: started,
-    };
-  },
-  verify: cannotVerify('голос отработал, но услышан ли звук, узнать нельзя'),
-};
+      const started = book.start(text, { label });
+      if (!started.total) return { ok: false, summary: 'нечего читать: текста нет', data: started };
+      // Чтение идёт в фоне: ход не занимается на минуты, пауза и стоп приходят следующим поручением.
+      return {
+        ok: true,
+        summary: `${readerSummary(started)}${started.truncated ? `, дальше не читаю (всего ${started.chars} символов)` : ''}`,
+        data: started,
+      };
+    },
+    verify: cannotVerify('голос отработал, но услышан ли звук, узнать нельзя'),
+  };
+}
 
-const desktopTools = [wait, windowsMinimizeAll, windowsRestoreAll, monitorOff, appClose, speak, pcShutdown, readClipboardAloud];
+const desktopTools = desktopToolsFactory();
 
 // Чтение вслух нужно и снаружи инструментов: окно и аварийный стоп спрашивают, читает ли Джарвис,
 // и могут остановить чтение, не дожидаясь нового поручения.
@@ -430,6 +463,7 @@ function stopReading() {
 
 module.exports = {
   desktopTools,
+  desktopToolsFactory,
   comboScript,
   setSpeaker,
   MAX_WAIT_MS,

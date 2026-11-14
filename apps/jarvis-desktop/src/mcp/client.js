@@ -590,6 +590,7 @@ class McpManager {
     load = () => ({}), save = () => {}, register = () => {}, unregister = () => {},
     allowed = () => [], log = console.warn, make = (opts) => new McpClient(opts),
     snapshotLoad = () => ({}), snapshotSave = () => {},
+    resolveConfig = (_name, config) => config,
   } = {}) {
     this.load = load;
     this.save = save;
@@ -598,6 +599,7 @@ class McpManager {
     this.allowed = allowed;
     this.log = log;
     this.make = make;
+    this.resolveConfig = resolveConfig;
     // Отпечатки наборов инструментов серверов: отдельная настройка, в mcpServers не смешиваются.
     this.snapshotLoad = snapshotLoad;
     this.snapshotSave = snapshotSave;
@@ -688,9 +690,10 @@ class McpManager {
     if (current && current.status === 'connected') return { ok: true };
     if (current && current.status === 'connecting' && current.promise) return current.promise;
 
-    const entry = { name: key, status: 'connecting', error: null, client: null, tools: [], registered: [], serverInfo: null, capabilities: null, protocolVersion: null, promise: null, secrets: configSecrets(raw), stopRequested: false };
+    const resolved = this.resolveConfig(key, raw);
+    const entry = { name: key, status: 'connecting', error: null, client: null, tools: [], registered: [], serverInfo: null, capabilities: null, protocolVersion: null, promise: null, secrets: configSecrets(resolved), stopRequested: false };
     this._live.set(key, entry);
-    const checked = normalizeServerConfig(raw);
+    const checked = normalizeServerConfig(resolved);
     if (!checked.ok) {
       entry.status = 'error';
       entry.error = checked.error;

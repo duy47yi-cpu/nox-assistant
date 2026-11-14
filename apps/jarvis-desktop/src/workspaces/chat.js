@@ -29,10 +29,10 @@ const { ChatBook } = require('../chats/book');
 // Картинки читаются инструментами самого пространства — их корень папки берётся из пространства.
 const COMMON = new Set([
   'web_search', 'web_fetch', 'web_wiki', 'web_research', 'web_check_claims', 'weather_now', 'currency_rate',
-  'screen_look', 'screen_region_look', 'desktop_observe', 'windows_list', 'mail_unread',
+  'screen_look', 'screen_region_look', 'desktop_observe', 'windows_list', 'mail_unread', 'mail_draft', 'calendar_prep',
   'desktop_click', 'desktop_type', 'ui_windows', 'ui_elements', 'ui_click', 'ui_type', 'ui_keys', 'ui_focus', 'ui_close_window', 'ui_set_toggle', 'ui_wait',
   'mouse_click', 'mouse_scroll', 'shell_run', 'app_search', 'app_install', 'app_open', 'app_close',
-  'browser_open', 'browser_read', 'browser_scroll', 'browser_click', 'browser_type', 'url_open', 'mail_send',
+  'browser_open', 'browser_read', 'browser_scroll', 'browser_click', 'browser_type', 'browser_bookmarks', 'url_open', 'mail_send',
   'youtube_play', 'windows_focus', 'windows_arrange', 'windows_minimize_all', 'windows_restore_all', 'windows_close_all',
   'organize_workspace', 'restore_workspace', 'clipboard_get', 'clipboard_set', 'media_control', 'volume_set', 'monitor_off', 'pc_shutdown',
   'apps_find', 'apps_scan', 'apps_usage', 'disk_free_space', 'disk_cleanup_suggest', 'wait', 'speak',
@@ -86,10 +86,10 @@ function saveChats(file, chats) {
   } finally { fs.rmSync(tmp, { force: true }); }
 }
 
-function toolsFor(space, commonTools, renderPdf, scopedTools, skills) {
+function toolsFor(space, commonTools, renderPdf, scopedTools, skills, ocrPdf) {
   const registry = new ToolRegistry();
   for (const tool of [
-    ...workspaceTools(space.index), ...projectTools(space.index), ...documentTools(space.index, { renderPdf }),
+    ...workspaceTools(space.index), ...projectTools(space.index), ...documentTools(space.index, { renderPdf, ocrPdf }),
     ...memoryTools(space.memory), ...goalTools(space.goals), ...imageTools({ workspace: space.root }),
     ...waitTools({ resolveFile: (p) => space.index.resolveInside(p) }),
     ...chatCodeTools({ root: space.root, denyDirs: space.index.denyWrite, index: space.index }),
@@ -101,10 +101,10 @@ function toolsFor(space, commonTools, renderPdf, scopedTools, skills) {
 }
 
 class WorkspaceChat {
-  constructor({ book, brain, commonTools = [], scopedTools = null, renderPdf, builtinSkillsDir = null, systemPrompt = '', policy, approvals, journal, emit, mode = 'ask', stop, clock, turnsLog, memoryAuto = () => true, turnDeadlineMs = 0, plans = null } = {}) {
+  constructor({ book, brain, commonTools = [], scopedTools = null, renderPdf, ocrPdf = null, builtinSkillsDir = null, systemPrompt = '', policy, approvals, journal, emit, mode = 'ask', stop, clock, turnsLog, memoryAuto = () => true, turnDeadlineMs = 0, plans = null } = {}) {
     if (!book || !brain) throw new Error('нужны реестр пространств и модель');
     this.book = book;
-    this.options = { brain, commonTools, scopedTools, renderPdf, builtinSkillsDir, systemPrompt, policy, approvals, journal, emit, mode, stop, clock, turnsLog, memoryAuto, turnDeadlineMs, plans };
+    this.options = { brain, commonTools, scopedTools, renderPdf, ocrPdf, builtinSkillsDir, systemPrompt, policy, approvals, journal, emit, mode, stop, clock, turnsLog, memoryAuto, turnDeadlineMs, plans };
     this.busy = false;
     this.session = this._open(book.current().id);
   }
@@ -117,7 +117,7 @@ class WorkspaceChat {
     const chats = loadChats(conversation);
     const skillsDir = path.join(path.dirname(space.memory.filePath), 'skills');
     const skills = loadSkills(...(this.options.builtinSkillsDir ? [this.options.builtinSkillsDir] : []), skillsDir);
-    const registry = toolsFor(space, this.options.commonTools, this.options.renderPdf, this.options.scopedTools, skills);
+    const registry = toolsFor(space, this.options.commonTools, this.options.renderPdf, this.options.scopedTools, skills, this.options.ocrPdf);
     const prompt = () => {
       const base = typeof this.options.systemPrompt === 'function' ? this.options.systemPrompt(space) : this.options.systemPrompt;
       return [base, profileNote(space.memory), goalsBrief(space.goals)].filter(Boolean).join('\n');

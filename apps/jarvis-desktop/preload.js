@@ -2,7 +2,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('jarvis', {
-  send: (text, files) => ipcRenderer.invoke('chat:send', String(text), Array.isArray(files) ? files : []),
+  send: (text, files, opts) => ipcRenderer.invoke('chat:send', String(text), Array.isArray(files) ? files : [], opts && typeof opts === 'object' ? opts : undefined),
   side: (text) => ipcRenderer.invoke('chat:side', String(text)),
   stop: () => ipcRenderer.invoke('agent:stop'),
   showMain: () => ipcRenderer.invoke('window:showMain'),
@@ -82,11 +82,13 @@ contextBridge.exposeInMainWorld('jarvis', {
   pickRegion: () => ipcRenderer.invoke('region:pick'),
   openWorkspace: () => ipcRenderer.invoke('workspace:open'),
   openSource: (url) => ipcRenderer.invoke('source:open', String(url)),
+  sourceIcon: (host) => ipcRenderer.invoke('source:icon', host),
   addFolder: () => ipcRenderer.invoke('folders:add'),
   removeFolder: (dir) => ipcRenderer.invoke('folders:remove', String(dir)),
   listCommands: () => ipcRenderer.invoke('commands:list'),
   installPack: (id) => ipcRenderer.invoke('packs:install', id),
   saveCommand: (cmd) => ipcRenderer.invoke('commands:save', cmd),
+  draftCommandFromTurn: (payload) => ipcRenderer.invoke('commands:draft-from-turn', payload),
   deleteCommand: (id) => ipcRenderer.invoke('commands:delete', id),
   runCommand: (id) => ipcRenderer.invoke('commands:run', id),
   updateCommandTriggers: (id, triggers) => ipcRenderer.invoke('commands:triggers-update', { id, triggers }),

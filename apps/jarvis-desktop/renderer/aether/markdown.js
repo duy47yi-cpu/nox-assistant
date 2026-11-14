@@ -21,63 +21,41 @@
     }
   }
 
-  function appendBoldAndLinks(parent, text, onOpenUrl) {
-    const re = /(\*\*(?=\S)([\s\S]*?\S)\*\*|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\))/g;
+  function appendInline(parent, text, onOpenUrl) {
+    const re = /(?<code>\x60[^\x60\n]+\x60)|(?<math>\$\$[^$]+\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$(?=\S)(?:[^$\n]*[\\^_={}][^$\n]*|[+-]?\d+(?:[.,/]\d+)?|[a-z])\$)|\*\*(?<bold>\S(?:[^\n]*?\S)?)\*\*|\*(?<italic>[^*\s](?:[^*\n]*?[^*\s])?)\*|\[(?<label>[^\]\n]+)\]\((?<url>https?:\/\/[^\s)]+)\)/gu;
     let at = 0;
     let m;
     while ((m = re.exec(text))) {
       if (m.index > at) appendTextLines(parent, text.slice(at, m.index));
-      if (m[2] !== undefined) {
-        const strong = document.createElement('strong');
-        appendTextLines(strong, m[2]);
-        parent.append(strong);
-      } else if (m[3] && m[4]) {
+      const { code, math, bold, italic, label, url } = m.groups;
+      if (code) {
+        const node = document.createElement('code');
+        node.className = 'md-inline-code';
+        node.textContent = code.slice(1, -1);
+        parent.append(node);
+      } else if (math) {
+        const block = math.startsWith('$$') || math.startsWith('\\[');
+        const cut = math.startsWith('$$') || math.startsWith('\\') ? 2 : 1;
+        parent.append(root.NoxMath ? root.NoxMath.render(math.slice(cut, -cut), block) : document.createTextNode(math));
+      } else if (bold !== undefined || italic !== undefined) {
+        const node = document.createElement(bold !== undefined ? 'strong' : 'em');
+        appendInline(node, bold ?? italic, onOpenUrl);
+        parent.append(node);
+      } else if (url) {
         const a = document.createElement('a');
         a.href = '#';
-        a.className = 'ae-md-link';
-        a.textContent = m[3];
-        a.title = m[4];
+        a.className = 'md-link';
+        a.textContent = label;
+        a.title = url;
         a.addEventListener('click', (e) => {
           e.preventDefault();
-          if (typeof onOpenUrl === 'function') onOpenUrl(m[4]);
+          if (typeof onOpenUrl === 'function') onOpenUrl(url);
         });
         parent.append(a);
       }
       at = m.index + m[0].length;
     }
     if (at < text.length) appendTextLines(parent, text.slice(at));
-  }
-
-  const MATH_RE = /(\$\$[^$]+\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$(?=\S)[^$\n]*[\\^_=][^$\n]*\$)/;
-
-  function appendMath(parent, text, onOpenUrl) {
-    if (!root.NoxMath || !/[$\\]/.test(text)) {
-      appendBoldAndLinks(parent, text, onOpenUrl);
-      return;
-    }
-    String(text).split(MATH_RE).forEach((part, idx) => {
-      if (!part) return;
-      if (idx % 2 === 0) {
-        appendBoldAndLinks(parent, part, onOpenUrl);
-        return;
-      }
-      const block = part.startsWith('$$') || part.startsWith('\\[');
-      const cut = part.startsWith('$$') || part.startsWith('\\') ? 2 : 1;
-      parent.append(root.NoxMath.render(part.slice(cut, -cut), block));
-    });
-  }
-
-  function appendInline(parent, text, onOpenUrl) {
-    for (const part of String(text).split(/(`[^`\n]+`)/)) {
-      if (!part) continue;
-      if (part.length > 2 && part[0] === '`' && part[part.length - 1] === '`') {
-        const code = document.createElement('code');
-        code.textContent = part.slice(1, -1);
-        parent.append(code);
-      } else {
-        appendMath(parent, part, onOpenUrl);
-      }
-    }
   }
 
   function isTableRow(line) {
@@ -145,15 +123,15 @@
           i += 1;
         }
         const wrap = document.createElement('div');
-        wrap.className = 'ae-codeblock';
+        wrap.className = 'md-code-block';
         const bar = document.createElement('div');
-        bar.className = 'ae-codebar';
+        bar.className = 'md-code-head';
         const tag = document.createElement('span');
         tag.className = 'ae-codelang';
         tag.textContent = lang || 'код';
         const copyBtn = document.createElement('button');
         copyBtn.type = 'button';
-        copyBtn.className = 'ae-codecopy';
+        copyBtn.className = 'md-code-copy';
         copyBtn.textContent = 'Копировать';
         const codeText = buf.join('\n');
         copyBtn.addEventListener('click', async () => {
@@ -185,7 +163,7 @@
         }
         i -= 1;
         const tableWrap = document.createElement('div');
-        tableWrap.className = 'ae-table-wrap';
+        tableWrap.className = 'md-table-wrap';
         const table = document.createElement('table');
         const thead = document.createElement('thead');
         const htr = document.createElement('tr');
@@ -237,7 +215,7 @@
         const p = document.createElement('p');
         p.className = 'md-footnote';
         p.append(document.createTextNode('* '));
-        appendInline(p, starNote[1], onOpenUrl);
+        appendInline(p, starNote[1].replace(/(?<!\*)\*$/, ''), onOpenUrl);
         frag.append(p);
         continue;
       }

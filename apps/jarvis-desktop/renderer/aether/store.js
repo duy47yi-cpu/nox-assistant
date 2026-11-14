@@ -47,6 +47,7 @@
     if (pendingApprovalCount > 0 || trackerState === 'waiting_approval') {
       return 'Жду вашего подтверждения';
     }
+    if (trackerState === 'verifying') return 'Проверяю результат…';
     if (currentAction && currentAction.status === 'running') {
       const title = cleanOneLine(currentAction.title || 'Выполняю шаг');
       const brief = cleanOneLine(currentAction.brief);
@@ -54,11 +55,133 @@
     }
     const cleanNote = cleanOneLine(note);
     if (trackerState === 'searching') return cleanNote || 'Ищу в источниках…';
-    if (trackerState === 'verifying') return cleanNote || 'Проверяю результат…';
     if (trackerState === 'acting' || trackerState === 'working') return cleanNote || 'Выполняю действие…';
     if (trackerState === 'thinking') return cleanNote || 'Думаю…';
     if (trackerState === 'speaking') return 'Формулирую ответ…';
     return '';
+  }
+
+  const CMD_DENY_TOOLS = new Set([
+    'mail_send', 'pc_shutdown', 'shell_run', 'app_close', 'ui_close_window',
+    'app_install', 'windows_close_all', 'window_close_active',
+    'forget', 'deal_clear', 'cancel_reminder',
+  ]);
+  const CMD_FORBIDDEN_PREFIXES = ['mission_', 'command_'];
+  const CMD_READ_ONLY_TOOLS = new Set([
+    'ui_windows', 'ui_elements', 'desktop_observe', 'windows_list',
+    'screen_look', 'screen_region_look', 'image_look', 'image_read_text',
+    'clipboard_get', 'workspace_read', 'workspace_list', 'workspace_search',
+    'document_read', 'document_batch', 'project_brief', 'project_diagnostics',
+    'project_commands', 'code_read', 'web_search', 'web_wiki', 'web_fetch',
+    'web_research', 'web_check_claims', 'browser_read', 'browser_tab_read',
+    'browser_tabs', 'browser_snapshot', 'recall', 'memory_about',
+    'disk_free_space', 'disk_cleanup_suggest', 'weather_now', 'currency_rate',
+    'calendar_upcoming', 'calendar_briefing', 'calendar_prep', 'mail_unread',
+    'apps_find', 'apps_scan', 'apps_usage', 'app_search', 'deals_hanging',
+    'list_reminders', 'library_list', 'skills_list', 'skill_read',
+    'goal_list', 'long_task_list', 'task_list', 'command_list',
+  ]);
+  const CMD_SECRET_KEY = /^(?:password|passwd|pwd|secret|token|api_?key|apikey|access_?token|refresh_?token|access_?key|private_?key|client_?secret|authorization|auth|cookie|cookies|otp|totp|one_?time_?code|credentials?)$/i;
+  const CMD_SECRET_LABEL = /(парол[^\s]*|password|passwd|api[\s_-]?key|токен[^\s]*|token|секрет[^\s]*|secret)\s*(?:[:=—–-]|это|is)\s*\S{4,}/i;
+  const CMD_SECRET_PREFIX = /\b(?:sk|pk|ghp|xox[abp])[-_][\w-]{12,}\b/i;
+  const CMD_SECRET_LIKE = /\b(?=[\w-]*\d)(?=[\w-]*[a-z])[\w-]{20,}\b/i;
+  const CMD_FAILED_STATUSES = new Set(['error', 'failed', 'refused', 'unverified', 'cancelled', 'canceled', 'pending', 'running', 'skipped']);
+
+  function clientTextLooksSecret(text, keyName = '') {
+    const s = String(text == null ? '' : text);
+    if (!s) return false;
+    if (CMD_SECRET_LABEL.test(s) || CMD_SECRET_PREFIX.test(s) || /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(s)) return true;
+    if (keyName === 'url' && /^https?:\/\//i.test(s)) {
+      return /^[a-z]+:\/\/[^/@\s]+:[^/@\s]*@/i.test(s)
+        || /[?&#](?:password|passwd|pwd|secret|token|api_?key|apikey|access_?token|refresh_?token|auth|otp|totp|code)=[^&#\s]+/i.test(s);
+    }
+    return CMD_SECRET_LIKE.test(s);
+  }
+
+  function clientArgsHaveSecret(val, keyName = '', depth = 0) {
+    if (depth > 10 || val === null || val === undefined) return false;
+    if (typeof val === 'string') return clientTextLooksSecret(val, keyName);
+    if (Array.isArray(val)) return val.some((item) => clientArgsHaveSecret(item, keyName, depth + 1));
+    if (typeof val === 'object') {
+      for (const [k, v] of Object.entries(val)) {
+        if (CMD_SECRET_KEY.test(k)) return true;
+        if (clientArgsHaveSecret(v, k, depth + 1)) return true;
+      }
+    }
+    return false;
+  }
+
+  function buildClientCommandDraft(phrase, actions, existingCommands = []) {
+    if (typeof phrase !== 'string') return { ok: false, reason: 'Нужна фраза запуска команды' };
+    const rawPhrase = phrase.trim();
+    if (!rawPhrase) return { ok: false, reason: 'Нужна фраза запуска команды' };
+    if (Array.from(rawPhrase).length > 200) return { ok: false, reason: 'Фраза слишком длинная (не больше 200 символов)' };
+    if (clientTextLooksSecret(rawPhrase)) return { ok: false, reason: 'В фразе обнаружены секретные данные — команду не создаём' };
+    let normPhrase = rawPhrase.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim().replace(/[\s.!?]+$/u, '');
+    if (!normPhrase) return { ok: false, reason: 'Нужна фраза запуска команды' };
+    if (Array.from(normPhrase).length > 120) normPhrase = Array.from(normPhrase).slice(0, 120).join('').trim();
+
+    if (!Array.isArray(actions) || actions.length === 0) {
+      return { ok: false, reason: 'В этом ответе нет выполненных шагов для команды' };
+    }
+
+    const steps = [];
+    let sawSecret = false;
+    let sawDenied = false;
+    let sawReadOnly = false;
+    let sawFailed = false;
+    for (const a of actions) {
+      if (!a || typeof a !== 'object') continue;
+      const tool = typeof a.tool === 'string' ? a.tool.trim() : '';
+      if (!tool) continue;
+      const st = typeof a.status === 'string' ? a.status.trim().toLowerCase() : '';
+      if (a.ok === false || CMD_FAILED_STATUSES.has(st)) { sawFailed = true; continue; }
+      if (st !== 'confirmed' && st !== 'done' && !(st === '' && a.ok === true)) continue;
+      if (CMD_DENY_TOOLS.has(tool) || CMD_FORBIDDEN_PREFIXES.some((p) => tool.startsWith(p))) { sawDenied = true; continue; }
+      if (CMD_READ_ONLY_TOOLS.has(tool)) { sawReadOnly = true; continue; }
+      let args = {};
+      if (a.args && typeof a.args === 'object' && !Array.isArray(a.args)) {
+        try { args = JSON.parse(JSON.stringify(a.args)); } catch { args = {}; }
+      }
+      if (clientArgsHaveSecret(args)) { sawSecret = true; continue; }
+      steps.push({ tool, args });
+    }
+
+    if (!steps.length) {
+      if (sawSecret) return { ok: false, reason: 'В шагах обнаружен пароль или ключ — такую команду не сохраняем' };
+      if (sawDenied) return { ok: false, reason: 'Опасные или разовые шаги в повторяемую команду не сохраняются' };
+      if (sawReadOnly) return { ok: false, reason: 'В ходе был только просмотр без повторяемого действия' };
+      if (sawFailed) return { ok: false, reason: 'Неподтверждённые или неудавшиеся шаги нельзя сохранить как команду' };
+      return { ok: false, reason: 'Нет подходящих повторяемых действий для сохранения' };
+    }
+
+    const cleanTitle = rawPhrase.replace(/^(?:джарвис|nox)[,:\s]+/i, '').replace(/[.!?]+$/u, '').trim() || 'Быстрая команда';
+    const ch = Array.from(cleanTitle);
+    let baseName = `${ch[0].toUpperCase()}${ch.slice(1).join('')}`;
+    if (Array.from(baseName).length > 64) baseName = Array.from(baseName).slice(0, 64).join('').trim();
+    const used = new Set((Array.isArray(existingCommands) ? existingCommands : []).map((c) => String(c?.name || '').trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ')));
+    let name = baseName;
+    let n = 2;
+    while (used.has(name.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ')) && n < 1000) {
+      name = `${baseName} (${n++})`;
+    }
+
+    return {
+      ok: true,
+      draft: {
+        schemaVersion: 2,
+        version: 2,
+        kind: 'sequence',
+        name,
+        phrases: [normPhrase],
+        steps: steps.slice(0, 20),
+        enabled: true,
+        hotkey: null,
+        folder: null,
+        collections: [],
+        origin: 'ai',
+      },
+    };
   }
 
   function createStore(deps = {}) {
@@ -105,17 +228,20 @@
         workspace: '',
         connectedFolders: [],
       },
-      account: { enabled: false, signedIn: false, account: null },
+      account: null,
       workspaces: [],
       currentWorkspaceId: 'default',
       chats: [],
       activeChatId: null,
-      historyOpen: typeof window !== 'undefined' ? window.innerWidth >= 980 : true,
+      historyOpen: false,
       historyLoading: false,
       sendingLock: false,
       pendingComposeAnim: false,
+      agentMode: false,
+      pendingCommandId: null,
+      lastUserPhrase: '',
       feedItems: [],       // [{ id, kind: 'user'|'assistant'|'error'|'notice'|'task', ... }]
-      activeTurn: null,    // { id, text, actions: [], actionsMap: Map, sources: [], detailsOpen: false, startedAt }
+      activeTurn: null,    // { id, userPhrase, text, actions: [], actionsMap: Map, sources: [], detailsOpen: false, startedAt }
       lastSentPayload: null, // { text, files }
       drafts: new Map(),   // chatId -> { text, files }
       currentDraftText: '',
@@ -139,6 +265,7 @@
         hotkeyOk: true,
         level: 0,
         lastWake: '',
+        error: '',
       },
       trackerState: 'idle',
       trackerBusy: false,
@@ -263,11 +390,20 @@
     }
 
     // ── События ядра и спокойный ход ──────────────────────────────
+    function lastFeedUserPhrase() {
+      for (let i = state.feedItems.length - 1; i >= 0; i--) {
+        const item = state.feedItems[i];
+        if (item && item.kind === 'user' && item.text) return String(item.text).trim();
+      }
+      return String(state.lastUserPhrase || '').trim();
+    }
+
     function ensureActiveTurn() {
       if (!state.activeTurn) {
         state.activeTurn = {
           id: nextId('turn'),
           kind: 'assistant',
+          userPhrase: lastFeedUserPhrase(),
           text: '',
           actions: [],
           actionsMap: new Map(),
@@ -275,6 +411,8 @@
           detailsOpen: false,
           startedAt: Date.now(),
         };
+      } else if (!state.activeTurn.userPhrase) {
+        state.activeTurn.userPhrase = lastFeedUserPhrase();
       }
       return state.activeTurn;
     }
@@ -284,18 +422,26 @@
       const t = state.activeTurn;
       state.activeTurn = null;
       const hasBody = Boolean(t.text.trim() || t.actions.length > 0 || t.sources.length > 0);
-      if (!hasBody && !options.forceKeep) {
+      if (!hasBody && !options.cancelled && !options.forceKeep) {
         notify();
         return;
       }
       state.feedItems = [...state.feedItems, {
         id: t.id,
         kind: 'assistant',
+        userPhrase: String(t.userPhrase || lastFeedUserPhrase() || '').trim(),
         text: t.text,
         actions: t.actions.map((a) => ({ ...a })),
         sources: t.sources.slice(),
+        searchSources: options.searchSources || [],
         detailsOpen: false,
         cancelled: Boolean(options.cancelled),
+        workStatus: options.status || '',
+        workElapsedMs: Math.max(0, Date.now() - t.startedAt),
+        savedCommandId: null,
+        savedCommandName: '',
+        savedCommandError: '',
+        savingCommand: false,
       }];
       notify();
     }
@@ -337,12 +483,14 @@
     function handleToolEvent(ev) {
       const turn = ensureActiveTurn();
       if (ev.type === 'tool_start' || ev.type === 'approval_request') {
-        let entry = turn.actionsMap.get(ev.id);
+        const id = ev.type === 'approval_request' ? (ev.callId || ev.id) : ev.id;
+        const name = ev.name || ev.tool || '';
+        let entry = turn.actionsMap.get(id);
         if (!entry) {
           entry = {
-            id: ev.id,
-            tool: ev.name || '',
-            title: toolTitle(ev.name),
+            id,
+            tool: name,
+            title: toolTitle(name),
             brief: argsBrief(ev.args, 64),
             args: ev.args || null,
             risk: ev.risk || null,
@@ -351,10 +499,11 @@
             evidence: '',
             verified: null,
           };
-          turn.actionsMap.set(ev.id, entry);
+          turn.actionsMap.set(id, entry);
           turn.actions.push(entry);
-        } else if (ev.type === 'approval_request') {
-          entry.status = 'pending';
+        } else {
+          if (name) { entry.tool = name; entry.title = toolTitle(name); }
+          entry.status = ev.type === 'approval_request' ? 'pending' : 'running';
         }
       } else if (ev.type === 'tool_result') {
         let entry = turn.actionsMap.get(ev.id);
@@ -374,6 +523,7 @@
           turn.actionsMap.set(ev.id, entry);
           turn.actions.push(entry);
         }
+        if (ev.name) { entry.tool = ev.name; entry.title = toolTitle(ev.name); }
         entry.status = statusOfResult(ev.ok, ev.summary, state.rejectedCalls.has(ev.id), ev.verified);
         entry.summary = cleanSummary(ev.summary);
         entry.verified = ev.verified || null;
@@ -585,6 +735,7 @@
           })();
           break;
         case 'quick_user':
+          state.lastUserPhrase = String(ev.text || '').trim();
           state.feedItems = [...state.feedItems, { id: nextId('u'), kind: 'user', text: String(ev.text || ''), files: [] }];
           ensureActiveTurn();
           break;
@@ -616,7 +767,7 @@
           appendError(ev.message, ev.message);
           break;
         case 'limit_pause': {
-          const what = ev.window === 'week' ? 'Недельный лимит' : 'Лимит на 5 часов';
+          const what = { week: 'Недельный лимит', day: 'Дневной лимит' }[ev.window] || 'Лимит на 5 часов';
           state.limitBanner = `${what} исчерпан. Продолжится автоматически позже.`;
           notify(true);
           break;
@@ -639,8 +790,7 @@
         }
         case 'done': {
           const cancelled = ev.cancelled === true || ev.status === 'cancelled';
-          finalizeActiveTurn({ cancelled });
-          if (cancelled) appendNotice('Ход остановлен. Активные действия завершены.');
+          finalizeActiveTurn({ cancelled, status: ev.status, searchSources: ev.searchSources });
           clearApprovalsForChat(ev.runId);
           refreshChats().catch(() => {});
           break;
@@ -662,6 +812,7 @@
         if (typeof ev.reply === 'string' && ev.reply.trim()) toast(ev.reply.trim());
         notify(true);
       } else if (ev.type === 'state') {
+        if (ev.state === 'listening') state.dictation.error = '';
         if (typeof ev.mode === 'string') state.dictation.mode = ev.mode;
         if (typeof ev.full === 'boolean') state.dictation.full = ev.full;
         if (typeof ev.recording === 'boolean') state.dictation.recording = ev.recording;
@@ -695,6 +846,7 @@
         sendChatMessage(cmd, state.currentDraftFiles);
       } else if (ev.type === 'error') {
         state.dictation.recording = false;
+        state.dictation.error = String(ev.message || 'Голосовой ввод не запустился');
         if (tracker && typeof tracker.setListening === 'function') tracker.setListening(false);
         if (ev.message) toast(ev.message, 'error');
         notify(true);
@@ -749,12 +901,21 @@
       } catch { /* ignore */ }
     }
 
+    let accountRefreshId = 0;
     async function refreshAccount() {
-      if (!bridge.has('accountState')) return;
+      const id = ++accountRefreshId;
       try {
-        const st = await bridge.call('accountState');
-        if (st && typeof st === 'object') state.account = st;
-      } catch { /* ignore */ }
+        const st = bridge.has('accountState') ? await bridge.call('accountState') : { enabled: false };
+        if (id === accountRefreshId && st && typeof st === 'object') {
+          state.account = st;
+          notify();
+        }
+      } catch {
+        if (id === accountRefreshId) {
+          state.account = { enabled: true, offline: true };
+          notify();
+        }
+      }
     }
 
     async function refreshWorkspaces() {
@@ -817,12 +978,28 @@
         const arr = Array.isArray(rows) ? rows : [];
         state.activeTurn = null;
         state.pendingComposeAnim = false;
+        state.lastUserPhrase = '';
+        let prevUserPhrase = '';
         state.feedItems = arr.map((m) => {
           if (m.role === 'user') {
             const parsed = parseUserHistory(m.text);
+            prevUserPhrase = String(parsed.text || '').trim();
             return { id: nextId('u'), kind: 'user', text: parsed.text, files: parsed.names.map((n) => ({ name: n })) };
           }
-          return { id: nextId('a'), kind: 'assistant', text: String(m.text || ''), actions: [], sources: [], detailsOpen: false };
+          return {
+            id: nextId('a'),
+            kind: 'assistant',
+            userPhrase: prevUserPhrase,
+            text: String(m.text || ''),
+            actions: [],
+            sources: [],
+            searchSources: Array.isArray(m.searchSources) ? m.searchSources : [],
+            detailsOpen: false,
+            savedCommandId: null,
+            savedCommandName: '',
+            savedCommandError: '',
+            savingCommand: false,
+          };
         });
       } catch (err) {
         if (mySeq === histSeq) toast(`История не загрузилась: ${bridge.errText(err)}`, 'error');
@@ -834,7 +1011,131 @@
       }
     }
 
-    // ── Действия чата и настроек ──────────────────────────────────
+    // ── Действия чата, режима агента и сохранения команд ──────────
+    function toggleAgentMode(force) {
+      const next = typeof force === 'boolean' ? force : !state.agentMode;
+      if (state.agentMode === next) return next;
+      state.agentMode = next;
+      notify(true);
+      return next;
+    }
+
+    function openSavedCommand(id) {
+      if (!id) return false;
+      state.pendingCommandId = String(id);
+      setRoute('commands');
+      return true;
+    }
+
+    function consumePendingCommandId() {
+      const id = state.pendingCommandId;
+      state.pendingCommandId = null;
+      return id || null;
+    }
+
+    async function saveTurnAsCommand(turnId) {
+      const idx = state.feedItems.findIndex((x) => x && x.id === turnId && x.kind === 'assistant');
+      if (idx < 0) return { ok: false, reason: 'Ответ не найден' };
+      const item = state.feedItems[idx];
+      if (item.savedCommandId) {
+        return { ok: true, id: item.savedCommandId, alreadySaved: true };
+      }
+      if (item.savingCommand) {
+        return { ok: false, reason: 'Уже сохраняем' };
+      }
+
+      const patchItem = (patch) => {
+        const curIdx = state.feedItems.findIndex((x) => x && x.id === turnId && x.kind === 'assistant');
+        if (curIdx < 0) return;
+        const copy = state.feedItems.slice();
+        copy[curIdx] = { ...copy[curIdx], ...patch };
+        state.feedItems = copy;
+      };
+
+      let phrase = String(item.userPhrase || '').trim();
+      if (!phrase) {
+        for (let i = idx - 1; i >= 0; i--) {
+          const prev = state.feedItems[i];
+          if (prev && prev.kind === 'user' && prev.text) {
+            phrase = String(prev.text).trim();
+            break;
+          }
+        }
+      }
+
+      patchItem({ savingCommand: true, savedCommandError: '' });
+      notify(true);
+
+      let existingCommands = [];
+      if (bridge && bridge.has('listCommands')) {
+        try {
+          const listRes = await bridge.call('listCommands');
+          existingCommands = Array.isArray(listRes)
+            ? listRes
+            : (listRes && Array.isArray(listRes.commands) ? listRes.commands : []);
+        } catch { existingCommands = []; }
+      }
+
+      let draftRes;
+      try {
+        if (bridge && bridge.has('draftCommandFromTurn')) {
+          draftRes = await bridge.call('draftCommandFromTurn', {
+            phrase,
+            actions: item.actions || [],
+            existingCommands,
+          });
+        } else {
+          draftRes = buildClientCommandDraft(phrase, item.actions || [], existingCommands);
+        }
+      } catch (err) {
+        draftRes = { ok: false, reason: bridge ? bridge.errText(err) : String(err && err.message || err) };
+      }
+
+      if (!draftRes || draftRes.ok === false || !draftRes.draft) {
+        const reason = (draftRes && (draftRes.reason || draftRes.error)) || 'Не удалось собрать команду';
+        patchItem({ savingCommand: false, savedCommandError: reason });
+        toast(reason, 'error');
+        notify(true);
+        return { ok: false, reason };
+      }
+
+      if (!bridge || !bridge.has('saveCommand')) {
+        const reason = 'Сохранение команд недоступно';
+        patchItem({ savingCommand: false, savedCommandError: reason });
+        toast(reason, 'error');
+        notify(true);
+        return { ok: false, reason };
+      }
+
+      let saved;
+      try {
+        saved = await bridge.call('saveCommand', draftRes.draft);
+      } catch (err) {
+        saved = { ok: false, error: bridge.errText(err) };
+      }
+
+      if (!saved || saved.ok === false) {
+        const reason = (saved && (saved.error || saved.reason)) || 'Команда не сохранилась';
+        patchItem({ savingCommand: false, savedCommandError: reason });
+        toast(reason, 'error');
+        notify(true);
+        return { ok: false, reason };
+      }
+
+      const cmd = saved.command || draftRes.draft;
+      const savedId = String(cmd.id || saved.id || draftRes.draft.name);
+      const savedName = String(cmd.name || draftRes.draft.name || '');
+      patchItem({
+        savingCommand: false,
+        savedCommandId: savedId,
+        savedCommandName: savedName,
+        savedCommandError: '',
+      });
+      toast(`Команда «${savedName || 'Новая команда'}» сохранена`);
+      notify(true);
+      return { ok: true, id: savedId, command: cmd };
+    }
+
     async function sendChatMessage(rawText, rawFiles = state.currentDraftFiles) {
       if (state.sendingLock || state.trackerBusy) return { ok: false, reason: 'busy' };
       const text = String(rawText || '').trim();
@@ -846,6 +1147,7 @@
       state.sendingLock = true;
       state.pendingComposeAnim = wasEmpty;
       state.lastSentPayload = { text: sendText, files: files.map((f) => ({ ...f })) };
+      state.lastUserPhrase = text;
 
       // Сразу отображаем реплику и очищаем текущий черновик (без дублей).
       state.feedItems = [...state.feedItems, {
@@ -863,7 +1165,10 @@
 
       let result;
       try {
-        result = await bridge.call('send', sendText, files.map((f) => f.path));
+        const filePaths = files.map((f) => f.path);
+        result = state.agentMode
+          ? await bridge.call('send', sendText, filePaths, { agentMode: true })
+          : await bridge.call('send', sendText, filePaths);
       } catch (err) {
         result = { ok: false, error: bridge.errText(err) };
       } finally {
@@ -873,7 +1178,7 @@
 
       if (result && result.ok === false) {
         if (tracker) tracker.reset();
-        finalizeActiveTurn();
+        finalizeActiveTurn({ status: 'failed' });
         appendError(result.error || 'Не удалось отправить сообщение', result.error || '');
       }
       await refreshChats();
@@ -957,6 +1262,7 @@
         if (res && res.ok === false) { toast(res.error || 'Не удалось очистить', 'error'); return false; }
         state.activeTurn = null;
         state.feedItems = [];
+        state.lastUserPhrase = '';
         notify(true);
         toast('Чат очищен', 'ok');
         return true;
@@ -1054,8 +1360,12 @@
         return;
       }
       try {
-        if (state.dictation.recording) await bridge.call('dictationStop');
-        else await bridge.call('dictationStart');
+        if (state.dictation.recording && !state.dictation.error) {
+          await bridge.call('dictationStop');
+        } else {
+          const result = await bridge.call('dictationStart');
+          if (result?.ok === false) onDictationEvent({ type: 'error', message: 'Не удалось включить голосовой ввод' });
+        }
       } catch (err) {
         toast(`Микрофон: ${bridge.errText(err)}`, 'error');
       }
@@ -1112,6 +1422,10 @@
       loadChatHistory,
       sendChatMessage,
       stopRun,
+      toggleAgentMode,
+      saveTurnAsCommand,
+      openSavedCommand,
+      consumePendingCommandId,
       createNewChat,
       selectChat,
       closeChat,
@@ -1140,6 +1454,7 @@
     parseUserHistory,
     isEmptyChatState,
     formatLiveWorkSummary,
+    buildClientCommandDraft,
     createStore,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = exported;

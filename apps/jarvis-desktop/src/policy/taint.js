@@ -7,7 +7,7 @@ const TAINT_SOURCES = new Set([
   'web_search', 'web_wiki', 'web_fetch', 'web_research', 'agents_parallel',
   'browser_open', 'browser_read', 'browser_tab_read',
   'screen_look', 'screen_region_look', 'desktop_observe', 'ui_elements', 'image_read_text', 'image_look',
-  'workspace_read', 'workspace_search', 'document_read', 'code_read', 'clipboard_get',
+  'workspace_read', 'workspace_search', 'document_read', 'document_batch', 'code_read', 'clipboard_get',
   'project_brief', 'project_diagnostics', 'mail_unread',
 ]);
 

@@ -43,6 +43,12 @@ function parseLine(out) {
 }
 
 function mediaTools({ runner = runPowerShell } = {}) {
+  async function readPlaybackStatus(ctx) {
+    const res = await runner(STATUS_SCRIPT, {}, { signal: ctx && ctx.signal, timeoutMs: 10000 });
+    if (!res.ok) return { ok: false, summary: res.summary };
+    return { ok: true, parsed: parseLine(res.data && res.data.stdout) };
+  }
+
   return [
     {
       name: 'media_control',
@@ -50,25 +56,47 @@ function mediaTools({ runner = runPowerShell } = {}) {
       risk: 'T1',
       parameters: {
         type: 'object',
-        properties: { action: { type: 'string', enum: [...ACTIONS] } },
+        properties: {
+          action: { type: 'string', enum: [...ACTIONS] },
+          allowNoSession: { type: 'boolean' },
+        },
         required: ['action'],
       },
       async run(args, ctx) {
         const action = String((args && args.action) || '');
         if (!ACTIONS.has(action)) return { ok: false, summary: 'неизвестное действие плеера', data: {} };
+        const allowNoSession = Boolean(args && args.allowNoSession === true);
         const res = await runner(CONTROL_SCRIPT, { JARVIS_MEDIA: action }, { signal: ctx && ctx.signal, timeoutMs: 15000 });
         if (!res.ok) return { ok: false, summary: res.summary, data: {} };
         const parsed = parseLine(res.data && res.data.stdout);
-        if (!parsed.session) return { ok: false, summary: 'плеер не найден: ничего не играет или не сообщает о себе Windows', data: { action } };
+        if (!parsed.session) {
+          if (allowNoSession && action === 'pause') {
+            return {
+              ok: true,
+              summary: 'ничего не играет (пауза не потребовалась)',
+              data: { action: 'pause', noSession: true, status: 'None' },
+            };
+          }
+          return { ok: false, summary: 'плеер не найден: ничего не играет или не сообщает о себе Windows', data: { action } };
+        }
         return { ok: parsed.ok, summary: parsed.ok ? `плеер: ${action}` : `плеер не ответил на «${action}»`, data: { action, status: parsed.status } };
       },
-      // Сверка: play и pause проверяем по статусу; переключение треков честно «не проверено».
+      // Сверка: play и pause проверяем по статусу; при allowNoSession: pause проверяем отсутствие сессии или паузу; переключение треков честно «не проверено».
       async verify(args, result, ctx = {}) {
+        if (result && result.data && result.data.noSession === true) {
+          const check = await readPlaybackStatus(ctx);
+          if (!check.ok) return { status: 'unknown', evidence: `статус не прочитан: ${check.summary}` };
+          const { parsed } = check;
+          if (!parsed.session) return { status: 'confirmed', evidence: 'активного воспроизведения нет' };
+          if (parsed.status === 'Paused') return { status: 'confirmed', evidence: 'статус Paused' };
+          if (parsed.status === 'Playing') return { status: 'failed', evidence: 'статус Playing, ожидали паузу' };
+          return { status: 'unknown', evidence: `статус ${parsed.status || 'неизвестен'}` };
+        }
         const action = result && result.data && result.data.action;
         if (!EXPECTED[action]) return { status: 'unknown', evidence: 'смену трека Windows не сообщает' };
-        const res = await runner(STATUS_SCRIPT, {}, { signal: ctx.signal, timeoutMs: 10000 });
-        if (!res.ok) return { status: 'unknown', evidence: `статус не прочитан: ${res.summary}` };
-        const parsed = parseLine(res.data && res.data.stdout);
+        const check = await readPlaybackStatus(ctx);
+        if (!check.ok) return { status: 'unknown', evidence: `статус не прочитан: ${check.summary}` };
+        const { parsed } = check;
         if (!parsed.session) return { status: 'unknown', evidence: 'плеер не найден при проверке' };
         return parsed.status === EXPECTED[action]
           ? { status: 'confirmed', evidence: `статус ${parsed.status}` }

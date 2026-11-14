@@ -1,7 +1,7 @@
 /* Раздел «Личное пространство» Nox Aether:
  * - «Рабочие столы»: вкладки столов, реальные виджеты (погода с городом, календарь, дела, новости, загрузки, место на диске);
  * - «Память и напоминания»: просмотр, редактирование, удаление памяти и отмена напоминаний;
- * - «Аккаунт и почта»: честный статус аккаунта/тарифа/лимитов, входа/регистрации, Gmail и источника календаря;
+ * - «Почта и календарь»: Gmail и источник календаря;
  * - «Журнал и расширения»: поиск по журналу, буфер обмена, быстрые вставки и уборка загрузок. */
 (() => {
   'use strict';
@@ -26,7 +26,7 @@
     root.hidden = true;
     root.setAttribute('aria-label', 'Личное пространство');
 
-    let subTab = 'desks'; // 'desks' | 'memory' | 'account' | 'journal'
+    let subTab = 'desks';
     let desksPayload = null;
     let memoryItems = [];
     let remindersItems = [];
@@ -48,11 +48,8 @@
     const tw = document.createElement('div');
     const h1 = document.createElement('h1');
     h1.className = 'ae-page-title';
-    h1.textContent = 'Личное пространство';
-    const sub = document.createElement('p');
-    sub.className = 'ae-page-sub';
-    sub.textContent = 'Ваши столы и виджеты, память ассистента, напоминания, аккаунт, почта и журнал действий.';
-    tw.append(h1, sub);
+    h1.textContent = 'Пространство';
+    tw.append(h1);
     const refBtn = document.createElement('button');
     refBtn.type = 'button';
     refBtn.className = 'ae-btn ae-btn-ghost';
@@ -65,7 +62,7 @@
     const TAB_LIST = [
       ['desks', 'Столы и виджеты'],
       ['memory', 'Память и напоминания'],
-      ['account', 'Аккаунт и сервисы'],
+      ['services', 'Почта и календарь'],
       ['journal', 'Журнал и утилиты'],
     ];
     const tabBtns = new Map();
@@ -102,9 +99,8 @@
           bridge.has('memoryList') ? bridge.call('memoryList', { limit: 200 }).then((r) => { memoryItems = (r && r.ok && Array.isArray(r.items)) ? r.items : []; }) : Promise.resolve(),
           bridge.has('remindersList') ? bridge.call('remindersList', {}).then((r) => { remindersItems = (r && r.ok && Array.isArray(r.items)) ? r.items : []; }) : Promise.resolve(),
         ]);
-      } else if (tab === 'account') {
+      } else if (tab === 'services') {
         await Promise.allSettled([
-          store.refreshAccount(),
           bridge.has('mailState') ? bridge.call('mailState').then((r) => { mailPayload = r; }) : Promise.resolve(),
           bridge.has('calendarState') ? bridge.call('calendarState').then((r) => { calendarPayload = r; }) : Promise.resolve(),
         ]);
@@ -159,7 +155,7 @@
       const newDeskBtn = document.createElement('button');
       newDeskBtn.type = 'button';
       newDeskBtn.className = 'ae-btn ae-btn-secondary ae-btn-sm';
-      newDeskBtn.textContent = '+ Стол';
+      newDeskBtn.append(icon('plus'), 'Новый стол');
       const form = document.createElement('form');
       form.className = 'ae-head-actions ae-new-desk';
       form.hidden = true;
@@ -227,7 +223,8 @@
         wSel.className = 'ae-select ae-select-sm';
         const firstOpt = document.createElement('option');
         firstOpt.value = '';
-        firstOpt.textContent = '+ Виджет…';
+        firstOpt.textContent = 'Добавить виджет…';
+        wSel.setAttribute('aria-label', 'Добавить виджет');
         wSel.append(firstOpt);
         for (const wt of types) {
           const id = typeof wt === 'string' ? wt : wt.type || wt.id;
@@ -257,7 +254,7 @@
       if (!widgets.length) {
         const emp = document.createElement('div');
         emp.className = 'ae-empty-pane';
-        emp.textContent = 'На этом столе пока нет виджетов. Добавьте виджет вверху справа.';
+        emp.textContent = 'На этом столе пока нет виджетов.';
         wrap.append(emp);
         return wrap;
       }
@@ -443,80 +440,9 @@
       return split;
     }
 
-    function renderAccount() {
+    function renderServices() {
       const wrap = document.createElement('div');
       wrap.className = 'ae-stack';
-
-      const accPanel = document.createElement('div');
-      accPanel.className = 'ae-panel';
-      const accTitle = document.createElement('h2');
-      accTitle.textContent = 'Аккаунт Nox';
-      accPanel.append(accTitle);
-
-      const acc = store.state.account;
-      if (!acc || !acc.enabled) {
-        const p = document.createElement('p');
-        p.className = 'ae-muted';
-        p.textContent = 'Приложение работает в локальном режиме со своими настройками и ключами (облачный сервер аккаунтов не подключён).';
-        accPanel.append(p);
-      } else if (acc.signedIn && acc.account) {
-        const a = acc.account;
-        const info = document.createElement('p');
-        info.textContent = `Вход выполнен: ${a.email} · Тариф: ${a.planTitle || a.plan || 'Активен'}`;
-        accPanel.append(info);
-        if (a.limits && a.limits.session) {
-          const lim = document.createElement('p');
-          lim.className = 'ae-item-meta';
-          lim.textContent = `Расход за 5 ч: ${a.limits.session.percent || 0}% · За неделю: ${(a.limits.week && a.limits.week.percent) || 0}%`;
-          accPanel.append(lim);
-        }
-        const outBtn = document.createElement('button');
-        outBtn.type = 'button';
-        outBtn.className = 'ae-btn ae-btn-secondary ae-btn-sm';
-        outBtn.textContent = 'Выйти из аккаунта';
-        outBtn.addEventListener('click', async () => {
-          await bridge.call('accountLogout');
-          await loadTabData('account');
-        });
-        accPanel.append(outBtn);
-      } else {
-        const form = document.createElement('form');
-        form.className = 'ae-form-grid';
-        const em = document.createElement('input');
-        em.type = 'email';
-        em.className = 'ae-input';
-        em.placeholder = 'Почта';
-        em.required = true;
-        const pw = document.createElement('input');
-        pw.type = 'password';
-        pw.className = 'ae-input';
-        pw.placeholder = 'Пароль (от 8 символов)';
-        pw.required = true;
-        const row = document.createElement('div');
-        row.className = 'ae-form-actions';
-        const loginB = document.createElement('button');
-        loginB.type = 'submit';
-        loginB.className = 'ae-btn ae-btn-primary ae-btn-sm';
-        loginB.textContent = 'Войти';
-        const regB = document.createElement('button');
-        regB.type = 'button';
-        regB.className = 'ae-btn ae-btn-secondary ae-btn-sm';
-        regB.textContent = 'Создать аккаунт';
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const r = await bridge.call('accountLogin', em.value.trim(), pw.value);
-          if (!r || !r.ok) store.toast((r && r.error) || 'Ошибка входа', 'error');
-          else await loadTabData('account');
-        });
-        regB.addEventListener('click', async () => {
-          const r = await bridge.call('accountRegister', em.value.trim(), pw.value);
-          if (!r || !r.ok) store.toast((r && r.error) || 'Ошибка регистрации', 'error');
-          else await loadTabData('account');
-        });
-        row.append(loginB, regB);
-        form.append(em, pw, row);
-        accPanel.append(form);
-      }
 
       // Почта и календарь
       const svcPanel = document.createElement('div');
@@ -546,7 +472,7 @@
         mBtn.textContent = mailPayload.connected ? 'Отключить' : 'Подключить';
         mBtn.addEventListener('click', async () => {
           await bridge.call(mailPayload.connected ? 'mailDisconnect' : 'mailConnect');
-          await loadTabData('account');
+          await loadTabData('services');
         });
         mailRow.append(mBtn);
       }
@@ -568,12 +494,12 @@
       calBtn.textContent = 'Выбрать файл…';
       calBtn.addEventListener('click', async () => {
         await bridge.call('calendarPickFile');
-        await loadTabData('account');
+        await loadTabData('services');
       });
       calRow.append(calInfo, calBtn);
       svcPanel.append(calRow);
 
-      wrap.append(accPanel, svcPanel);
+      wrap.append(svcPanel);
       return wrap;
     }
 
@@ -823,7 +749,7 @@
       }
       if (subTab === 'desks') body.append(renderDesks());
       else if (subTab === 'memory') body.append(renderMemory());
-      else if (subTab === 'account') body.append(renderAccount());
+      else if (subTab === 'services') body.append(renderServices());
       else if (subTab === 'journal') body.append(renderJournalAndTools());
     }
 

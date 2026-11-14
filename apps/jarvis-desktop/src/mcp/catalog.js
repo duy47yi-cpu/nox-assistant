@@ -547,6 +547,16 @@ validateCatalog(normalized);
 const CATALOG = deepFreeze(normalized);
 const BY_ID = new Map(CATALOG.map((entry) => [entry.id, entry]));
 
+const FEATURED = deepFreeze([
+  { ...BY_ID.get('github'), description: 'Репозитории, задачи и pull request.', accountKey: 'NOX_GITHUB_TOKEN' },
+  { id: 'gmail', title: 'Gmail', description: 'Почта Google через вход в браузере.', integration: 'mail', category: 'productivity', envKeys: [] },
+  { ...BY_ID.get('linear'), description: 'Задачи и проекты команды.', docs: 'https://linear.app/docs/mcp', accountKey: 'NOX_LINEAR_TOKEN' },
+  { ...BY_ID.get('notion'), description: 'Страницы и базы рабочего пространства.', docs: 'https://www.notion.com/help/notion-mcp' },
+  { ...BY_ID.get('figma'), description: 'Макеты и компоненты Figma.', docs: 'https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/' },
+  { id: 'slack', title: 'Slack', category: 'productivity', transport: 'http', description: 'Каналы и сообщения Slack.', docs: 'https://docs.slack.dev/ai/slack-mcp-server', url: 'https://mcp.slack.com/mcp' },
+  { id: 'sentry', title: 'Sentry', category: 'dev', transport: 'http', description: 'Ошибки и релизы приложений.', docs: 'https://mcp.sentry.dev/', url: 'https://mcp.sentry.dev/mcp' },
+]);
+
 // Сколько записей в каждой категории — для фильтра в окне.
 const CATEGORY_COUNTS = new Map(CATEGORIES.map((category) => [category.id, 0]));
 for (const entry of CATALOG) CATEGORY_COUNTS.set(entry.category, CATEGORY_COUNTS.get(entry.category) + 1);
@@ -615,6 +625,7 @@ function toServerConfig(entryOrId) {
 module.exports = {
   CATALOG,
   CATEGORIES,
+  FEATURED,
   validateCatalog,
   listCatalog,
   catalogCategories,

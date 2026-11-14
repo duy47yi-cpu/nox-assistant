@@ -32,12 +32,12 @@ function makeStore(t, options = {}) {
 }
 
 test('история: новые записи сверху, всё сохраняется и читается другим экземпляром', (t) => {
-  const { dir, file, store } = makeStore(t);
+  const { dir, file, store, clock } = makeStore(t);
   assert.equal(store.add({ text: 'первый' }).ok, true);
   assert.equal(store.add({ text: 'второй' }).ok, true);
   assert.deepEqual(store.list().map((item) => item.text), ['второй', 'первый']);
 
-  const second = new ClipboardHistoryStore(file);
+  const second = new ClipboardHistoryStore(file, { now: () => clock.now });
   assert.deepEqual(second.list().map((item) => item.text), ['второй', 'первый']);
   const leftovers = fs.readdirSync(dir).filter((name) => name.endsWith('.tmp'));
   assert.deepEqual(leftovers, []);

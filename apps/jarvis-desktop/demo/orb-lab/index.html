@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Сферы Nox — демо</title>
+<link rel="stylesheet" href="orb-lab.css">
+</head>
+<body>
+<header class="top"><a class="brand" href="./index.html" aria-label="Сферы Nox, на главную демо"><span class="mark" aria-hidden="true"></span>NOX <span class="slash">/</span> Лаборатория сфер</a><span class="demo">Демо · не подключено к приложению</span></header>
+<main>
+<section class="workbench" aria-label="Демонстрация новой сферы">
+<div class="stage" id="stage" role="img" aria-label="Поток: сфера готова">
+<canvas id="orb" aria-hidden="true"></canvas>
+<div class="stage-label"><span class="live" aria-hidden="true"></span><span id="stateLabel">Готов</span></div>
+<span class="measure" aria-hidden="true">N / 01</span>
+</div>
+<aside class="panel">
+<p class="eyebrow">Три направления</p>
+<h1 id="variantTitle">Поток</h1>
+<p id="variantDescription" class="description">Световые нити огибают объём. Направление света и глубина важнее свечения.</p>
+<div class="choices" role="group" aria-label="Вид сферы">
+<button class="choice selected" data-variant="flux" aria-pressed="true"><span class="number">01</span><span><strong>Поток</strong><small>Свет и глубина</small></span><span class="arrow" aria-hidden="true">↗</span></button>
+<button class="choice" data-variant="membrane" aria-pressed="false"><span class="number">02</span><span><strong>Мембрана</strong><small>Живая поверхность</small></span><span class="arrow" aria-hidden="true">↗</span></button>
+<button class="choice" data-variant="resonance" aria-pressed="false"><span class="number">03</span><span><strong>Резонанс</strong><small>Светящаяся структура</small></span><span class="arrow" aria-hidden="true">↗</span></button>
+</div>
+<p class="note">Оригинальный интерфейс и его сферы не изменены</p>
+</aside>
+</section>
+<section class="controls" aria-label="Настройки демо">
+<div class="states"><span class="control-label">Состояние</span><div class="state-buttons" role="group" aria-label="Состояние сферы"><button class="selected" data-state="idle" aria-pressed="true">Готов</button><button data-state="listening" aria-pressed="false">Слушает</button><button data-state="thinking" aria-pressed="false">Думает</button><button data-state="speaking" aria-pressed="false">Отвечает</button><button data-state="success" aria-pressed="false">Готово</button><button data-state="error" aria-pressed="false">Ошибка</button></div></div>
+<div class="sliders">
+<label>Сила движения <output id="motionValue">70%</output><input id="motion" type="range" min="0" max="130" value="70" step="5"></label>
+<label>Свет <output id="lightValue">100%</output><input id="light" type="range" min="40" max="140" value="100" step="5"></label>
+</div>
+<div class="utility"><button id="voice" class="text-button" aria-pressed="false">Показать отклик голоса</button><button id="reduce" class="text-button" aria-pressed="false">Меньше движения</button><button id="pause" class="icon-button" aria-label="Пауза" aria-pressed="false">Ⅱ</button></div>
+</section>
+<footer><span>Локальный концепт · три ролика — только референс формы</span><span>Состояние всегда подписано, не только цветом</span></footer>
+</main>
+<script src="orb-lab.js"></script>
+<script src="demo.js"></script>
+</body>
+</html>

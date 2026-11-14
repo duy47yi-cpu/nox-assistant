@@ -17,6 +17,7 @@ function youtubeTools(urlOpen, { find = findYoutubeCandidates, notePlay = null }
       properties: {
         query: { type: 'string', minLength: 1, maxLength: 200 },
         start: { type: 'integer', minimum: 0, maximum: 86400 },
+        mood: { type: 'boolean' },
       },
       required: ['query'],
     },
@@ -25,8 +26,9 @@ function youtubeTools(urlOpen, { find = findYoutubeCandidates, notePlay = null }
       const query = String((args && args.query) || '').trim();
       if (!query) return { ok: false, summary: 'пустой запрос', data: {} };
       const start = Number.isInteger(args.start) && args.start > 0 ? args.start : null;
+      const mood = Boolean(args && args.mood === true);
       const candidates = await find(query);
-      const pick = chooseVideo(query, candidates);
+      const pick = chooseVideo(query, candidates, { mood });
       if (!pick.video) {
         // Видео не нашли: открываем страницу поиска, секунду туда не передать.
         const url = SERVICES.youtube.url(query);

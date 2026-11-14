@@ -140,7 +140,7 @@
       titleWrap.append(icon(highRisk ? 'alert' : 'shield', 'ae-approval-ico'));
       const titleEl = document.createElement('strong');
       titleEl.className = 'ae-approval-title';
-      titleEl.textContent = scrub(item.actionTitle || toolTitle(item.tool) || 'Требуется подтверждение');
+      titleEl.textContent = scrub(item.actionTitle || toolTitle(item.tool || item.name) || 'Требуется подтверждение');
       titleWrap.append(titleEl);
 
       const meta = document.createElement('div');

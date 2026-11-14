@@ -33,3 +33,18 @@ test('без содержимого презентацию не собираем
 test('проверка не принимает не-архив', () => {
   assert.equal(pptxCheck(Buffer.from('не презентация'), 1).ok, false);
 });
+
+test('презентация поддерживает обложку с подзаголовком, содержание и карточки', () => {
+  const deck = pptxBuffer({ title: 'Стрелец A*', subtitle: 'Центр Млечного Пути', slides: [
+    { title: 'Содержание', layout: 'agenda', bullets: ['Что наблюдаем', 'Как измеряем'] },
+    { title: 'Сравнение', layout: 'cards', bullets: ['Масса: в единицах Солнца', 'Радиус: от горизонта событий'] },
+  ] });
+  const files = readZip(deck);
+  const slide = (n) => files.get(`ppt/slides/slide${n}.xml`).toString('utf8');
+  assert.equal(pptxCheck(deck, 3).ok, true);
+  assert.match(slide(1), /Центр Млечного Пути/);
+  assert.match(slide(2), /02   /);
+  assert.match(slide(2), /2 \/ 3/);
+  assert.equal((slide(3).match(/prst="roundRect"/g) || []).length, 2);
+  assert.match(slide(3), /в единицах Солнца/);
+});

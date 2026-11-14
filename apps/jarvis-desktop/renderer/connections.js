@@ -63,40 +63,12 @@
     return el('span', { class: 'mcp-popular-icon', 'data-brand': brand ? id : null, 'aria-hidden': 'true' }, art);
   }
 
-  const ACCOUNT_SERVICES = [
-    { id: 'github', title: 'GitHub', guide: 'https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md' },
-    { id: 'gitlab', title: 'GitLab', guide: 'https://docs.gitlab.com/user/model_context_protocol/mcp_server/' },
-    { id: 'gmail', title: 'Gmail', mail: true },
-  ];
   let mail = null;
   let mailConnecting = false;
 
-  // Сервисы из каталога, которым нужен ключ, вход или которые не проверены в работе.
-  // Честное состояние: «Добавить» недоступно, в строке написано, чего не хватает.
-  const POPULAR_UNAVAILABLE = [
-    { id: 'slack', title: 'Slack', hint: 'Сообщения и каналы Slack', reason: 'Нужен ключ SLACK_BOT_TOKEN: добавьте вручную' },
-    { id: 'gdrive', title: 'Google Диск', hint: 'Файлы Google Диска', reason: 'Нужен вход Google и Python-запуск (uvx), не проверено' },
-  ];
-  // Порядок как в утверждённом макете: доступные и требующие настройки вперемешку.
-  const POPULAR_ORDER = ['github', 'gitlab', 'gmail', 'playwright', 'context7', 'slack', 'gdrive', 'filesystem', 'puppeteer', 'memory', 'postgres', 'sequential-thinking'];
-  const POPULAR_GROUPS = {
-    filesystem: 'files',
-    memory: 'files',
-    puppeteer: 'dev',
-    playwright: 'dev',
-    context7: 'dev',
-    'sequential-thinking': 'dev',
-    postgres: 'other',
-    slack: 'other',
-    github: 'dev',
-    gitlab: 'dev',
-    gmail: 'other',
-    gdrive: 'other',
-  };
   const POPULAR_CATS = [
     { id: 'all', title: 'Все' },
-    { id: 'files', title: 'Файлы', full: 'Файлы и память' },
-    { id: 'dev', title: 'Разработка', full: 'Разработка и браузер' },
+    { id: 'dev', title: 'Разработка' },
     { id: 'other', title: 'Прочее', full: 'Прочее' },
   ];
 
@@ -951,15 +923,16 @@
     if (verifiedCatalog === null) return [];
     return verifiedCatalog.map((entry) => ({
       id: entry.id, title: entry.title, hint: entry.description,
-      available: false, reason: entry.envKeys.length
-        ? 'Для подключения требуется настройка доступа.'
-        : 'Для подключения требуется установка и настройка сервера.',
-      guide: entry.docs || null, category: entry.category,
+      available: entry.ready === true,
+      mail: entry.integration === 'mail',
+      target: entry.url,
+      reason: entry.accountKey ? `Укажите ${entry.accountKey} в настройке сборки.` : 'Требуется настройка доступа.',
+      guide: entry.ready ? null : entry.docs || null, category: entry.category,
     }));
   }
 
   function popularMatches(item) {
-    if (STATE.popularCat !== 'all' && (POPULAR_GROUPS[item.id] || ({ files: 'files', git: 'dev', dev: 'dev', browser: 'dev' })[item.category] || 'other') !== STATE.popularCat) return false;
+    if (STATE.popularCat !== 'all' && (['git', 'dev'].includes(item.category) ? 'dev' : 'other') !== STATE.popularCat) return false;
     const q = STATE.q.trim().toLowerCase();
     if (!q) return true;
     return [item.id, item.title, item.hint, item.reason || ''].join(' ').toLowerCase().includes(q);
@@ -1162,7 +1135,7 @@
     try {
       const state = await api.mcpState();
       LOAD_ERROR = '';
-      verifiedCatalog = Array.isArray(state?.catalog) ? state.catalog.filter((entry) => entry.verified === true) : null;
+      verifiedCatalog = Array.isArray(state?.catalog) ? state.catalog : null;
       paint((state && state.servers) || []);
       if (!mailConnecting) void loadPopularMail(api);
     } catch (err) {

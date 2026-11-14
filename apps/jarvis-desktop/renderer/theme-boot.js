@@ -5,7 +5,7 @@
   'use strict';
 
   const IDS = ['signal', 'dark', 'light', 'graphite', 'lime', 'paper', 'forest', 'wine', 'cobalt', 'aurora', 'ember', 'dawn', 'glass',
-    'liquid', 'liquidday', 'frost', 'gradient', 'gradientday', 'midnight', 'neon', 'starry', 'moonlight', 'sunrise', 'blue-hour', 'eclipse', 'system'];
+    'liquid', 'liquidday', 'frost', 'gradient', 'gradientday', 'midnight', 'neon', 'starry', 'moonlight', 'sunrise', 'blue-hour', 'eclipse', 'malachite', 'copper', 'porcelain', 'system'];
   const resolve = (id) => {
     // Убранные темы (archive, tablet, acrylic и их дневные) и мусор тихо открывают «Ночь».
     if (id !== 'system') return IDS.includes(id) ? id : 'signal';
@@ -14,7 +14,7 @@
   const apply = (id) => { document.documentElement.dataset.theme = resolve(id); applyAccent(); applyFx(); };
 
   // Цвета акцента: на тёмных темах светлее, на светлых темнее, чтобы текст и значки акцентом читались (от 4,5:1).
-  const LIGHT_THEMES = ['light', 'lime', 'paper', 'dawn', 'liquidday', 'frost', 'gradientday'];
+  const LIGHT_THEMES = ['light', 'lime', 'paper', 'dawn', 'liquidday', 'frost', 'gradientday', 'porcelain'];
   const ACCENTS = [
     { id: 'theme', name: 'Как в теме' },
     { id: 'blue', name: 'Синий', dark: '#6AA6FF', light: '#2554C7' },
@@ -63,7 +63,7 @@
     const dark = backs.reduce((s, b) => s + luminance(b), 0) / backs.length < 0.4;
     const target = dark ? [255, 255, 255] : [0, 0, 0];
     for (let i = 1; i <= 20; i++) {
-      const c = rgb.map((v, j) => v + (target[j] - v) * (i / 20));
+      const c = rgb.map((v, j) => Math.round(v + (target[j] - v) * (i / 20)));
       if (ok(c)) return rgbToHex(c);
     }
     return rgbToHex(target);
@@ -123,6 +123,7 @@
       bahn: ['Bahnschrift', `"Bahnschrift", ${SANS}`],
       candara: ['Candara', `"Candara", ${SANS}`],
       century: ['Century Gothic', `"Century Gothic", ${SANS}`],
+      plex: ['IBM Plex Serif', `"IBM Plex Serif"${SERIF_END}`],
       book: ['Книжный Sitka', `"Sitka Text", "Sitka Small"${SERIF_END}`],
       times: ['Классический (Times New Roman)', `"Times New Roman", "Liberation Serif", Georgia, serif`],
     },
@@ -200,9 +201,9 @@
     if (headStack) r.style.setProperty('--font-head', headStack);
     else r.style.removeProperty('--font-head');
     if (look.reply === 'theme') r.style.removeProperty('--font-reply');
-    else if (look.reply === 'ui') r.style.setProperty('--font-reply', uiStack || 'var(--font)');
-    else if (headStack) r.style.setProperty('--font-reply', headStack);
-    else r.style.removeProperty('--font-reply');
+    else r.style.setProperty('--font-reply', look.reply === 'ui' ? (uiStack || 'var(--font)') : (headStack || 'var(--font-head)'));
+    if (look.reply === 'theme') r.style.removeProperty('--ae-answer-font');
+    else r.style.setProperty('--ae-answer-font', 'var(--font-reply)');
     const k = (SIZES[look.size] || SIZES.m)[1];
     for (const [key, px] of Object.entries(FS)) r.style.setProperty(`--fs-${key}`, `${Math.round(px * k * 2) / 2}px`);
     const q = (ROUNDS[look.round] || ROUNDS.m)[1];

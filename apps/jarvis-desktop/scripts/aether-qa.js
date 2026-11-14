@@ -21,7 +21,7 @@ if (!electron || typeof electron !== 'object' || !electron.app || typeof electro
   process.exit(1);
 }
 
-const { app, globalShortcut } = electron;
+const { app, globalShortcut, shell } = electron;
 
 const APP_DIR = path.resolve(__dirname, '..');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -108,6 +108,39 @@ globalShortcut.unregisterAll = () => {};
 
 // ── Локальный OpenAI-совместимый SSE-сервер (без внешней сети) ────────
 let qaErrorAttempts = 0;
+let qaClockRequests = 0;
+const openedPresentations = [];
+const openedSources = [];
+shell.openExternal = async (url) => { openedSources.push(url); };
+const originalFetch = globalThis.fetch;
+globalThis.fetch = (input, options) => {
+  const address = new URL(input);
+  if (address.hostname === 'icons.duckduckgo.com') {
+    if (address.pathname.includes('example.net')) return Promise.resolve(new Response(''));
+    if (has('live-source-icons')) return originalFetch(input, options);
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAeUlEQVR4nGNkwAIUa/L+YxO/3zKJEV2MiVjNuOQYidGIzzVMDBQCJnJsR9bDiE/zveaJYFqpNh+/C/BpRmcTZcA9LBpwGcLEQCFgwiaIzc+4woEJl8nIGvAFIiO50QhLTEwwBjmaQTTFgYhhMyHvoLsWwwX4vINNDgCCdzEmO/zWegAAAABJRU5ErkJggg==';
+    return Promise.resolve(new Response(Buffer.from(png, 'base64')));
+  }
+  const fixture = /^qa-sources-(\d+)-(\d+)$/.exec(address.searchParams.get('q') || '');
+  if (address.hostname !== 'html.duckduckgo.com' || !fixture) return originalFetch(input, options);
+  const count = Math.min(Number(fixture[1]), 5);
+  const group = Number(fixture[2]);
+  const hosts = ['github.com', 'ru.wikipedia.org', 'example.net'];
+  const rows = Array.from({ length: count }, (_, i) => {
+    const link = `https://${hosts[i % hosts.length]}/nox-qa/${group * 5 + i + 1}`;
+    const title = i ? `Источник ${group * 5 + i + 1}` : 'Длинное название страницы '.repeat(9);
+    return `<a class="result__a" href="${link}">${title}</a><a class="result__snippet">Фрагмент</a>`;
+  });
+  return Promise.resolve(new Response(rows.join('')));
+};
+const originalOpenPath = shell.openPath.bind(shell);
+shell.openPath = (file) => {
+  if (file === path.join(workspaceDir, 'qa-astronomy.pptx')) {
+    openedPresentations.push(file);
+    return Promise.resolve('');
+  }
+  return originalOpenPath(file);
+};
 
 function sendCompletion(res, body, chunks, delayMs, finishReason = 'stop') {
   if (!body.stream) {
@@ -185,8 +218,55 @@ function startQaBrainServer() {
         const lastUser = [...messages].reverse().find((m) => m && m.role === 'user');
         const lastRole = messages.length ? messages[messages.length - 1].role : '';
         const text = String((lastUser && lastUser.content) || '');
+        if (/который час/i.test(text)) qaClockRequests += 1;
         console.error('[qa-brain]', req.method, req.url, 'stream=', Boolean(body.stream), 'lastRole=', lastRole, 'user=', text.slice(0, 60));
 
+        const sourceFixture = /Проверка ссылок (0|1|5|20)\b/.exec(text);
+        if (sourceFixture) {
+          const count = Number(sourceFixture[1]);
+          if (lastRole !== 'tool') {
+            const tool_calls = Array.from({ length: count === 20 ? 4 : 1 }, (_, i) => ({
+              index: i,
+              id: `qa_search_${i}`,
+              type: 'function',
+              function: { name: 'web_search', arguments: JSON.stringify({ query: `qa-sources-${count}-${i}` }) },
+            }));
+            sendCompletion(res, body, [{ tool_calls }], 10, 'tool_calls');
+          } else {
+            sendCompletion(res, body, [{ content: `Результат проверки ${count}. [Ссылка в тексте](https://example.org/model-only)` }], 10);
+          }
+          return;
+        }
+
+        if (/проверка появления ответа/i.test(text)) {
+          await sleep(3500);
+          sendCompletion(res, body, [
+            { content: '**Сначала вывод.**' },
+            { content: '\n\nЗатем короткое пояснение.\n\n$$\\frac{3}{5}+\\frac{1}{4}=\\frac{17}{20}$$\n\n**Ответ: $0{,}85$.**\n\n* Оговорка с *курсивом*.' },
+          ], 1200);
+          return;
+        }
+        if (/Стрелец A\*/i.test(text)) {
+          sendCompletion(res, body, [{ content: 'Стрелец A* — сверхмассивная чёрная дыра в центре Млечного Пути.' }], 10);
+          return;
+        }
+        if (/презентацию об этом/i.test(text)) {
+          const prior = messages.some((m) => m.role === 'assistant' && typeof m.content === 'string' && m.content.includes('Стрелец A*'));
+          const lastTool = [...messages].reverse().find((m) => m.role === 'tool');
+          const call = (name, args) => sendCompletion(res, body, [{
+            tool_calls: [{ index: 0, id: `qa_${name}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }],
+          }], 15, 'tool_calls');
+          if (!prior) { sendCompletion(res, body, [{ content: 'Не вижу тему.' }], 10); return; }
+          if (lastRole !== 'tool') {
+            call('document_write', { path: 'qa-astronomy.pptx', format: 'pptx', title: 'Стрелец A*',
+              slides: [{ title: 'Где находится', bullets: ['Центр Млечного Пути'] }] });
+          } else if (lastTool?.tool_call_id === 'qa_document_write') {
+            call('presentation_open', { path: 'qa-astronomy.pptx' });
+          } else {
+            sendCompletion(res, body, [{ content: 'Создан файл qa-astronomy.pptx: 2 слайда. Проверка открытия показана ниже.' }], 10);
+          }
+          return;
+        }
         // Тест ошибки и восстановления по кнопке «Повторить»
         if (/ошибку модели/i.test(text)) {
           qaErrorAttempts += 1;
@@ -214,8 +294,8 @@ function startQaBrainServer() {
             ], 20, 'tool_calls');
             return;
           }
-          // Небольшая пауза, чтобы QA успел снять живую строку состояния во время хода
-          await sleep(1100);
+          // Оставляем время увидеть несколько циклов блика после работы инструмента.
+          await sleep(4000);
           sendCompletion(res, body, [
             { content: 'Проверил рабочую папку: внутри найдены файлы `plan.txt` и `notes.md`. Все подробности и список шагов убраны в блок под ответом.' },
           ], 15);
@@ -225,7 +305,7 @@ function startQaBrainServer() {
         // Запись файла в режиме ask -> вызывает R3-01 подтверждение
         if (/запиши заметку/i.test(text)) {
           if (lastRole !== 'tool') {
-            const args = JSON.stringify({ path: 'qa-check.txt', content: 'Проверка подтверждения R3-01 в Nox Aether.\n' });
+            const args = JSON.stringify({ path: /qa-stop/i.test(text) ? 'qa-stop.txt' : 'qa-check.txt', content: 'Проверка подтверждения R3-01 в Nox Aether.\n' });
             sendCompletion(res, body, [
               {
                 tool_calls: [{
@@ -305,10 +385,10 @@ async function setViewport(win, width, height) {
   await settle(win, 180);
 }
 
-async function shot(win, fileName) {
+async function shot(win, fileName, rect) {
   try { win.showInactive(); } catch { /* visible */ }
   await settle(win, 120);
-  const img = await win.webContents.capturePage();
+  const img = rect ? await win.webContents.capturePage(rect) : await win.webContents.capturePage();
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const filePath = path.join(OUT_DIR, fileName);
   fs.writeFileSync(filePath, img.toPNG());
@@ -413,7 +493,16 @@ async function runQa(win) {
   await setViewport(win, 1200, 720);
   const navCheck = await js(win, `(() => {
     const topText = document.querySelector('#aeTopbar').innerText;
-    const labels = [...document.querySelectorAll('#aeTopbar .ae-nav-btn')].filter((b) => b.offsetParent !== null).map((b) => b.innerText.trim());
+    const tabs = [...document.querySelectorAll('#aeTopbar .ae-nav-btn')].filter((b) => b.offsetParent !== null);
+    const labels = tabs.map((b) => b.title);
+    const history = document.querySelector('#aeHistoryToggle');
+    const account = document.querySelector('#aeAccountTrigger');
+    const historyRect = history.getBoundingClientRect();
+    const accountRect = account.getBoundingClientRect();
+    tabs[0]?.focus();
+    tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    const arrowMovesFocus = document.activeElement === tabs[1];
+    document.querySelector('#chatInput')?.focus();
     const chat = document.querySelector('#noxChat');
     const cr = chat.getBoundingClientRect();
     const cmp = document.querySelector('#aeComposer').getBoundingClientRect();
@@ -421,6 +510,11 @@ async function runQa(win) {
     const overflow = document.documentElement.scrollWidth > window.innerWidth + 1;
     return {
       labels,
+      historyInTopbar: Boolean(history.closest('#aeTopbar')),
+      historyAboveAccount: history.closest('.ae-utility-rail') === account.closest('.ae-utility-rail')
+        && Math.abs(historyRect.left + historyRect.width / 2 - accountRect.left - accountRect.width / 2) < 1
+        && historyRect.bottom <= accountRect.top && accountRect.bottom > window.innerHeight - 24,
+      arrowMovesFocus,
       hasLegacyGarbage: /Разговор|Поровну|Присутствие|Демо-данные/.test(topText),
       isEmpty: chat.classList.contains('is-empty'),
       composerCentered: cmp.top < cr.top + cr.height * 0.72,
@@ -429,20 +523,25 @@ async function runQa(win) {
       sig: document.querySelector('.ae-orb-signature')?.textContent.trim(),
     };
   })()`);
-  push('topbar-clean-5-items', !navCheck.hasLegacyGarbage && navCheck.labels.length === 5, navCheck);
+  push('topbar-clean-5-items', !navCheck.hasLegacyGarbage && navCheck.labels.length === 5 && !navCheck.historyInTopbar && navCheck.arrowMovesFocus, navCheck);
+  push('history-above-account', navCheck.historyAboveAccount, navCheck);
   push('empty-chat-centered-and-orb-1200', navCheck.isEmpty && navCheck.composerCentered && navCheck.orbOk && !navCheck.overflow && navCheck.sig === 'The Nox', navCheck);
   shots.push(await shot(win, '01-empty-1200x720.png'));
 
   await setViewport(win, 864, 520);
   const narrowEmpty = await js(win, `(() => ({
     overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-    overflowTriggerVisible: document.querySelector('.ae-overflow-trigger')?.offsetParent !== null,
+    tabsFit: [...document.querySelectorAll('#aeTopbar .ae-nav-btn')].length === 5
+      && [...document.querySelectorAll('#aeTopbar button')].filter((b) => b.offsetParent !== null).every((b) => {
+        const rect = b.getBoundingClientRect();
+        return rect.width > 0 && rect.left >= 0 && rect.right <= window.innerWidth && rect.top >= 0 && rect.bottom <= 44;
+      }),
     isEmpty: document.querySelector('#noxChat').classList.contains('is-empty'),
     orbW: Math.round(document.querySelector('#aeOrbCanvas').getBoundingClientRect().width),
     cmpBottom: Math.round(document.querySelector('#aeComposer').getBoundingClientRect().bottom),
     winH: window.innerHeight,
   }))()`);
-  push('empty-chat-narrow-864', !narrowEmpty.overflow && narrowEmpty.overflowTriggerVisible && narrowEmpty.isEmpty && narrowEmpty.orbW > 50 && narrowEmpty.cmpBottom <= narrowEmpty.winH, narrowEmpty);
+  push('empty-chat-narrow-864', !narrowEmpty.overflow && narrowEmpty.tabsFit && narrowEmpty.isEmpty && narrowEmpty.orbW > 50 && narrowEmpty.cmpBottom <= narrowEmpty.winH, narrowEmpty);
   shots.push(await shot(win, '01-empty-864x520.png'));
 
   // ── 2. Проверка выбора модели/обдумывания (границы и отсутствие утечек названий) ──
@@ -482,6 +581,154 @@ async function runQa(win) {
   }))()`);
   push('first-send-focus-and-dock', focusKeep.activeSame && focusKeep.docked && afterGreeting.docked && afterGreeting.turns >= 2 && afterGreeting.inputCleared && afterGreeting.answer.includes('Готов помочь'), { focusKeep, afterGreeting });
   shots.push(await shot(win, '02-dialog-1200x720.png'));
+
+  const cdp = win.webContents.debugger;
+  if (!cdp.isAttached()) cdp.attach('1.3');
+  const setReducedMotion = (value) => cdp.sendCommand('Emulation.setEmulatedMedia', {
+    features: value ? [{ name: 'prefers-reduced-motion', value }] : [],
+  });
+  await setReducedMotion('no-preference');
+  await js(win, `(() => {
+    const root = document.documentElement;
+    window.__qaReplyLook = { theme: root.dataset.theme, motion: root.dataset.motion };
+    root.dataset.theme = 'signal';
+    root.dataset.motion = 'off';
+  })()`);
+  await sendText(win, 'Проверка появления ответа');
+  const replyPreparing = await waitUntil(() => js(win, `(() => {
+    const live = document.querySelector('#feed .is-live');
+    if (live?.querySelector('.ae-reply-author')?.textContent === 'Nox' &&
+      live.querySelector('.ae-reply-thinking[role="status"]')?.textContent === 'Думаю...' &&
+      !live.querySelector('.ae-assistant-body') && live.querySelector('.ae-msg-copy:disabled') &&
+      document.querySelector('.ae-live-line').hidden) {
+      window.__qaReplyUser = live.previousElementSibling;
+      window.__qaReplyAuthor = live.querySelector('.ae-reply-author');
+      window.__qaReplyContent = live.querySelector('.ae-reply-content');
+      return true;
+    }
+    return false;
+  })()`), 6000, 50);
+  if (replyPreparing) shots.push(await shot(win, '02b-reply-preparing.png'));
+  const thinkingMotion = await js(win, `(() => {
+    const status = document.querySelector('.ae-reply-thinking');
+    const label = status?.querySelector('.ae-reply-thinking-label');
+    const dots = status?.querySelector('.ae-reply-dots');
+    const steps = dots?.getAnimations().find((a) => a.animationName === 'aeReplyDots');
+    const shimmer = label?.getAnimations().find((a) => a.animationName === 'aeReplyShimmer');
+    if (!steps || !shimmer) return {
+      frames: [],
+      motion: document.documentElement.dataset.motion,
+      animations: document.documentElement.dataset.animations,
+      reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    };
+    steps.pause();
+    shimmer.pause();
+    const frames = [0, 500, 950].map((time) => {
+      steps.currentTime = time;
+      shimmer.currentTime = time;
+      return {
+        clip: getComputedStyle(dots).clipPath,
+        light: getComputedStyle(label).backgroundPosition,
+        width: dots.getBoundingClientRect().width,
+      };
+    });
+    steps.play();
+    shimmer.play();
+    return {
+      frames,
+      confirmed: new Set(frames.map((f) => f.clip)).size === 3 &&
+        new Set(frames.map((f) => f.light)).size === 3 &&
+        new Set(frames.map((f) => f.width)).size === 1 &&
+        getComputedStyle(label).backgroundClip === 'text' &&
+        document.documentElement.dataset.motion === 'off' &&
+        document.documentElement.dataset.theme === 'signal',
+    };
+  })()`);
+  const labelRect = await js(win, `(() => {
+    const rect = document.querySelector('.ae-reply-thinking-label')?.getBoundingClientRect();
+    return rect ? { x: Math.floor(rect.x), y: Math.floor(rect.y), width: Math.ceil(rect.width), height: Math.ceil(rect.height) } : null;
+  })()`);
+  let changedLetterPixels = 0;
+  if (thinkingMotion.confirmed && labelRect) {
+    const pixels = [];
+    for (const [idx, time] of [0, 510, 900].entries()) {
+      await js(win, `(() => {
+        const label = document.querySelector('.ae-reply-thinking-label');
+        const dots = document.querySelector('.ae-reply-dots');
+        for (const animation of [...label.getAnimations(), ...dots.getAnimations()]) {
+          animation.pause();
+          animation.currentTime = ${time};
+        }
+      })()`);
+      await settle(win, 40);
+      pixels.push((await win.webContents.capturePage(labelRect)).toBitmap());
+      shots.push(await shot(win, `02b-thinking-close-${idx + 1}.png`, {
+        x: labelRect.x - 3, y: labelRect.y - 21, width: 115, height: 78,
+      }));
+    }
+    for (let i = 0; i < pixels[0].length; i += 4) {
+      const level = pixels.map((frame) => (frame[i] + frame[i + 1] + frame[i + 2]) / 3);
+      if (Math.max(...level) - Math.min(...level) >= 24) changedLetterPixels += 1;
+    }
+  }
+  await setReducedMotion('reduce');
+  const staticThinking = await js(win, `(() => {
+    const status = document.querySelector('.ae-reply-thinking');
+    return status?.textContent === 'Думаю...' &&
+      status.getAnimations({ subtree: true }).length === 0 &&
+      getComputedStyle(status.firstElementChild).backgroundImage === 'none';
+  })()`);
+  await setReducedMotion('no-preference');
+  const staticWithAnimationsOff = await js(win, `(() => {
+    const root = document.documentElement;
+    const previous = root.dataset.animations;
+    root.dataset.animations = 'off';
+    const status = document.querySelector('.ae-reply-thinking');
+    const still = status?.textContent === 'Думаю...' && status.getAnimations({ subtree: true }).length === 0;
+    root.dataset.animations = previous;
+    return still;
+  })()`);
+  await setReducedMotion('');
+  await js(win, 'Object.assign(document.documentElement.dataset, window.__qaReplyLook)');
+  const replyStreaming = await waitUntil(() => js(win, `(() => {
+    const live = document.querySelector('#feed .is-live');
+    return live?.querySelector('.ae-reply-author')?.textContent === 'Nox' &&
+      !live.querySelector('.ae-reply-thinking') && live.querySelector('.ae-msg-copy:not(:disabled)') &&
+      live.querySelector('.ae-assistant-body strong')?.textContent === 'Сначала вывод.' &&
+      live.querySelector('.ae-reply-author') === window.__qaReplyAuthor &&
+      live.querySelector('.ae-reply-content') === window.__qaReplyContent &&
+      live.previousElementSibling === window.__qaReplyUser;
+  })()`), 6000, 50);
+  if (replyStreaming) shots.push(await shot(win, '02c-reply-streaming.png'));
+  await waitIdle(win);
+  const replyFinished = await js(win, `(() => {
+    const last = [...document.querySelectorAll('#feed .is-assistant')].at(-1);
+    return !document.querySelector('#feed .ae-reply-thinking') &&
+      last?.querySelector('.ae-reply-author')?.textContent === 'Nox' &&
+      last.querySelector('.ae-reply-author') === window.__qaReplyAuthor &&
+      last.querySelector('.ae-reply-content') === window.__qaReplyContent &&
+      last.querySelector('.ae-assistant-body')?.textContent.includes('Затем короткое пояснение.') &&
+      last.querySelectorAll('.math-block .m-frac').length === 3 &&
+      last.querySelector('strong .math')?.textContent === '0,85' &&
+      last.querySelector('.md-footnote em')?.textContent === 'курсивом' &&
+      last.querySelector('.ae-msg-copy')?.previousElementSibling === window.__qaReplyContent &&
+      getComputedStyle(last.querySelector('.m-den')).borderTopWidth === '1px';
+  })()`);
+  push('reply-preparation-stream-and-finish',
+    replyPreparing && thinkingMotion.confirmed && changedLetterPixels >= 15 && staticThinking && staticWithAnimationsOff && replyStreaming && replyFinished,
+    { replyPreparing, thinkingMotion, changedLetterPixels, staticThinking, staticWithAnimationsOff, replyStreaming, replyFinished });
+  if (replyFinished) {
+    const rect = await js(win, `(() => {
+      const box = [...document.querySelectorAll('#feed .ae-reply')].at(-1).getBoundingClientRect();
+      return { x: Math.floor(box.x), y: Math.floor(box.y) - 8, width: 400, height: Math.ceil(box.height) + 16 };
+    })()`);
+    shots.push(await shot(win, '02d-final-reply-close.png', rect));
+  }
+
+  await sendText(win, 'Который час?');
+  await waitIdle(win);
+  const clockText = await js(win, `[...document.querySelectorAll('#feed .ae-assistant-body')].at(-1)?.textContent.trim()`);
+  push('local-clock-answers-without-model', /^\d{2}:\d{2}$/.test(clockText) && qaClockRequests === 0, { clockText, qaClockRequests });
 
   // Черновики между чатами и немедленный docked на существующем чате
   await js(win, `(() => {
@@ -529,13 +776,26 @@ async function runQa(win) {
   shots.push(await shot(win, '03-long-reply-1200x720.png'));
 
   // ── 5. Работа инструментов (не >1 строки живого статуса) + свёрнутые/раскрытые Подробности ──
+  await setReducedMotion('no-preference');
   await sendText(win, 'Проверь файлы папки');
   const liveSeen = await waitUntil(() => js(win, `(() => {
-    const w = document.querySelector('#feed .ae-live-line');
-    return w && w.innerText.trim() ? { count: document.querySelectorAll('#feed .ae-live-line').length, text: w.innerText.trim(), orbState: document.querySelector('#aeOrbStage')?.dataset.state } : null;
+    const live = document.querySelector('#feed .is-live');
+    const text = live?.querySelector('.ae-details-toggle')?.textContent;
+    if (!text?.startsWith('Ход работы · Выполняется · ')) return null;
+    const shimmer = live.querySelector('.ae-reply-thinking-label')?.getAnimations()
+      .find((animation) => animation.animationName === 'aeReplyShimmer');
+    const timing = shimmer?.effect.getComputedTiming();
+    if (!timing || timing.iterations !== Infinity || timing.currentIteration < 2) return null;
+    return {
+      count: live.querySelectorAll('.ae-details-toggle').length,
+      text,
+      dockHidden: document.querySelector('.ae-live-line').hidden,
+      completedCycles: timing.currentIteration,
+    };
   })()`).catch(() => null), 8000, 50);
   if (liveSeen) shots.push(await shot(win, '04-tool-live-1200x720.png'));
   await waitIdle(win, 18000);
+  await setReducedMotion('');
   await settle(win, 180);
   const detailsCheck = await js(win, `(() => {
     const btns = [...document.querySelectorAll('#feed .ae-details-toggle')];
@@ -544,6 +804,9 @@ async function runQa(win) {
     const msg = lastBtn.closest('.ae-msg.is-assistant');
     const msgId = msg ? msg.dataset.id : '';
     const collapsedBefore = lastBtn.getAttribute('aria-expanded') === 'false';
+    const finalStatus = lastBtn.textContent;
+    const beforeReply = lastBtn.closest('.ae-details-wrap') === msg.firstElementChild;
+    const finishedReply = Boolean(msg.querySelector('.ae-assistant-body')) && !msg.querySelector('.ae-reply-thinking');
     lastBtn.focus();
     lastBtn.click();
     const afterMsg = msgId
@@ -553,9 +816,11 @@ async function runQa(win) {
     const expandedAfter = Boolean(afterBtn && afterBtn.getAttribute('aria-expanded') === 'true');
     const focusPreserved = Boolean(afterBtn && document.activeElement === afterBtn);
     const drawer = afterMsg ? afterMsg.querySelector('.ae-details-panel') : null;
-    return { found: true, collapsedBefore, expandedAfter, focusPreserved, drawerText: drawer ? drawer.innerText.trim().slice(0, 120) : '' };
+    return { found: true, collapsedBefore, expandedAfter, focusPreserved, finalStatus, beforeReply, finishedReply, drawerText: drawer ? drawer.innerText.trim().slice(0, 120) : '' };
   })()`);
-  push('tool-work-minimal-noise-and-details', Boolean(liveSeen && liveSeen.count <= 1 && detailsCheck.found && detailsCheck.collapsedBefore && detailsCheck.expandedAfter && detailsCheck.focusPreserved), { liveSeen, detailsCheck });
+  push('tool-work-minimal-noise-and-details', Boolean(liveSeen && liveSeen.count === 1 && liveSeen.dockHidden &&
+    detailsCheck.finishedReply && detailsCheck.found && detailsCheck.beforeReply && /^Ход работы · Готово · /.test(detailsCheck.finalStatus) &&
+    detailsCheck.collapsedBefore && detailsCheck.expandedAfter && detailsCheck.focusPreserved), { liveSeen, detailsCheck });
   shots.push(await shot(win, '04b-tool-details-open-1200x720.png'));
 
   // ── 6. Ожидание подтверждения R3-01 (ask + workspace_write) на 1200x720 и 864x520 ──
@@ -572,6 +837,7 @@ async function runQa(win) {
       rejectEnabledEarly: rej && !rej.disabled,
       countdown: cd ? cd.textContent.trim() : '',
       preview: prev ? prev.textContent.trim() : '',
+      agentWaiting: dock.previousElementSibling?.dataset.state === 'waiting',
     } : null;
   })()`).catch(() => null), 10000, 35);
   shots.push(await shot(win, '05-approval-1200x720.png'));
@@ -590,7 +856,19 @@ async function runQa(win) {
   await waitIdle(win, 15000);
   await settle(win, 180);
   const fileWritten = fs.existsSync(path.join(workspaceDir, 'qa-check.txt'));
-  push('approval-r301-and-file-write', Boolean(approvalInit && approvalInit.onceDisabledEarly && approvalInit.rejectEnabledEarly && approvalArmed && fileWritten), { approvalInit, approvalArmed, fileWritten });
+  push('approval-r301-and-file-write', Boolean(approvalInit && approvalInit.agentWaiting && approvalInit.onceDisabledEarly && approvalInit.rejectEnabledEarly && approvalArmed && fileWritten), { approvalInit, approvalArmed, fileWritten });
+
+  await sendText(win, 'Запиши заметку qa-stop');
+  const stopReady = await waitUntil(() => js(win, `Boolean(document.querySelector('.ae-live-line:not([hidden])[data-state="waiting"] .ae-live-stop:not(:disabled)') && !document.querySelector('#aeApprovalDock').hidden)`), 10000, 50);
+  if (stopReady) {
+    await js(win, `document.querySelector('.ae-live-stop').click()`);
+    await waitIdle(win, 10000);
+  }
+  const stopPanelClosed = await js(win, `document.querySelector('.ae-live-line').hidden && document.querySelector('#aeApprovalDock').hidden`);
+  const stoppedFileAbsent = !fs.existsSync(path.join(workspaceDir, 'qa-stop.txt'));
+  const stoppedReply = await js(win, `document.querySelector('#feed .ae-reply-stopped')?.textContent === 'Остановлено.'`);
+  push('agent-panel-stop-cancels-approval', stopReady && stopPanelClosed && stoppedFileAbsent && stoppedReply,
+    { stopReady, stopPanelClosed, stoppedFileAbsent, stoppedReply });
 
   // ── 7. Ошибка модели и восстановление кнопкой «Повторить» ──
   await sendText(win, 'Вызови ошибку модели');
@@ -668,6 +946,7 @@ async function runQa(win) {
     if (resetBtn) resetBtn.click();
     const afterReset = window.NoxOrbLibrary.getSettings('jarvis:core');
     if (nonDefaultBtn) nonDefaultBtn.click();
+    document.querySelector('#aeSettingsView [data-section="window"]').click();
     const sel = [...document.querySelectorAll('#aeSettingsView select')].find((s) => [...s.options].some((o) => o.value === 'times'));
     if (sel) {
       sel.value = 'times';
@@ -681,6 +960,107 @@ async function runQa(win) {
     };
   })()`);
   await settle(win, 140);
+  const settingsSearch = await js(win, `(() => {
+    const settings = document.querySelector('#aeSettingsView');
+    const input = settings.querySelector('input[type="search"]');
+    input.focus();
+    const search = (value) => {
+      input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    search('громкость');
+    const foundVoice = settings.innerText.includes('Громкость речи') && document.activeElement === input;
+    search('несуществующий параметр');
+    const noResults = settings.innerText.includes('Настройки не найдены');
+    settings.querySelector('[data-section="window"]').click();
+    const sameCategoryClearsSearch = !input.value && settings.innerText.includes('Шрифт подписи');
+    settings.querySelector('[data-section="appearance"]').click();
+    const searchOnLeft = input.closest('.ae-settings-nav') === settings.querySelector('.ae-settings-nav') &&
+      input.getBoundingClientRect().top < settings.querySelector('[data-section="workshop"]').getBoundingClientRect().top;
+    return { foundVoice, noResults, sameCategoryClearsSearch, searchOnLeft, appearanceVisible: !!settings.querySelector('#aeThemeSelect') };
+  })()`);
+  push('settings-cross-category-search', Object.values(settingsSearch).every(Boolean), settingsSearch);
+  shots.push(await shot(win, '08b-appearance-1200x720.png'));
+  const appearanceChecks = await js(win, `(async () => {
+    const root = document.documentElement;
+    const theme = window.JarvisTheme;
+    const saved = localStorage.getItem('jarvis.theme') || root.dataset.theme;
+    const card = document.querySelector('[data-theme-id="porcelain"]');
+    card.click();
+    const lightPalette = root.dataset.theme === 'porcelain' && card.getAttribute('aria-pressed') === 'true' &&
+      getComputedStyle(root).colorScheme === 'light';
+    const hex = document.querySelector('#aeAccentHex');
+    const submit = (value) => { hex.value = value; hex.form.requestSubmit(); };
+    submit('oops');
+    const rejectedHex = hex.getAttribute('aria-invalid') === 'true';
+    submit('#295443');
+    const appliedHex = theme.getAccent() === '#295443';
+    const choose = (key, value) => {
+      const select = document.querySelector('#aeSettingsView [data-look="' + key + '"]');
+      select.value = value;
+      select.dispatchEvent(new Event('change'));
+    };
+    choose('ui', 'plex');
+    choose('reply', 'ui');
+    const typeApplied = theme.getLook().ui === 'plex' &&
+      getComputedStyle(document.querySelector('.ae-type-sample span')).fontFamily.includes('IBM Plex Serif');
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 2;
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve));
+    const fileInput = document.querySelector('#aeSettingsView input[type="file"]');
+    const files = new DataTransfer();
+    files.items.add(new File([blob], 'qa-background.png', { type: 'image/png' }));
+    fileInput.files = files.files;
+    fileInput.dispatchEvent(new Event('change'));
+    return { saved, lightPalette, rejectedHex, appliedHex, typeApplied };
+  })()`);
+  const { saved, ...appearanceResults } = appearanceChecks;
+  push('appearance-gallery-hex-and-reply-font', Object.values(appearanceResults).every(Boolean), appearanceResults);
+  const backgroundApplied = await waitUntil(() => js(win, `!!document.querySelector('#aeSettingsView [data-look="bgDim"]') && document.documentElement.dataset.bg === 'image'`), 3000);
+  const backgroundControls = backgroundApplied && await js(win, `(() => {
+    const blur = document.querySelector('#aeSettingsView [data-look="bgBlur"]');
+    blur.value = '16';
+    blur.dispatchEvent(new Event('change'));
+    return document.documentElement.style.getPropertyValue('--own-bg-blur') === '16px';
+  })()`);
+  await js(win, `(async () => {
+    await window.NoxBackdrop.clear();
+    window.JarvisTheme.setLook({ bg: 'theme' });
+    document.querySelector('#aeSettingsView [data-section="appearance"]').click();
+  })()`);
+  push('appearance-custom-background-controls', backgroundApplied && backgroundControls, { backgroundApplied, backgroundControls });
+  await settle(win, 120);
+  shots.push(await shot(win, '08c-porcelain-1200x720.png'));
+  const picker = await js(win, `(() => {
+    const select = document.querySelector('#aeThemeSelect');
+    select.focus();
+    select.showPicker();
+    const style = getComputedStyle(select, '::picker(select)');
+    return {
+      open: select.matches(':open'),
+      styled: style.appearance === 'base-select' && style.borderRadius === '9px',
+      themeColor: style.backgroundColor === 'rgb(251, 250, 246)',
+    };
+  })()`);
+  if (picker.open) shots.push(await shot(win, '08e-themed-select-1200x720.png'));
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+  const pickerDismissed = await waitUntil(() => js(win, `!document.querySelector('#aeThemeSelect').matches(':open')`), 2000);
+  push('themed-select-opens-and-dismisses-with-escape', Object.values(picker).every(Boolean) && pickerDismissed, { picker, pickerDismissed });
+  await setViewport(win, 864, 520);
+  const appearsWithoutOverflow = await js(win, `(() => {
+    const el = document.querySelector('#aeSettingsView');
+    return el.scrollWidth <= el.clientWidth + 1;
+  })()`);
+  push('appearance-narrow-no-horizontal-overflow', appearsWithoutOverflow);
+  shots.push(await shot(win, '08d-porcelain-864x520.png'));
+  await setViewport(win, 1200, 720);
+  await js(win, `(() => {
+    window.JarvisTheme.resetToTheme();
+    const select = document.querySelector('#aeThemeSelect');
+    select.value = ${JSON.stringify(saved)};
+    select.dispatchEvent(new Event('change'));
+  })()`);
   // Возврат в Чат с активной сферой Jarvis Ядро -> проверить сцену и шрифт подписи
   await js(win, `document.querySelector('#aeNav_chat').click()`);
   await settle(win, 220);
@@ -729,6 +1109,21 @@ async function runQa(win) {
   await js(win, `document.querySelector('#aeNav_mcp').click()`);
   await settle(win, 220);
   shots.push(await shot(win, '11-mcp-1200x720.png'));
+  const featuredServices = await js(win, `[...document.querySelectorAll('#aeMcpView [data-service]')].map((el) => el.dataset.service)`);
+  push('connections-feature-external-services', featuredServices.slice(0, 4).join(',') === 'github,gmail,linear,notion' &&
+    !featuredServices.some((id) => ['filesystem', 'desktop-commander', 'time', 'evidence-check'].includes(id)), featuredServices);
+  const connectionSearch = await js(win, `(() => {
+    const input = document.querySelector('#aeMcpView input[type="search"]');
+    if (!input) return false;
+    input.focus();
+    input.value = 'test search';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const keepsFocus = document.activeElement === input && input.value === 'test search';
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return keepsFocus;
+  })()`);
+  push('connections-search-keeps-focus', connectionSearch);
 
   await js(win, `document.querySelector('#aeNav_personal').click()`);
   const personalLoaded = await waitUntil(() => js(win, `(() => {
@@ -740,31 +1135,289 @@ async function runQa(win) {
   push('personal-space-desks-loaded', Boolean(personalLoaded && personalLoaded.len > 0), { personalLoaded });
   shots.push(await shot(win, '12-personal-1200x720.png'));
 
-  // ── 11. Узкое окно 864x520: меню «Разделы», наложенная история, Мастерская ──
+  // ── 11. Узкое окно 864x520: быстрые настройки, наложенная история, Мастерская ──
   await setViewport(win, 864, 520);
   await js(win, `document.querySelector('#aeNav_chat').click()`);
   await settle(win, 180);
   const narrowMenuOpen = await js(win, `(() => {
-    const trig = document.querySelector('.ae-overflow-trigger');
+    const trig = document.querySelector('[aria-controls="aeQuickSettings"]');
     trig.click();
-    const menu = document.querySelector('.ae-overflow-menu');
+    const menu = document.querySelector('#aeQuickSettings');
     const r = menu.getBoundingClientRect();
-    return { open: !menu.hidden, fits: r.left >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight };
+    return { open: !menu.hidden, fits: r.left >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight,
+      fields: menu.querySelectorAll('label').length };
   })()`);
   shots.push(await shot(win, '13-narrow-nav-864x520.png'));
-  await js(win, `document.querySelector('.ae-overflow-trigger')?.click()`);
+  await js(win, `document.querySelector('[aria-controls="aeQuickSettings"]')?.click()`);
 
   // Наложенная панель истории на 864x520
-  await js(win, `document.querySelector('#aeHistoryToggle').click()`);
+  const historyFromSettings = await js(win, `(() => {
+    const { store } = window.__noxAether;
+    store.toggleHistory(true);
+    store.setRoute('settings');
+    const trigger = document.querySelector('#aeHistoryToggle');
+    const collapsedOutsideChat = trigger.getAttribute('aria-expanded') === 'false';
+    trigger.click();
+    return collapsedOutsideChat && store.state.route === 'chat'
+      && trigger.getAttribute('aria-expanded') === 'true'
+      && document.querySelector('#aeHistoryWrap').classList.contains('is-open');
+  })()`);
   await settle(win, 180);
   shots.push(await shot(win, '14-narrow-history-864x520.png'));
-  await js(win, `document.querySelector('#aeHistoryToggle').click()`);
+  const historyKeyboard = await js(win, `(() => {
+    const trigger = document.querySelector('#aeHistoryToggle');
+    const drawer = document.querySelector('#aeHistoryWrap');
+    document.querySelector('#aeNewChatBtn').focus();
+    document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const closed = drawer.inert && document.activeElement === trigger;
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true }));
+    const reopened = !drawer.inert && trigger.getAttribute('aria-expanded') === 'true';
+    trigger.click();
+    return closed && reopened && drawer.inert;
+  })()`);
+  push('history-from-settings-and-keyboard', historyFromSettings && historyKeyboard, { historyFromSettings, historyKeyboard });
 
   await js(win, `document.querySelector('#aeNav_settings').click()`);
+  await js(win, `document.querySelector('#aeSettingsView [data-section="workshop"]').click()`);
   await settle(win, 200);
   const narrowSettingsOverflow = await js(win, `document.documentElement.scrollWidth > window.innerWidth + 1`);
   shots.push(await shot(win, '15-narrow-workshop-864x520.png'));
-  push('narrow-864-nav-history-workshop', narrowMenuOpen.open && narrowMenuOpen.fits && !narrowSettingsOverflow, { narrowMenuOpen, narrowSettingsOverflow, dictCheck });
+  push('narrow-864-nav-history-workshop', narrowMenuOpen.open && narrowMenuOpen.fits
+    && narrowMenuOpen.fields === 6 && !narrowSettingsOverflow, { narrowMenuOpen, narrowSettingsOverflow, dictCheck });
+
+  // Пример заполняет черновик. Обычная отправка запрашивает разрешение, а отказ виден в чате.
+  await js(win, `window.__noxAether.store.createNewChat()`);
+  const starterDraft = await js(win, `(() => {
+    const button = document.querySelector('.ae-starter-chip');
+    const field = document.querySelector('#chatInput');
+    field.value = 'Свой черновик';
+    field.dispatchEvent(new Event('input'));
+    const draftProtected = button.disabled;
+    field.value = '';
+    field.dispatchEvent(new Event('input'));
+    button.click();
+    return draftProtected && field.value === 'Открой Блокнот'
+      && document.activeElement === field && document.querySelector('#noxChat').classList.contains('is-empty');
+  })()`);
+  await js(win, `document.querySelector('#sendBtn').click()`);
+  const starterApproval = await waitUntil(() => js(win, `(() => {
+    const dock = document.querySelector('#aeApprovalDock');
+    const reject = dock.querySelector('[data-decision="reject"]');
+    if (dock.hidden || !reject || !/notepad/i.test(dock.innerText)) return false;
+    reject.click();
+    return true;
+  })()`), 6000, 60);
+  await waitIdle(win, 10000);
+  const starterRefused = await js(win, `Boolean(document.querySelector('.ae-action-outcome[data-status="refused"]'))`);
+  push('starter-prefills-and-uses-real-approval', starterDraft && starterApproval && starterRefused, { starterDraft, starterApproval, starterRefused });
+  shots.push(await shot(win, '16-first-command-refused-864x520.png'));
+
+  // Два реальных вызова ядра через чат. Запуск Office подменён только на границе Electron.
+  await js(win, `window.NoxOrbLibrary.setActive('nox:wire')`);
+  await js(win, `window.__noxAether.store.createNewChat()`);
+  await sendText(win, 'Что такое Стрелец A*?');
+  await waitIdle(win, 12000);
+  await sendText(win, 'Создай презентацию об этом и открой её');
+  for (const tool of ['document_write', 'presentation_open']) {
+    const allowed = await waitUntil(() => js(win, `(() => {
+      const store = window.__noxAether.store;
+      const active = store.state.approvals.queue.find((item) => item.id === store.state.approvals.view?.id);
+      const button = document.querySelector('#aeApprovalDock [data-decision="once"]');
+      if ((active?.name || active?.tool) !== ${JSON.stringify(tool)} || !button || button.disabled) return false;
+      button.click();
+      return true;
+    })()`), 9000, 60);
+    if (!allowed) throw new Error(`Нет запроса разрешения для ${tool}`);
+  }
+  await waitIdle(win, 14000);
+  const deckPath = path.join(workspaceDir, 'qa-astronomy.pptx');
+  const deckOk = fs.existsSync(deckPath) && require('../src/tools/pptx').pptxCheck(fs.readFileSync(deckPath), 2).ok;
+  const openingStatus = await js(win, `document.querySelector('.ae-action-outcome[data-status="unverified"]')?.innerText || ''`);
+  push('context-pptx-create-and-open', deckOk && openedPresentations.length === 1 && /Открытие презентации не подтверждено/.test(openingStatus),
+    { deckOk, openCalls: openedPresentations.length, openingStatus });
+  shots.push(await shot(win, '17-presentation-864x520.png'));
+
+  // Отдельные панели аккаунта и лимитов для локальной сборки и ответа сервера.
+  const localAccount = await js(win, `(() => {
+    const trigger = document.querySelector('#aeAccountTrigger');
+    trigger.click();
+    const rect = trigger.getBoundingClientRect();
+    return rect.left < 48 && rect.bottom > window.innerHeight - 24
+      && document.querySelector('#aeAccountPanel').innerText.includes('Локальный режим');
+  })()`);
+  const localLimits = await js(win, `(() => {
+    const history = document.querySelector('#aeHistoryToggle').getBoundingClientRect();
+    const account = document.querySelector('#aeAccountTrigger').getBoundingClientRect();
+    const trigger = document.querySelector('#aeLimitsTrigger');
+    const rect = trigger.getBoundingClientRect();
+    trigger.click();
+    const panel = document.querySelector('#aeLimitsPanel');
+    return rect.top >= history.bottom && rect.bottom <= account.top
+      && document.querySelector('#aeAccountPanel').hidden && !panel.hidden
+      && panel.innerText.includes('при подключении к серверу Nox')
+      && !trigger.querySelector('.has-data');
+  })()`);
+  await js(win, `(() => {
+    const bridge = window.NoxAetherBridge;
+    const call = bridge.call;
+    bridge.call = (name, ...args) => {
+      if (name !== 'accountState') return call(name, ...args);
+      const now = Date.now();
+      return Promise.resolve({ enabled: true, signedIn: true, account: {
+        email: 'alex@example.test', planTitle: 'Pro', limits: {
+          day: { percent: 37, resetAt: now + 3600000 },
+          week: { percent: 64, resetAt: now + 86400000 },
+          session: { percent: 18, resetAt: now + 1800000 },
+        },
+      } });
+    };
+    return window.__noxAether.store.refreshAccount();
+  })()`);
+  const accountLimits = await waitUntil(() => js(win, `(() => {
+    const panel = document.querySelector('#aeLimitsPanel');
+    const trigger = document.querySelector('#aeLimitsTrigger');
+    const r = panel.getBoundingClientRect();
+    const values = [...panel.querySelectorAll('progress')].map((p) => p.value);
+    return !panel.hidden && r.left >= 48 && r.top >= 44 && r.right <= window.innerWidth
+      && r.bottom <= window.innerHeight && values.join(',') === '37,64,18'
+      && panel.innerText.includes('Дневной лимит') && panel.innerText.includes('Недельный лимит')
+      && panel.innerText.includes('Лимит на 5 часов') && panel.innerText.includes('Обновится')
+      && trigger.querySelector('.has-data')?.style.getPropertyValue('--used') === '64%'
+      && trigger.title.includes('Недельный лимит');
+  })()`), 2500);
+  shots.push(await shot(win, '18-limits-864x520.png'));
+  const limitsClose = await js(win, `(() => {
+    const panel = document.querySelector('#aeLimitsPanel');
+    panel.querySelector('button').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    return panel.hidden && document.activeElement.id === 'aeLimitsTrigger';
+  })()`);
+  const profileSeparate = await js(win, `(() => {
+    document.querySelector('#aeAccountTrigger').click();
+    const profile = document.querySelector('#aeAccountPanel');
+    return !profile.hidden && profile.innerText.includes('alex@example.test')
+      && !profile.querySelector('progress') && document.querySelector('#aeLimitsPanel').hidden;
+  })()`);
+  shots.push(await shot(win, '19-account-864x520.png'));
+  const signedOutLimits = await js(win, `(async () => {
+    const { store } = window.__noxAether;
+    const bridge = window.NoxAetherBridge;
+    const call = bridge.call;
+    bridge.call = (name, ...args) => name === 'accountState'
+      ? Promise.resolve({ enabled: true, signedIn: false }) : call(name, ...args);
+    await store.refreshAccount();
+    document.querySelector('#aeLimitsTrigger').click();
+    const panel = document.querySelector('#aeLimitsPanel');
+    const enter = panel.querySelector('.ae-account-body button');
+    if (!enter || !enter.textContent.includes('Войти')) return false;
+    enter.click();
+    return panel.hidden && !document.querySelector('#aeAccountPanel').hidden
+      && Boolean(document.querySelector('#aeAccountPanel input[type="email"]'))
+      && !document.querySelector('#aeLimitsTrigger .has-data');
+  })()`);
+  push('limits-own-button-dialog-progress-and-escape', localAccount && localLimits && accountLimits
+    && limitsClose && profileSeparate && signedOutLimits,
+    { localAccount, localLimits, accountLimits, limitsClose, profileSeparate, signedOutLimits });
+
+  // ── Источники поиска, история и нативное всплывающее окно ──
+  await js(win, 'window.__noxAether.store.createNewChat()');
+  const counts = [];
+  for (const count of [0, 1, 5, 20]) {
+    await sendText(win, `Проверка ссылок ${count}`);
+    await waitIdle(win);
+    counts.push(await js(win, `(() => {
+      const last = [...document.querySelectorAll('#feed .is-assistant')].at(-1);
+      return {
+        label: last?.querySelector('.ae-sources-trigger')?.textContent || '',
+        count: last?.querySelectorAll('.ae-source-link').length,
+        textLinkExcluded: !last?.querySelector('.ae-source-link[href*="model-only"]'),
+      };
+    })()`));
+  }
+  const sourceChat = await js(win, 'window.__noxAether.store.state.activeChatId');
+  await setViewport(win, 864, 520);
+  const openLastSources = () => js(win, `(() => {
+    const trigger = [...document.querySelectorAll('.ae-sources-trigger')].at(-1);
+    if (!trigger) return;
+    trigger.scrollIntoView({ block: 'nearest' });
+    trigger.click();
+  })()`);
+  await openLastSources();
+  await waitUntil(() => js(win, `(() => {
+    const panel = document.querySelector('.ae-sources-popover:popover-open');
+    return panel?.querySelectorAll('.is-loaded').length >= 2 &&
+      panel.querySelector('.ae-source-favicon:not(:has(img)) svg');
+  })()`), 4500, 50);
+  const readPopover = () => js(win, `(() => {
+    const panel = document.querySelector('.ae-sources-popover:popover-open');
+    if (!panel) return null;
+    const rect = panel.getBoundingClientRect();
+    const trigger = panel.previousElementSibling.getBoundingClientRect();
+    const title = panel.querySelector('.ae-source-title');
+    const feed = panel.closest('.ae-feed').getBoundingClientRect();
+    return {
+      width: rect.width, height: rect.height,
+      side: panel.dataset.side,
+      rowHeight: panel.querySelector('.ae-source-link').getBoundingClientRect().height,
+      fits: rect.x >= 0 && rect.y >= feed.top - 1 && rect.right <= innerWidth && rect.bottom <= feed.bottom + 1,
+      anchored: Math.abs(rect.x - trigger.x) <= 1 &&
+        Math.abs(panel.dataset.side === 'below' ? rect.top - trigger.bottom : trigger.top - rect.bottom) <= 10,
+      scroll: panel.scrollHeight > panel.clientHeight,
+      clippedTitle: title.scrollWidth > title.clientWidth,
+      icon: [...panel.querySelectorAll('.is-loaded')].some((image) => image.naturalWidth >= 16),
+      fallback: Boolean(panel.querySelector('.ae-source-favicon:not(:has(img)) svg')),
+    };
+  })()`);
+  const popover = await readPopover();
+  if (popover?.fits) shots.push(await shot(win, '20-sources-864x520.png'));
+  const dismissPoint = await js(win, `(() => {
+    const rect = document.querySelector('.ae-sources-popover:popover-open')?.getBoundingClientRect();
+    return rect ? { x: Math.floor(rect.right + 12), y: Math.floor(rect.top + 20) } : null;
+  })()`);
+  if (dismissPoint) {
+    const cdp = win.webContents.debugger;
+    await cdp.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', ...dismissPoint, button: 'left', clickCount: 1 });
+    await cdp.sendCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', ...dismissPoint, button: 'left', clickCount: 1 });
+  }
+  const lightDismissed = await js(win, '!document.querySelector(".ae-sources-popover:popover-open")');
+  await openLastSources();
+  await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  const escapeDismissed = await js(win, '!document.querySelector(".ae-sources-popover:popover-open")');
+  await openLastSources();
+  await js(win, 'document.querySelector(".ae-sources-popover:popover-open .ae-source-link")?.click()');
+  const opened = await waitUntil(() => openedSources.includes('https://github.com/nox-qa/1'), 3000, 50);
+  const blocked = await js(win, `Promise.all(['file:///tmp/a', 'javascript:1', 'https://user:pass@example.org'].map((url) => window.jarvis.openSource(url)))`);
+  await js(win, 'document.querySelector(".ae-sources-popover:popover-open")?.hidePopover()');
+  await setViewport(win, 1200, 720);
+  await openLastSources();
+  const widePopover = await readPopover();
+  if (widePopover?.fits) shots.push(await shot(win, '21-sources-1200x720.png'));
+  await js(win, `(() => {
+    document.querySelector('.ae-sources-popover:popover-open')?.hidePopover();
+    const first = document.querySelector('.ae-sources-trigger');
+    first.scrollIntoView({ block: 'start' });
+    first.click();
+  })()`);
+  const downwardPopover = await readPopover();
+  await js(win, 'window.__noxAether.store.createNewChat()');
+  await js(win, `window.__noxAether.store.selectChat(${JSON.stringify(sourceChat)})`);
+  const reopened = await js(win, `[...document.querySelectorAll('.ae-sources-trigger')].map((button) => button.textContent)`);
+  const expected = [1, 5, 20].map((count) => `Источники · ${count}`);
+  const history = JSON.parse(fs.readFileSync(path.join(dataDir, 'conversation.json'), 'utf8'));
+  const persisted = history.chats.find((chat) => chat.id === sourceChat)?.history
+    .filter((m) => m.searchSources).map((m) => m.searchSources.length);
+  const compact = (panel) => panel?.fits && panel.anchored && panel.width >= 300 && panel.width <= 340 &&
+    panel.height <= 272 && panel.rowHeight >= 48 && panel.rowHeight <= 54 && panel.icon && panel.clippedTitle;
+  push('search-sources-popover-and-history',
+    JSON.stringify(counts.map((item) => item.count)) === '[0,1,5,20]' &&
+    counts.every((item) => item.textLinkExcluded) &&
+    JSON.stringify(counts.slice(1).map((item) => item.label)) === JSON.stringify(expected) &&
+    compact(popover) && popover.scroll && popover.fallback && popover.side === 'above' &&
+    compact(widePopover) && widePopover.scroll && widePopover.side === 'above' &&
+    compact(downwardPopover) && downwardPopover.side === 'below' &&
+    lightDismissed && escapeDismissed && opened && blocked.every((result) => result.ok === false) &&
+    JSON.stringify(reopened) === JSON.stringify(expected) && JSON.stringify(persisted) === '[1,5,20]',
+    { counts, popover, widePopover, downwardPopover, lightDismissed, escapeDismissed, opened, openedSources, blocked, reopened, persisted });
 
   // ── 12. Финальная проверка утечек и ошибок консоли/рендерера ──
   const pageState = await js(win, `(() => ({

@@ -34,6 +34,7 @@
 
     let servers = [];
     let catalog = [];
+    let mail = null;
     let filterGroup = 'all'; // 'all' | 'connected' | 'attention' | 'disabled'
     let query = '';
     let selectedName = null;
@@ -46,10 +47,10 @@
     const tw = document.createElement('div');
     const h1 = document.createElement('h1');
     h1.className = 'ae-page-title';
-    h1.textContent = 'MCP-подключения';
+    h1.textContent = 'Подключения';
     const sub = document.createElement('p');
     sub.className = 'ae-page-sub';
-    sub.textContent = 'Внешние сервисы и локальные программы, с которыми Nox может работать по протоколу MCP.';
+    sub.textContent = 'Внешние сервисы и аккаунты.';
     tw.append(h1, sub);
 
     const headBtns = document.createElement('div');
@@ -102,12 +103,16 @@
     searchInp.type = 'search';
     searchInp.className = 'ae-input ae-search-wide';
     searchInp.placeholder = 'Поиск подключений…';
+    searchInp.setAttribute('aria-label', 'Поиск подключений');
     searchInp.addEventListener('input', () => {
       query = searchInp.value;
       renderBody();
     });
 
-    filterBar.append(chips, searchInp);
+    const search = document.createElement('label');
+    search.className = 'ae-page-search';
+    search.append(icon('search'), searchInp);
+    filterBar.append(chips, search);
 
     const addWrap = document.createElement('div');
     addWrap.className = 'ae-inline-panel';
@@ -116,7 +121,19 @@
     const body = document.createElement('div');
     body.className = 'ae-mcp-body';
 
-    root.append(head, filterBar, addWrap, body);
+    const listGroup = document.createElement('section');
+    listGroup.className = 'ae-mcp-list';
+    const listHeading = document.createElement('h2');
+    listHeading.className = 'ae-section-heading';
+    listHeading.textContent = 'Мои подключения';
+    const listSection = document.createElement('div');
+    listSection.className = 'ae-mcp-list';
+    listGroup.append(listHeading, filterBar, listSection);
+    const catalogSection = document.createElement('section');
+    catalogSection.className = 'ae-mcp-catalog';
+    catalogSection.hidden = true;
+    body.append(listGroup, catalogSection);
+    root.append(head, addWrap, body);
 
     async function loadState() {
       loaded = true;
@@ -127,9 +144,13 @@
         return;
       }
       try {
-        const res = await bridge.call('mcpState');
+        const [res, mailState] = await Promise.all([
+          bridge.call('mcpState'),
+          bridge.has('mailState') ? bridge.call('mailState').catch(() => null) : null,
+        ]);
         servers = Array.isArray(res && res.servers) ? res.servers : [];
         catalog = Array.isArray(res && res.catalog) ? res.catalog : [];
+        mail = mailState;
       } catch (err) {
         store.toast(`Не удалось загрузить подключения: ${bridge.errText(err)}`, 'error');
       }
@@ -153,7 +174,7 @@
       nmInp.type = 'text';
       nmInp.className = 'ae-input';
       nmInp.placeholder = 'Имя сервиса (например: github или notes)';
-      nmInp.value = prefill ? (prefill.name || '') : '';
+      nmInp.value = prefill ? (prefill.id || prefill.name || '') : '';
       nmInp.required = true;
 
       const tgtInp = document.createElement('input');
@@ -200,7 +221,8 @@
         try {
           const r = await bridge.call('mcpAdd', name, target, args);
           if (r && r.ok === false) throw new Error(r.error || 'не удалось подключить');
-          store.toast(`Сервис «${name}» добавлен`, 'ok');
+          if (r?.error) store.toast('Сервис сохранён. Подключение пока не установлено.', 'error');
+          else store.toast(`Сервис «${name}» добавлен`, 'ok');
           showAddForm = false;
           await loadState();
         } catch (err) {
@@ -228,22 +250,43 @@
     function renderBody() {
       for (const [id, b] of chipBtns.entries()) {
         b.classList.toggle('is-active', id === filterGroup);
+        b.setAttribute('aria-pressed', String(id === filterGroup));
       }
       if (showAddForm && !addWrap.childElementCount) renderAddForm(null);
       else if (!showAddForm) renderAddForm(null);
 
-      body.replaceChildren();
+      listSection.replaceChildren();
+      catalogSection.replaceChildren();
 
       const filtered = servers.filter(matchesFilter);
-      const listSection = document.createElement('div');
-      listSection.className = 'ae-mcp-list';
-
-      if (!filtered.length) {
+      const installedNames = new Set(servers.map((s) => s.name));
+      const mailMatches = mail?.connected && ['all', 'connected'].includes(filterGroup) &&
+        (!query.trim() || `Gmail ${mail.email || ''}`.toLowerCase().includes(query.trim().toLowerCase()));
+      const availableCatalog = catalog.filter((c) => c && !installedNames.has(c.id) && !(c.integration === 'mail' && mail?.connected));
+      if (!filtered.length && !mailMatches) {
         const emp = document.createElement('div');
         emp.className = 'ae-empty-pane';
-        emp.textContent = servers.length ? 'По выбранному фильтру подключений нет.' : 'Внешних MCP-сервисов пока не подключено.';
+        emp.textContent = 'Подключений пока нет.';
+        if (servers.length || mail?.connected) emp.textContent = 'Подключения по этим условиям не найдены.';
+        else if (availableCatalog.length) emp.textContent = 'Добавьте сервис вручную или выберите его из каталога.';
         listSection.append(emp);
       } else {
+        if (mailMatches) {
+          const card = document.createElement('div');
+          card.className = 'ae-mcp-card';
+          const row = document.createElement('div');
+          row.className = 'ae-mcp-card-main';
+          const name = document.createElement('strong');
+          name.textContent = mail.email ? `Gmail · ${mail.email}` : 'Gmail';
+          const disconnect = document.createElement('button');
+          disconnect.type = 'button';
+          disconnect.className = 'ae-btn ae-btn-secondary ae-btn-sm';
+          disconnect.textContent = 'Отключить';
+          disconnect.addEventListener('click', () => runMailAction(disconnect, 'mailDisconnect'));
+          row.append(name, disconnect);
+          card.append(row);
+          listSection.append(card);
+        }
         for (const s of filtered) {
           const info = statusInfo(s);
           const card = document.createElement('div');
@@ -376,21 +419,19 @@
         }
       }
 
-      body.append(listSection);
-
       // Каталог популярных сервисов (без фейков — только то, что отдаёт ядро)
-      const installedNames = new Set(servers.map((s) => s.name));
-      const availableCatalog = catalog.filter((c) => c && !installedNames.has(c.name));
+      catalogSection.hidden = !availableCatalog.length;
       if (availableCatalog.length) {
         const catHead = document.createElement('h2');
         catHead.className = 'ae-section-heading';
-        catHead.textContent = 'Каталог сервисов';
+        catHead.textContent = 'Популярные сервисы';
 
         const grid = document.createElement('div');
         grid.className = 'ae-cards-grid';
-        for (const item of availableCatalog.slice(0, 12)) {
+        for (const item of availableCatalog) {
           const card = document.createElement('div');
           card.className = 'ae-grid-card';
+          card.dataset.service = item.id;
           const title = document.createElement('strong');
           title.textContent = item.title || item.name;
           const desc = document.createElement('p');
@@ -399,16 +440,49 @@
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'ae-btn ae-btn-secondary ae-btn-sm';
-          btn.textContent = 'Настроить';
-          btn.addEventListener('click', () => {
-            showAddForm = true;
-            renderAddForm(item);
-            addWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          });
+          if (item.integration === 'mail') {
+            btn.textContent = 'Войти через Google';
+            btn.disabled = !mail?.credentials;
+            if (btn.disabled) desc.append(' Для входа нужно настроить Gmail в сборке Nox.');
+            btn.addEventListener('click', () => runMailAction(btn, 'mailConnect', true));
+          } else if (item.ready) {
+            btn.textContent = 'Настроить';
+            btn.addEventListener('click', () => {
+              showAddForm = true;
+              renderAddForm(item);
+              addWrap.scrollIntoView({ block: 'nearest' });
+              addWrap.querySelector('input')?.focus({ preventScroll: true });
+            });
+          } else {
+            if (item.accountKey) desc.append(` Для подключения укажите ${item.accountKey} в настройке сборки.`);
+            else if (item.transport === 'http') desc.append(' Для входа нужен совместимый клиент.');
+            else desc.append(' Требуется настройка доступа и сервера.');
+            btn.textContent = 'Инструкция ↗';
+            btn.disabled = !item.docs || !bridge.has('openSource');
+            btn.addEventListener('click', async () => {
+              try {
+                const result = await bridge.call('openSource', item.docs);
+                if (!result?.ok) throw new Error(result?.error || 'Не удалось открыть инструкцию');
+              } catch (err) { store.toast(scrub(bridge.errText(err)), 'error'); }
+            });
+          }
           card.append(title, desc, btn);
           grid.append(card);
         }
-        body.append(catHead, grid);
+        catalogSection.append(catHead, grid);
+      }
+    }
+
+    async function runMailAction(button, action, ...args) {
+      button.disabled = true;
+      try {
+        const result = await bridge.call(action, ...args);
+        if (!result?.ok) throw new Error(result?.error || 'Не удалось изменить подключение Gmail');
+        await loadState();
+      } catch (err) {
+        store.toast(scrub(bridge.errText(err)), 'error');
+      } finally {
+        button.disabled = false;
       }
     }
 

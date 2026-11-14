@@ -21,7 +21,7 @@ const GROUPS = [
   },
   {
     id: 'documents',
-    tool: /^document_/,
+    tool: /^(document_|presentation_open$)/,
     words: /документ|word|ворд|excel|эксел|таблиц|pdf|пдф|презентац|слайд|pptx|docx|xlsx|csv|диплом|справк|договор|резюме|шаблон/i,
   },
   {

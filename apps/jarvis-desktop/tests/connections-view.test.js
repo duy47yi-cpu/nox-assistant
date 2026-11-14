@@ -644,15 +644,16 @@ test('изменения набора действий: ошибка подтв�
 
 // ── Популярные сервисы ────────────────────────────────────────
 
-test('популярные: показываются только проверенные записи каталога', async () => {
+test('популярные: показываются предложенные внешние сервисы с их состоянием настройки', async () => {
   const catalog = [
-    { id: 'filesystem', title: 'Файлы', verified: true, envKeys: [], category: 'files', docs: 'https://example.org/docs' },
-    { id: 'github', title: 'GitHub', verified: false, envKeys: [], category: 'git' },
+    { id: 'github', title: 'GitHub', ready: true, category: 'git', url: 'https://example.org/mcp' },
+    { id: 'notion', title: 'Notion', ready: false, category: 'productivity', docs: 'https://example.org/docs' },
   ];
   const { ids } = makeSandbox({ mcpState: async () => ({ servers: [], catalog }) });
   await wait();
-  assert.ok(findAll(ids.mcpPopularList, (n) => n.getAttribute('data-popular') === 'filesystem')[0]);
-  assert.equal(findAll(ids.mcpPopularList, (n) => n.getAttribute('data-popular') === 'github').length, 0);
+  const row = (id) => findAll(ids.mcpPopularList, (n) => n.getAttribute('data-popular') === id)[0];
+  assert.equal(byTag(row('github'), 'BUTTON')[0].textContent, '+ Добавить');
+  assert.equal(byTag(row('notion'), 'BUTTON')[0].textContent, 'Настроить ↗');
 });
 
 test('популярные: инструкция открывается по нажатию, ошибка отображается', async () => {

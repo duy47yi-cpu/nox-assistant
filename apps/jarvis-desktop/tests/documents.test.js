@@ -8,7 +8,7 @@ const os = require('os');
 const path = require('path');
 const { WorkspaceIndex } = require('../src/rag/index');
 const { readZip, writeZip } = require('../src/tools/zip');
-const { documentTools, parseCsv } = require('../src/tools/documents');
+const { documentTools, presentationOpenTool, parseCsv } = require('../src/tools/documents');
 
 function tempRoot(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-docs-'));
@@ -23,6 +23,32 @@ function setup(t, opts) {
   const [read, write] = documentTools(index, opts);
   return { root, index, read, write };
 }
+
+test('открытие презентации: подтверждает точный файл, а не успех Windows или наличие любого окна', async (t) => {
+  const { root, index, write } = setup(t);
+  const args = { path: 'тема.pptx', format: 'pptx', title: 'Тема' };
+  const written = await write.run(args);
+  assert.equal(written.ok, true);
+  assert.equal((await write.verify(args, written)).status, 'confirmed');
+
+  const target = fs.realpathSync(path.join(root, args.path));
+  let shown = '';
+  let opened = '';
+  const tool = presentationOpenTool(index, {
+    openPath: async (file) => { opened = file; return ''; },
+    probeOpen: async (file) => shown === file,
+  });
+  assert.equal((await tool.run({ path: '../чужой.pptx' })).ok, false);
+  assert.equal((await tool.run({ path: 'несуществующий.pptx' })).ok, false);
+  assert.equal(opened, '');
+  const result = await tool.run(args);
+  assert.equal(result.ok, true);
+  assert.equal(opened, target);
+  shown = path.join(root, 'другая.pptx');
+  assert.equal((await tool.verify(args, result)).status, 'unknown');
+  shown = target;
+  assert.equal((await tool.verify(args, result)).status, 'confirmed');
+});
 
 test('zip: запись и чтение туда и обратно, имена в UTF-8, пустой файл', () => {
   const buf = writeZip([{ name: 'word/документ.xml', data: '<x>привет</x>' }, { name: 'пусто.txt', data: '' }]);

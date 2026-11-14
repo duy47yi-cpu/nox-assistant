@@ -78,7 +78,26 @@ function stripTabRecordFields(entry) {
   return out;
 }
 
-// Копия истории для файла разговора: без набранного текста, содержимого буфера и текста вкладок Chrome.
+function redactUntrustedToolContent(rawContent) {
+  let parsed = null;
+  try {
+    parsed = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+  } catch {
+    parsed = null;
+  }
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    return JSON.stringify({
+      ok: Boolean(parsed.ok),
+      summary: '[данные из недоверенного контекста скрыты]',
+      ...(parsed.verified !== undefined ? { verified: parsed.verified } : {}),
+      redacted: true,
+    });
+  }
+  return '[данные из недоверенного контекста скрыты]';
+}
+
+// Копия истории для файла разговора: без набранного текста, содержимого буфера, текста вкладок Chrome
+// и производных вызовов/ответов из недоверенного контекста.
 function maskHistory(history) {
   const clipboardReads = new Set();
   const tabReads = new Set();
@@ -89,9 +108,11 @@ function maskHistory(history) {
       const { reasoning_content: _reasoning, ...safe } = m;
       m = safe;
     }
+    const isUntrusted = Boolean(m.provenance && m.provenance.untrusted);
     if (m.role === 'tool') {
       if (clipboardReads.has(m.tool_call_id)) return { ...m, content: JSON.stringify({ ok: true, summary: '[содержимое буфера скрыто]' }) };
       if (tabReads.has(m.tool_call_id) || isTabToolContent(m.content)) return { ...m, content: redactTabToolContent(m.content) };
+      if (isUntrusted) return { ...m, content: redactUntrustedToolContent(m.content) };
       return m;
     }
     if (!Array.isArray(m.tool_calls)) return m;
@@ -101,6 +122,9 @@ function maskHistory(history) {
         const name = c.function && c.function.name;
         if (name === 'clipboard_get') clipboardReads.add(c.id);
         if (name === 'browser_tab_read') tabReads.add(c.id);
+        if (isUntrusted && c.function) {
+          return { ...c, function: { ...c.function, arguments: JSON.stringify({ redacted: true }) } };
+        }
         try {
           return { ...c, function: { ...c.function, arguments: JSON.stringify(maskArgs(name, JSON.parse(c.function.arguments))) } };
         } catch {

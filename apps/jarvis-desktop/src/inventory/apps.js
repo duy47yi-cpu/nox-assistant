@@ -47,12 +47,35 @@ const CATEGORIES = [
   ['music', /spotify|aimp|foobar|winamp|vlc|musicbee|yandex music|яндекс\.?\s*музык|youtube music|deezer/i],
   ['messenger', /telegram|ayugram|discord|whatsapp|viber|signal|skype/i],
   ['game', /steam|epic games|battle\.net|riot|league of legends|counter-strike|\bcs2\b/i],
-  ['creative', /davinci|premiere|obs studio|handbrake|blender|photoshop|audacity/i],
+  ['creative', /davinci|premiere|obs studio|handbrake|blender|photoshop|audacity|capcut|vegas|after effects|afterfx|filmora|kdenlive|shotcut|clipchamp|camtasia|movavi|openshot|topaz|media encoder|illustrator|figma|gimp|krita|paint\.net|inkscape|coreldraw|canva|affinity|lightroom|aseprite/i],
+  ['ai', /ollama|lm studio|lmstudio|comfyui|stable diffusion|automatic1111|webui forge|koboldcpp|gpt4all|jan\.ai|\bjan\b|anythingllm|open webui|pinokio|whisper/i],
 ];
+
+const CATEGORY_LABELS = {
+  browser: 'Браузеры',
+  music: 'Музыка',
+  messenger: 'Мессенджеры',
+  game: 'Игры',
+  creative: 'Графика и монтаж',
+  ai: 'Локальный ИИ',
+};
 
 function category(name) {
   const hit = CATEGORIES.find(([, re]) => re.test(name));
   return hit ? hit[0] : null;
+}
+
+function formatAppSummary(summary) {
+  if (!summary) return '';
+  const lines = [];
+  for (const [key, label] of Object.entries(CATEGORY_LABELS)) {
+    const list = Array.isArray(summary[key]) ? summary[key] : [];
+    if (list.length) lines.push(`${label}: ${list.join(', ')}`);
+  }
+  if (typeof summary.total === 'number') {
+    lines.push(`Всего программ: ${summary.total}`);
+  }
+  return lines.join('\n');
 }
 
 // Приводит запись к виду {name, path, source}. Пустые и битые записи отбрасываются.
@@ -156,7 +179,7 @@ class AppInventory {
     return this.entries.some((e) => pattern.test(e.name));
   }
 
-  // Сводка по категориям для системного промпта: какие браузеры, музыка, мессенджеры и игры есть.
+  // Сводка по категориям для системного промпта: какие браузеры, музыка, мессенджеры, игры, графика и локальный ИИ есть.
   summary() {
     if (!this.scannedAt) return null;
     const groups = {};
@@ -172,9 +195,23 @@ class AppInventory {
       messenger: pick('messenger'),
       game: pick('game'),
       creative: pick('creative'),
+      ai: pick('ai'),
       total: this.entries.length,
     };
   }
+
+  // Текстовая сводка категорий с русскими подписями (включая «Локальный ИИ»).
+  summaryText() {
+    return formatAppSummary(this.summary());
+  }
 }
 
-module.exports = { AppInventory, SCAN_SCRIPT, parseScan, category, normalizeItem };
+module.exports = {
+  AppInventory,
+  SCAN_SCRIPT,
+  parseScan,
+  category,
+  normalizeItem,
+  CATEGORY_LABELS,
+  formatAppSummary,
+};

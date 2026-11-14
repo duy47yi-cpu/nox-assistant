@@ -57,6 +57,7 @@ const PS_USER32 = [
   '[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);',
   '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();',
   '[DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);',
+  '[DllImport("user32.dll")] public static extern bool LockWorkStation();',
   '[DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);',
   '[DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);',
   '[DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();',
@@ -112,6 +113,21 @@ const PS_UIA = [
   '    if ($null -eq $part -and (Has $n $needle)) { $part = $w }',
   '  }',
   '  return $part',
+  '}',
+  // Если внешнее окно не найдено, проверяем, не принадлежит ли заголовок окну самого Nox ($selfPid).
+  'function Test-JSelfWindow([string]$needle) {',
+  '  $needle = Cut $needle 1000',
+  "  if ($needle -eq '' -or $selfPid -eq 0) { return $false }",
+  '  $all = $AE::RootElement.FindAll($TS::Children, [System.Windows.Automation.Condition]::TrueCondition)',
+  '  foreach ($w in $all) {',
+  '    try { $n = Cut $w.Current.Name 1000; $p = [int]$w.Current.ProcessId } catch { continue }',
+  "    if ($p -eq $selfPid -and $n -ne '' -and (Has $n $needle)) { return $true }",
+  '  }',
+  '  return $false',
+  '}',
+  'function No-JWindow([string]$needle) {',
+  "  if (Test-JSelfWindow $needle) { return @{ status = 'self_window' } }",
+  "  return @{ status = 'no_window' }",
   '}',
   // Все элементы окна одним запросом, с кешем нужных свойств (так быстрее, чем по одному).
   'function Get-JElements($w) {',
@@ -323,7 +339,7 @@ const WINDOWS_SCRIPT = buildScript([PS_HEAD, PS_USER32, PS_UIA, WINDOWS_MAIN, WI
 const ELEMENTS_MAIN = [
   'function Main {',
   '  $w = Find-JWindow ([string]$env:JARVIS_UI_WINDOW)',
-  "  if ($null -eq $w) { $script:R = @{ status = 'no_window' }; return }",
+  "  if ($null -eq $w) { $script:R = No-JWindow ([string]$env:JARVIS_UI_WINDOW); return }",
   '  $filter = Cut ([string]$env:JARVIS_UI_FILTER) 200',
   // Собираем все подходящие элементы (до 300): порядок, лимит и бюджет считает JS ниже,
   // чтобы фокус и текст результата не вытеснялись сорока кнопками (идея Ghosthand).
@@ -430,7 +446,7 @@ const PS_PAYMENT = [
 const CLICK_MAIN = [
   'function Main {',
   '  $w = Find-JWindow ([string]$env:JARVIS_UI_WINDOW)',
-  "  if ($null -eq $w) { $script:R = @{ status = 'no_window' }; return }",
+  "  if ($null -eq $w) { $script:R = No-JWindow ([string]$env:JARVIS_UI_WINDOW); return }",
   '  $title = Cut $w.Current.Name 120',
   '  $f = Find-JTarget $w ([string]$env:JARVIS_UI_NAME) (Get-Occurrence)',
   "  if ($f.status -eq 'not_found') { $f.window = $title; $f.suggestions = (Get-JSuggestions $w ([string]$env:JARVIS_UI_NAME)); $script:R = $f; return }",
@@ -524,7 +540,7 @@ const TYPE_MAIN = [
   'function Main {',
   "  $script:JKinds = @('Edit', 'Document', 'ComboBox')",
   '  $w = Find-JWindow ([string]$env:JARVIS_UI_WINDOW)',
-  "  if ($null -eq $w) { $script:R = @{ status = 'no_window' }; return }",
+  "  if ($null -eq $w) { $script:R = No-JWindow ([string]$env:JARVIS_UI_WINDOW); return }",
   '  $title = Cut $w.Current.Name 120',
   '  $name = [string]$env:JARVIS_UI_NAME',
   '  $focused = $false',
@@ -591,9 +607,15 @@ const KEYS_STATE = [
 const KEYS_MAIN = [
   'function Main {',
   '  $wname = [string]$env:JARVIS_UI_WINDOW',
+  '  $plan = [string]$env:JARVIS_UI_VK',
+  // Win+L без указания окна блокирует станцию напрямую через LockWorkStation: работает и при активном окне Nox.
+  "  if ($plan -eq '91,76' -and $wname.Trim() -eq '') {",
+  "    if ([JarvisUi.User32]::LockWorkStation()) { $script:R = @{ status = 'ok'; window = '' } } else { $script:R = @{ status = 'lock_failed'; window = '' } }",
+  '    return',
+  '  }',
   "  if ($wname.Trim() -ne '') {",
   '    $w = Find-JWindow $wname',
-  "    if ($null -eq $w) { $script:R = @{ status = 'no_window' }; return }",
+  "    if ($null -eq $w) { $script:R = No-JWindow $wname; return }",
   '    $title = Cut $w.Current.Name 120',
   // Ctrl+S в окне уже сохранённого файла перезаписывает его: пусть вызов назовёт файл в window, тогда спросит Risk Gate.
   "    if ([string]$env:JARVIS_UI_SAVE_GUARD -eq '1' -and $title -match '\\.[A-Za-z0-9]{1,5}(\\s|$)') { $script:R = @{ status = 'save_existing'; window = $title }; return }",
@@ -612,7 +634,6 @@ const KEYS_MAIN = [
   '  $b = Get-JKeyState',
   '  $sb = ConvertTo-Json -Compress -InputObject $b',
   // Виртуальные клавиши через keybd_event: сочетания с Ctrl из SendKeys новые программы Windows (Блокнот, Проводник) не принимают.
-  '  $plan = [string]$env:JARVIS_UI_VK',
   "  if ($plan -ne '') {",
   '    $ext = @(33, 34, 35, 36, 37, 38, 39, 40)',
   "    foreach ($combo in $plan.Split(';')) {",
@@ -637,7 +658,7 @@ const KEYS_SCRIPT = buildScript([PS_HEAD, PS_USER32, PS_UIA, PS_FOREGROUND, PS_C
 const FOCUS_MAIN = [
   'function Main {',
   '  $w = Find-JWindow ([string]$env:JARVIS_UI_WINDOW)',
-  "  if ($null -eq $w) { $script:R = @{ status = 'no_window' }; return }",
+  "  if ($null -eq $w) { $script:R = No-JWindow ([string]$env:JARVIS_UI_WINDOW); return }",
   '  $title = Cut $w.Current.Name 120',
   "  if (-not (Set-JForeground $w)) { $script:R = @{ status = 'no_focus'; window = $title }; return }",
   // Повторное чтение чуть позже: окно могло сразу потерять передний план.
@@ -654,7 +675,7 @@ const FOCUS_SCRIPT = buildScript([PS_HEAD, PS_USER32, PS_UIA, PS_FOREGROUND, FOC
 const CLOSE_MAIN = [
   'function Main {',
   '  $w = Find-JWindow ([string]$env:JARVIS_UI_WINDOW)',
-  "  if ($null -eq $w) { $script:R = @{ status = 'no_window' }; return }",
+  "  if ($null -eq $w) { $script:R = No-JWindow ([string]$env:JARVIS_UI_WINDOW); return }",
   '  $title = Cut $w.Current.Name 120',
   '  $cls = [string]$w.Current.ClassName',
   "  if (@('Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd') -contains $cls) { $script:R = @{ status = 'protected'; window = $title }; return }",
@@ -672,7 +693,7 @@ const CLOSE_SCRIPT = buildScript([PS_HEAD, PS_USER32, PS_UIA, CLOSE_MAIN, PS_TAI
 const TOGGLE_MAIN = [
   'function Main {',
   '  $w = Find-JWindow ([string]$env:JARVIS_UI_WINDOW)',
-  "  if ($null -eq $w) { $script:R = @{ status = 'no_window' }; return }",
+  "  if ($null -eq $w) { $script:R = No-JWindow ([string]$env:JARVIS_UI_WINDOW); return }",
   '  $title = Cut $w.Current.Name 120',
   '  $name = [string]$env:JARVIS_UI_NAME',
   '  $f = Find-JTarget $w $name (Get-Occurrence)',
@@ -939,6 +960,8 @@ function statusFailure(r, { window, name, occurrence }) {
   const title = r.window ? `«${r.window}»` : `«${window}»`;
   const matches = Array.isArray(r.matches) ? r.matches.slice(0, 5) : [];
   switch (r.status) {
+    case 'self_window':
+      return fail(`окно «${window}» принадлежит самому Nox (Джарвису): управлять собственным окном и читать его элементы нельзя`);
     case 'no_window':
       return fail(`окно с заголовком, содержащим «${window}», не найдено; список окон даёт ui_windows`);
     case 'not_found':
@@ -978,6 +1001,8 @@ function statusFailure(r, { window, name, occurrence }) {
       return fail(`элемент «${(r.element && r.element.name) || name}» закрыт другим окном или элементом, клик не выполнен`, { window: r.window, element: r.element });
     case 'self_foreground':
       return fail('активно окно самого Джарвиса; укажи window, куда отправить клавиши');
+    case 'lock_failed':
+      return fail('не удалось заблокировать экран');
     case 'protected':
       return fail(`окно ${title} принадлежит оболочке Windows, закрывать его нельзя`, { window: r.window });
     case 'no_handle':
@@ -1429,7 +1454,15 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
       if (parsed.status === 'save_existing') {
         return fail(`в окне «${parsed.window}» открыт уже сохранённый файл: Ctrl+S его перезапишет. Для нового файла — ctrl+n и новая вкладка; для сохранения этого укажи в window имя файла из заголовка.`, { window: parsed.window });
       }
+      if (parsed.status === 'lock_failed') return fail('не удалось заблокировать экран');
       if (parsed.status !== 'ok') return statusFailure(parsed, { window: w.value });
+      if (k.tokens.length === 1 && k.tokens[0] === 'win+l' && !w.value) {
+        return {
+          ok: true,
+          summary: 'экран заблокирован',
+          data: { lock: true, keys: 'win+l' },
+        };
+      }
       const where = parsed.window ? ` в окно «${parsed.window}»` : '';
       return {
         ok: true,
@@ -1438,6 +1471,9 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
       };
     },
     async verify(args, result) {
+      if (result && result.data && result.data.lock === true) {
+        return { status: 'unknown', evidence: 'блокировку экрана нельзя проверить до входа' };
+      }
       return keysVerdict(takeCheck(result), result.data && result.data.keys);
     },
   };

@@ -39,10 +39,10 @@
     const titleWrap = document.createElement('div');
     const h1 = document.createElement('h1');
     h1.className = 'ae-page-title';
-    h1.textContent = 'Готовые команды';
+    h1.textContent = 'Команды';
     const sub = document.createElement('p');
     sub.className = 'ae-page-sub';
-    sub.textContent = 'Сценарии и цепочки шагов по одной фразе, горячей клавише или расписанию.';
+    sub.textContent = 'Запускайте цепочки действий по фразе, сочетанию клавиш или расписанию.';
     titleWrap.append(h1, sub);
 
     const headActions = document.createElement('div');
@@ -280,6 +280,7 @@
       searchBox.type = 'search';
       searchBox.className = 'ae-input';
       searchBox.placeholder = 'Найти по названию или фразе…';
+      searchBox.setAttribute('aria-label', 'Поиск команд по названию или фразе');
       searchBox.value = filterQuery;
       searchBox.addEventListener('input', () => {
         filterQuery = searchBox.value;
@@ -287,7 +288,7 @@
       });
 
       const ul = document.createElement('div');
-      ul.className = 'ae-card-list';
+      ul.className = 'ae-card-list ae-command-list';
 
       function renderListItems() {
         const q = filterQuery.trim().toLowerCase();
@@ -310,6 +311,7 @@
           const pickBtn = document.createElement('button');
           pickBtn.type = 'button';
           pickBtn.className = 'ae-item-main';
+          pickBtn.setAttribute('aria-pressed', String(Boolean(active)));
           const nm = document.createElement('strong');
           nm.className = 'ae-item-title';
           nm.textContent = cmd.name || 'Без названия';
@@ -352,16 +354,20 @@
       }
 
       renderListItems();
-      listCol.append(searchBox, ul);
+      const search = document.createElement('label');
+      search.className = 'ae-page-search';
+      search.append(icon('search'), searchBox);
+      listCol.append(search, ul);
 
       // Правая колонка: редактор
       const editCol = document.createElement('div');
       editCol.className = 'ae-pane-detail';
 
       if (!draft) {
+        editCol.classList.add('is-empty');
         const hint = document.createElement('div');
         hint.className = 'ae-empty-pane';
-        hint.textContent = 'Выберите команду слева для настройки или создайте новую.';
+        hint.append(icon('commands'), 'Выберите команду, чтобы открыть её редактор.');
         editCol.append(hint);
       } else {
         const form = document.createElement('div');
@@ -783,15 +789,43 @@
       }
     }
 
+    async function openCommand(id) {
+      if (!id) return false;
+      activeTab = 'my';
+      selectedId = String(id);
+      draft = null;
+      if (!loaded) {
+        await loadAll();
+      } else {
+        await loadMyCommands();
+        renderView();
+      }
+      const hit = commandsList.find((c) => c.id === selectedId);
+      if (hit) {
+        if (!draft || draft.id !== hit.id) {
+          draft = normCmd(hit);
+          renderView();
+        }
+        return true;
+      }
+      return false;
+    }
+
     function render(st) {
       const show = st.route === 'commands';
       root.hidden = !show;
-      if (show && !loaded) {
+      if (!show) return;
+      const pendingId = typeof store.consumePendingCommandId === 'function'
+        ? store.consumePendingCommandId()
+        : (st.pendingCommandId ? (() => { const v = st.pendingCommandId; st.pendingCommandId = null; return v; })() : null);
+      if (pendingId) {
+        openCommand(pendingId);
+      } else if (!loaded) {
         loadAll();
       }
     }
 
-    return { el: root, render, onEvent, refresh: loadAll };
+    return { el: root, render, onEvent, refresh: loadAll, openCommand };
   }
 
   window.NoxAetherCommandsView = { createCommandsView };

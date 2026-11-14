@@ -1,6 +1,6 @@
 // Инструменты первой очереди: громкость, запуск приложения, PowerShell, открытие URL.
 // Аргументы в PowerShell передаются через переменные окружения, а не склейкой строк.
-const { spawn } = require('child_process');
+const childProcess = require('child_process');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -64,7 +64,7 @@ function runPowerShell(script, env, { timeoutMs = 30000, signal, cwd, maxOutput 
     };
     let child;
     try {
-      child = spawn('powershell.exe', args, { env: { ...process.env, ...env }, windowsHide: true, ...(cwd ? { cwd } : {}) });
+      child = childProcess.spawn('powershell.exe', args, { env: { ...process.env, ...env }, windowsHide: true, ...(cwd ? { cwd } : {}) });
     } catch (err) {
       cleanup();
       resolve({ ok: false, summary: err.message, data: {} });
@@ -114,8 +114,8 @@ async function pollUntil(check, { timeoutMs, stepMs = 250, signal } = {}) {
 
 // Есть ли процесс с таким именем (без .exe). Имя передаётся через переменную окружения.
 // null — опрос не удался: это не то же, что «процесса нет».
-async function probeProcess(proc, { signal } = {}) {
-  const res = await runPowerShell(
+async function probeProcess(proc, { signal, runner = runPowerShell } = {}) {
+  const res = await runner(
     '(@(Get-Process -Name $env:JARVIS_PROC -ErrorAction SilentlyContinue)).Count -gt 0',
     { JARVIS_PROC: proc },
     { signal, timeoutMs: 5000 }
@@ -125,8 +125,8 @@ async function probeProcess(proc, { signal } = {}) {
 }
 
 // Есть ли у процесса видимое главное окно. Процесс без окна (фон, лаунчер) — false. null — опрос не удался.
-async function probeProcessWindow(proc, { signal } = {}) {
-  const res = await runPowerShell(
+async function probeProcessWindow(proc, { signal, runner = runPowerShell } = {}) {
+  const res = await runner(
     '(@(Get-Process -Name $env:JARVIS_PROC -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero })).Count -gt 0',
     { JARVIS_PROC: proc },
     { signal, timeoutMs: 5000 }
@@ -138,9 +138,9 @@ async function probeProcessWindow(proc, { signal } = {}) {
 // Окно браузера, у которого в заголовке название сайта («YouTube - Google Chrome»). Адреса в заголовке обычно нет,
 // поэтому ищем по названию сайта. procs — процессы браузера через запятую.
 const BROWSER_PROCS = ['chrome', 'msedge', 'firefox', 'brave', 'opera', 'librewolf', 'vivaldi'];
-async function probeBrowserTitle(brand, { signal, browserExe } = {}) {
-  const procs = browserExe ? [String(browserExe).replace(/^.*[\\/]/, '').replace(/\.exe$/i, '')] : BROWSER_PROCS;
-  const res = await runPowerShell(
+async function probeBrowserTitle(brand, { signal, browserExe: targetBrowser, runner = runPowerShell } = {}) {
+  const procs = targetBrowser ? [String(targetBrowser).replace(/^.*[\\/]/, '').replace(/\.exe$/i, '')] : BROWSER_PROCS;
+  const res = await runner(
     '(@(Get-Process -Name ($env:JARVIS_PROCS -split \',\') -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like ("*" + $env:JARVIS_BRAND + "*") })).Count -gt 0',
     { JARVIS_PROCS: procs.join(','), JARVIS_BRAND: brand },
     { signal, timeoutMs: 5000 }
@@ -155,44 +155,14 @@ function brandOf(host) {
 }
 
 // Открыто ли окно Проводника именно с этой папкой (по пути, не по заголовку). Путь — через переменную окружения.
-async function probeFolderWindow(dir, { signal } = {}) {
-  const res = await runPowerShell(
+async function probeFolderWindow(dir, { signal, runner = runPowerShell } = {}) {
+  const res = await runner(
     '$d = $env:JARVIS_DIR.TrimEnd([char]92); @((New-Object -ComObject Shell.Application).Windows() | Where-Object { try { $_.Document.Folder.Self.Path.TrimEnd([char]92) -eq $d } catch { $false } }).Count -gt 0',
     { JARVIS_DIR: dir },
     { signal, timeoutMs: 5000 }
   );
   return res.ok && String(res.data.stdout || '').trim() === 'True';
 }
-
-// Громкость: SendKeys шагами по 2%. Сначала тихо до нуля, затем вверх до цели.
-// Точной установки здесь нет, зато без COM-обёрток и без внешних утилит.
-const volumeSet = {
-  name: 'volume_set',
-  description: 'Установить громкость системы в процентах (0–100). Приближённо, шагом 2%.',
-  risk: 'T0',
-  parameters: {
-    type: 'object',
-    properties: {
-      percent: { type: 'integer', minimum: 0, maximum: 100 },
-    },
-    required: ['percent'],
-  },
-  async run(args, ctx) {
-    const percent = Number(args.percent);
-    if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
-      return { ok: false, summary: 'громкость от 0 до 100', data: {} };
-    }
-    const ups = Math.round(percent / 2);
-    const script = [
-      '$w = New-Object -ComObject WScript.Shell',
-      'for ($i = 0; $i -lt 50; $i++) { $w.SendKeys([char]174) }',
-      `for ($i = 0; $i -lt ${ups}; $i++) { $w.SendKeys([char]175) }`,
-    ].join('; ');
-    const res = await runPowerShell(script, {}, { signal: ctx.signal });
-    return { ...res, summary: res.ok ? `громкость ~${percent}%` : res.summary };
-  },
-  verify: cannotVerify('громкость выставлена нажатиями клавиш, текущий уровень не считывается'),
-};
 
 // Список установленных программ: по имени находит exe. Задаётся из main.js после согласия владельца.
 let appResolver = null;
@@ -284,176 +254,229 @@ function windowMatches(window, expected = {}) {
   return Number.isInteger(gotPid) && gotPid > 0 && gotPid === startedPid;
 }
 
+function resolveAppTarget(getAppResolver, name) {
+  if (typeof getAppResolver !== 'function') return name;
+  const resolved = getAppResolver(name);
+  const pathOrNull = typeof resolved === 'function' ? resolved(name) : resolved;
+  return pathOrNull || name;
+}
 
-// Запуск программы по имени или пути. Имя передаётся через переменную окружения.
-const appOpen = {
-  name: 'app_open',
-  description: 'Запустить программу по имени (например, spotify) или по полному пути к exe. Имена из списка установленных находятся сами. Полный путь к папке открывает её в Проводнике.',
-  risk: 'T1',
-  parameters: {
-    type: 'object',
-    properties: {
-      name: { type: 'string', minLength: 1, maxLength: 260 },
-    },
-    required: ['name'],
-  },
-  async run(args, ctx) {
-    const name = String(args.name || '').trim();
-    if (!name) return { ok: false, summary: 'пустое имя', data: {} };
-    const target = (appResolver && appResolver(name)) || name;
-    const res = await runPowerShell(OPEN_SCRIPT, { JARVIS_APP: target, JARVIS_SELF_PID: String(process.pid) }, { signal: ctx.signal, timeoutMs: 15000 });
-    const open = parseOpenOutput(res.data && res.data.stdout);
-    const newWindow = typeof open.title === 'string' ? open.title : '';
-    // Папка открывается в Проводнике: проверяем окно с её именем в заголовке, а не процесс.
-    let folder = null;
-    try { if (path.isAbsolute(target) && require('fs').statSync(target).isDirectory()) folder = path.basename(target); } catch {}
-    if (res.ok && appLaunchHook && !folder) appLaunchHook(name);
-    // Имя процесса для проверки: путь без папки и без .exe. Для имени без пути — само имя.
-    const proc = path.basename(target).replace(/\.exe$/i, '');
-    let targetPath = '';
-    try { if (path.isAbsolute(target) && fs.statSync(target).isFile()) targetPath = target; } catch {}
-    // Окно запоминаем вместе с его процессом: проверка сверит его с запущенным, а не поверит любому окну.
-    const window = newWindow
-      ? { title: newWindow, process: String(open.process || ''), path: String(open.path || ''), pid: open.pid, startedPid: open.startedPid }
-      : null;
-    const own = window ? windowMatches(window, { process: proc, path: targetPath }) : false;
-    let shown = '';
-    if (window) {
-      shown = own
-        ? `, окно «${newWindow.slice(0, 80)}»`
-        : `, но новое окно «${newWindow.slice(0, 80)}» не от этой программы`;
-    }
-    return {
-      ...res,
-      summary: res.ok
-        ? `${folder ? 'открыта папка' : 'запущено'}: ${name}${shown}`
-        : res.summary,
-      data: {
-        ...res.data,
-        process: proc,
-        ...(targetPath ? { targetPath } : {}),
-        ...(window ? { newWindow, window } : {}),
-        ...(folder ? { folder, target } : {}),
+// Фабрика инструментов первой очереди: в тестах позволяет подменить runner, spawn и настройки без запуска реальных программ.
+function systemToolsFactory({
+  runner = runPowerShell,
+  spawn = childProcess.spawn,
+  getAppResolver = () => appResolver,
+  getBrowserExe = () => browserExe,
+  getAppLaunchHook = () => appLaunchHook,
+  fsImpl = fs,
+} = {}) {
+  // Громкость: SendKeys шагами по 2%. Сначала тихо до нуля, затем вверх до цели.
+  // Точной установки здесь нет, зато без COM-обёрток и без внешних утилит.
+  const volumeSet = {
+    name: 'volume_set',
+    description: 'Установить громкость системы в процентах (0–100). Приближённо, шагом 2%.',
+    risk: 'T0',
+    parameters: {
+      type: 'object',
+      properties: {
+        percent: { type: 'integer', minimum: 0, maximum: 100 },
       },
-    };
-  },
-  // Проверка: новое окно принадлежит запущенному процессу (имя процесса, путь exe или PID), либо у процесса
-  // есть своё видимое окно. Чужое окно и уведомление подтверждением не считаются: тогда unknown с честным текстом.
-  async verify(args, result, ctx = {}) {
-    const folder = result.data && result.data.folder;
-    if (folder) {
-      const probe = ctx.probeFolderWindow || ((p) => probeFolderWindow(p, ctx));
-      const seen = await pollUntil(() => probe(result.data.target), { timeoutMs: ctx.pollTimeoutMs || 4000, signal: ctx.signal });
-      return seen ? { status: 'confirmed', evidence: `Проводник показывает папку «${folder}»` } : { status: 'unknown', evidence: `окно Проводника с папкой «${folder}» не найдено за срок` };
-    }
-    const proc = result.data && result.data.process;
-    const expectedPath = result.data && result.data.targetPath;
-    const window = result.data && result.data.window;
-    const windowTitle = window && window.title ? String(window.title).slice(0, 80) : '';
-    if (window && windowTitle) {
-      if (windowMatches(window, { process: proc, path: expectedPath })) {
-        const owner = window.process ? `процессу «${window.process}»` : 'запущенному процессу';
-        return { status: 'confirmed', evidence: `новое окно «${windowTitle}» принадлежит ${owner}` };
+      required: ['percent'],
+    },
+    async run(args, ctx = {}) {
+      const percent = Number(args.percent);
+      if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
+        return { ok: false, summary: 'громкость от 0 до 100', data: {} };
       }
-      // Окно чужое: процесс мог открыться без окна (лаунчер, фон) или окно ещё открывается — тогда short-добор.
-      const probe = ctx.probeProcessWindow || ((p) => probeProcessWindow(p, ctx));
-      const seen = proc ? await pollUntil(() => probe(proc), { timeoutMs: ctx.pollTimeoutMs || 2000, signal: ctx.signal }) : false;
+      const ups = Math.round(percent / 2);
+      const script = [
+        '$w = New-Object -ComObject WScript.Shell',
+        'for ($i = 0; $i -lt 50; $i++) { $w.SendKeys([char]174) }',
+        `for ($i = 0; $i -lt ${ups}; $i++) { $w.SendKeys([char]175) }`,
+      ].join('; ');
+      const res = await runner(script, {}, { signal: ctx.signal });
+      return { ...res, summary: res.ok ? `громкость ~${percent}%` : res.summary };
+    },
+    verify: cannotVerify('громкость выставлена нажатиями клавиш, текущий уровень не считывается'),
+  };
+
+  // Запуск программы по имени или пути. Имя передаётся через переменную окружения.
+  const appOpen = {
+    name: 'app_open',
+    description: 'Запустить программу по имени (например, spotify) или по полному пути к exe. Имена из списка установленных находятся сами. Полный путь к папке открывает её в Проводнике.',
+    risk: 'T1',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', minLength: 1, maxLength: 260 },
+      },
+      required: ['name'],
+    },
+    async run(args, ctx = {}) {
+      const name = String(args.name || '').trim();
+      if (!name) return { ok: false, summary: 'пустое имя', data: {} };
+      const target = resolveAppTarget(getAppResolver, name);
+      const res = await runner(OPEN_SCRIPT, { JARVIS_APP: target, JARVIS_SELF_PID: String(process.pid) }, { signal: ctx.signal, timeoutMs: 15000 });
+      const open = parseOpenOutput(res.data && res.data.stdout);
+      const newWindow = typeof open.title === 'string' ? open.title : '';
+      // Папка открывается в Проводнике: проверяем окно с её именем в заголовке, а не процесс.
+      let folder = null;
+      try { if (path.isAbsolute(target) && fsImpl.statSync(target).isDirectory()) folder = path.basename(target); } catch {}
+      const launchHook = typeof getAppLaunchHook === 'function' ? getAppLaunchHook() : null;
+      if (res.ok && launchHook && !folder) launchHook(name);
+      // Имя процесса для проверки: путь без папки и без .exe. Для имени без пути — само имя.
+      const proc = path.basename(target).replace(/\.exe$/i, '');
+      let targetPath = '';
+      try { if (path.isAbsolute(target) && fsImpl.statSync(target).isFile()) targetPath = target; } catch {}
+      // Окно запоминаем вместе с его процессом: проверка сверит его с запущенным, а не поверит любому окну.
+      const window = newWindow
+        ? { title: newWindow, process: String(open.process || ''), path: String(open.path || ''), pid: open.pid, startedPid: open.startedPid }
+        : null;
+      const own = window ? windowMatches(window, { process: proc, path: targetPath }) : false;
+      let shown = '';
+      if (window) {
+        shown = own
+          ? `, окно «${newWindow.slice(0, 80)}»`
+          : `, но новое окно «${newWindow.slice(0, 80)}» не от этой программы`;
+      }
+      return {
+        ...res,
+        summary: res.ok
+          ? `${folder ? 'открыта папка' : 'запущено'}: ${name}${shown}`
+          : res.summary,
+        data: {
+          ...res.data,
+          process: proc,
+          ...(targetPath ? { targetPath } : {}),
+          ...(window ? { newWindow, window } : {}),
+          ...(folder ? { folder, target } : {}),
+        },
+      };
+    },
+    // Проверка: новое окно принадлежит запущенному процессу (имя процесса, путь exe или PID), либо у процесса
+    // есть своё видимое окно. Чужое окно и уведомление подтверждением не считаются: тогда unknown с честным текстом.
+    async verify(args, result, ctx = {}) {
+      const folder = result.data && result.data.folder;
+      if (folder) {
+        const probe = ctx.probeFolderWindow || ((p) => probeFolderWindow(p, { signal: ctx.signal, runner }));
+        const seen = await pollUntil(() => probe(result.data.target), { timeoutMs: ctx.pollTimeoutMs || 4000, signal: ctx.signal });
+        return seen ? { status: 'confirmed', evidence: `Проводник показывает папку «${folder}»` } : { status: 'unknown', evidence: `окно Проводника с папкой «${folder}» не найдено за срок` };
+      }
+      const proc = result.data && result.data.process;
+      const expectedPath = result.data && result.data.targetPath;
+      const window = result.data && result.data.window;
+      const windowTitle = window && window.title ? String(window.title).slice(0, 80) : '';
+      if (window && windowTitle) {
+        if (windowMatches(window, { process: proc, path: expectedPath })) {
+          const owner = window.process ? `процессу «${window.process}»` : 'запущенному процессу';
+          return { status: 'confirmed', evidence: `новое окно «${windowTitle}» принадлежит ${owner}` };
+        }
+        // Окно чужое: процесс мог открыться без окна (лаунчер, фон) или окно ещё открывается — тогда short-добор.
+        const probe = ctx.probeProcessWindow || ((p) => probeProcessWindow(p, { signal: ctx.signal, runner }));
+        const seen = proc ? await pollUntil(() => probe(proc), { timeoutMs: ctx.pollTimeoutMs || 2000, signal: ctx.signal }) : false;
+        if (seen) return { status: 'confirmed', evidence: `у процесса ${proc} есть видимое окно` };
+        const who = window.process ? `процессу «${window.process}»` : 'другому процессу';
+        return { status: 'unknown', evidence: `новое окно «${windowTitle}» принадлежит ${who}, а не запущенной программе${proc ? ` ${proc}` : ''}: запуск не подтверждён` };
+      }
+      if (!proc) return { status: 'unknown', evidence: 'не знаю имя процесса' };
+      const probe = ctx.probeProcessWindow || ((p) => probeProcessWindow(p, { signal: ctx.signal, runner }));
+      // Новое окно скрипт уже ждал до 6 с: здесь короткий добор для программ, что открылись в уже открытом окне.
+      const seen = await pollUntil(() => probe(proc), { timeoutMs: ctx.pollTimeoutMs || 2000, signal: ctx.signal });
       if (seen) return { status: 'confirmed', evidence: `у процесса ${proc} есть видимое окно` };
-      const who = window.process ? `процессу «${window.process}»` : 'другому процессу';
-      return { status: 'unknown', evidence: `новое окно «${windowTitle}» принадлежит ${who}, а не запущенной программе${proc ? ` ${proc}` : ''}: запуск не подтверждён` };
-    }
-    if (!proc) return { status: 'unknown', evidence: 'не знаю имя процесса' };
-    const probe = ctx.probeProcessWindow || ((p) => probeProcessWindow(p, ctx));
-    // Новое окно скрипт уже ждал до 6 с: здесь короткий добор для программ, что открылись в уже открытом окне.
-    const seen = await pollUntil(() => probe(proc), { timeoutMs: ctx.pollTimeoutMs || 2000, signal: ctx.signal });
-    if (seen) return { status: 'confirmed', evidence: `у процесса ${proc} есть видимое окно` };
-    return { status: 'unknown', evidence: `у процесса ${proc} видимое окно не появилось за срок (лаунчер, фоновый запуск или окно ещё открывается)` };
-  },
-};
-
-// Произвольная команда PowerShell. Риск T2: внешнее действие, в «Авто» спрашивает.
-const shellRun = {
-  name: 'shell_run',
-  description: 'Команда PowerShell (медленно, таймаут 30 с). Только когда нет готового инструмента; не для ссылок и интернета (url_open, web_*).',
-  risk: 'T2',
-  parameters: {
-    type: 'object',
-    properties: {
-      command: { type: 'string', minLength: 1, maxLength: 4000 },
+      return { status: 'unknown', evidence: `у процесса ${proc} видимое окно не появилось за срок (лаунчер, фоновый запуск или окно ещё открывается)` };
     },
-    required: ['command'],
-  },
-  async run(args, ctx) {
-    const command = String(args.command || '');
-    if (!command.trim()) return { ok: false, summary: 'пустая команда', data: {} };
-    // Ссылки и интернет — только через url_open и web_*: PowerShell тут медленный и ненадёжный.
-    if (/https?:\/\/|Invoke-(Web|Rest)Request|explorer(\.exe)?\s+https?/i.test(command)) {
-      return { ok: false, summary: 'для ссылок и интернета используй url_open, web_search или web_fetch', data: {} };
-    }
-    const res = await runPowerShell(command, {}, { signal: ctx.signal, timeoutMs: 30000, cwd: ctx.workspace });
-    return { ...res, summary: res.ok ? 'команда выполнена' : res.summary };
-  },
-  verify: cannotVerify('известен только код выхода, эффект команды не проверялся'),
-};
+  };
 
-// Открыть http или https адрес в браузере по умолчанию.
-const urlOpen = {
-  name: 'url_open',
-  description: 'Открыть ссылку или сайт (http/https) в браузере по умолчанию. Для любых ссылок — этот инструмент.',
-  risk: 'T1',
-  parameters: {
-    type: 'object',
-    properties: {
-      url: { type: 'string', maxLength: 2048 },
+  // Произвольная команда PowerShell. Риск T2: внешнее действие, в «Авто» спрашивает.
+  const shellRun = {
+    name: 'shell_run',
+    description: 'Команда PowerShell (медленно, таймаут 30 с). Только когда нет готового инструмента; не для ссылок и интернета (url_open, web_*).',
+    risk: 'T2',
+    parameters: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', minLength: 1, maxLength: 4000 },
+      },
+      required: ['command'],
     },
-    required: ['url'],
-  },
-  async run(args, ctx) {
-    let url;
-    try {
-      url = new URL(String(args.url || ''));
-    } catch {
-      return { ok: false, summary: 'некорректный адрес', data: {} };
-    }
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-      return { ok: false, summary: 'разрешены только http и https', data: {} };
-    }
-    if (url.username || url.password) {
-      return { ok: false, summary: 'адреса с учётными данными не разрешены', data: {} };
-    }
-    // explorer.exe открывает адрес в браузере по умолчанию. Его код выхода не означает ошибку,
-    // поэтому смотрим только на то, запустился ли процесс. Без PowerShell: это быстро.
-    return new Promise((resolve) => {
-      let child;
-      try {
-        // Браузер запускаем напрямую: обработчик https в Windows у некоторых систем не настроен.
-        // Firefox и LibreWolf без флага открывают ссылку в новом окне; -new-tab открывает вкладку в текущем.
-        const firefoxLike = Boolean(browserExe) && /(firefox|librewolf)\.exe$/i.test(browserExe);
-        const args = firefoxLike ? ['-new-tab', url.href] : [url.href];
-        child = spawn(browserExe || 'explorer.exe', args, { windowsHide: true, detached: true, stdio: 'ignore' });
-      } catch (err) {
-        resolve({ ok: false, summary: err.message, data: {} });
-        return;
+    async run(args, ctx = {}) {
+      const command = String(args.command || '');
+      if (!command.trim()) return { ok: false, summary: 'пустая команда', data: {} };
+      // Ссылки и интернет — только через url_open и web_*: PowerShell тут медленный и ненадёжный.
+      if (/https?:\/\/|Invoke-(Web|Rest)Request|explorer(\.exe)?\s+https?/i.test(command)) {
+        return { ok: false, summary: 'для ссылок и интернета используй url_open, web_search или web_fetch', data: {} };
       }
-      child.once('spawn', () => {
-        child.unref();
-        resolve({ ok: true, summary: `открыто: ${url.host}`, data: { host: url.host } });
-      });
-      child.once('error', (err) => resolve({ ok: false, summary: err.message, data: {} }));
-    });
-  },
-  // Проверка: окно браузера со страницей сайта. Заголовок называет сайт, а не адрес, поэтому ищем название сайта.
-  // Без совпадения — unknown с пояснением, не failed: страница могла ещё грузиться.
-  async verify(args, result, ctx = {}) {
-    const host = result.data && result.data.host;
-    if (!host) return { status: 'unknown', evidence: 'нет адреса для проверки' };
-    const brand = brandOf(host);
-    if (brand.length < 3) return { status: 'unknown', evidence: `страница ${host} открыта; по заголовку окна проверить нельзя: название сайта слишком короткое` };
-    const probe = ctx.probeWindowTitle || ((b) => probeBrowserTitle(b, { signal: ctx.signal, browserExe }));
-    const seen = await pollUntil(() => probe(brand), { timeoutMs: ctx.pollTimeoutMs || 3000, signal: ctx.signal });
-    if (seen) return { status: 'confirmed', evidence: `окно браузера со страницей ${host} найдено по заголовку («${brand}»)` };
-    return { status: 'unknown', evidence: `браузер открыт, но в заголовках его окон нет «${brand}»: страница ещё грузится или сайт назван иначе` };
-  },
-};
+      const res = await runner(command, {}, { signal: ctx.signal, timeoutMs: 30000, cwd: ctx.workspace });
+      return { ...res, summary: res.ok ? 'команда выполнена' : res.summary };
+    },
+    verify: cannotVerify('известен только код выхода, эффект команды не проверялся'),
+  };
 
-module.exports = { systemTools: [volumeSet, appOpen, shellRun, urlOpen], runPowerShell, probeProcess, probeProcessWindow, probeBrowserTitle, brandOf, pollUntil, setBrowserExe, findBrowserExe, setAppResolver, setAppLaunchHook, parseOpenOutput, windowMatches, MAX_ENCODED };
+  // Открыть http или https адрес в браузере по умолчанию.
+  const urlOpen = {
+    name: 'url_open',
+    description: 'Открыть ссылку или сайт (http/https) в браузере по умолчанию. Для любых ссылок — этот инструмент.',
+    risk: 'T1',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', maxLength: 2048 },
+      },
+      required: ['url'],
+    },
+    async run(args, ctx = {}) {
+      let url;
+      try {
+        url = new URL(String(args.url || ''));
+      } catch {
+        return { ok: false, summary: 'некорректный адрес', data: {} };
+      }
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        return { ok: false, summary: 'разрешены только http и https', data: {} };
+      }
+      if (url.username || url.password) {
+        return { ok: false, summary: 'адреса с учётными данными не разрешены', data: {} };
+      }
+      // explorer.exe открывает адрес в браузере по умолчанию. Его код выхода не означает ошибку,
+      // поэтому смотрим только на то, запустился ли процесс. Без PowerShell: это быстро.
+      return new Promise((resolve) => {
+        const activeBrowser = typeof getBrowserExe === 'function' ? (getBrowserExe() || null) : null;
+        let child;
+        try {
+          // Браузер запускаем напрямую: обработчик https в Windows у некоторых систем не настроен.
+          // Firefox и LibreWolf без флага открывают ссылку в новом окне; -new-tab открывает вкладку в текущем.
+          const firefoxLike = Boolean(activeBrowser) && /(firefox|librewolf)\.exe$/i.test(activeBrowser);
+          const spawnArgs = firefoxLike ? ['-new-tab', url.href] : [url.href];
+          child = spawn(activeBrowser || 'explorer.exe', spawnArgs, { windowsHide: true, detached: true, stdio: 'ignore' });
+        } catch (err) {
+          resolve({ ok: false, summary: err.message, data: {} });
+          return;
+        }
+        child.once('spawn', () => {
+          if (typeof child.unref === 'function') child.unref();
+          resolve({ ok: true, summary: `открыто: ${url.host}`, data: { host: url.host } });
+        });
+        child.once('error', (err) => resolve({ ok: false, summary: err.message, data: {} }));
+      });
+    },
+    // Проверка: окно браузера со страницей сайта. Заголовок называет сайт, а не адрес, поэтому ищем название сайта.
+    // Без совпадения — unknown с пояснением, не failed: страница могла ещё грузиться.
+    async verify(args, result, ctx = {}) {
+      const host = result.data && result.data.host;
+      if (!host) return { status: 'unknown', evidence: 'нет адреса для проверки' };
+      const brand = brandOf(host);
+      if (brand.length < 3) return { status: 'unknown', evidence: `страница ${host} открыта; по заголовку окна проверить нельзя: название сайта слишком короткое` };
+      const activeBrowser = typeof getBrowserExe === 'function' ? (getBrowserExe() || null) : null;
+      const probe = ctx.probeWindowTitle || ((b) => probeBrowserTitle(b, { signal: ctx.signal, browserExe: activeBrowser, runner }));
+      const seen = await pollUntil(() => probe(brand), { timeoutMs: ctx.pollTimeoutMs || 3000, signal: ctx.signal });
+      if (seen) return { status: 'confirmed', evidence: `окно браузера со страницей ${host} найдено по заголовку («${brand}»)` };
+      return { status: 'unknown', evidence: `браузер открыт, но в заголовках его окон нет «${brand}»: страница ещё грузится или сайт назван иначе` };
+    },
+  };
+
+  return [volumeSet, appOpen, shellRun, urlOpen];
+}
+
+const systemTools = systemToolsFactory();
+
+module.exports = { systemTools, systemToolsFactory, runPowerShell, probeProcess, probeProcessWindow, probeBrowserTitle, probeFolderWindow, brandOf, pollUntil, setBrowserExe, findBrowserExe, setAppResolver, setAppLaunchHook, parseOpenOutput, windowMatches, MAX_ENCODED };

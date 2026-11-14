@@ -23,6 +23,11 @@ const FORWARD_FIELDS = ['messages', 'tools', 'tool_choice', 'stream', 'stream_op
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@.]{2,}$/;
 const LOGIN_IP_PER_15MIN = 60; // общий предел попыток входа с адреса, чтобы перебор не шёл по разным почтам
 const ADMIN_PER_15MIN = 20; // неудачные попытки со служебным ключом
+const LIMIT_LABELS = { session: 'лимит на 5 часов', day: 'дневной лимит', week: 'лимит на неделю' };
+
+function planWindows(plan) {
+  return [['session', plan.sessionUsd], ['day', plan.dayUsd], ['week', plan.weekUsd]];
+}
 
 function scheduleBoundedTimer(delayMs, fn) {
   if (!Number.isFinite(delayMs)) return { clear() {} };
@@ -286,7 +291,7 @@ function createServer(config) {
     const t = now();
     const plan = planOf(account);
     const view = {};
-    for (const [kind, limit] of [['session', plan.sessionUsd], ['week', plan.weekUsd]]) {
+    for (const [kind, limit] of planWindows(plan)) {
       const w = store.window(account.id, kind, t);
       view[kind] = { percent: Math.min(100, Math.round((w.usedUsd / limit) * 100)), resetAt: w.resetAt };
     }
@@ -302,7 +307,7 @@ function createServer(config) {
     // Сначала самое позднее время: нельзя обещать продолжение в момент, когда второе окно всё ещё закрыто.
     let resetAt = null;
     let hit = null;
-    for (const [kind, limit] of [['session', plan.sessionUsd], ['week', plan.weekUsd]]) {
+    for (const [kind, limit] of planWindows(plan)) {
       const w = store.window(account.id, kind, t);
       if (w.active && w.usedUsd >= limit && (!resetAt || w.resetAt > resetAt)) {
         resetAt = w.resetAt;
@@ -310,7 +315,7 @@ function createServer(config) {
       }
     }
     if (hit) {
-      throw new HttpError(429, 'limit', hit === 'session' ? 'лимит на 5 часов исчерпан' : 'лимит на неделю исчерпан', { window: hit, resetAt, retryAfterMs: resetAt - t });
+      throw new HttpError(429, 'limit', `${LIMIT_LABELS[hit]} исчерпан`, { window: hit, resetAt, retryAfterMs: resetAt - t });
     }
     if (store.spentSince(t - DAY) >= globalDailyUsd) {
       throw new HttpError(503, 'capacity', 'сервис временно перегружен, попробуйте позже');

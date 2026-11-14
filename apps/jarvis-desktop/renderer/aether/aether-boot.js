@@ -15,8 +15,8 @@
     chatWidth: 'medium',   // 'narrow' | 'medium' | 'wide'
     orbPosition: 'right',  // 'right' | 'left' | 'top' | 'hidden'
     density: 'calm',       // 'calm' | 'compact'
-    orbSplitPx: 400,       // ширина панели сферы на широких окнах
-    accentGlow: true,      // мягкое тепло вокруг сферы
+    orbSplitPx: 360,
+    accentGlow: false,
   };
 
   function readWorkshop() {

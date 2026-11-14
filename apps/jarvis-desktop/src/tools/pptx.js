@@ -1,16 +1,16 @@
 'use strict';
 
 // Презентация .pptx без установки программ: набор XML-файлов в zip (стандарт Office Open XML).
-// Открывается в PowerPoint, LibreOffice и других. Тёмный стиль с акцентом; одна раскладка, без картинок.
+// Открывается в PowerPoint, LibreOffice и других. Тёмный фон и сиреневый акцент по видеореференсу.
 const { writeZip, readZip } = require('./zip');
 
 const SLIDE_W = 12192000; // 13,33 дюйма в EMU (914400 на дюйм)
 const SLIDE_H = 6858000;
 const MARGIN = 640080;
-const BG = '0E1116';
+const BG = '211c43';
 const FG = 'F2F4F8';
-const MUTED = 'A9B3C4';
-const ACCENT = '39FF14';
+const MUTED = 'B5AED0';
+const ACCENT = 'ABA0EF';
 const MAX_BULLETS = 12;
 
 const esc = (s) => String(s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -28,9 +28,9 @@ function textBox(id, x, y, cx, cy, paras, anchor = 't') {
 }
 
 // Прямоугольник без текста: полоса-акцент.
-function bar(id, x, y, cx, cy, color) {
+function bar(id, x, y, cx, cy, color, geometry = 'rect') {
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Полоса ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>`
-    + `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>`
+    + `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="${geometry}"><a:avLst/></a:prstGeom>`
     + `<a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>`;
 }
 
@@ -41,6 +41,7 @@ function run(text, { size, color, bold = false }) {
 
 const titlePara = (text, size, color, algn = 'l') => `<a:p><a:pPr algn="${algn}"><a:buNone/></a:pPr>${run(text, { size, color, bold: true })}</a:p>`;
 const bulletPara = (text) => `<a:p><a:pPr marL="342900" indent="-342900"><a:spcBef><a:spcPts val="1400"/></a:spcBef><a:buClr><a:srgbClr val="${ACCENT}"/></a:buClr><a:buFont typeface="Arial"/><a:buChar char="■"/></a:pPr>${run(text, { size: 2600, color: FG })}</a:p>`;
+const plainPara = (text, size, color) => `<a:p><a:pPr><a:buNone/></a:pPr>${run(text, { size, color })}</a:p>`;
 
 function slideXml(shapes, bg) {
   return `${XML_HEAD}<p:sld ${NS}><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="${bg}"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>`
@@ -49,21 +50,42 @@ function slideXml(shapes, bg) {
     + `${shapes}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
 }
 
-// Обложка: название по центру, акцентная полоса под ним.
-function coverShapes(title) {
+// Обложка: вертикальная полоса и название слева, с полем под подзаголовок.
+function coverShapes(title, subtitle) {
   const w = SLIDE_W - MARGIN * 2;
-  return bar(2, MARGIN, 3300000, 1600000, 54864, ACCENT)
-    + textBox(3, MARGIN, 1900000, w, 1350000, titlePara(title, 6000, FG), 'b')
-    + textBox(4, MARGIN, 3500000, w, 900000, '<a:p><a:pPr><a:buNone/></a:pPr></a:p>');
+  return bar(2, 0, 0, 182880, SLIDE_H, ACCENT)
+    + textBox(3, MARGIN + 182880, 1700000, w - 182880, 1800000, titlePara(title, title.length > 65 ? 4200 : 5400, FG), 'b')
+    + bar(4, MARGIN + 182880, 3780000, 1250000, 54864, ACCENT)
+    + (subtitle ? textBox(5, MARGIN + 182880, 4100000, w - 182880, 1000000, plainPara(subtitle, 2400, MUTED)) : '');
 }
 
 // Обычный слайд: заголовок сверху, маркированный список ниже.
-function contentShapes(title, bullets) {
+function contentShapes(title, bullets, page, total, layout) {
   const w = SLIDE_W - MARGIN * 2;
-  const size = title.length > 60 ? 3400 : 4400;
-  return bar(2, MARGIN, 1520000, 1600000, 45720, ACCENT)
-    + textBox(3, MARGIN, 457200, w, 1000000, titlePara(title, size, FG), 'b')
-    + textBox(4, MARGIN, 1800000, w, SLIDE_H - 1800000 - 640080, bullets.map(bulletPara).join(''));
+  const size = title.length > 60 ? 3200 : 4000;
+  const body = bullets.length ? bullets.map(bulletPara).join('') : '<a:p/>';
+  let content = textBox(4, MARGIN, 1850000, w, SLIDE_H - 1850000 - 900000, body);
+  if (layout === 'cards' && bullets.length >= 2 && bullets.length <= 3) {
+    const gap = 228600;
+    const cardWidth = Math.floor((w - gap * (bullets.length - 1)) / bullets.length);
+    content = bullets.map((bullet, i) => {
+      const x = MARGIN + i * (cardWidth + gap);
+      const [heading, detail] = /^(.*?):\s+(.+)$/.exec(bullet)?.slice(1) || [bullet, ''];
+      return bar(10 + i * 3, x, 2000000, cardWidth, 3500000, '302953', 'roundRect')
+        + bar(11 + i * 3, x + 220000, 2260000, 360000, 29000, ACCENT)
+        + textBox(12 + i * 3, x + 220000, 2490000, cardWidth - 440000, 2650000,
+          titlePara(heading, 2200, FG) + (detail ? plainPara(detail, 1800, MUTED) : ''));
+    }).join('');
+  } else if (layout === 'agenda' && bullets.length) {
+    const paragraphs = bullets.map((bullet, i) =>
+      `<a:p><a:pPr><a:spcAft><a:spcPts val="700"/></a:spcAft><a:buNone/></a:pPr>${run(String(i + 1).padStart(2, '0') + '   ', { size: 2300, color: ACCENT, bold: true })}${run(bullet, { size: 2300, color: FG })}</a:p>`);
+    content = textBox(4, MARGIN, 1850000, w, SLIDE_H - 1850000 - 900000, paragraphs.join(''));
+  }
+  return bar(2, MARGIN, 550000, 640000, 45720, ACCENT)
+    + textBox(3, MARGIN, 690000, w, 1050000, titlePara(title, size, FG))
+    + content
+    + bar(5, MARGIN, 6170000, w, 12000, '3C355B')
+    + textBox(6, MARGIN, 6300000, w, 320000, titlePara(`${page} / ${total}`, 1300, MUTED, 'r'));
 }
 
 // Нормализует слайды: заголовок обязателен, список — строки без пустых и без лишних.
@@ -72,17 +94,20 @@ function normalizeSlides(slides) {
     .map((s) => ({
       title: String((s && s.title) || '').trim(),
       bullets: (Array.isArray(s && s.bullets) ? s.bullets : []).map((b) => String(b).trim()).filter(Boolean).slice(0, MAX_BULLETS),
+      ...(s && ['agenda', 'cards'].includes(s.layout) ? { layout: s.layout } : {}),
     }))
     .filter((s) => s.title || s.bullets.length);
 }
 
 // Набор слайдов: обложка (если задано title) и содержательные слайды. Возвращает {slides: [...xml], pages: n}.
-function buildPages({ title, slides }) {
+function buildPages({ title, subtitle, slides }) {
   const pages = [];
   const cover = String(title || '').trim();
-  if (cover) pages.push({ bg: BG, shapes: coverShapes(cover) });
-  for (const s of normalizeSlides(slides)) {
-    pages.push({ bg: BG, shapes: contentShapes(s.title || ' ', s.bullets) });
+  const body = normalizeSlides(slides);
+  const total = body.length + Number(Boolean(cover));
+  if (cover) pages.push({ bg: BG, shapes: coverShapes(cover, String(subtitle || '').trim()) });
+  for (const s of body) {
+    pages.push({ bg: BG, shapes: contentShapes(s.title || ' ', s.bullets, pages.length + 1, total, s.layout) });
   }
   return pages;
 }
@@ -127,8 +152,8 @@ const LAYOUT = `${XML_HEAD}<p:sldLayout ${NS} type="blank" preserve="1"><p:cSld 
   + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>';
 
 // Презентация в виде байтов .pptx. title — обложка (необязательна), slides — [{title, bullets}].
-function pptxBuffer({ title, slides } = {}) {
-  const pages = buildPages({ title, slides });
+function pptxBuffer({ title, subtitle, slides } = {}) {
+  const pages = buildPages({ title, subtitle, slides });
   if (!pages.length) throw new Error('нет слайдов: передайте title или slides');
   const n = pages.length;
   const slideIds = pages.map((_, i) => `<p:sldId id="${256 + i}" r:id="rId${i + 3}"/>`).join('');

@@ -56,6 +56,12 @@ const toolWords = (name) => String(name || '').replace(/([a-z0-9])([A-Z])/g, '$1
 const EXTERNAL_SOURCES = new Set(['mcp', 'mail']);
 // Виды памяти, которые читаются всегда и не протухают (src/tools/memory.js).
 const PINNED_MEMORY_KINDS = new Set(['profile', 'agreement']);
+// Локальные записи, меняющие долговременное состояние: после чтения вкладки браузера спрашиваются в любом режиме.
+const BROWSER_TAINT_WRITES = new Set([
+  'remember', 'workspace_write', 'workspace_move', 'workspace_copy', 'workspace_mkdir', 'workspace_restore',
+  'deal_add', 'deal_update', 'command_create', 'goal_create', 'mission_create', 'task_create', 'task_submit',
+  'snippet_add',
+]);
 
 function isOneShot(name) {
   return ONE_SHOT_TOOLS.test(toolWords(name));
@@ -386,7 +392,7 @@ function hasSecretEgress({ name, args } = {}) {
 function decide({ mode, name, risk, args, workspace, sessionAllow, hasPathParam = true, source, ownerAllowed = false, ownerText = '', ownerCommand = false, tainted = false, handsTainted = false, browserTainted = false, installEvidence = null } = {}) {
   // Оплата запрещена всегда: платит владелец сам.
   if (isPayment({ name, args })) return 'deny';
-  if (browserTainted && name === 'remember') return 'ask';
+  if (browserTainted && BROWSER_TAINT_WRITES.has(name)) return 'ask';
   // Для удаления и установки без прямой просьбы владельца требуется подтверждение.
   if (isDeletion({ name, args }) && !(mode === 'full' && (ownerCommand || (ownerAsked('delete', ownerText) && ownerNamedWorkspaceTarget(ownerText, args && args.path, workspace))))) return 'ask';
   // Установка в «Полном доступе» — по прямой просьбе «установи <программа>»: программа должна совпасть с названной
@@ -405,9 +411,9 @@ function decide({ mode, name, risk, args, workspace, sessionAllow, hasPathParam 
   const directMail = mode === 'full' && name === 'mail_send' && source === 'mail' && (ownerSends || ownerAskedMail(ownerText, args));
   const selectedCommand = mode === 'full' && ownerCommand === true;
   if (EXTERNAL_SOURCES.has(source) && ownerAllowed !== true && !directMail && !selectedCommand) return 'ask';
-  // Заражение контекста: если в этом ходу уже читали страницу, экран или файл, исходящее действие
+  // Заражение контекста: если в этом ходу или в истории вкладки уже был недоверенный текст, исходящее действие
   // спрашиваем, кроме прямой просьбы владельца отправить.
-  if (tainted && isEgress(name) && !ownerSends) return 'ask';
+  if ((tainted || browserTainted) && isEgress(name) && !ownerSends) return 'ask';
   // Чужой текст и руки: клик или ввод после чужой страницы/файла могут выполнить чужое указание.
   // Прямая просьба владельца отправить («отправь», «ответь») это снимает.
   if (handsTainted && isHandsAction(name) && !ownerSends) return 'ask';
@@ -459,4 +465,4 @@ const POLICY_PATTERNS = Object.freeze({
   HARD_BROWSER_HOST,
 });
 
-module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe, POLICY_PATTERNS };
+module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe, POLICY_PATTERNS, BROWSER_TAINT_WRITES };

@@ -89,6 +89,13 @@
     success:          pal('#8CF2BE', '#1A4F35', '#EBFFF6', '#2E6E4C', '#E6FFF4', '#6EEFA8', '#145032'),
   };
   const PAL_KEYS = Object.keys(PALETTE.idle);
+  const WIRE_GREEN = {
+    idle: pal('#62d8a3', '#123d2c', '#b0efcf', '#286b4d', '#d0f5e1', '#51d396', '#206144'),
+    attentive: pal('#70e0ac', '#174832', '#b9f6d8', '#307c57', '#d0f5e1', '#55d89b', '#266d4b'),
+    listening: pal('#83efbb', '#194c36', '#d2ffe7', '#38845e', '#e0ffef', '#62e6a8', '#297e55'),
+    thinking: pal('#78e4b0', '#164731', '#c9ffdf', '#327857', '#d8ffe9', '#56dc9e', '#26724e'),
+    speaking: pal('#70e0ac', '#174832', '#b9f6d8', '#307c57', '#d0f5e1', '#55d89b', '#266d4b'),
+  };
 
   // Сетка проволочного вида. В документации оценка «~60 x ~40 ячеек», но по 02-sphere-2x.png
   // на диаметр сферы приходится ~40 ячеек (≈120 меридиан × ~60 параллелей): при 60 сфера
@@ -147,6 +154,7 @@
       if (!this.ctx) throw new Error('NoxOrb: canvas 2D недоступен');
 
       this.variant = o.variant === 'wire' ? 'wire' : (o.variant === 'shutter' ? 'shutter' : 'nox');
+      this.colorway = o.colorway;
       this.state = STATES.includes(o.state) ? o.state : (ALIAS[o.state] || 'idle');
       this.animated = o.animated !== false;
       this.scale = Number.isFinite(Number(o.scale)) && Number(o.scale) > 0 ? Math.min(6, Math.max(0.05, Number(o.scale))) : 1;
@@ -178,7 +186,7 @@
 
       this.mix = { ...MOTION[this.state] };
       this.col = {};
-      for (const key of PAL_KEYS) this.col[key] = PALETTE[this.state][key].slice();
+      for (const key of PAL_KEYS) this.col[key] = this._palette()[key].slice();
 
       // Диагностика для замера fps (публичный API от неё не зависит).
       this.status = { fps: 0, frameMs: 0, frames: 0 };
@@ -388,7 +396,7 @@
       const k = 1 - Math.exp(-dt / 0.26);
       const target = MOTION[this.state];
       for (const key of MIX_KEYS) this.mix[key] += (target[key] - this.mix[key]) * k;
-      const palTarget = PALETTE[this.state];
+      const palTarget = this._palette();
       for (const key of PAL_KEYS) {
         const src = this.col[key];
         const dst = palTarget[key];
@@ -422,10 +430,14 @@
       this.waves = alive;
     }
 
+    _palette() {
+      return (this.variant === 'wire' && this.colorway === 'green' && WIRE_GREEN[this.state]) || PALETTE[this.state];
+    }
+
     _snap() {
       const m = MOTION[this.state];
       for (const key of MIX_KEYS) this.mix[key] = m[key];
-      const p = PALETTE[this.state];
+      const p = this._palette();
       for (const key of PAL_KEYS) this.col[key] = p[key].slice();
       this.kick = 0;
       this.flash = 0;
@@ -702,6 +714,7 @@
       const segBucket = G.segBucket;
       const u = Math.max(0.7, R / 127.4);
       const bright = this.mix.bright * (1 + this.flash * 0.5);
+      const evenMesh = this.colorway === 'green';
       const line = this.col.line, lo = this.col.lo, hi = this.col.hi;
 
       // Тёмная основа полой сферы: в референсе ячейки темнее панели и с синевой.
@@ -739,8 +752,9 @@
           : mixRgb(line, hi, ((s - 0.82) / 0.18) * 0.55);
         // «Ярче» в работе — сдвиг к белому, а не только умножение каналов.
         if (bright > 1) c = mixRgb(c, [230, 249, 255], Math.min(0.40, (bright - 1) * 0.35));
+        if (evenMesh) c = mixRgb(c, line, 0.38);
         cols.push(c);
-        alphas.push(Math.min(1, (0.28 + 0.50 * s) * (0.94 + 0.06 * Math.min(bright, 1.5))));
+        alphas.push(Math.min(1, (evenMesh ? 0.35 + 0.33 * s : 0.28 + 0.50 * s) * (0.94 + 0.06 * Math.min(bright, 1.5))));
         widths.push((0.68 + 0.22 * s) * u);
       }
 
@@ -776,14 +790,14 @@
           has = true;
         }
         if (!has) continue;
-        ctx.strokeStyle = rgba(cols[b], 0.012 + 0.024 * (b / (WIRE_SHADES - 1)));
+        ctx.strokeStyle = rgba(cols[b], (evenMesh ? 0.42 : 1) * (0.012 + 0.024 * (b / (WIRE_SHADES - 1))));
         ctx.lineWidth = widths[b] * 2.6;
         ctx.stroke();
       }
       ctx.globalCompositeOperation = 'source-over';
 
       // Пояс светится шире, чем линия: его свечение не должно доходить до кромки холста.
-      this._drawBelt(ctx, t, cx, cy, R, u, Math.max(2, limit - 3.5 * u));
+      if (!evenMesh) this._drawBelt(ctx, t, cx, cy, R, u, Math.max(2, limit - 3.5 * u));
     }
 
     // Светлая линия-пояс: в референсе это выделенная линия сетки, а не отдельный обод.

@@ -1,8 +1,8 @@
 /* Раздел «Настройки» и «Мастерская Nox» Nox Aether:
- * - поиск по параметрам и 3 понятных категории: «Мастерская Nox», «Основные и доступ», «Голос и диктовка»;
+ * - поиск по всем категориям и отдельные страницы сферы, окна, оформления, доступа и голоса;
  * - единая «Библиотека сфер» (сохраняет обе существующие системы NoxOrb и JarvisOrb и все их варианты без визуальных правок);
  * - независимые настройки для каждой сферы, пресеты и сброс без потери параметров при переключении;
- * - шрифт подписи «The Nox» (IBM Plex Serif, Times New Roman, Georgia, Sitka), 24 темы + акцент, свой фон и 9 эффектов;
+ * - шрифт подписи «The Nox» (IBM Plex Serif, Times New Roman, Georgia, Sitka), темы, акцент, свой фон и 9 эффектов;
  * - временная кнопка безопасного отката на прошлый интерфейс (uiShell: 'legacy'). */
 (() => {
   'use strict';
@@ -33,6 +33,9 @@
     sunrise: 'Восход',
     'blue-hour': 'Синий час',
     eclipse: 'Затмение',
+    malachite: 'Малахит',
+    copper: 'Медь',
+    porcelain: 'Фарфор',
     system: 'Как в системе',
   };
 
@@ -48,7 +51,7 @@
     root.hidden = true;
     root.setAttribute('aria-label', 'Настройки');
 
-    let section = 'workshop'; // 'workshop' | 'general' | 'voice'
+    let section = 'workshop';
     let searchQuery = '';
     let voicesLoaded = false;
     let voicesList = [];
@@ -61,38 +64,46 @@
     const tw = document.createElement('div');
     const h1 = document.createElement('h1');
     h1.className = 'ae-page-title';
-    h1.textContent = 'Настройки и Мастерская Nox';
-    const sub = document.createElement('p');
-    sub.className = 'ae-page-sub';
-    sub.textContent = 'Живой выбор сферы, оформление окна, правила доступа, папки и голосовые функции.';
-    tw.append(h1, sub);
+    h1.textContent = 'Настройки';
+    tw.append(h1);
 
     const searchInp = document.createElement('input');
     searchInp.type = 'search';
     searchInp.className = 'ae-input ae-search-wide';
-    searchInp.placeholder = 'Поиск по настройкам…';
+    searchInp.placeholder = 'Поиск в настройках';
+    searchInp.setAttribute('aria-label', 'Поиск по всем настройкам');
+    const searchWrap = document.createElement('label');
+    searchWrap.className = 'ae-page-search';
+    searchWrap.append(icon('search'), searchInp);
     searchInp.addEventListener('input', () => {
       searchQuery = searchInp.value.trim().toLowerCase();
-      renderBody();
+      render(store.state);
     });
-    head.append(tw, searchInp);
+    head.append(tw);
 
-    const tabs = document.createElement('div');
-    tabs.className = 'ae-subtabs';
+    const tabs = document.createElement('nav');
+    tabs.className = 'ae-settings-nav';
+    tabs.setAttribute('aria-label', 'Разделы настроек');
+    tabs.append(searchWrap);
     const SEC_DEFS = [
-      ['workshop', 'Мастерская Nox'],
-      ['general', 'Основные и доступ'],
-      ['voice', 'Голос и диктовка'],
+      ['workshop', 'Сфера', 'orb'],
+      ['window', 'Окно и чат', 'panelLeft'],
+      ['appearance', 'Оформление', 'palette'],
+      ['general', 'Основные и доступ', 'settings'],
+      ['voice', 'Голос и диктовка', 'mic'],
     ];
     const tabBtns = new Map();
-    for (const [id, label] of SEC_DEFS) {
+    for (const [id, label, glyph] of SEC_DEFS) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'ae-subtab';
-      b.textContent = label;
+      b.className = 'ae-settings-nav-btn';
+      b.dataset.section = id;
+      b.append(icon(glyph), label);
       b.addEventListener('click', () => {
         section = id;
-        renderBody();
+        clearSearch();
+        root.scrollTop = 0;
+        render(store.state);
       });
       tabs.append(b);
       tabBtns.set(id, b);
@@ -101,7 +112,15 @@
     const body = document.createElement('div');
     body.className = 'ae-settings-body';
 
-    root.append(head, tabs, body);
+    const layout = document.createElement('div');
+    layout.className = 'ae-settings-layout';
+    layout.append(tabs, body);
+    root.append(head, layout);
+
+    function clearSearch() {
+      searchInp.value = '';
+      searchQuery = '';
+    }
 
     function updateWorkshop(patch) {
       if (!boot) return;
@@ -122,7 +141,7 @@
     // Синхронизируем предпросмотр в Мастерской при изменениях, не перестраивая форму при плавном перетаскивании ползунков
     let lastSig = '';
     const unsubLib = lib ? lib.subscribe((snap) => {
-      if (root.hidden || section !== 'workshop') return;
+      if (root.hidden || (!searchQuery && section !== 'workshop')) return;
       const activeInput = document.activeElement;
       const isSliderActive = Boolean(activeInput && root.contains(activeInput) && activeInput.tagName === 'INPUT' && activeInput.type === 'range');
       if (((previewHandle && previewOrbId === snap.activeId) || isSliderActive) && !snap.activeSettings.presetId) {
@@ -148,12 +167,14 @@
 
     function matchesSearch(title, desc = '') {
       if (!searchQuery) return true;
-      return (`${title} ${desc}`).toLowerCase().includes(searchQuery);
+      const normalize = (text) => text.toLowerCase().replaceAll('ё', 'е');
+      const haystack = normalize(`${title} ${desc}`);
+      return normalize(searchQuery).split(/\s+/).every((word) => haystack.includes(word));
     }
 
     function makePanel(title, desc = '') {
       const panel = document.createElement('div');
-      panel.className = 'ae-panel';
+      panel.className = 'ae-panel ae-settings-group';
       const th = document.createElement('h2');
       th.textContent = title;
       panel.append(th);
@@ -183,26 +204,27 @@
       const inp = document.createElement('input');
       inp.type = 'checkbox';
       inp.className = 'ae-checkbox';
+      inp.setAttribute('role', 'switch');
       inp.checked = Boolean(checked);
       inp.addEventListener('change', () => onChange(inp.checked));
       row.append(txt, inp);
       return row;
     }
 
-    function renderWorkshop() {
+    function renderWorkshop(group) {
       const wrap = document.createElement('div');
       wrap.className = 'ae-stack';
 
       // ── 1. Библиотека сфер + Живой предпросмотр ────────────────
-      if (lib && matchesSearch('Библиотека сфер сфера вариант пресет Nox Jarvis Контур Точечный Ядро Диафрагма')) {
+      if ((group === 'workshop' || searchQuery) && lib && matchesSearch(
+        'Сфера Библиотека сфер вариант пресет Nox Jarvis Контур Точечный Ядро Диафрагма масштаб движение реакция на голос прозрачность ореол свечение скорость плотность',
+        lib.getSnapshot().orbs.map((orb) => orb.name).join(' ')
+      )) {
         const snap = lib.getSnapshot();
         const activeSpec = snap.activeSpec;
         const activeCfg = snap.activeSettings;
 
-        const panel = makePanel(
-          'Библиотека сфер',
-          'Обе системы визуализации сохранены полностью. Настройки и пресеты каждой сферы запоминаются отдельно.'
-        );
+        const panel = makePanel('Библиотека сфер');
         panel.classList.add('ae-workshop-orbs');
 
         const split = document.createElement('div');
@@ -231,6 +253,7 @@
         previewCard.append(pStage, pCaption);
 
         requestAnimationFrame(() => {
+          if (root.hidden || !pCanvas.isConnected) return;
           destroyPreview();
           previewOrbId = snap.activeId;
           previewHandle = lib.mount(pCanvas, snap.activeId, {
@@ -325,6 +348,7 @@
             hdr.append(lbl, valEl);
             const rng = document.createElement('input');
             rng.type = 'range';
+            rng.setAttribute('aria-label', f.label);
             rng.min = String(f.min);
             rng.max = String(f.max);
             rng.step = String(f.step || 0.05);
@@ -345,7 +369,7 @@
       }
 
       // ── 2. Подпись «The Nox», композиция и шрифт ────────────────
-      if (boot && matchesSearch('The Nox подпись шрифт Times New Roman IBM Plex Serif композиция ширина сфера положение')) {
+      if ((group === 'window' || searchQuery) && boot && matchesSearch('Окно чат The Nox подпись шрифт Times New Roman IBM Plex Serif композиция ширина сфера положение плотность свечение')) {
         const curW = boot.readWorkshop();
         const panel = makePanel('Композиция и подпись «The Nox»', 'Подпись под сферой и распределение пространства чата.');
 
@@ -436,48 +460,137 @@
       }
 
       // ── 3. Тема, акцент и фон окна ──────────────────────────────
-      if (T && matchesSearch('Тема палитра акцент фон эффект звёзды дождь снег своя картинка прозрачность')) {
-        const panel = makePanel('Тема, фон и эффекты', 'Все палитры и эффекты работают локально, без обращения в сеть.');
+      if ((group === 'appearance' || searchQuery) && T && matchesSearch('Оформление Тема палитра цвет акцент HEX фон эффект звёзды дождь снег своя картинка размытие панели',
+        [...Object.values(THEME_LABELS), ...T.ACCENTS.map((a) => a.name)].join(' '))) {
+        const panel = makePanel('Темы');
 
-        // Сетка тем
-        const curTheme = document.documentElement.dataset.theme || 'dark';
-        const themeGrid = document.createElement('div');
-        themeGrid.className = 'ae-theme-chips';
+        const themeGrid = document.createElement('label');
+        themeGrid.className = 'ae-field';
+        const themeSelect = document.createElement('select');
+        themeSelect.className = 'ae-select';
+        let curTheme = document.documentElement.dataset.theme || 'dark';
+        try { curTheme = localStorage.getItem('jarvis.theme') || curTheme; } catch { /* без хранилища */ }
         for (const id of T.IDS) {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.className = curTheme === id ? 'ae-subtab is-active' : 'ae-subtab';
-          b.textContent = THEME_LABELS[id] || id;
-          b.addEventListener('click', () => {
-            try {
-              if (boot) localStorage.setItem(boot.THEME_CHOSEN_KEY, '1');
-              localStorage.setItem('jarvis.theme', id);
-            } catch { /* ignore */ }
-            T.apply(id);
-            document.dispatchEvent(new Event('jarvis:themechange'));
-            renderBody();
-          });
-          themeGrid.append(b);
+          themeSelect.add(new Option(THEME_LABELS[id] || id, id));
         }
-        panel.append(themeGrid);
+        themeSelect.value = T.IDS.includes(curTheme) ? curTheme : 'dark';
+        themeSelect.addEventListener('change', () => applyTheme(themeSelect.value));
+        function applyTheme(id) {
+          themeSelect.value = id;
+          try {
+            if (boot) localStorage.setItem(boot.THEME_CHOSEN_KEY, '1');
+            localStorage.setItem('jarvis.theme', themeSelect.value);
+          } catch { /* без хранилища */ }
+          T.apply(themeSelect.value);
+          document.dispatchEvent(new Event('jarvis:themechange'));
+          syncAppearance();
+        }
+        themeSelect.id = 'aeThemeSelect';
+        themeGrid.append('Все темы', themeSelect);
+        const gallery = document.createElement('div');
+        gallery.className = 'ae-theme-gallery';
+        for (const id of ['dark', 'malachite', 'blue-hour', 'eclipse', 'copper', 'porcelain']) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'ae-theme-card';
+          button.dataset.themeId = id;
+          button.setAttribute('aria-pressed', 'false');
+          const sample = document.createElement('span');
+          sample.className = 'ae-theme-sample';
+          sample.dataset.theme = id;
+          sample.setAttribute('aria-hidden', 'true');
+          sample.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
+          const title = document.createElement('span');
+          title.textContent = THEME_LABELS[id];
+          button.append(sample, title);
+          button.addEventListener('click', () => applyTheme(id));
+          gallery.append(button);
+        }
+        panel.append(gallery, themeGrid);
+        wrap.append(panel);
+        const colorPanel = makePanel('Акцент и фон');
 
         // Акцент
         const accRow = document.createElement('div');
-        accRow.className = 'ae-chips-row ae-mt-sm';
-        const curAcc = typeof T.getAccent === 'function' ? T.getAccent() : 'theme';
+        accRow.className = 'ae-chips-row ae-accent-options';
+        accRow.setAttribute('role', 'group');
+        accRow.setAttribute('aria-label', 'Цвет акцента');
         for (const a of T.ACCENTS) {
           const b = document.createElement('button');
           b.type = 'button';
-          b.className = curAcc === a.id ? 'ae-subtab is-active' : 'ae-subtab';
-          b.textContent = a.name;
+          b.className = 'ae-accent-choice';
+          b.title = a.name;
+          b.setAttribute('aria-label', a.name);
+          b.dataset.accentId = a.id;
+          const dot = document.createElement('span');
+          dot.className = 'ae-accent-dot';
+          b.append(dot);
           b.addEventListener('click', () => {
-            if (typeof T.setAccent === 'function') T.setAccent(a.id);
-            document.dispatchEvent(new Event('jarvis:themechange'));
-            renderBody();
+            applyAccent(a.id);
           });
           accRow.append(b);
         }
-        panel.append(accRow);
+        const accent = document.createElement('div');
+        accent.className = 'ae-field';
+        accent.append('Цвет акцента', accRow);
+        const hexForm = document.createElement('form');
+        hexForm.className = 'ae-hex-form';
+        const hex = document.createElement('input');
+        hex.id = 'aeAccentHex';
+        hex.className = 'ae-input';
+        hex.placeholder = '#89DAB1';
+        hex.maxLength = 7;
+        hex.spellcheck = false;
+        hex.setAttribute('aria-label', 'Свой цвет HEX');
+        const hexApply = document.createElement('button');
+        hexApply.className = 'ae-btn ae-btn-secondary ae-btn-sm';
+        hexApply.textContent = 'Применить';
+        const hexStatus = document.createElement('span');
+        hexStatus.className = 'ae-hex-status';
+        hexStatus.setAttribute('role', 'status');
+        const colorPicker = document.createElement('input');
+        colorPicker.type = 'color';
+        colorPicker.className = 'ae-accent-picker';
+        colorPicker.setAttribute('aria-label', 'Выбрать свой цвет');
+        colorPicker.addEventListener('change', () => applyAccent(colorPicker.value));
+        const hexLabel = document.createElement('label');
+        hexLabel.className = 'ae-hex-label';
+        hexLabel.htmlFor = hex.id;
+        hexLabel.textContent = 'HEX';
+        hexForm.append(colorPicker, hexLabel, hex, hexApply, hexStatus);
+        hexForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const color = T.normHex(hex.value);
+          if (!color) {
+            hex.setAttribute('aria-invalid', 'true');
+            hexStatus.textContent = 'Введите HEX, например #89DAB1.';
+            return;
+          }
+          applyAccent(color);
+        });
+        accent.append(hexForm);
+
+        function applyAccent(value) {
+          T.setAccent(value);
+          document.dispatchEvent(new Event('jarvis:themechange'));
+          syncAppearance();
+        }
+        function syncAppearance() {
+          for (const button of gallery.children) button.setAttribute('aria-pressed', String(button.dataset.themeId === themeSelect.value));
+          const current = T.getAccent();
+          const light = getComputedStyle(document.documentElement).colorScheme === 'light';
+          T.ACCENTS.forEach((a, i) => {
+            const option = accRow.children[i];
+            option.setAttribute('aria-pressed', String(current === a.id));
+            option.firstElementChild.style.backgroundColor = (light ? a.light : a.dark) || '';
+          });
+          const info = T.getAccentInfo();
+          colorPicker.value = info.applied || T.normHex(getComputedStyle(document.documentElement).getPropertyValue('--hue')) || '#808080';
+          hex.removeAttribute('aria-invalid');
+          hex.value = T.normHex(current) || '';
+          hexStatus.textContent = hex.value && info.adjusted ? `С учётом контраста применён ${info.applied}` : '';
+        }
+        syncAppearance();
 
         // Эффект фона и своя картинка
         const look = typeof T.getLook === 'function' ? T.getLook() : {};
@@ -489,13 +602,12 @@
         for (const [k, [lbl]] of Object.entries(T.FXS || {})) {
           const o = document.createElement('option');
           o.value = k;
-          o.textContent = `Эффект: ${lbl}`;
+          o.textContent = lbl;
           if (k === look.fx) o.selected = true;
           fxSel.append(o);
         }
         fxSel.addEventListener('change', () => {
           T.setLook({ fx: fxSel.value });
-          renderBody();
         });
 
         const blurSel = document.createElement('select');
@@ -503,17 +615,32 @@
         for (const [k, [lbl]] of Object.entries(T.BLURS || {})) {
           const o = document.createElement('option');
           o.value = k;
-          o.textContent = `Размытие: ${lbl}`;
+          o.textContent = lbl;
           if (k === look.blur) o.selected = true;
           blurSel.append(o);
         }
         blurSel.addEventListener('change', () => {
           T.setLook({ blur: blurSel.value });
-          renderBody();
         });
 
-        lookGrid.append(fxSel, blurSel);
-        panel.append(lookGrid);
+        function lookField(text, field) {
+          const label = document.createElement('label');
+          label.className = 'ae-field';
+          label.append(text, field);
+          return label;
+        }
+        const hasBackdrop = Boolean(window.NoxBackdrop?.has());
+        const backgrounds = hasBackdrop ? T.BGS : { theme: T.BGS.theme, solid: T.BGS.solid };
+        const background = makeLookSelect('bg', backgrounds, backgrounds[look.bg] ? look.bg : 'theme');
+        const panels = makeLookSelect('panel', T.PANELS, look.panel);
+        lookGrid.append(accent, lookField('Фон окна', background), lookField('Эффект фона', fxSel),
+          lookField('Размытие панелей', blurSel), lookField('Плотность панелей', panels));
+        lookGrid.append(lookField('Прозрачность окна', makeLookSelect('winAlpha', T.WIN_ALPHAS, look.winAlpha)));
+        if (hasBackdrop) {
+          lookGrid.append(lookField('Затемнение картинки', makeLookSelect('bgDim', T.BG_DIMS, look.bgDim)),
+            lookField('Размытие картинки', makeLookSelect('bgBlur', T.BG_BLURS, look.bgBlur)));
+        }
+        colorPanel.append(lookGrid);
 
         // Своя картинка через NoxBackdrop
         if (window.NoxBackdrop) {
@@ -558,18 +685,60 @@
           rstAllBtn.textContent = 'Сбросить вид к теме';
           rstAllBtn.addEventListener('click', () => {
             T.resetToTheme();
+            document.dispatchEvent(new Event('jarvis:themechange'));
             renderBody();
           });
 
           bgRow.append(fileInp, pickBgBtn, clrBgBtn, rstAllBtn);
-          panel.append(bgRow);
+          colorPanel.append(bgRow);
         }
 
+        wrap.append(colorPanel);
+      }
+
+      function makeLookSelect(key, options, value) {
+        const select = document.createElement('select');
+        select.className = 'ae-select';
+        select.dataset.look = key;
+        for (const [id, [label, stack]] of Object.entries(options)) {
+          const option = new Option(label, id);
+          if ((key === 'ui' || key === 'head') && stack && stack !== 'ui') option.style.fontFamily = stack;
+          select.add(option);
+        }
+        select.value = value;
+        select.addEventListener('change', () => T.setLook({ [key]: select.value }));
+        return select;
+      }
+
+      if ((group === 'appearance' || searchQuery) && T && matchesSearch('Типографика шрифты размер текста интерфейс заголовки ответы Inter Aptos IBM Plex Serif')) {
+        const panel = makePanel('Шрифты');
+        const look = T.getLook();
+        const grid = document.createElement('div');
+        grid.className = 'ae-workshop-grid ae-mt-sm';
+        for (const [key, caption, options] of [
+          ['ui', 'Интерфейс', T.FONTS.ui],
+          ['head', 'Заголовки', T.FONTS.head],
+          ['reply', 'Ответы в чате', { theme: ['Как в теме'], ui: ['Как интерфейс'], head: ['Как заголовки'] }],
+          ['size', 'Размер текста', T.SIZES],
+        ]) {
+          const label = document.createElement('label');
+          label.className = 'ae-field';
+          label.append(caption, makeLookSelect(key, options, look[key]));
+          grid.append(label);
+        }
+        const sample = document.createElement('div');
+        sample.className = 'ae-type-sample';
+        const title = document.createElement('strong');
+        title.textContent = 'План на сегодня';
+        const prose = document.createElement('span');
+        prose.textContent = 'Проверил расписание. Следующая встреча в 15:00.';
+        sample.append(title, prose);
+        panel.append(sample, grid);
         wrap.append(panel);
       }
 
       // ── 4. Анимации и временный откат оболочки ──────────────────
-      if (matchesSearch('Анимации движение прошлый интерфейс откат legacy')) {
+      if ((group === 'window' || searchQuery) && matchesSearch('Анимации движение прошлый интерфейс откат legacy')) {
         const panel = makePanel('Движение и оболочка окна');
         panel.append(makeToggleRow(
           'Плавные анимации интерфейса и сфер',
@@ -861,19 +1030,38 @@
 
     function renderBody() {
       for (const [id, b] of tabBtns.entries()) {
-        b.classList.toggle('is-active', id === section);
-        b.setAttribute('aria-pressed', String(id === section));
+        const active = !searchQuery && id === section;
+        b.classList.toggle('is-active', active);
+        if (active) b.setAttribute('aria-current', 'page');
+        else b.removeAttribute('aria-current');
       }
-      if (section !== 'workshop') destroyPreview();
+      destroyPreview();
       body.replaceChildren();
-      if (section === 'workshop') body.append(renderWorkshop());
+      if (searchQuery) {
+        const heading = document.createElement('h2');
+        heading.className = 'ae-section-heading';
+        heading.textContent = 'Результаты поиска';
+        body.append(heading);
+        const matches = [renderWorkshop(section), renderGeneral(), renderVoice()].filter((group) => group.childElementCount > 0);
+        if (matches.length) body.append(...matches);
+        else {
+          const empty = document.createElement('p');
+          empty.className = 'ae-empty-pane';
+          empty.textContent = 'Настройки не найдены. Попробуйте другой запрос.';
+          empty.setAttribute('role', 'status');
+          body.append(empty);
+        }
+      } else if (['workshop', 'window', 'appearance'].includes(section)) body.append(renderWorkshop(section));
       else if (section === 'general') body.append(renderGeneral());
       else if (section === 'voice') body.append(renderVoice());
     }
 
     async function loadQuickHotkey() {
-      if (!bridge.has('quickHotkey')) return;
       try {
+        if (!bridge.has('quickHotkey')) {
+          quickHotkeyText = 'Не определено';
+          return;
+        }
         const r = await bridge.call('quickHotkey');
         quickHotkeyText = (r && r.accelerator) ? `${r.accelerator}${r.ok === false ? ' (занята другой программой)' : ''}` : 'По умолчанию';
       } catch {
@@ -923,7 +1111,7 @@
         destroyPreview();
         return;
       }
-      if (!quickHotkeyText) loadQuickHotkey().then(() => { if (!root.hidden) { lastSig = ''; render(store.state); } });
+      if (wasHidden && !quickHotkeyText) loadQuickHotkey().then(() => { if (!root.hidden) render(store.state); });
       const sig = buildRenderSig(st);
       if (wasHidden || sig !== lastSig) {
         lastSig = sig;
@@ -933,6 +1121,15 @@
 
     return {
       el: root,
+      openVoiceSettings: () => {
+        section = 'voice';
+        clearSearch();
+        root.scrollTop = 0;
+        lastSig = '';
+        store.setRoute('settings');
+        render(store.state);
+        tabBtns.get('voice').focus();
+      },
       render,
       destroy: () => {
         unsubLib();

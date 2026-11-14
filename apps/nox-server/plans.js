@@ -5,7 +5,7 @@
 const fs = require('fs');
 
 const HOUR = 3600 * 1000;
-const WINDOW_MS = { session: 5 * HOUR, week: 7 * 24 * HOUR };
+const WINDOW_MS = { session: 5 * HOUR, day: 24 * HOUR, week: 7 * 24 * HOUR };
 
 const DEFAULT_PLANS = {
   trial: { title: 'Пробный', priceUsd: 0, sessionUsd: 0.03, weekUsd: 0.1, trialDays: 7 },
@@ -18,10 +18,12 @@ function isLimit(v) {
 }
 
 function loadPlans(file) {
-  const plans = file ? JSON.parse(fs.readFileSync(file, 'utf8')) : DEFAULT_PLANS;
-  for (const [id, plan] of Object.entries(plans)) {
+  const source = file ? JSON.parse(fs.readFileSync(file, 'utf8')) : DEFAULT_PLANS;
+  const plans = Object.fromEntries(Object.entries(source).map(([id, plan]) => {
     if (!isLimit(plan.sessionUsd) || !isLimit(plan.weekUsd)) throw new Error(`тариф ${id}: нужны sessionUsd и weekUsd больше 0`);
-  }
+    if (plan.dayUsd !== undefined && !isLimit(plan.dayUsd)) throw new Error(`тариф ${id}: нужен dayUsd больше 0`);
+    return [id, { ...plan, dayUsd: plan.dayUsd ?? Math.min(plan.sessionUsd * 2, plan.weekUsd) }];
+  }));
   if (!plans.trial) throw new Error('нужен тариф trial: с него начинается аккаунт');
   return plans;
 }

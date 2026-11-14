@@ -3,24 +3,71 @@
  * - при действительно пустом чате строка ввода по центру;
  * - при первой отправке — плавная FLIP-анимация в нижний док (или мгновенно при reduced-motion);
  * - при открытии непустого чата из истории — сразу внизу без лишней анимации;
- * - минимальный шум: не более 1 спокойной строки состояния во время работы, все шаги/доказательства/источники — в «Подробности»;
+ * - подпись Nox и многоточие в ожидании, панель действий над вводом и короткий итог проверки;
  * - все 8 состояний: пустой, диалог, длинный ответ, работа инструментов, подтверждение, ошибка+повтор, голос, узкое/широкое окно. */
 (() => {
   'use strict';
 
-  const FALLBACK_STARTERS = [
-    'С чего лучше начать день?',
-    'Проверь, что сейчас открыто на компьютере',
-    'Помоги составить короткий план на неделю',
-  ];
+  // Эти фразы распознаёт src/shortcuts/offline.js, в том числе без аккаунта.
+  const STARTERS = ['Открой Блокнот', 'Открой Калькулятор'];
+  const ACTION_LABELS = {
+    confirmed: 'Результат проверен', unverified: 'Результат не подтверждён',
+    failed: 'Проверка не прошла', error: 'Не удалось выполнить', refused: 'Действие отклонено',
+    done: 'Выполнено', running: 'Выполняется', pending: 'Ждёт решения',
+  };
+  const SAVE_DENY_TOOLS = new Set([
+    'mail_send', 'pc_shutdown', 'shell_run', 'app_close', 'ui_close_window',
+    'app_install', 'windows_close_all', 'window_close_active',
+    'forget', 'deal_clear', 'cancel_reminder',
+  ]);
+  const SAVE_FORBIDDEN_PREFIXES = ['mission_', 'command_'];
+  const SAVE_READ_ONLY_TOOLS = new Set([
+    'ui_windows', 'ui_elements', 'desktop_observe', 'windows_list',
+    'screen_look', 'screen_region_look', 'image_look', 'image_read_text',
+    'clipboard_get', 'workspace_read', 'workspace_list', 'workspace_search',
+    'document_read', 'document_batch', 'project_brief', 'project_diagnostics',
+    'project_commands', 'code_read', 'web_search', 'web_wiki', 'web_fetch',
+    'web_research', 'web_check_claims', 'browser_read', 'browser_tab_read',
+    'browser_tabs', 'browser_snapshot', 'recall', 'memory_about',
+    'disk_free_space', 'disk_cleanup_suggest', 'weather_now', 'currency_rate',
+    'calendar_upcoming', 'calendar_briefing', 'calendar_prep', 'mail_unread',
+    'apps_find', 'apps_scan', 'apps_usage', 'app_search', 'deals_hanging',
+    'list_reminders', 'library_list', 'skills_list', 'skill_read',
+    'goal_list', 'long_task_list', 'task_list', 'command_list',
+  ]);
+  const SAVE_FAILED_STATUSES = new Set(['error', 'failed', 'refused', 'unverified', 'cancelled', 'canceled', 'pending', 'running', 'skipped']);
 
-  function createChatView({ store, bridge, orbStage }) {
+  function hasSaveableTurnActions(item, fallbackPhrase = '') {
+    if (!item || item.kind !== 'assistant' || item.cancelled) return false;
+    const phrase = String(item.userPhrase || fallbackPhrase || '').trim();
+    if (phrase) {
+      if (Array.from(phrase).length > 200) return false;
+      const storeMod = typeof window !== 'undefined' ? window.NoxAetherStore : null;
+      if (storeMod && typeof storeMod.buildClientCommandDraft === 'function') {
+        const probe = storeMod.buildClientCommandDraft(phrase, item.actions || [], []);
+        return Boolean(probe && probe.ok);
+      }
+    }
+    const actions = Array.isArray(item.actions) ? item.actions : [];
+    return actions.some((a) => {
+      if (!a || typeof a !== 'object') return false;
+      const tool = typeof a.tool === 'string' ? a.tool.trim() : '';
+      if (!tool) return false;
+      const st = typeof a.status === 'string' ? a.status.trim().toLowerCase() : '';
+      if (a.ok === false || SAVE_FAILED_STATUSES.has(st)) return false;
+      if (st !== 'confirmed' && st !== 'done' && !(st === '' && a.ok === true)) return false;
+      if (SAVE_DENY_TOOLS.has(tool) || SAVE_FORBIDDEN_PREFIXES.some((p) => tool.startsWith(p))) return false;
+      if (SAVE_READ_ONLY_TOOLS.has(tool)) return false;
+      return true;
+    });
+  }
+
+  function createChatView({ store, bridge, orbStage, onVoiceSettings }) {
     const ui = window.JarvisUI || {};
     const md = window.NoxAetherMarkdown;
     const { icon } = window.NoxAetherIcons;
     const scrub = typeof ui.scrub === 'function' ? ui.scrub : (s) => String(s || '');
     const toolTitle = typeof ui.toolTitle === 'function' ? ui.toolTitle : (t) => String(t || 'Шаг');
-    const statusOfResult = typeof ui.statusOfResult === 'function' ? ui.statusOfResult : () => ({ ok: true, label: 'Готово' });
     const argsPretty = typeof ui.argsPretty === 'function' ? ui.argsPretty : () => '';
 
     const root = document.createElement('section');
@@ -43,16 +90,23 @@
 
     const emptyTitle = document.createElement('h1');
     emptyTitle.className = 'ae-empty-title';
-    emptyTitle.textContent = 'С чего начнём?';
+    emptyTitle.textContent = 'Что сделать на компьютере?';
 
     const emptySub = document.createElement('p');
     emptySub.className = 'ae-empty-sub';
-    emptySub.textContent = 'Задайте вопрос, попросите выполнить действие или приложите файл.';
+    emptySub.textContent = 'Напишите поручение или выберите пример.';
+
+    const starterLabel = document.createElement('p');
+    starterLabel.className = 'ae-starter-label';
+    starterLabel.id = 'aeStarterLabel';
+    starterLabel.textContent = 'Примеры поручений';
 
     const starterRow = document.createElement('div');
     starterRow.className = 'ae-starters';
+    starterRow.setAttribute('role', 'group');
+    starterRow.setAttribute('aria-labelledby', starterLabel.id);
 
-    emptyHero.append(emptyTitle, emptySub, starterRow);
+    emptyHero.append(emptyTitle, emptySub, starterLabel, starterRow);
 
     // Лента сообщений
     const feedWrap = document.createElement('div');
@@ -78,6 +132,37 @@
     // Слот подтверждения (показывается над полем ввода, фокусируя внимание без шума)
     const approvalCard = window.NoxAetherApprovalCard.createApprovalCard({ store });
 
+    const workPanel = document.createElement('div');
+    workPanel.className = 'ae-live-line';
+    workPanel.hidden = true;
+    const workLabel = document.createElement('span');
+    workLabel.className = 'ae-live-label';
+    const workDot = document.createElement('span');
+    workDot.className = 'ae-live-dot';
+    workDot.setAttribute('aria-hidden', 'true');
+    const workText = document.createElement('span');
+    workText.className = 'ae-live-text';
+    workText.setAttribute('role', 'status');
+    const workStep = document.createElement('span');
+    workStep.className = 'ae-live-step';
+    const workElapsed = document.createElement('span');
+    workElapsed.className = 'ae-live-elapsed';
+    workElapsed.setAttribute('aria-hidden', 'true');
+    const workStop = document.createElement('button');
+    workStop.type = 'button';
+    workStop.className = 'ae-btn ae-btn-ghost ae-live-stop';
+    workStop.setAttribute('aria-label', 'Остановить текущий ход');
+    workStop.append(icon('stop'), 'Стоп');
+    workStop.addEventListener('click', async () => {
+      workStop.disabled = true;
+      try {
+        await store.stopRun();
+      } finally {
+        workStop.disabled = false;
+      }
+    });
+    workPanel.append(workDot, workLabel, workStep, workElapsed, workStop, workText);
+
     // Поле ввода (единый экземпляр без пересоздания при переходе empty -> docked)
     let stickBottom = true;
     let captureBeforeSendRect = null;
@@ -85,6 +170,7 @@
     const composer = window.NoxAetherComposer.createComposer({
       store,
       bridge,
+      onVoiceSettings,
       onSendTrigger: () => {
         if (store.isEmptyChat()) {
           captureBeforeSendRect = dockWrap.getBoundingClientRect();
@@ -92,6 +178,7 @@
         stickBottom = true;
       },
       onTyping: (text, caret) => {
+        syncStarters(text, store.state.currentDraftFiles.length);
         if (orbStage) {
           orbStage.setComposer(text);
           if (text.length) orbStage.gesture('type', caret);
@@ -101,48 +188,27 @@
 
     const dockWrap = document.createElement('div');
     dockWrap.className = 'ae-composer-dock';
-    dockWrap.append(approvalCard.el, composer.el);
+    const workDock = document.createElement('div');
+    workDock.className = 'ae-work-dock';
+    workDock.append(workPanel, approvalCard.el);
+    dockWrap.append(workDock, composer.el);
 
     column.append(feedWrap, emptyHero, dockWrap);
     root.append(bannerWrap, column);
 
-    // Загрузка подсказок из библиотеки (до 3-4 аккуратных вариантов для пустого экрана)
-    let loadedStarters = FALLBACK_STARTERS.slice();
-    async function loadStarterChips() {
-      if (bridge.has('libraryList')) {
-        try {
-          const list = await bridge.call('libraryList');
-          if (Array.isArray(list) && list.length) {
-            const picked = [];
-            const seenCats = new Set();
-            for (const c of list) {
-              if (!c || !c.phrase) continue;
-              const cat = c.category || 'all';
-              if (!seenCats.has(cat)) {
-                seenCats.add(cat);
-                picked.push(c.phrase);
-              }
-              if (picked.length >= 3) break;
-            }
-            if (picked.length) loadedStarters = picked;
-          }
-        } catch { /* fallback */ }
-      }
-      renderStarters();
+    function syncStarters(text, fileCount) {
+      for (const chip of starterRow.children) chip.disabled = Boolean(text.trim() || fileCount);
     }
 
-    function renderStarters() {
-      starterRow.replaceChildren();
-      for (const phrase of loadedStarters.slice(0, 3)) {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'ae-starter-chip';
-        chip.textContent = phrase;
-        chip.addEventListener('click', () => composer.setValueAndSend(phrase));
-        starterRow.append(chip);
-      }
+    for (const phrase of STARTERS) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'ae-starter-chip';
+      chip.append(phrase, icon('chevronRight'));
+      chip.title = 'Подставить в поле ввода';
+      chip.addEventListener('click', () => composer.insertStarter(phrase));
+      starterRow.append(chip);
     }
-    renderStarters();
 
     // Управление прокруткой ленты
     function isNearBottom() {
@@ -175,37 +241,46 @@
 
     let pendingFocusTurnId = null;
 
-    function buildDetailsPanel(turn) {
+    function elapsedLabel(ms) {
+      return `${(Math.max(0, ms) / 1000).toFixed(1)} с`;
+    }
+
+    function buildDetailsPanel(turn, { running, waiting }) {
       const acts = Array.isArray(turn.actions) ? turn.actions : [];
-      const srcs = Array.isArray(turn.sources) ? turn.sources : [];
-      if (!acts.length && !srcs.length) return null;
+      const searchUrls = new Set((turn.searchSources || []).map((source) => source.url));
+      const srcs = Array.isArray(turn.sources) ? turn.sources.filter((source) => !searchUrls.has(source.url)) : [];
+      const expandable = acts.length > 0 || srcs.length > 0;
+      if (!expandable && !running) return null;
 
       const wrap = document.createElement('div');
       wrap.className = 'ae-details-wrap';
 
-      const parts = [];
-      if (acts.length) parts.push(`действий: ${acts.length}`);
-      if (srcs.length) parts.push(`источников: ${srcs.length}`);
-
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
+      const toggle = document.createElement(expandable ? 'button' : 'div');
       toggle.className = 'ae-details-toggle';
-      toggle.setAttribute('aria-expanded', String(Boolean(turn.detailsOpen)));
-      toggle.append(
-        icon(turn.detailsOpen ? 'chevronDown' : 'chevronRight', 'ae-details-chev'),
-        (() => {
-          const sp = document.createElement('span');
-          sp.textContent = turn.detailsOpen ? 'Скрыть подробности' : `Подробности (${parts.join(', ')})`;
-          return sp;
-        })()
-      );
-      toggle.addEventListener('click', () => {
-        pendingFocusTurnId = turn.id;
-        store.toggleTurnDetails(turn.id);
-      });
+      if (expandable) {
+        toggle.type = 'button';
+        toggle.setAttribute('aria-expanded', String(Boolean(turn.detailsOpen)));
+        toggle.append(icon(turn.detailsOpen ? 'chevronDown' : 'chevronRight', 'ae-details-chev'));
+        toggle.addEventListener('click', () => {
+          pendingFocusTurnId = turn.id;
+          store.toggleTurnDetails(turn.id);
+        });
+      }
+      const status = turn.cancelled ? 'Остановлено'
+        : running ? (waiting ? 'Ждёт разрешения' : 'Выполняется')
+          : ({ failed: 'Не выполнено', unverified: 'Не подтверждено', succeeded: 'Готово' })[turn.workStatus];
+      toggle.append(status ? `Ход работы · ${status}` : 'Ход работы');
+      const elapsedMs = running ? Date.now() - turn.startedAt : turn.workElapsedMs;
+      if (Number.isFinite(elapsedMs)) {
+        const elapsed = document.createElement('span');
+        elapsed.className = 'ae-work-time';
+        if (running) elapsed.setAttribute('aria-hidden', 'true');
+        elapsed.textContent = ` · ${elapsedLabel(elapsedMs)}`;
+        toggle.append(elapsed);
+      }
       wrap.append(toggle);
 
-      if (turn.detailsOpen) {
+      if (expandable && turn.detailsOpen) {
         const panel = document.createElement('div');
         panel.className = 'ae-details-panel';
 
@@ -222,13 +297,10 @@
             title.className = 'ae-act-name';
             title.textContent = toolTitle(a.tool);
 
-            const stInfo = a.status === 'done'
-              ? statusOfResult({ ok: a.ok !== false, text: a.summary || '', verified: a.verified })
-              : { ok: a.status !== 'failed', label: a.status === 'running' ? 'Выполняется' : (a.status === 'waiting' ? 'Ждёт решения' : 'Выполнено') };
-
             const badge = document.createElement('span');
-            badge.className = stInfo.ok === false ? 'ae-act-state is-err' : (a.verified === true ? 'ae-act-state is-ok' : 'ae-act-state');
-            badge.textContent = a.verified === true ? 'Проверено' : (stInfo.label || 'Готово');
+            badge.className = 'ae-act-state';
+            badge.dataset.status = a.status || '';
+            badge.textContent = ACTION_LABELS[a.status] || 'Статус неизвестен';
 
             top.append(title, badge);
             row.append(top);
@@ -238,6 +310,12 @@
               sum.className = 'ae-act-summary';
               sum.textContent = scrub(a.summary);
               row.append(sum);
+            }
+            if (a.evidence && !String(a.summary || '').includes(a.evidence)) {
+              const evidence = document.createElement('div');
+              evidence.className = 'ae-act-evidence';
+              evidence.textContent = scrub(a.evidence);
+              row.append(evidence);
             }
             const argStr = a.args ? argsPretty(a.args) : '';
             if (argStr) {
@@ -281,7 +359,69 @@
       return wrap;
     }
 
-    function renderTurnItem(item, { isActive = false, isLastError = false } = {}) {
+    function buildOutcomeActionsBar(item) {
+      const actionsBar = document.createElement('div');
+      actionsBar.className = item.savedCommandId ? 'ae-outcome-actions is-saved' : 'ae-outcome-actions';
+
+      if (item.savedCommandId) {
+        const row = document.createElement('div');
+        row.className = 'ae-save-cmd-row';
+
+        const savedBtn = document.createElement('button');
+        savedBtn.type = 'button';
+        savedBtn.className = 'ae-save-cmd-btn is-saved';
+        savedBtn.disabled = true;
+        savedBtn.setAttribute('aria-pressed', 'true');
+        savedBtn.append(icon('check'));
+        const savedLabel = document.createElement('span');
+        savedLabel.textContent = 'Сохранено как команда';
+        savedBtn.append(savedLabel);
+
+        const openBtn = document.createElement('button');
+        openBtn.type = 'button';
+        openBtn.className = 'ae-save-cmd-open';
+        openBtn.append(icon('external'));
+        const openLabel = document.createElement('span');
+        openLabel.textContent = 'Открыть';
+        openBtn.append(openLabel);
+        openBtn.addEventListener('click', () => {
+          if (typeof store.openSavedCommand === 'function') store.openSavedCommand(item.savedCommandId);
+        });
+
+        row.append(savedBtn, openBtn);
+
+        const sub = document.createElement('div');
+        sub.className = 'ae-save-cmd-sub';
+        sub.textContent = 'В следующий раз — сразу, без нейросети';
+
+        actionsBar.append(row, sub);
+        return actionsBar;
+      }
+
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'ae-save-cmd-btn';
+      saveBtn.disabled = Boolean(item.savingCommand);
+      saveBtn.append(icon('commands'));
+      const saveLabel = document.createElement('span');
+      saveLabel.textContent = item.savingCommand ? 'Сохраняем…' : 'Сохранить как команду';
+      saveBtn.append(saveLabel);
+      saveBtn.addEventListener('click', () => {
+        if (typeof store.saveTurnAsCommand === 'function') store.saveTurnAsCommand(item.id);
+      });
+      actionsBar.append(saveBtn);
+
+      if (item.savedCommandError) {
+        const errSpan = document.createElement('span');
+        errSpan.className = 'ae-save-cmd-error';
+        errSpan.textContent = scrub(item.savedCommandError);
+        actionsBar.append(errSpan);
+      }
+
+      return actionsBar;
+    }
+
+    function renderTurnItem(item, { isActive = false, isLastError = false, existing = null, fallbackPhrase = '' } = {}) {
       if (item.kind === 'user') {
         const msg = document.createElement('article');
         msg.className = 'ae-msg is-user';
@@ -376,58 +516,126 @@
       }
 
       // Сообщение ассистента (включая активный поток)
-      const msg = document.createElement('article');
+      const msg = existing || document.createElement('article');
       msg.className = isActive ? 'ae-msg is-assistant is-live' : 'ae-msg is-assistant';
       msg.dataset.id = item.id;
 
-      // Во время активной работы — не более ОДНОЙ спокойной строки прогресса (без многострочного спама)
-      if (isActive) {
-        const liveText = store.getLiveWorkText() || 'Готовлю ответ…';
-        const statusLine = document.createElement('div');
-        statusLine.className = 'ae-live-line';
-        const dot = document.createElement('span');
-        dot.className = 'ae-live-dot';
-        dot.setAttribute('aria-hidden', 'true');
-        const stLabel = document.createElement('span');
-        stLabel.className = 'ae-live-text';
-        const sec = Number.isFinite(item.startedAt) ? Math.max(0, (Date.now() - item.startedAt) / 1000) : 0;
-        stLabel.textContent = liveText === 'Ход работы · Выполняется'
-          ? `${liveText} ${sec.toFixed(1)} с`
-          : `${liveText} · ${sec.toFixed(1)} с`;
-        liveTextNode = stLabel;
-        statusLine.append(dot, stLabel);
-        msg.append(statusLine);
+      const hasText = Boolean(item.text?.trim());
+      const cancelled = !isActive && item.cancelled;
+      const preparing = isActive && showReplyPlaceholder;
+      let reply = msg.querySelector('.ae-reply');
+      for (const child of Array.from(msg.children)) {
+        if (child !== reply) child.remove();
+      }
+      if (hasText || preparing || cancelled) {
+        if (!reply) {
+          reply = document.createElement('div');
+          reply.className = 'ae-reply';
+          const author = document.createElement('div');
+          author.className = 'ae-reply-author';
+          author.textContent = 'Nox';
+          const content = document.createElement('div');
+          content.className = 'ae-reply-content';
+          const copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.className = 'ae-msg-copy';
+          copyBtn.title = 'Скопировать ответ';
+          copyBtn.setAttribute('aria-label', 'Скопировать ответ');
+          copyBtn.append(icon('copy'));
+          reply.append(author, content, copyBtn);
+          msg.append(reply);
+        }
+      } else {
+        reply?.remove();
       }
 
-      if (item.text) {
-        const body = document.createElement('div');
-        body.className = 'ae-assistant-body';
-        body.append(md.renderMarkdown(item.text, { onOpenUrl: openSourceUrl }));
+      const replyContent = reply?.querySelector('.ae-reply-content');
+      if (preparing && !replyContent.querySelector('.ae-reply-thinking')) {
+        const status = document.createElement('div');
+        status.className = 'ae-reply-thinking';
+        status.setAttribute('role', 'status');
+        const label = document.createElement('span');
+        label.className = 'ae-reply-thinking-label';
+        label.textContent = 'Думаю';
+        const dots = document.createElement('span');
+        dots.className = 'ae-reply-dots';
+        dots.setAttribute('aria-hidden', 'true');
+        dots.textContent = '...';
+        status.append(label, dots);
+        replyContent.replaceChildren(status);
+      }
 
-        const copyBtn = document.createElement('button');
-        copyBtn.type = 'button';
-        copyBtn.className = 'ae-msg-copy';
-        copyBtn.title = 'Скопировать ответ';
-        copyBtn.setAttribute('aria-label', 'Скопировать ответ');
-        copyBtn.append(icon('copy'));
-        copyBtn.addEventListener('click', async () => {
-          const ok = await md.copyPlain(item.text);
-          if (ok) {
+      if (hasText || cancelled) {
+        const body = document.createElement('div');
+        body.className = 'ae-assistant-body md';
+        if (hasText) body.append(md.renderMarkdown(item.text, { onOpenUrl: openSourceUrl }));
+        if (cancelled) {
+          const stopped = document.createElement('p');
+          stopped.className = 'ae-reply-stopped';
+          stopped.textContent = hasText ? 'Остановлено. Ответ не завершён.' : 'Остановлено.';
+          body.append(stopped);
+        }
+        replyContent.replaceChildren(body);
+      }
+
+      if (reply?.parentElement === msg) {
+        const copyBtn = reply.querySelector('.ae-msg-copy');
+        const copyText = cancelled ? replyContent.innerText || replyContent.textContent : item.text;
+        copyBtn.disabled = preparing;
+        copyBtn.onclick = async () => {
+          if (await md.copyPlain(copyText)) {
             copyBtn.replaceChildren(icon('check'));
             setTimeout(() => copyBtn.replaceChildren(icon('copy')), 1500);
           }
-        });
-        body.append(copyBtn);
-        msg.append(body);
+        };
       }
 
-      const details = buildDetailsPanel(item);
-      if (details) msg.append(details);
+      const details = buildDetailsPanel(item, { running: isActive && showActiveWork, waiting: isActive && showApprovalWork });
+      if (details) {
+        msg.insertBefore(details, reply?.parentElement === msg ? reply : null);
+      }
+
+      if (!isActive && hasText && item.searchSources?.length) {
+        const loadIcon = bridge.has('sourceIcon') ? (host) => bridge.call('sourceIcon', host) : null;
+        msg.append(window.NoxAetherSources.createSourcesPopover(item.searchSources, openSourceUrl, loadIcon));
+      }
+
+      const actions = item.actions || [];
+      const action = actions.length === 1 ? actions[0] : actions.findLast((a) => a.tool === 'presentation_open');
+      if (!isActive && !item.cancelled && ['confirmed', 'unverified', 'failed', 'error', 'refused'].includes(action?.status)) {
+        const outcome = document.createElement('div');
+        outcome.className = 'ae-action-outcome';
+        outcome.dataset.status = action.status;
+        const label = document.createElement('span');
+        label.textContent = action.tool === 'presentation_open' && action.status === 'unverified'
+          ? 'Открытие презентации не подтверждено' : ACTION_LABELS[action.status];
+        outcome.append(icon(action.status === 'confirmed' ? 'check' : 'alert'), label);
+        if (action.evidence) {
+          const evidence = document.createElement('span');
+          evidence.className = 'ae-action-evidence';
+          evidence.textContent = scrub(action.evidence);
+          outcome.append(evidence);
+        }
+        msg.append(outcome);
+      }
+
+      if (!isActive && !item.cancelled && (item.savedCommandId || hasSaveableTurnActions(item, fallbackPhrase))) {
+        msg.append(buildOutcomeActionsBar(item));
+      }
 
       return msg;
     }
 
     function renderBanner(st) {
+      if (st.limitBanner) {
+        bannerWrap.hidden = false;
+        const banner = document.createElement('div');
+        banner.className = 'ae-banner is-warn';
+        banner.setAttribute('role', 'status');
+        banner.textContent = st.limitBanner;
+        bannerWrap.replaceChildren(banner);
+        return;
+      }
       if (st.link === 'none') {
         bannerWrap.hidden = false;
         const b = document.createElement('div');
@@ -436,12 +644,12 @@
         bannerWrap.replaceChildren(b);
         return;
       }
-      if (!st.hasKey && !st.account.signedIn && st.link === 'electron') {
+      if (!st.hasKey && !st.account?.signedIn && st.link === 'electron') {
         bannerWrap.hidden = false;
         const b = document.createElement('div');
         b.className = 'ae-banner is-info';
         const sp = document.createElement('span');
-        sp.textContent = 'Чтобы отправлять запросы, подключите аккаунт или ключ в Настройках.';
+        sp.textContent = 'Команды «Открой Блокнот» и «Открой Калькулятор» работают без аккаунта. Для свободного диалога подключите аккаунт или ключ.';
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'ae-link-btn';
@@ -457,24 +665,41 @@
 
     let wasEmptyPrev = true;
     let lastFeedSig = '';
-    let liveTextNode = null;
+    let lastActiveSig = '';
+    let activeMessage = null;
+    let showReplyPlaceholder = false;
+    let showActiveWork = false;
+    let showApprovalWork = false;
     let liveElapsedTimer = null;
 
-    function syncLiveTimer(active) {
-      if (active && !liveElapsedTimer) {
-        liveElapsedTimer = setInterval(() => {
-          const t = store.state.activeTurn;
-          if (!t || !liveTextNode || !liveTextNode.isConnected) return;
-          const base = store.getLiveWorkText() || 'Готовлю ответ…';
-          const sec = Number.isFinite(t.startedAt) ? Math.max(0, (Date.now() - t.startedAt) / 1000) : 0;
-          liveTextNode.textContent = base === 'Ход работы · Выполняется'
-            ? `${base} ${sec.toFixed(1)} с`
-            : `${base} · ${sec.toFixed(1)} с`;
-        }, 200);
-      } else if (!active && liveElapsedTimer) {
+    function renderElapsed() {
+      const startedAt = store.state.activeTurn?.startedAt;
+      if (!Number.isFinite(startedAt)) return;
+      const text = elapsedLabel(Date.now() - startedAt);
+      const elapsed = activeMessage?.querySelector('.ae-work-time');
+      if (elapsed && elapsed.textContent !== ` · ${text}`) elapsed.textContent = ` · ${text}`;
+      if (!workPanel.hidden && workElapsed.textContent !== text) workElapsed.textContent = text;
+    }
+
+    function renderWork(st) {
+      const active = st.activeTurn;
+      showApprovalWork = Boolean(active && (st.approvals.queue.length > 0 || st.trackerState === 'waiting_approval'));
+      showActiveWork = Boolean(active && (active.actions.length > 0 || showApprovalWork || st.handsActive || st.trackerState === 'searching' || st.trackerState === 'verifying'));
+      workPanel.hidden = !showApprovalWork;
+      showReplyPlaceholder = Boolean(active && !active.text.trim());
+      if (showApprovalWork) {
+        const steps = active.actions.length;
+        workPanel.dataset.state = 'waiting';
+        workLabel.textContent = 'Агент';
+        workStep.textContent = steps ? `Шаг ${steps}` : '';
+        const text = store.getLiveWorkText() || 'Ждёт разрешения';
+        if (workText.textContent !== text) workText.textContent = text;
+      }
+      if (showActiveWork && !liveElapsedTimer) {
+        liveElapsedTimer = setInterval(renderElapsed, 100);
+      } else if (!showActiveWork && liveElapsedTimer) {
         clearInterval(liveElapsedTimer);
         liveElapsedTimer = null;
-        liveTextNode = null;
       }
     }
 
@@ -482,11 +707,13 @@
       renderBanner(st);
       approvalCard.render(st);
       composer.render(st);
+      renderWork(st);
 
       const isEmpty = store.isEmptyChat();
       const shouldAnim = store.consumeComposeAnim() || (wasEmptyPrev && !isEmpty && Boolean(captureBeforeSendRect));
 
       if (isEmpty) {
+        syncStarters(st.currentDraftText, st.currentDraftFiles.length);
         root.classList.add('is-empty');
         root.classList.remove('is-docked');
         emptyHero.hidden = false;
@@ -520,31 +747,45 @@
       }
       wasEmptyPrev = false;
 
-      // Сравнение сигнатуры ленты снижает лишнюю перестройку DOM во время частых тиков
+      // При поступлении текста меняется только текущий ответ.
       const active = st.activeTurn;
-      const liveText = active ? store.getLiveWorkText() : '';
       const lastItem = st.feedItems[st.feedItems.length - 1];
       const sig = [
         st.activeChatId,
         st.feedItems.length,
-        st.feedItems.map((x) => `${x.id}:${x.detailsOpen ? 1 : 0}:${(x.text || '').length}`).join(','),
-        active ? `${active.id}:${active.text.length}:${active.actions.length}:${active.sources.length}:${active.detailsOpen ? 1 : 0}:${liveText}` : '',
-        st.trackerBusy ? '1' : '0',
+        st.feedItems.map((x) => `${x.id}:${x.detailsOpen ? 1 : 0}:${(x.text || '').length}:${x.savedCommandId || ''}:${x.savingCommand ? 1 : 0}:${x.savedCommandError || ''}:${(x.actions || []).map((a) => `${a.tool || ''}:${a.status || ''}`).join(',')}`).join(','),
+        lastItem?.kind === 'error' && st.trackerBusy ? '1' : '0',
       ].join('|');
+      const activeSig = active
+        ? `${active.id}:${active.text.length}:${active.actions.map((a) => a.status).join(',')}:${active.sources.length}:${active.detailsOpen ? 1 : 0}:${showReplyPlaceholder ? 1 : 0}:${showActiveWork ? 1 : 0}:${showApprovalWork ? 1 : 0}`
+        : '';
+      const rebuilt = sig !== lastFeedSig;
 
-      if (sig !== lastFeedSig) {
+      if (rebuilt) {
         lastFeedSig = sig;
         const frag = document.createDocumentFragment();
         const len = st.feedItems.length;
+        let prevUserPhrase = '';
         for (let i = 0; i < len; i += 1) {
           const item = st.feedItems[i];
+          if (item.kind === 'user' && item.text) prevUserPhrase = String(item.text).trim();
           const isLastErr = item.kind === 'error' && item === lastItem;
-          frag.append(renderTurnItem(item, { isActive: false, isLastError: isLastErr }));
-        }
-        if (active) {
-          frag.append(renderTurnItem({ ...active, kind: 'assistant' }, { isActive: true }));
+          const existing = activeMessage?.dataset.id === item.id ? activeMessage : null;
+          frag.append(renderTurnItem(item, { isLastError: isLastErr, existing, fallbackPhrase: prevUserPhrase }));
         }
         feed.replaceChildren(frag);
+        activeMessage = null;
+      }
+      if (rebuilt || activeSig !== lastActiveSig) {
+        lastActiveSig = activeSig;
+        if (activeMessage && activeMessage.dataset.id !== active?.id) {
+          activeMessage.remove();
+          activeMessage = null;
+        }
+        if (active) {
+          activeMessage = renderTurnItem(active, { isActive: true, existing: activeMessage });
+          if (activeMessage.parentElement !== feed) feed.append(activeMessage);
+        }
         if (pendingFocusTurnId) {
           const focusId = pendingFocusTurnId;
           pendingFocusTurnId = null;
@@ -559,10 +800,8 @@
         }
         scrollBottom(false);
       }
-      syncLiveTimer(Boolean(active));
+      if (showActiveWork) renderElapsed();
     }
-
-    loadStarterChips();
 
     return {
       el: root,

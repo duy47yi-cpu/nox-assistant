@@ -30,6 +30,54 @@
   --fw-bold: 650;
 }
 body { font-optical-sizing: auto; }
+
+/* Общий список выбора для обеих оболочек и вспомогательных окон. */
+@supports (appearance: base-select) and selector(::picker(select)) {
+  select:not([multiple], [size]:not([size="1"])) {
+    appearance: base-select !important;
+  }
+  select.input:not([multiple], [size]:not([size="1"])) {
+    background-image: none !important;
+    padding-inline-end: 10px;
+  }
+  select:not([multiple], [size]:not([size="1"]))::picker(select) {
+    appearance: base-select;
+    margin-block: 4px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 10px 28px #0005;
+    max-block-size: min(320px, 55vh);
+    overflow: auto;
+  }
+  select:not([multiple], [size]:not([size="1"]))::picker-icon {
+    color: var(--text-2);
+  }
+  select:not([multiple], [size]:not([size="1"])):open::picker-icon {
+    color: var(--accent);
+    rotate: 180deg;
+  }
+  select:not([multiple], [size]:not([size="1"])) option {
+    min-block-size: 28px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text);
+    white-space: normal;
+  }
+  select:not([multiple], [size]:not([size="1"])) option:checked {
+    background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  }
+  select:not([multiple], [size]:not([size="1"])) option:not(:disabled):is(:hover, :focus-visible) {
+    background: var(--surface-3);
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
+  }
+  select:not([multiple], [size]:not([size="1"])) option::checkmark { color: var(--accent); }
+  select:not([multiple], [size]:not([size="1"])) option:disabled { opacity: .6; }
+}
 /* Заголовки серифом: только крупные, мелкий сериф на экране читается хуже. Начертание одно — обычное. */
 .view-title, .set-title, .dialog-title, .account-title, .chat-empty h2 {
   font-family: var(--font-head); font-weight: var(--fw-regular); letter-spacing: -0.005em;
@@ -68,9 +116,8 @@ body, .theme-mini {
   --focus: var(--hue);
 }
 
-select.input option {
-  background: var(--surface);
-  color: var(--text);
+@supports not (appearance: base-select) {
+  select.input option { background: var(--surface); color: var(--text); }
 }
 
 /* ── Основные ──────────────────────────────────────────────── */
@@ -204,6 +251,34 @@ select.input option {
   --bg: #101116; --surface: #181920; --surface-2: #20222C; --surface-3: #292D39; --border: #434957;
   --text: #F1F2F7; --text-2: #CBCEDB; --text-3: #A3ABBC;
   --hue: #B8C9F1; --contour: #232633; --contour-index: #555E74;
+}
+
+[data-theme="malachite"] {
+  color-scheme: dark;
+  --theme-font: "Inter", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, serif;
+  --bg: #101815; --surface: #15201C; --surface-2: #1B2B25; --surface-3: #253831; --border: #3B5549;
+  --text: #E9F4ED; --text-2: #BECFC6; --text-3: #A0B7AA;
+  --hue: #89DAB1; --accent-ink: #10241A; --contour: #22372D; --contour-index: #4F7864;
+  --ok: #A3EAC2; --warn: #FFD18A; --err: #FFB0AA; --on-stop: #231718;
+}
+[data-theme="copper"] {
+  color-scheme: dark;
+  --theme-font: "Aptos", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, serif;
+  --bg: #1B1513; --surface: #241B18; --surface-2: #2F221E; --surface-3: #3A2C26; --border: #60463D;
+  --text: #FFF2EA; --text-2: #DFCCC1; --text-3: #C5AA9E;
+  --hue: #F5AB83; --accent-ink: #321E16; --contour: #3B2822; --contour-index: #855644;
+  --ok: #A7E3B4; --warn: #FFE85A; --err: #FFACA8; --on-stop: #321B18;
+}
+[data-theme="porcelain"] {
+  color-scheme: light;
+  --theme-font: "Inter", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "IBM Plex Serif", Georgia, serif;
+  --bg: #EEEDE7; --surface: #FBFAF6; --surface-2: #F2F1EB; --surface-3: #E2E5DD; --border: #BEC7BD;
+  --text: #25312C; --text-2: #414F48; --text-3: #505D56;
+  --hue: #2F6455; --accent-ink: #FFFFFF; --contour: #D5DBD2; --contour-index: #A8BAAE;
+  --ok: #396641; --warn: #805413; --err: #9B3840; --on-stop: #FFFFFF;
 }
 
 /* ── Градиентные: панели спокойные, цвет живёт в фоне ─────────── */
@@ -452,7 +527,7 @@ html[data-fx] .theme-fx { display: block; }
   --fx-moon-halo: color-mix(in srgb, var(--fx-moon-tint) 11%, transparent);
   --fx-moon-beam: color-mix(in srgb, var(--fx-moon-tint) 6%, transparent);
 }
-:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"]) {
+:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"]) {
   --fx-star-1: color-mix(in srgb, var(--text) 90%, transparent);
   --fx-star-2: color-mix(in srgb, color-mix(in srgb, var(--warn) 65%, var(--text)) 88%, transparent);
   --fx-star-3: color-mix(in srgb, color-mix(in srgb, var(--hue) 75%, var(--text)) 85%, transparent);
@@ -498,7 +573,7 @@ html[data-fx="waves"] .theme-fx::after {
   background: var(--fx-wave-dark) repeat-x 0 100% / 1200px 100%;
   animation: fxWave 85s linear infinite;
 }
-html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"]) .theme-fx::before, html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"]) .theme-fx::after { background-image: var(--fx-wave-light); }
+html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"]) .theme-fx::before, html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"]) .theme-fx::after { background-image: var(--fx-wave-light); }
 @keyframes fxWave { to { background-position-x: -1200px; } }
 
 /* Лунный свет: мягкое пятно света сверху справа и редкий косой луч; свет медленно дышит. */
@@ -612,7 +687,7 @@ html[data-animations="off"] .theme-fx::after { animation: none !important; }
 
 /* ── Стекло панели чата ─ контур и фон видны сквозь матовую панель ─ */
 [data-theme] { --glass: 80%; --glass-edge: #FFFFFF24; }
-:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"]) { --glass: 86%; --glass-edge: #FFFFFF99; }
+:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"]) { --glass: 86%; --glass-edge: #FFFFFF99; }
 :is([data-theme="glass"]) { --glass: 64%; --glass-edge: #FFFFFF1F; }
 /* Стеклянные наборы: жидкое — прозрачнее, матовое — плотнее и сильнее размыто. */
 :is([data-theme="liquid"], [data-theme="moonlight"]) { --glass: 62%; --glass-edge: #FFFFFF26; }

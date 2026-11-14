@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nox — первый сценарий</title>
+  <style>
+    @font-face {
+      font-family: Inter;
+      src: url("../../../../../apps/jarvis-desktop/renderer/fonts/Inter-Variable.ttf") format("truetype");
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }
+
+    :root {
+      color-scheme: dark;
+      --bg: #0f0f10;
+      --panel: #18181b;
+      --raised: #1c1c1f;
+      --active: #232326;
+      --line: #2a2a2e;
+      --line-strong: #34343a;
+      --text: #f1f1f3;
+      --secondary: #a1a1a6;
+      --muted: #85858b;
+      --cyan: #2e9ac1;
+      --cyan-soft: rgb(46 154 193 / 13%);
+      --green: #6ee7a6;
+      --amber: #f5a524;
+      --red: #ff7373;
+      --ease: cubic-bezier(.2, 0, 0, 1);
+      font-family: Inter, "Segoe UI Variable Text", "Segoe UI", sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      background: #09090a;
+      color: var(--text);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 360px;
+      min-height: 100vh;
+      padding: 24px;
+      background: #09090a;
+    }
+
+    button, textarea { font: inherit; }
+    button { color: inherit; }
+
+    .lab {
+      width: min(1200px, 100%);
+      margin: 0 auto 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--secondary);
+      font-size: 12px;
+    }
+
+    .lab-title { margin-right: auto; color: var(--text); font-weight: 500; }
+
+    .lab button, .lab select {
+      height: 30px;
+      padding: 0 10px;
+      color: var(--secondary);
+      background: #141415;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      cursor: pointer;
+      transition: background 140ms var(--ease), color 140ms var(--ease), border-color 140ms var(--ease);
+    }
+
+    .lab button:hover, .lab select:hover { color: var(--text); border-color: var(--line-strong); }
+    .lab button[aria-pressed="true"] { color: var(--text); background: #232326; border-color: #45454b; }
+
+    .window {
+      --window-w: 1200px;
+      --window-h: 720px;
+      --rail: 52px;
+      --sphere: 360px;
+      width: min(var(--window-w), 100%);
+      height: min(var(--window-h), calc(100vh - 88px));
+      min-height: 500px;
+      margin: 0 auto;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: var(--rail) minmax(0, 1fr) var(--sphere);
+      gap: 8px;
+      overflow: hidden;
+      background: var(--bg);
+      border: 1px solid #29292d;
+      border-radius: 14px;
+      box-shadow: 0 22px 70px rgb(0 0 0 / 35%);
+    }
+
+    .window[data-size="compact"] {
+      --window-w: 864px;
+      --window-h: 520px;
+      --rail: 46px;
+      --sphere: 278px;
+    }
+
+    .rail {
+      min-height: 0;
+      padding: 8px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      background: #111112;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    .brand-mark {
+      position: relative;
+      width: 26px;
+      height: 26px;
+      margin: 1px 0 10px;
+      border: 1px solid #b8b8bc;
+      border-radius: 50%;
+    }
+
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      top: 4px;
+      right: 3px;
+      width: 7px;
+      height: 7px;
+      background: #111112;
+      border-left: 1px solid #b8b8bc;
+      transform: rotate(25deg);
+    }
+
+    .rail-button {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+      border-radius: 9px;
+    }
+
+    .rail-button svg, .control svg, .icon-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .rail-button.active { color: #69c9e8; background: var(--cyan-soft); box-shadow: inset 2px 0 #63c7e5; }
+    .rail-spacer { flex: 1; }
+    .rail-button.profile { border: 1px solid var(--line); border-radius: 50%; }
+
+    .chat, .presence {
+      min-width: 0;
+      min-height: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+
+    .chat { display: flex; flex-direction: column; overflow: hidden; }
+
+    .chat-head {
+      height: 48px;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgb(255 255 255 / 5%);
+    }
+
+    .wordmark { font-size: 14px; font-weight: 600; letter-spacing: .08em; }
+    .chat-head-note { color: var(--muted); font-size: 12px; }
+
+    .conversation {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      padding: 24px clamp(24px, 7vw, 82px) 16px;
+      display: flex;
+      align-items: center;
+      overflow: auto;
+    }
+
+    .welcome { width: min(100%, 510px); margin: 0 auto; padding-bottom: 4px; }
+    .welcome h1 { max-width: 440px; margin: 0 0 12px; font-size: 27px; font-weight: 500; line-height: 1.2; letter-spacing: -.025em; }
+    .welcome p { max-width: 460px; margin: 0; color: var(--secondary); font-size: 14px; line-height: 21px; }
+    .try-label { margin: 27px 0 8px; color: var(--muted); font-size: 12px; }
+
+    .examples { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .example {
+      min-height: 42px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: #d9d9dd;
+      text-align: left;
+      background: #1c1c1f;
+      border: 1px solid #303035;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 140ms var(--ease), border-color 140ms var(--ease), transform 140ms var(--ease);
+    }
+
+    .example:hover { background: #242428; border-color: #48484f; }
+    .example:active { transform: scale(.985); }
+    .example svg { flex: 0 0 auto; width: 14px; height: 14px; color: var(--muted); fill: none; stroke: currentColor; stroke-width: 1.6; }
+
+    .activity {
+      width: min(100%, 510px);
+      margin: auto;
+      animation: appear 180ms var(--ease) both;
+    }
+
+    @keyframes appear { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    .activity-label { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--secondary); font-size: 12px; }
+    .dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--cyan); }
+    .dot.warn { background: var(--amber); }
+    .dot.ok { background: var(--green); }
+    .activity h1 { margin: 0 0 8px; font-size: 23px; font-weight: 500; line-height: 1.25; }
+    .activity > p { margin: 0; color: var(--secondary); font-size: 14px; line-height: 21px; }
+
+    .steps { margin-top: 26px; border-top: 1px solid var(--line); }
+    .step { min-height: 44px; display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); color: var(--secondary); font-size: 13px; }
+    .step-mark { width: 16px; height: 16px; display: grid; place-items: center; color: var(--muted); }
+    .step-mark svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .step.done .step-mark { color: var(--green); }
+    .step.current { color: var(--text); }
+    .step.current .step-mark { color: var(--cyan); }
+    .step-note { color: var(--muted); font-size: 11px; }
+
+    .proof {
+      margin-top: 22px;
+      padding: 13px 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      color: #d3d3d7;
+      background: #151c19;
+      border: 1px solid #294536;
+      border-radius: 9px;
+      font-size: 13px;
+      line-height: 19px;
+    }
+
+    .proof svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 1px; fill: none; stroke: var(--green); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .proof strong { color: var(--text); font-weight: 500; }
+
+    .approval-actions { margin-top: 20px; display: flex; gap: 8px; }
+    .approval-actions button { min-height: 38px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 8px; background: #202023; cursor: pointer; }
+    .approval-actions .allow { color: #101113; background: #e8e8eb; border-color: #e8e8eb; font-weight: 500; }
+
+    .composer {
+      margin: 0 16px 16px;
+      padding: 10px 10px 8px 14px;
+      background: #151517;
+      border: 1px solid #343439;
+      border-radius: 12px;
+      transition: border-color 160ms var(--ease);
+    }
+
+    .composer:focus-within { border-color: #4a626a; }
+    .composer textarea { width: 100%; height: 30px; padding: 2px 0; resize: none; color: var(--text); background: transparent; border: 0; outline: 0; font-size: 14px; line-height: 22px; }
+    .composer textarea::placeholder { color: #84848a; opacity: 1; }
+    .composer-row { display: flex; align-items: center; gap: 8px; }
+    .control, .icon-button { min-height: 30px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; color: var(--secondary); background: transparent; border: 0; border-radius: 7px; font-size: 12px; cursor: pointer; }
+    .control:hover, .icon-button:hover { color: var(--text); background: #242427; }
+    .voice-control { padding: 0 8px 0 6px; }
+    .voice-control svg { width: 15px; height: 15px; }
+    .compose-spacer { flex: 1; }
+    .tier { padding: 0 8px; color: var(--secondary); border-left: 1px solid var(--line); }
+    .send { width: 34px; height: 34px; padding: 0; color: #061217; background: var(--cyan); border: 0; border-radius: 9px; cursor: pointer; }
+    .send svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .send:hover { background: #43acd1; }
+
+    .presence { position: relative; padding: 10px 12px 16px; display: flex; flex-direction: column; align-items: center; overflow: hidden; background: #171719; }
+    .window-controls { width: 100%; display: flex; justify-content: flex-end; align-items: center; gap: 3px; }
+    .window-controls button { width: 30px; height: 28px; padding: 0; display: grid; place-items: center; color: var(--muted); background: transparent; border: 0; border-radius: 6px; }
+    .window-controls button:hover { color: var(--text); background: #262629; }
+    .window-controls svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+    .orb-wrap { width: min(100%, 330px); aspect-ratio: 1; margin: auto 0 10px; display: grid; place-items: center; }
+    .orb-wrap img { display: block; width: 100%; height: 100%; object-fit: contain; mix-blend-mode: lighten; }
+    .presence-copy { width: 100%; padding: 10px 10px 0; text-align: left; border-top: 1px solid rgb(255 255 255 / 6%); }
+    .presence-name { margin: 0 0 5px; font-size: 16px; font-weight: 500; }
+    .presence-status { display: flex; align-items: center; gap: 7px; color: var(--secondary); font-size: 12px; }
+    .presence-status .dot { width: 6px; height: 6px; background: var(--muted); }
+    .presence-status.running .dot { background: var(--cyan); }
+    .presence-status.done .dot { background: var(--green); }
+    .presence-hint { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 16px; }
+
+    .window[data-state="ready"] .activity,
+    .window:not([data-state="ready"]) .welcome { display: none; }
+
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+    @media (max-width: 900px) {
+      body { min-width: 360px; padding: 12px; }
+      .lab { flex-wrap: wrap; }
+      .lab-title { width: 100%; }
+      .window { --rail: 46px; --sphere: 278px; width: 100%; height: calc(100vh - 118px); min-height: 480px; }
+      .window:not([data-size="compact"]) { --rail: 46px; --sphere: 278px; }
+      .window[data-size="compact"] { --sphere: 258px; }
+      .conversation { padding: 20px 24px 12px; }
+      .welcome h1 { font-size: 23px; }
+      .examples { grid-template-columns: 1fr; }
+      .orb-wrap { width: min(100%, 232px); }
+      .presence { padding: 8px; }
+      .presence-copy { padding: 8px 4px 0; }
+      .presence-hint { display: none; }
+    }
+
+    @media (max-width: 680px) {
+      body { padding: 8px; }
+      .window { grid-template-columns: 42px minmax(0, 1fr); gap: 6px; padding: 6px; height: calc(100vh - 110px); }
+      .presence { display: none; }
+      .rail { padding-top: 6px; }
+      .rail-button { width: 30px; height: 30px; }
+      .conversation { padding: 18px; }
+      .composer { margin: 0 10px 10px; }
+      .tier { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="lab" aria-label="Управление предпросмотром">
+    <span class="lab-title">Сценарий первого поручения · макет</span>
+    <button type="button" data-preview="ready" aria-pressed="true">Начало</button>
+    <button type="button" data-preview="approval" aria-pressed="false">Подтверждение</button>
+    <button type="button" data-preview="running" aria-pressed="false">Выполнение</button>
+    <button type="button" data-preview="verifying" aria-pressed="false">Проверка</button>
+    <button type="button" data-preview="done" aria-pressed="false">Результат</button>
+    <select id="size" aria-label="Размер окна">
+      <option value="wide">1200 × 720</option>
+      <option value="compact">864 × 520</option>
+    </select>
+  </div>
+
+  <main class="window" data-state="ready" data-size="wide" aria-label="Макет первого экрана Nox">
+    <nav class="rail" aria-label="Разделы Nox">
+      <div class="brand-mark" aria-label="Nox"></div>
+      <button class="rail-button active" aria-label="Чат" title="Чат">
+        <svg viewBox="0 0 24 24"><path d="M4.5 5.5h15v11h-9l-4 3v-3h-2z"/><path d="M8 10h8M8 13h5"/></svg>
+      </button>
+      <button class="rail-button" aria-label="Команды" title="Команды">
+        <svg viewBox="0 0 24 24"><path d="M13.3 2.8 5.8 13h5.1l-.3 8.2L18.2 11h-5.1z"/></svg>
+      </button>
+      <button class="rail-button" aria-label="Журнал" title="Журнал">
+        <svg viewBox="0 0 24 24"><path d="m5 12 4.2 4.2L19 6.5"/></svg>
+      </button>
+      <button class="rail-button" aria-label="Подключения" title="Подключения">
+        <svg viewBox="0 0 24 24"><path d="M8 7v4a4 4 0 0 0 8 0V7"/><path d="M6 4v3M10 4v3M14 4v3M18 4v3M12 15v5"/></svg>
+      </button>
+      <div class="rail-spacer"></div>
+      <button class="rail-button profile" aria-label="Настройки" title="Настройки">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.1"/><path d="M5.8 19c.8-3 3-4.6 6.2-4.6s5.4 1.6 6.2 4.6"/></svg>
+      </button>
+    </nav>
+
+    <section class="chat" aria-label="Диалог с Джарвисом">
+      <header class="chat-head">
+        <span class="wordmark">NOX</span>
+        <span class="chat-head-note">Диалог</span>
+      </header>
+
+      <div class="conversation" aria-live="polite">
+        <section class="welcome" aria-labelledby="welcome-title">
+          <h1 id="welcome-title">Что сделать на компьютере?</h1>
+          <p>Напишите поручение или скажите его Джарвису. Ход работы и подтверждение результата появятся здесь.</p>
+          <div class="try-label">Попробуйте</div>
+          <div class="examples">
+            <button class="example" type="button" data-example="Открой Блокнот">
+              <span>Открой Блокнот</span>
+              <svg viewBox="0 0 16 16"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+            </button>
+            <button class="example" type="button" data-example="Сделай снимок экрана">
+              <span>Сделай снимок экрана</span>
+              <svg viewBox="0 0 16 16"><path d="M3 8h9M8 4l4 4-4 4"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <section class="activity" aria-labelledby="activity-title">
+          <div class="activity-label"><span class="dot" id="activity-dot"></span><span id="activity-kicker">Джарвис выполняет поручение</span></div>
+          <h1 id="activity-title">Открываю Блокнот</h1>
+          <p id="activity-description">Покажу, когда окно программы появится на рабочем столе.</p>
+          <div class="steps" id="steps"></div>
+          <div class="proof" id="proof" hidden>
+            <svg viewBox="0 0 20 20"><path d="m4 10 4 4 8-9"/></svg>
+            <span><strong>Подтверждено.</strong> Nox нашёл видимое окно процесса Блокнота.</span>
+          </div>
+          <div class="approval-actions" id="approval-actions" hidden>
+            <button class="allow" type="button" data-preview="running">Разрешить один раз</button>
+            <button type="button" data-preview="ready">Отмена</button>
+          </div>
+        </section>
+      </div>
+
+      <form class="composer" id="composer">
+        <label class="sr-only" for="task">Поручение</label>
+        <textarea id="task" rows="1" placeholder="Напишите, что сделать…"></textarea>
+        <div class="composer-row">
+          <button class="icon-button" type="button" aria-label="Прикрепить файл" title="Прикрепить файл">
+            <svg viewBox="0 0 24 24"><path d="m8 12.5 6.7-6.7a3.2 3.2 0 0 1 4.5 4.5l-8.1 8.1a5 5 0 0 1-7.1-7.1l8-8"/></svg>
+          </button>
+          <button class="control voice-control" type="button" title="Голосовой ввод">
+            <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>
+            <span>Говорить</span>
+          </button>
+          <span class="compose-spacer"></span>
+          <span class="tier">Быстрая</span>
+          <button class="send" type="submit" aria-label="Отправить поручение" title="Отправить поручение">
+            <svg viewBox="0 0 24 24"><path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/></svg>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <aside class="presence" aria-label="Состояние Джарвиса">
+      <div class="window-controls" aria-hidden="true">
+        <button><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="4"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2"/></svg></button>
+        <button><svg viewBox="0 0 20 20"><path d="M4 10h12"/></svg></button>
+        <button><svg viewBox="0 0 20 20"><path d="M7 3H3v4M13 3h4v4M3 13v4h4M17 13v4h-4"/></svg></button>
+        <button><svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></svg></button>
+      </div>
+      <div class="orb-wrap"><img src="../../../screenshots/orb-nox.png" alt="Сфера Nox" /></div>
+      <div class="presence-copy">
+        <p class="presence-name">Джарвис</p>
+        <div class="presence-status" id="presence-status"><span class="dot"></span><span id="presence-label">Ждёт поручение</span></div>
+        <p class="presence-hint" id="presence-hint">Готов к новому поручению</p>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const app = document.querySelector('.window');
+    const controls = [...document.querySelectorAll('[data-preview]')];
+    const steps = document.getElementById('steps');
+    const proof = document.getElementById('proof');
+    const approval = document.getElementById('approval-actions');
+    const title = document.getElementById('activity-title');
+    const kicker = document.getElementById('activity-kicker');
+    const description = document.getElementById('activity-description');
+    const status = document.getElementById('presence-status');
+    const statusLabel = document.getElementById('presence-label');
+    const dot = document.getElementById('activity-dot');
+
+    const check = '<svg viewBox="0 0 16 16"><path d="m3 8 3 3 7-7"/></svg>';
+    const ring = '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.5"/></svg>';
+    const idle = '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/></svg>';
+    const stateData = {
+      approval: {
+        kicker: 'Нужно подтверждение', title: 'Открыть Блокнот?',
+        description: 'Джарвис запустит одну программу. Остальные действия не запланированы.',
+        rows: [['Подготовлено', 'Команда: app_open · Блокнот', 'done'], ['Ожидает решения', 'Запуск начнётся после вашего разрешения', 'current']],
+        status: 'Ждёт разрешения', kind: 'approval', proof: false, approval: true,
+      },
+      running: {
+        kicker: 'Джарвис выполняет поручение', title: 'Открываю Блокнот',
+        description: 'Покажу, когда окно программы появится на рабочем столе.',
+        rows: [['Поручение принято', 'Открой Блокнот', 'done'], ['Запускаю программу', 'Блокнот', 'current']],
+        status: 'Выполняется', kind: 'running', proof: false, approval: false,
+      },
+      verifying: {
+        kicker: 'Проверка результата', title: 'Сверяю окно программы',
+        description: 'Проверяю, появилось ли окно процесса Блокнота.',
+        rows: [['Поручение принято', 'Открой Блокнот', 'done'], ['Программа запущена', 'Окно найдено', 'done'], ['Проверяю результат', 'Сверяю процесс и окно', 'current']],
+        status: 'Проверяет результат', kind: 'running', proof: false, approval: false,
+      },
+      done: {
+        kicker: 'Результат проверен', title: 'Блокнот открыт',
+        description: 'Джарвис выполнил поручение и проверил состояние окна.',
+        rows: [['Поручение принято', 'Открой Блокнот', 'done'], ['Программа запущена', 'Блокнот', 'done'], ['Результат проверен', 'Видимое окно найдено', 'done']],
+        status: 'Готово · подтверждено', kind: 'done', proof: true, approval: false,
+      },
+    };
+
+    function render(name) {
+      const data = stateData[name];
+      app.dataset.state = name === 'ready' ? 'ready' : 'activity';
+      controls.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.preview === name)));
+      if (name === 'ready') {
+        status.className = 'presence-status';
+        statusLabel.textContent = 'Ждёт поручение';
+        document.getElementById('presence-hint').textContent = 'Готов к новому поручению';
+        return;
+      }
+      kicker.textContent = data.kicker;
+      title.textContent = data.title;
+      description.textContent = data.description;
+      statusLabel.textContent = data.status;
+      status.className = `presence-status ${data.kind}`;
+      dot.className = `dot ${name === 'approval' ? 'warn' : name === 'done' ? 'ok' : ''}`;
+      steps.innerHTML = data.rows.map(([label, note, kind]) => `<div class="step ${kind}"><span class="step-mark">${kind === 'done' ? check : kind === 'current' ? ring : idle}</span><span>${label}</span><span class="step-note">${note}</span></div>`).join('');
+      proof.hidden = !data.proof;
+      approval.hidden = !data.approval;
+      document.getElementById('presence-hint').textContent = name === 'done' ? 'Результат виден в диалоге' : 'Ход команды виден в диалоге';
+    }
+
+    controls.forEach((button) => button.addEventListener('click', () => render(button.dataset.preview)));
+    document.getElementById('size').addEventListener('change', (event) => { app.dataset.size = event.target.value; });
+    document.querySelectorAll('[data-example]').forEach((button) => button.addEventListener('click', () => {
+      const field = document.getElementById('task');
+      field.value = button.dataset.example;
+      field.focus();
+    }));
+    document.getElementById('composer').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const value = document.getElementById('task').value.trim().toLowerCase();
+      render(value.includes('блокнот') ? 'running' : 'approval');
+    });
+    render('ready');
+  </script>
+</body>
+</html>

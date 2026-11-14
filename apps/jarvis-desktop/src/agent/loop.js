@@ -2,13 +2,14 @@
 
 const { randomUUID } = require('crypto');
 const path = require('path');
-const { decide: defaultDecide, allowKey, isOneShot } = require('../policy/modes');
-const { isTaintSource, isForeignTextSource, isHandsAction } = require('../policy/taint');
+const { decide: defaultDecide, allowKey, isOneShot, BROWSER_TAINT_WRITES } = require('../policy/modes');
+const { isTaintSource, isForeignTextSource, isHandsAction, isEgress } = require('../policy/taint');
 const { TurnLog } = require('./turnlog');
 const { planNote, planBrief, STOP_WORDS } = require('./plan');
 const { checkEffect } = require('./effects');
 const { makeToolContext } = require('./tool-context');
 const { uniqueSearchMatch } = require('../tools/install');
+const { collectSearchSources } = require('./sources');
 
 // Лимит вызовов инструментов за один ход: защита от зацикливания модели.
 const MAX_TOOL_STEPS = 12;
@@ -235,13 +236,15 @@ function stampMessage(m, stamp) {
 // Сообщение для запроса. Картинка от инструмента (поле image) уходит модели только в текущем ходу,
 // в прошлых ходах остаётся текстом. Поле image в запрос не попадает.
 function wireMessage(m, current) {
-  if (!m.image) return current ? m : compactOld(m);
-  if (!current) return { role: m.role, content: m.content };
+  const base = 'provenance' in m || 'searchSources' in m
+    ? (({ provenance: _p, searchSources: _s, ...rest }) => rest)(m) : m;
+  if (!base.image) return current ? base : compactOld(base);
+  if (!current) return { role: base.role, content: base.content };
   return {
-    role: m.role,
+    role: base.role,
     content: [
-      { type: 'text', text: m.content },
-      { type: 'image_url', image_url: { url: m.image } },
+      { type: 'text', text: base.content },
+      { type: 'image_url', image_url: { url: base.image } },
     ],
   };
 }
@@ -368,7 +371,7 @@ class Agent {
 
   // ownerText — то, что владелец сам написал в чате (без приложенных файлов). Только по нему политика узнаёт его слова;
   // у фоновых агентов его нет, и запись профиля там всегда с вопросом.
-  async run(userText, { ownerText = '' } = {}) {
+  async run(userText, { ownerText = '', turnContext = '' } = {}) {
     if (this._controller) throw new Error('ход уже выполняется');
     const controller = new AbortController();
     this._controller = controller;
@@ -388,6 +391,7 @@ class Agent {
     this._turn = {
       id: randomUUID().slice(0, 8),
       started: Date.now(),
+      searchSources: new Map(),
       userChars: text.length,
       modelCalls: 0,
       modelMs: 0,
@@ -412,6 +416,10 @@ class Agent {
       } catch (err) {
         console.warn(`Справка к ходу не собрана: ${errText(err)}`);
       }
+    }
+    const note = typeof turnContext === 'string' ? turnContext.trim() : '';
+    if (note) {
+      this._turnContext = [this._turnContext, note].filter(Boolean).join('\n\n');
     }
     // «Продолжай» поднимает незакрытый план прошлого хода: модель видит, что уже сделано.
     // Границу слова здесь не используем: в JS она считается только по латинице.
@@ -534,7 +542,12 @@ class Agent {
       };
       // DeepSeek в режиме размышлений с вызовом инструментов требует reasoning_content обратно.
       if (res.reasoningContent) assistant.reasoning_content = res.reasoningContent;
-      if (calls.length) assistant.tool_calls = calls.map(toWireToolCall);
+      if (calls.length) {
+        assistant.tool_calls = calls.map(toWireToolCall);
+        if (this._tainted === true || this._foreign === true || this._hasBrowserContext()) {
+          assistant.provenance = { untrusted: true };
+        }
+      }
       this.history.push(assistant);
 
       // Текст перед вызовом инструмента уже показан потоком: следующий текст начнётся с новой строки.
@@ -758,8 +771,8 @@ class Agent {
         resolution = await this._askApproval(tool, call, signal, { step, target, startedAt: stepStartedAt });
         waitMs = Date.now() - askStarted;
         if (`${call.name}:${stableKey(call.args || {})}` !== approvedAction) resolution = 'reject';
-        // Отправка, публикация и удаление: «на сессию» не выдаём, каждое действие — отдельное согласие.
-        if (resolution === 'session' && (isOneShot(tool.name) || (tool.name === 'remember' && this._hasBrowserContext()))) resolution = 'once';
+        // Отправка, публикация, удаление и производные записи после чтения вкладки: каждое действие — отдельное согласие.
+        if (resolution === 'session' && (isOneShot(tool.name) || (this._hasBrowserContext() && (BROWSER_TAINT_WRITES.has(tool.name) || isEgress(tool.name))))) resolution = 'once';
         // Стоп пришёл, пока ждали ответ: одобрение «на сессию» не сохраняем, стоп его уже отозвал.
         if (resolution === 'session' && !this._stopped() && !signal.aborted && !this._runClosed) {
           this.sessionAllow.add(allowKey(tool.name, call.args));
@@ -837,22 +850,23 @@ class Agent {
 
     // Журнал владельца: итог вызова вместе с проверкой результата. callId связывает запись со стартом в turnLog,
     // runId и step — с ходом и событием окна. Сбой записи не должен оставить вызов без ответа в истории.
+    const redactDerivedJournal = this._hasBrowserContext() && call.name !== 'browser_tab_read';
     try {
       this.journal.append({
         tool: call.name,
-        args: call.args,
+        args: redactDerivedJournal ? { redacted: true } : call.args,
         risk,
         mode: this.mode,
         decision: resolution,
         ok: result.ok,
-        summary: result.summary,
+        summary: redactDerivedJournal && !stopped ? '[скрыто: вызов из контекста вкладки браузера]' : result.summary,
         callId: call.id,
         ...(this._runId ? { runId: this._runId } : {}),
         step,
         status: callStatus,
         verified: result.verified || null,
         verifiedStatus,
-        evidence: result.evidence || null,
+        evidence: redactDerivedJournal ? null : (result.evidence || null),
         ...(afterStop ? { afterStop: true } : {}),
         ...(hung ? { hung: true } : {}),
       });
@@ -880,10 +894,11 @@ class Agent {
     }
     // Итог позднего действия идёт в обход защиты от поздних событий: done уже отправлен, второго не будет.
     const sources = sourcesForWindow(result);
+    if (!afterStop && this._turn) collectSearchSources(this._turn.searchSources, call.name, result);
     (afterStop ? this._emitRaw : this._emit).call(this, {
       ...(afterStop ? { afterStop: true } : {}),
       ...(hung ? { hung: true } : {}),
-      type: 'tool_result', id: call.id, ok: result.ok, summary: result.summary,
+      type: 'tool_result', id: call.id, name: call.name, ok: result.ok, summary: result.summary,
       ...(this._runId ? { runId: this._runId } : {}), step, status: callStatus,
       verifiedStatus, decision: resolution, ...(target ? { target } : {}), startedAt: stepStartedAt,
       label: stopped ? STEP_WORDS.failed : STEP_WORDS[callStatus],
@@ -920,11 +935,13 @@ class Agent {
     const status = !ok || real.verified === 'failed' ? 'failed'
       : real.verified === 'unknown' || (risk !== 'T0' && real.verified !== 'confirmed') ? 'unverified' : 'succeeded';
     const verifiedStatus = real && real.verified === 'confirmed' ? 'confirmed' : real && real.verified === 'failed' ? 'failed' : status === 'unverified' ? 'unverified' : null;
+    const redactDerivedJournal = this._hasBrowserContext() && call.name !== 'browser_tab_read';
     try {
       this.journal.append({
-        tool: call.name, args: call.args, risk, mode, decision, ok, summary, callId: call.id,
+        tool: call.name, args: redactDerivedJournal ? { redacted: true } : call.args, risk, mode, decision, ok,
+        summary: redactDerivedJournal ? '[скрыто: вызов из контекста вкладки браузера]' : summary, callId: call.id,
         ...(runId ? { runId } : {}), step, status, verified: (real && real.verified) || null, verifiedStatus,
-        evidence: (real && real.evidence) || null, afterStop: true, late: true,
+        evidence: redactDerivedJournal ? null : ((real && real.evidence) || null), afterStop: true, late: true,
       });
     } catch (err) {
       console.warn(`Не удалось записать в журнал: ${errText(err)}`);
@@ -964,7 +981,7 @@ class Agent {
         installEvidence: this._installEvidence,
         tainted: this._tainted === true,
         handsTainted: this._foreign === true,
-        browserTainted: this._hasBrowserContext(),
+        browserTainted: typeof this._hasBrowserContext === 'function' ? this._hasBrowserContext() : Boolean(this._browserTainted),
       });
     } catch {
       verdict = 'deny'; // сбой политики = отказ по умолчанию
@@ -975,7 +992,7 @@ class Agent {
 
   // Считаем чтение недоверенным даже при повреждённом или обрезанном результате.
   _hasBrowserContext() {
-    return this.history.some((m) => m && Array.isArray(m.tool_calls)
+    return Array.isArray(this.history) && this.history.some((m) => m && Array.isArray(m.tool_calls)
       && m.tool_calls.some((c) => c && c.function && c.function.name === 'browser_tab_read'));
   }
 
@@ -1117,7 +1134,11 @@ class Agent {
 
   _pushToolResult(id, result) {
     const { image, imageLabel, ...rest } = result;
-    this.history.push({ role: 'tool', tool_call_id: id, content: safeJson(rest) });
+    const entry = { role: 'tool', tool_call_id: id, content: safeJson(rest) };
+    if (this._tainted === true || this._foreign === true || this._hasBrowserContext()) {
+      entry.provenance = { untrusted: true };
+    }
+    this.history.push(entry);
     if (image) this._pendingImages.push({ id, image, summary: rest.summary, label: imageLabel || 'Картинка' });
   }
 
@@ -1272,6 +1293,11 @@ class Agent {
     this._runClosed = true;
     const status = this._runStatus();
     const plan = this._planSummary();
+    const last = this.history.at(-1);
+    const searchSources = status !== 'cancelled' && last?.role === 'assistant' &&
+      !last.tool_calls?.length && typeof last.content === 'string' && last.content.trim() && this._turn?.searchSources.size
+      ? [...this._turn.searchSources.values()] : null;
+    if (searchSources) last.searchSources = searchSources;
     this._emitRaw({
       type: 'done',
       ...(this._runId ? { runId: this._runId } : {}),
@@ -1280,6 +1306,7 @@ class Agent {
       // Явный признак отмены: окно не должно показывать «Ответ готов» после стопа.
       ...(status === 'cancelled' ? { cancelled: true } : {}),
       ...(this._startedAt ? { startedAt: this._startedAt } : {}),
+      ...(searchSources ? { searchSources } : {}),
       verification: this._verificationSummary(),
       ...(plan ? { plan } : {}),
       ...(this._turn ? { steps: this._turn.toolCalls } : {}),

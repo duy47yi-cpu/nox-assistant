@@ -77,7 +77,15 @@ function observeTools(ui = [], { mouse = [] } = {}) {
     const list = (windows.data && windows.data.windows) || [];
     if (!list.length) return { error: 'окон с заголовком нет' };
     const chosen = findWindow(list, want);
-    if (!chosen) return { error: `окно «${want}» не найдено`, windows: list.map((x) => x.title).slice(0, 20) };
+    if (!chosen) {
+      if (/^(?:nox(?:\s+assistant)?|джарвис|nox\s*[—–-]\s*джарвис)$/i.test(String(want || '').trim())) {
+        return {
+          error: `окно «${want}» принадлежит самому Nox (Джарвису): управлять собственным окном и читать его элементы нельзя`,
+          windows: list.map((x) => x.title).slice(0, 20),
+        };
+      }
+      return { error: `окно «${want}» не найдено`, windows: list.map((x) => x.title).slice(0, 20) };
+    }
     const elements = await elementsTool.run({ window: chosen.title, filter: filter || undefined, limit }, ctx);
     if (!elements || !elements.ok) return { error: (elements && elements.summary) || 'элементы не прочитаны' };
     const scene = buildScene({

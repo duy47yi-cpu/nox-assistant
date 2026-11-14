@@ -132,6 +132,19 @@ describe('ui_elements', () => {
     assert.match(res.summary, /не найдено/);
     assert.match(res.summary, /ui_windows/);
   });
+
+  test('окно самого Nox → честный отказ вместо «не найдено»', async () => {
+    for (const name of ['ui_elements', 'ui_click']) {
+      const { runner } = fakeRunner(okJson({ status: 'self_window' }));
+      const args = name === 'ui_click' ? { window: 'NOX', name: 'Отправить' } : { window: 'NOX' };
+      const res = await tool(name, runner).run(args, {});
+      assert.equal(res.ok, false, name);
+      assert.match(res.summary, /принадлежит самому Nox \(Джарвису\): управлять собственным окном и читать его элементы нельзя/, name);
+    }
+    for (const key of ['ui_elements', 'ui_click', 'ui_type', 'ui_keys', 'ui_focus', 'ui_close_window', 'ui_set_toggle']) {
+      assert.ok(SCRIPTS[key].includes('No-JWindow'), `${key} должен проверять окно самого Nox`);
+    }
+  });
 });
 
 describe('пустой или слишком длинный window → отказ без вызова runner', () => {

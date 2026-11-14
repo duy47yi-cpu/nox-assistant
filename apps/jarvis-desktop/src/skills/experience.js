@@ -24,7 +24,7 @@ const READ_ONLY = new Set([
   'web_search', 'web_fetch', 'web_wiki', 'web_research', 'weather_now', 'recall', 'memory_about',
   'skills_list', 'skill_read', 'disk_free_space', 'disk_cleanup_suggest',
   'windows_list', 'ui_elements', 'ui_windows', 'desktop_observe', 'screen_look',
-  'image_read_text', 'document_read', 'workspace_read', 'workspace_search', 'workspace_list', 'project_brief', 'project_diagnostics',
+  'image_read_text', 'document_read', 'document_batch', 'calendar_prep', 'workspace_read', 'workspace_search', 'workspace_list', 'project_brief', 'project_diagnostics',
 ]);
 
 function normalizePhrase(text) {

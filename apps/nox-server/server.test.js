@@ -28,7 +28,7 @@ function provider({ prompt = 1000, completion = 500, status = 200, stream = true
 async function start(t, overrides = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nox-srv-'));
   const plansFile = path.join(dir, 'plans.json');
-  fs.writeFileSync(plansFile, JSON.stringify({ trial: { title: 'Пробный', priceUsd: 0, sessionUsd: 0.05, weekUsd: 0.25, trialDays: 7 }, pro: { title: 'Pro', priceUsd: 10, sessionUsd: 1, weekUsd: 5 } }));
+  fs.writeFileSync(plansFile, JSON.stringify({ trial: { title: 'Пробный', priceUsd: 0, sessionUsd: 0.05, weekUsd: 0.25, trialDays: 7, ...overrides.trialPlan }, pro: { title: 'Pro', priceUsd: 10, sessionUsd: 1, weekUsd: 5 } }));
   const clock = { ms: Date.parse('2026-11-01T10:00:00Z') };
   const prov = overrides.provider || provider();
   const { server, store } = createServer({ dbFile: path.join(dir, 'x.db'), models: { fast: { url: 'http://provider', key: 'PROVIDER-SECRET', model: 'm1', price: PRICE }, smart: { url: 'http://smart', key: 'SMART-SECRET', model: 'm2', price: { inputPerM: 10, cachedPerM: 1, outputPerM: 20 } } }, plansFile, adminKey: 'admin-key-12345', fetchImpl: prov.fetchImpl, now: () => clock.ms, ...overrides.config });
@@ -122,7 +122,7 @@ test('лимит 5 часов: стоп с временем сброса, пос
 
 test('неделя держит и после сброса 5 часов; сообщается поздний срок', async (t) => {
   const prov = provider({ prompt: 20000, completion: 10000 });
-  const { user, ask, clock } = await start(t, { provider: prov }); // неделя у пробного $0.25
+  const { user, ask, clock } = await start(t, { provider: prov, trialPlan: { dayUsd: 0.25 } });
   const a = await user();
   const started = clock.ms;
   for (let i = 0; i < 7; i++) {
@@ -133,6 +133,27 @@ test('неделя держит и после сброса 5 часов; соо�
   assert.equal(r.status, 429);
   assert.equal(r.json.error.window, 'week');
   assert.equal(r.json.error.resetAt, started + 7 * 24 * HOUR);
+});
+
+test('дневной лимит учитывается после сброса пяти часов и обновляется через сутки', async (t) => {
+  const prov = provider({ prompt: 20000, completion: 10000 });
+  const { user, ask, clock, call } = await start(t, { provider: prov });
+  const { token } = await user();
+  const started = clock.ms;
+  for (const offset of [0, 5, 10]) {
+    clock.ms = started + offset * HOUR;
+    assert.equal((await ask(token)).status, 200);
+  }
+  clock.ms = started + 15 * HOUR;
+  const account = (await call('GET', '/v1/me', { token })).json;
+  assert.deepEqual(account.limits.day, { percent: 100, resetAt: started + 24 * HOUR });
+  assert.equal(account.limits.session.percent, 0);
+  assert.equal((await ask(token)).json.error.window, 'day');
+  clock.ms = started + 24 * HOUR;
+  assert.equal((await ask(token)).status, 200);
+  const limits = (await call('GET', '/v1/me', { token })).json.limits;
+  assert.equal(limits.day.percent, 40);
+  assert.ok(limits.week.percent > limits.day.percent);
 });
 
 test('пробный период кончился: 402, тариф открывает доступ', async (t) => {

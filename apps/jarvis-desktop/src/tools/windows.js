@@ -59,24 +59,62 @@ function parseEnum(stdout) {
   const area = parsed && parsed.area && typeof parsed.area === 'object'
     ? { x: Number(parsed.area.x) || 0, y: Number(parsed.area.y) || 0, w: Number(parsed.area.w) || 0, h: Number(parsed.area.h) || 0 }
     : { x: 0, y: 0, w: 0, h: 0 };
-  const windows = Array.isArray(parsed.windows) ? parsed.windows.map((w) => ({
-    hwnd: Number(w.hwnd),
-    process: String(w.process ?? ''),
-    title: String(w.title ?? ''),
-    left: Number(w.left) || 0,
-    top: Number(w.top) || 0,
-    right: Number(w.right) || 0,
-    bottom: Number(w.bottom) || 0,
-    minimized: Boolean(w.minimized),
-  })) : [];
+  const windows = Array.isArray(parsed.windows) ? parsed.windows.map((w) => {
+    const hasBounds = [w.left, w.top, w.right, w.bottom].every((v) => v !== undefined && v !== null && Number.isFinite(Number(v)));
+    return {
+      hwnd: Number(w.hwnd),
+      process: String(w.process ?? ''),
+      title: String(w.title ?? ''),
+      left: Number(w.left) || 0,
+      top: Number(w.top) || 0,
+      right: Number(w.right) || 0,
+      bottom: Number(w.bottom) || 0,
+      hasBounds,
+      minimized: Boolean(w.minimized),
+      visible: w.visible === undefined ? true : Boolean(w.visible),
+      cloaked: Boolean(w.cloaked),
+    };
+  }) : [];
   return { area, windows };
 }
 
-// Перечисление окон: hwnd, заголовок, прямоугольник, свёрнутое состояние, рабочая область монитора первого окна.
+const ARRANGE_SKIP_PROCS = new Set([
+  'jarvis-desktop',
+  'nox-assistant',
+  'nox',
+  'electron',
+  'applicationframehost',
+  'textinputhost',
+  'shellexperiencehost',
+  'startmenuexperiencehost',
+  'searchhost',
+  'searchui',
+  'systemsettings',
+  'lockapp',
+  'widgets',
+]);
+
+function isArrangeProcessExcluded(processName) {
+  const proc = String(processName || '').trim().toLowerCase().replace(/\.exe$/i, '');
+  if (!proc) return false;
+  if (ARRANGE_SKIP_PROCS.has(proc)) return true;
+  return proc.includes('nox') || proc.includes('jarvis');
+}
+
+function isSuitableArrangeWindow(w) {
+  if (!w || w.minimized) return false;
+  if (w.cloaked === true || w.visible === false) return false;
+  if (!String(w.title || '').trim()) return false;
+  if (isArrangeProcessExcluded(w.process)) return false;
+  if (w.hasBounds && ((w.right - w.left) <= 0 || (w.bottom - w.top) <= 0)) return false;
+  return true;
+}
+
+// Перечисление окон: hwnd, заголовок, прямоугольник, свёрнутое/видимое/cloaked состояние, рабочая область монитора первого окна.
 const ENUM_SCRIPT = [
   "try { [Console]::OutputEncoding = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false } catch {}",
   'Add-Type -AssemblyName System.Windows.Forms',
-  '$sig = \'[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r); [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h); public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }\'',
+  '$sig = \'[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r); [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int val, int size); public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }\'',
   'Add-Type -MemberDefinition $sig -Name Win -Namespace Nox',
   '$procs = @(Get-Process -ErrorAction SilentlyContinue |',
   '  Where-Object { $_.Id -ne $PID -and $_.MainWindowHandle -ne [IntPtr]::Zero -and -not [string]::IsNullOrWhiteSpace($_.MainWindowTitle) })',
@@ -85,8 +123,12 @@ const ENUM_SCRIPT = [
   '  $h = $p.MainWindowHandle',
   '  $r = New-Object Nox.Win+RECT',
   '  if ([Nox.Win]::GetWindowRect($h, [ref]$r)) {',
+  '    $visible = $true',
+  '    try { $visible = [Nox.Win]::IsWindowVisible($h) } catch { $visible = $true }',
+  '    $cloaked = $false',
+  '    try { $cv = 0; if ([Nox.Win]::DwmGetWindowAttribute($h, 14, [ref]$cv, 4) -eq 0 -and $cv -ne 0) { $cloaked = $true } } catch { $cloaked = $false }',
   '    $items += [pscustomobject]@{',
-  '      hwnd = [int]$h',
+  '      hwnd = [int64]$h',
   '      process = [string]$p.ProcessName',
   '      title = [string]$p.MainWindowTitle',
   '      left = $r.Left',
@@ -94,26 +136,30 @@ const ENUM_SCRIPT = [
   '      right = $r.Right',
   '      bottom = $r.Bottom',
   '      minimized = [Nox.Win]::IsIconic($h)',
+  '      visible = $visible',
+  '      cloaked = $cloaked',
   '    }',
   '  }',
   '}',
   '$area = $null',
   'if ($items.Count -gt 0) {',
-  '  $screen = [System.Windows.Forms.Screen]::FromHandle([IntPtr]$items[0].hwnd)',
+  '  $screen = [System.Windows.Forms.Screen]::FromHandle([IntPtr][int64]$items[0].hwnd)',
   '  $wa = $screen.WorkingArea',
   '  $area = [pscustomobject]@{ x = $wa.X; y = $wa.Y; w = $wa.Width; h = $wa.Height }',
   '}',
   'ConvertTo-Json -Compress -InputObject ([pscustomobject]@{ area = $area; windows = $items })',
 ].join('\n');
 
-// Применение раскладки: MoveWindow по списку из JARVIS_ARRANGE.
+// Применение раскладки: восстанавливает развёрнутое на весь экран окно (SW_RESTORE = 9) и ставит MoveWindow по списку из JARVIS_ARRANGE.
 const APPLY_SCRIPT = [
   "try { [Console]::OutputEncoding = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false } catch {}",
-  '$sig = \'[DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int h, bool r);\'',
+  '$sig = \'[DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr hwnd, int x, int y, int w, int h, bool r); [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);\'',
   'Add-Type -MemberDefinition $sig -Name Win -Namespace Nox',
   '$arr = ConvertFrom-Json -InputObject $env:JARVIS_ARRANGE',
   'foreach ($item in $arr) {',
-  '  [Nox.Win]::MoveWindow([IntPtr]$item.hwnd, $item.x, $item.y, $item.w, $item.h, $true) | Out-Null',
+  '  $h = [IntPtr][int64]$item.hwnd',
+  '  if ([Nox.Win]::IsZoomed($h)) { [void][Nox.Win]::ShowWindow($h, 9) }',
+  '  [Nox.Win]::MoveWindow($h, $item.x, $item.y, $item.w, $item.h, $true) | Out-Null',
   '}',
   'ConvertTo-Json -Compress -InputObject ([pscustomobject]@{ moved = $arr.Count })',
 ].join('\n');
@@ -440,19 +486,30 @@ function windowsTools(runner = runPowerShell) {
 
   const windowsArrange = {
     name: 'windows_arrange',
-    description: 'Раскладка открытых окон на экране: рядом, сеткой или каскадом.',
+    description: 'Раскладка открытых окон на экране: рядом (row), сеткой (grid) или каскадом (cascade). Можно ограничить число окон через count (2–9).',
     risk: 'T1',
     parameters: {
       type: 'object',
       properties: {
         layout: { type: 'string', enum: ['row', 'grid', 'cascade'], minLength: 1 },
         titles: { type: 'array', items: { type: 'string' }, maxItems: 9 },
+        count: { type: 'integer', minimum: 2, maximum: 9 },
       },
       required: ['layout'],
     },
     async run(args, ctx) {
       const layout = String((args && args.layout) || '').trim().toLowerCase();
       if (!layout) return { ok: false, summary: 'не указана раскладка', data: {} };
+
+      const hasCount = args && args.count !== undefined && args.count !== null;
+      let limit = layout === 'left_right' ? 2 : 9;
+      if (hasCount) {
+        const countNum = Number(args.count);
+        if (!Number.isInteger(countNum) || countNum < 2 || countNum > 9) {
+          return { ok: false, summary: 'count должен быть целым числом от 2 до 9', data: {} };
+        }
+        limit = layout === 'left_right' ? Math.min(2, countNum) : countNum;
+      }
 
       const signal = ctx && ctx.signal;
       const enumRes = await runner(ENUM_SCRIPT, {}, { timeoutMs: TIMEOUT_MS, signal });
@@ -465,7 +522,7 @@ function windowsTools(runner = runPowerShell) {
         return { ok: false, summary: 'не удалось разобрать список окон', data: {} };
       }
 
-      let windows = parsed.windows.filter((w) => !w.minimized);
+      let windows = parsed.windows.filter(isSuitableArrangeWindow);
       const titles = Array.isArray((args && args.titles)) ? args.titles.filter(Boolean).slice(0, 9) : null;
       if (titles && titles.length > 0) {
         const lower = titles.map((t) => String(t).toLowerCase());
@@ -473,9 +530,13 @@ function windowsTools(runner = runPowerShell) {
       }
 
       if (windows.length < 2) {
-        return { ok: false, summary: `подходящих окон: ${windows.length}, нужно минимум 2`, data: {} };
+        return {
+          ok: false,
+          summary: `подходящих окон: ${windows.length}, нужно минимум 2`,
+          data: { found: windows.length, windows: windows.map((w) => w.title) },
+        };
       }
-      if (windows.length > 9) windows = windows.slice(0, 9);
+      windows = windows.slice(0, limit);
 
       let rects;
       try {
@@ -495,6 +556,14 @@ function windowsTools(runner = runPowerShell) {
 
       const applyRes = await runner(APPLY_SCRIPT, { JARVIS_ARRANGE: JSON.stringify(placed) }, { timeoutMs: TIMEOUT_MS, signal });
       if (!applyRes.ok) return { ok: false, summary: applyRes.summary, data: {} };
+
+      if (layout === 'left_right' || (layout === 'row' && limit === 2)) {
+        return {
+          ok: true,
+          summary: `разложил 2 окна рядом: «${placed[0].title}» и «${placed[1].title}»`,
+          data: { placed, layout },
+        };
+      }
 
       const layoutWord = layout === 'row' ? 'рядом' : layout === 'grid' ? 'сетка' : 'каскадом';
       const cols = layout === 'grid' ? Math.ceil(Math.sqrt(placed.length)) : null;
@@ -534,6 +603,11 @@ function windowsTools(runner = runPowerShell) {
         if (cur.minimized) {
           allOk = false;
           evidence.push(`окно «${p.title}» свернуто`);
+          continue;
+        }
+        if (cur.visible === false || cur.cloaked) {
+          allOk = false;
+          evidence.push(`окно «${p.title}» скрыто`);
           continue;
         }
         const dx = Math.abs((cur.left || 0) - p.x);

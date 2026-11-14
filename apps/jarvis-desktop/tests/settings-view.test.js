@@ -750,7 +750,9 @@ test('index.html: 15 карточек с категориями, новые ка
   assert.equal((view.match(/data-preview-only="true"/g) || []).length, 3, 'превью помечено честно');
   assert.match(view, /id="sphereApply"[^>]*disabled/, '«Применить» недоступна');
   assert.equal((view.match(/data-sphere-variant="/g) || []).length, 2);
-  assert.equal((view.match(/data-theme-opt="/g) || []).length, 24, 'все темы на месте');
+  const configuredThemes = [...read('theme-boot.js').match(/const IDS = \[([^\]]+)\]/)[1].matchAll(/'([a-z-]+)'/g)].map((match) => match[1]);
+  const themeOptions = [...view.matchAll(/data-theme-opt="([a-z-]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(themeOptions.sort(), configuredThemes.sort(), 'все темы на месте');
   assert.equal((view.match(/data-orb-opt="/g) || []).length, 3, 'все виды шара на месте');
 
   // Прежняя разметка — регрессионный страж «не удали настройку».

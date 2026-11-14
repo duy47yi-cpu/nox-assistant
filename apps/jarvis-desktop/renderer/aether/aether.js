@@ -13,13 +13,16 @@
     const store = window.NoxAetherStore.createStore();
 
     const topbar = window.NoxAetherTopbar.createTopbar({ store, bridge });
+    const accountPanel = window.NoxAetherAccountPanel.createAccountPanel({ store, bridge });
     const historyDrawer = window.NoxAetherHistory.createHistoryDrawer({ store });
     const orbStage = window.NoxAetherOrbStage.createOrbStage({ store });
-    const chatView = window.NoxAetherChatView.createChatView({ store, bridge, orbStage });
     const commandsView = window.NoxAetherCommandsView.createCommandsView({ store, bridge });
     const mcpView = window.NoxAetherMcpView.createMcpView({ store, bridge });
     const personalView = window.NoxAetherPersonalView.createPersonalView({ store, bridge });
     const settingsView = window.NoxAetherSettingsView.createSettingsView({ store, bridge });
+    const chatView = window.NoxAetherChatView.createChatView({
+      store, bridge, orbStage, onVoiceSettings: settingsView.openVoiceSettings,
+    });
 
     // Рабочая зона чата (история + диалог + сцена сферы)
     const chatStageShell = document.createElement('div');
@@ -36,7 +39,12 @@
     toastHost.className = 'ae-toast-host';
     toastHost.setAttribute('aria-live', 'polite');
 
-    appRoot.replaceChildren(topbar.el, mainContent, toastHost);
+    const rail = document.createElement('aside');
+    rail.className = 'ae-utility-rail';
+    rail.setAttribute('aria-label', 'История, лимиты и аккаунт');
+    rail.append(historyDrawer.trigger, accountPanel.el);
+
+    appRoot.replaceChildren(topbar.el, rail, mainContent, toastHost);
 
     // Отрисовка тостов
     let lastToastSig = '';
@@ -57,10 +65,12 @@
     function syncAll(st) {
       const isChat = st.route === 'chat';
       chatStageShell.hidden = !isChat;
+      if (!isChat) chatStageShell.querySelector('.ae-sources-popover:popover-open')?.hidePopover();
 
       topbar.render(st);
+      accountPanel.render(st);
+      historyDrawer.render(st);
       if (isChat) {
-        historyDrawer.render(st);
         chatView.render(st);
         orbStage.render(st);
       }
@@ -78,6 +88,8 @@
       (ev) => {
         store.onAgentEvent(ev);
         commandsView.onEvent(ev);
+        if ((store.state.account?.signedIn || accountPanel.isOpen())
+          && ['done', 'limit_pause', 'limit_resume'].includes(ev.type)) store.refreshAccount();
       },
       (dev) => store.onDictationEvent(dev)
     );
@@ -85,19 +97,21 @@
     // Глобальные клавиши окна
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        if (chatStageShell.querySelector('.ae-sources-popover:popover-open')) return;
         if (store.state.trackerBusy) {
           e.preventDefault();
           store.stopRun();
         } else if (window.innerWidth < 980 && store.state.historyOpen && store.state.route === 'chat') {
+          const focusInHistory = historyDrawer.el.contains(document.activeElement);
           store.toggleHistory(false);
+          if (focusInHistory) historyDrawer.trigger.focus();
         }
       } else if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         store.createNewChat();
       } else if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
         e.preventDefault();
-        if (store.state.route !== 'chat') store.setRoute('chat');
-        store.toggleHistory();
+        historyDrawer.toggle();
       } else if (e.ctrlKey && e.altKey && !e.shiftKey && (e.code === 'KeyM' || e.key.toLowerCase() === 'm')) {
         if (store.state.dictation.hotkeyOk === false) {
           e.preventDefault();

@@ -12,11 +12,14 @@ const {
   checkFolder,
   checkCollections,
   maskArgsForJournal,
+  isSecretArgKey,
   DANGEROUS_TOOLS,
+  MAX_NAME,
   MAX_PHRASES,
   MAX_STEPS,
   COMMAND_SCHEMA_VERSION,
 } = require('./store');
+const { looksSecret, looksSecretEgress } = require('../memory/store');
 
 // Пределы черновика из текста: сценарий по фразе должен оставаться понятным человеку.
 const MAX_STEPS_DRAFT = Math.min(12, MAX_STEPS);
@@ -663,10 +666,277 @@ function dryRunCommand(command, { tools } = {}) {
   };
 }
 
+// Инструменты только чтения/наблюдения: сами по себе повторяемой командой не считаются,
+// но если в ходе есть хотя бы одно реальное действие, вспомогательный осмотр просто отсеиваем.
+const READ_ONLY_INSPECTION_TOOLS = new Set([
+  'ui_windows',
+  'ui_elements',
+  'desktop_observe',
+  'windows_list',
+  'screen_look',
+  'screen_region_look',
+  'image_look',
+  'image_read_text',
+  'clipboard_get',
+  'workspace_read',
+  'workspace_list',
+  'workspace_search',
+  'document_read',
+  'document_batch',
+  'project_brief',
+  'project_diagnostics',
+  'project_commands',
+  'code_read',
+  'web_search',
+  'web_wiki',
+  'web_fetch',
+  'web_research',
+  'web_check_claims',
+  'browser_read',
+  'browser_tab_read',
+  'browser_tabs',
+  'browser_snapshot',
+  'recall',
+  'memory_about',
+  'disk_free_space',
+  'disk_cleanup_suggest',
+  'weather_now',
+  'currency_rate',
+  'calendar_upcoming',
+  'calendar_briefing',
+  'calendar_prep',
+  'mail_unread',
+  'apps_find',
+  'apps_scan',
+  'apps_usage',
+  'app_search',
+  'deals_hanging',
+  'list_reminders',
+  'library_list',
+  'skills_list',
+  'skill_read',
+  'goal_list',
+  'long_task_list',
+  'task_list',
+  'command_list',
+]);
+
+const MAX_TURN_PHRASE = 200;
+const MAX_COMMAND_PHRASE = 120;
+const URL_CRED_RE = /^[a-z]+:\/\/[^/@\s]+:[^/@\s]*@/i;
+const URL_SECRET_QUERY_RE = /[?&#](?:password|passwd|pwd|secret|token|api_?key|apikey|access_?token|refresh_?token|auth|otp|totp|code)=[^&#\s]+/i;
+const FAILED_TURN_STATUSES = new Set(['error', 'failed', 'refused', 'unverified', 'cancelled', 'canceled', 'pending', 'running', 'skipped']);
+
+function clipWords(text, maxChars) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  const chars = Array.from(clean);
+  if (chars.length <= maxChars) return clean;
+  const sliced = chars.slice(0, maxChars).join('');
+  const lastSpace = sliced.lastIndexOf(' ');
+  const cut = lastSpace >= Math.floor(maxChars * 0.5) ? sliced.slice(0, lastSpace) : sliced;
+  return cut.replace(/[\s,.;:!?-]+$/u, '').trim() || sliced.trim();
+}
+
+function normalizeDraftPhrase(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[\s.!?]+$/u, '');
+}
+
+function stringLooksSecret(value, keyName = '') {
+  const s = String(value ?? '');
+  if (!s) return false;
+  if (keyName === 'url' && /^https?:\/\//i.test(s)) {
+    return URL_CRED_RE.test(s) || URL_SECRET_QUERY_RE.test(s) || looksSecretEgress(s);
+  }
+  return looksSecret(s) || looksSecretEgress(s);
+}
+
+function argsContainSecret(value, keyName = '', depth = 0) {
+  if (depth > 10 || value === null || value === undefined) return false;
+  if (typeof value === 'string') return stringLooksSecret(value, keyName);
+  if (Array.isArray(value)) return value.some((item) => argsContainSecret(item, keyName, depth + 1));
+  if (typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) {
+      if (isSecretArgKey(k)) return true;
+      if (argsContainSecret(v, k, depth + 1)) return true;
+    }
+  }
+  return false;
+}
+
+function clonePlainArgs(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  try {
+    const parsed = JSON.parse(JSON.stringify(raw));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function nameKey(name) {
+  return String(name || '').trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
+}
+
+function buildHumanCommandName(rawPhrase, firstStep, existingCommands) {
+  let candidate = String(rawPhrase || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(?:джарвис|nox)[,:\s]+/iu, '')
+    .replace(/[.!?]+$/u, '')
+    .trim();
+  if (!candidate) {
+    candidate = STEP_TITLES[firstStep.tool] || 'Быстрая команда';
+  }
+  const chars = Array.from(candidate);
+  candidate = `${chars[0].toUpperCase()}${chars.slice(1).join('')}`;
+  candidate = clipWords(candidate, Math.min(64, MAX_NAME - 8));
+  if (!candidate) candidate = STEP_TITLES[firstStep.tool] || 'Быстрая команда';
+
+  const used = new Set();
+  if (Array.isArray(existingCommands)) {
+    for (const cmd of existingCommands) {
+      const k = nameKey(cmd && cmd.name);
+      if (k) used.add(k);
+    }
+  }
+  if (!used.has(nameKey(candidate))) return candidate;
+
+  let n = 2;
+  while (n < 1000) {
+    const suffix = ` (${n})`;
+    const base = clipWords(candidate, MAX_NAME - Array.from(suffix).length);
+    const next = `${base}${suffix}`;
+    if (!used.has(nameKey(next))) return next;
+    n += 1;
+  }
+  return candidate;
+}
+
+/**
+ * Собирает черновик команды (схема v2) из успешных повторяемых шагов завершённого хода.
+ * Чистая функция: не пишет на диск, отбрасывает ошибки, опасные шаги, чистый просмотр и секреты.
+ */
+function draftCommandFromTurn({ phrase, actions, existingCommands } = {}) {
+  if (typeof phrase !== 'string') {
+    return { ok: false, reason: 'Нужна фраза запуска команды' };
+  }
+  const rawPhrase = phrase.trim();
+  if (!rawPhrase) {
+    return { ok: false, reason: 'Нужна фраза запуска команды' };
+  }
+  if (Array.from(rawPhrase).length > MAX_TURN_PHRASE) {
+    return { ok: false, reason: `Фраза слишком длинная (не больше ${MAX_TURN_PHRASE} символов)` };
+  }
+  if (looksSecret(rawPhrase) || looksSecretEgress(rawPhrase)) {
+    return { ok: false, reason: 'В фразе обнаружены пароль или секретный ключ — команду не создаём' };
+  }
+
+  let normalizedPhrase = normalizeDraftPhrase(rawPhrase);
+  if (!normalizedPhrase) {
+    return { ok: false, reason: 'Нужна фраза запуска команды' };
+  }
+  if (Array.from(normalizedPhrase).length > MAX_COMMAND_PHRASE) {
+    normalizedPhrase = clipWords(normalizedPhrase, MAX_COMMAND_PHRASE);
+  }
+  let phrases;
+  try {
+    phrases = checkPhrases([normalizedPhrase]);
+  } catch (err) {
+    return { ok: false, reason: err.message || 'Неподходящая фраза запуска' };
+  }
+
+  if (!Array.isArray(actions) || actions.length === 0) {
+    return { ok: false, reason: 'В этом ответе нет выполненных шагов для команды' };
+  }
+
+  let sawSecret = false;
+  let sawDenied = false;
+  let sawReadOnly = false;
+  let sawFailed = false;
+  const candidateSteps = [];
+
+  for (const action of actions) {
+    if (!action || typeof action !== 'object') continue;
+    const tool = typeof action.tool === 'string' ? action.tool.trim() : '';
+    if (!tool) continue;
+
+    const st = typeof action.status === 'string' ? action.status.trim().toLowerCase() : '';
+    if (action.ok === false || FAILED_TURN_STATUSES.has(st)) {
+      sawFailed = true;
+      continue;
+    }
+    if (st !== 'confirmed' && st !== 'done' && !(st === '' && action.ok === true)) {
+      continue;
+    }
+
+    const denied = deniedReason(tool);
+    if (denied) {
+      sawDenied = true;
+      continue;
+    }
+    if (READ_ONLY_INSPECTION_TOOLS.has(tool)) {
+      sawReadOnly = true;
+      continue;
+    }
+
+    const cleanArgs = clonePlainArgs(action.args);
+    if (argsContainSecret(cleanArgs)) {
+      sawSecret = true;
+      continue;
+    }
+    candidateSteps.push({ tool, args: cleanArgs });
+  }
+
+  if (candidateSteps.length === 0) {
+    if (sawSecret) return { ok: false, reason: 'В шагах обнаружен пароль или ключ — такую команду не сохраняем' };
+    if (sawDenied) return { ok: false, reason: 'Опасные или разовые шаги в повторяемую команду не сохраняются' };
+    if (sawReadOnly) return { ok: false, reason: 'В ходе был только просмотр без повторяемого действия' };
+    if (sawFailed) return { ok: false, reason: 'Неподтверждённые или неудавшиеся шаги нельзя сохранить как команду' };
+    return { ok: false, reason: 'Нет подходящих повторяемых действий для сохранения' };
+  }
+
+  let steps;
+  try {
+    steps = checkSteps(candidateSteps.slice(0, MAX_STEPS));
+  } catch (err) {
+    return { ok: false, reason: err.message || 'Шаги не прошли проверку безопасности' };
+  }
+
+  let name;
+  try {
+    name = checkName(buildHumanCommandName(rawPhrase, steps[0], existingCommands));
+  } catch (err) {
+    return { ok: false, reason: err.message || 'Некорректное имя команды' };
+  }
+
+  return {
+    ok: true,
+    draft: {
+      schemaVersion: COMMAND_SCHEMA_VERSION,
+      version: COMMAND_SCHEMA_VERSION,
+      kind: 'sequence',
+      name,
+      phrases,
+      steps,
+      enabled: true,
+      hotkey: null,
+      folder: null,
+      collections: [],
+      origin: 'ai',
+    },
+  };
+}
+
 module.exports = {
   validateDraft,
   buildCommandFromText,
   dryRunCommand,
+  draftCommandFromTurn,
   buildPrompt,
   parseModelJson,
   toolSourceOf,

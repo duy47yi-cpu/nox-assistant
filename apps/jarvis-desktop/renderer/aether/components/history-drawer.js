@@ -16,6 +16,22 @@
     wrap.className = 'ae-sidebar-wrap';
     wrap.id = 'aeHistoryWrap';
 
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.id = 'aeHistoryToggle';
+    trigger.className = 'ae-icon-btn';
+    trigger.title = 'История чатов (Ctrl+B)';
+    trigger.setAttribute('aria-label', 'История чатов');
+    trigger.setAttribute('aria-controls', wrap.id);
+    trigger.append(icon('panelLeft'));
+
+    function toggle() {
+      const fromAnotherSection = store.state.route !== 'chat';
+      if (fromAnotherSection) store.setRoute('chat');
+      store.toggleHistory(fromAnotherSection ? true : undefined);
+    }
+    trigger.addEventListener('click', toggle);
+
     const backdrop = document.createElement('div');
     backdrop.className = 'ae-sidebar-backdrop';
     backdrop.addEventListener('click', () => store.toggleHistory(false));
@@ -76,7 +92,10 @@
       if (ok) wsForm.hidden = true;
     });
 
-    wsBlock.append(wsRow, wsForm);
+    const title = document.createElement('h2');
+    title.className = 'ae-history-title';
+    title.textContent = 'История';
+    wsBlock.append(title, wsRow, wsForm);
 
     // ── Новый чат и поиск ──────────────────────────────────────
     const actionsRow = document.createElement('div');
@@ -225,8 +244,12 @@
 
     function render(st) {
       const open = Boolean(st.historyOpen) && st.route === 'chat';
+      trigger.setAttribute('aria-expanded', String(open));
+      trigger.dataset.active = String(open);
       wrap.classList.toggle('is-open', open);
+      wrap.inert = !open;
       wrap.setAttribute('aria-hidden', open ? 'false' : 'true');
+      if (st.route !== 'chat') return;
 
       // Синхронизация списка пространств только при изменении
       const ws = Array.isArray(st.workspaces) ? st.workspaces : [];
@@ -250,7 +273,7 @@
 
     aside.append(wsBlock, actionsRow, listBox);
     wrap.append(backdrop, aside);
-    return { el: wrap, render };
+    return { el: wrap, trigger, toggle, render };
   }
 
   window.NoxAetherHistory = { createHistoryDrawer };

@@ -64,6 +64,10 @@ const readResume = { title: 'продолжить чтение', steps: [{ tool:
 const readStop = { title: 'остановить чтение', steps: [{ tool: 'read_clipboard_aloud', args: { action: 'stop' } }] };
 const screenOff = { title: 'выключить экран', steps: [{ tool: 'monitor_off', args: {} }] };
 const weather = { title: 'погода', steps: [{ tool: 'weather_now', args: {} }] };
+const louder = { title: 'громче', steps: [{ tool: 'ui_keys', args: { keys: VOLUME_STEP_KEYS } }] };
+const quieter = { title: 'тише', steps: [{ tool: 'ui_keys', args: { keys: VOLUME_DOWN_KEYS } }] };
+const mute = { title: 'выключить звук', steps: [{ tool: 'volume_set', args: { percent: 0 } }] };
+const twoWindows = { title: 'два окна рядом', steps: [{ tool: 'windows_arrange', args: { layout: 'row', count: 2 } }] };
 const FREQUENT = {
   'закрой окна': closeAll,
   'закрой все окна': closeAll,
@@ -74,8 +78,24 @@ const FREQUENT = {
   'сделай ярче': brighter,
   'темнее': darker,
   'сделай темнее': darker,
-  'громче': { title: 'громче', steps: [{ tool: 'ui_keys', args: { keys: VOLUME_STEP_KEYS } }] },
-  'тише': { title: 'тише', steps: [{ tool: 'ui_keys', args: { keys: VOLUME_DOWN_KEYS } }] },
+  'громче': louder,
+  'сделай громче': louder,
+  'погромче': louder,
+  'звук громче': louder,
+  'прибавь громкость': louder,
+  'прибавь звук': louder,
+  'тише': quieter,
+  'сделай тише': quieter,
+  'потише': quieter,
+  'звук тише': quieter,
+  'убавь громкость': quieter,
+  'убавь звук': quieter,
+  'убери звук': mute,
+  'без звука': mute,
+  'два окна рядом': twoWindows,
+  'поставь два окна рядом': twoWindows,
+  'расположи два окна рядом': twoWindows,
+  'размести два окна рядом': twoWindows,
   'прочитай вслух': readAloud,
   'прочитай буфер вслух': readAloud,
   'прочитай выделенное': readSelection,

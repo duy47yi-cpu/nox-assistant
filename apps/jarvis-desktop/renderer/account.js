@@ -77,6 +77,7 @@
     };
   };
   const session = meter('За 5 часов');
+  const day = meter('За день');
   const week = meter('За неделю');
   const who = el('span', { class: 'set-name' });
   const plan = el('span', { class: 'set-hint' });
@@ -84,13 +85,15 @@
   const panel = el('section', { class: 'set-section', 'aria-label': 'Аккаунт', hidden: 'hidden' },
     el('h2', { class: 'set-title', text: 'Аккаунт и лимиты' }),
     el('div', { class: 'set-row' }, el('span', { class: 'set-text' }, who, plan), logout),
-    session.node, week.node);
+    session.node, day.node, week.node);
 
   function paintAccount(a) {
     who.textContent = a.email;
     const trial = a.plan === 'trial' && a.trialUntil ? `, до ${new Date(a.trialUntil).toLocaleDateString('ru-RU')}` : '';
     plan.textContent = `Тариф: ${a.planTitle}${trial}`;
     session.set(a.limits.session);
+    day.node.hidden = !a.limits.day;
+    if (a.limits.day) day.set(a.limits.day);
     week.set(a.limits.week);
   }
 
@@ -113,7 +116,7 @@
   const banner = el('div', { class: 'limit-banner', role: 'status', hidden: 'hidden' });
   api.onEvent((ev) => {
     if (ev.type === 'limit_pause') {
-      const what = ev.window === 'week' ? 'Недельный лимит' : 'Лимит на 5 часов';
+      const what = { week: 'Недельный лимит', day: 'Дневной лимит' }[ev.window] || 'Лимит на 5 часов';
       banner.textContent = `${what} исчерпан. Работа сохранена и продолжится сама: ${clock(ev.resetAt)}.`;
       banner.hidden = false;
       refresh();

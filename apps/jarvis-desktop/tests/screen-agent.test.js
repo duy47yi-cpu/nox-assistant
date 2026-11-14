@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { ScreenAgent, screenTask, MAX_SCREEN_STEPS, UNSURE_TEXT, isDangerousStep } = require('../src/screen/agent');
+const { ScreenAgent, screenTask, SCREEN_TOOL_NAMES, SCREEN_PROMPT, MAX_SCREEN_STEPS, UNSURE_TEXT, isDangerousStep } = require('../src/screen/agent');
 const { ToolRegistry } = require('../src/tools/registry');
 const { Journal } = require('../src/journal/journal');
 const { ApprovalBroker } = require('../src/policy/approvals');
@@ -69,6 +69,38 @@ test('видны только инструменты экрана', (t) => {
   const { agent } = setup(t, { brain: brainOf(() => ({})) });
   const names = agent.tools.list().map((x) => x.name).sort();
   assert.deepEqual(names, ['app_open', 'screen_look', 'ui_click', 'ui_elements', 'ui_focus', 'ui_keys', 'ui_type']);
+});
+
+test('SCREEN_TOOL_NAMES включает ui_windows, а SCREEN_PROMPT не раскрывает внутренности и не трогает окно Nox', () => {
+  assert.equal(SCREEN_TOOL_NAMES.includes('ui_windows'), true);
+  assert.equal(SCREEN_TOOL_NAMES.includes('ui_wait'), true);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-screen-win-'));
+  try {
+    const reg = new ToolRegistry();
+    reg.register({ name: 'ui_windows', risk: 'T0', description: '', async run() { return { ok: true, summary: 'окна' }; } });
+    reg.register({ name: 'shell_run', risk: 'T2', description: '', async run() { return { ok: true, summary: 'shell' }; } });
+    const look = { name: 'screen_look', risk: 'T1', description: '', async run() { return { ok: true, summary: 'ok', image: 'data:image/jpeg;base64,AA==' }; } };
+    const agent = new ScreenAgent({
+      brain: brainOf(() => ({ content: 'ok' })),
+      tools: reg,
+      look,
+      policy: modes,
+      approvals: new ApprovalBroker(),
+      journal: new Journal(path.join(dir, 'journal.jsonl')),
+      mode: 'full',
+      workspace: dir,
+    });
+    assert.deepEqual(agent.tools.list().map((x) => x.name).sort(), ['screen_look', 'ui_windows']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  assert.match(SCREEN_PROMPT, /ui_windows/);
+  assert.match(SCREEN_PROMPT, /Собственным окном Nox/i);
+  assert.match(SCREEN_PROMPT, /Никогда не называй владельцу внутренние имена инструментов/i);
+  assert.doesNotMatch(SCREEN_PROMPT, /спросит код/i);
+  assert.match(SCREEN_PROMPT, /система сама запросит подтверждение/i);
 });
 
 test('лимит 40 шагов', async (t) => {

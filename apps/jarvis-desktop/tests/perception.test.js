@@ -226,6 +226,17 @@ describe('desktop_observe', () => {
     assert.equal(calls.elements, 0);
   });
 
+  test('запрос окна самого Nox → честный отказ без чтения элементов', async () => {
+    for (const want of ['NOX', 'Nox Assistant', 'Джарвис']) {
+      const { ui, calls } = fakeUi([[element('ОК', 'Button')]]);
+      const [tool] = observeTools(ui);
+      const result = await tool.run({ window: want }, {});
+      assert.equal(result.ok, false, want);
+      assert.match(result.summary, /принадлежит самому Nox \(Джарвису\)/, want);
+      assert.equal(calls.elements, 0, want);
+    }
+  });
+
   test('неверный limit отклоняется до вызова инструментов', async () => {
     const { ui } = fakeUi([[]]);
     const [tool] = observeTools(ui);

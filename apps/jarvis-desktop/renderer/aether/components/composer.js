@@ -28,7 +28,7 @@
     return `${(n / (1024 * 1024)).toFixed(1)} МБ`;
   }
 
-  function createComposer({ store, bridge, onSendTrigger, onTyping }) {
+  function createComposer({ store, bridge, onSendTrigger, onTyping, onVoiceSettings }) {
     const { icon } = window.NoxAetherIcons;
 
     const wrap = document.createElement('div');
@@ -118,11 +118,14 @@
     const micBtn = document.createElement('button');
     micBtn.type = 'button';
     micBtn.id = 'dictationBtn';
-    micBtn.className = 'ae-tool-btn';
-    micBtn.title = 'Голосовой ввод';
-    micBtn.setAttribute('aria-label', 'Голосовой ввод');
-    micBtn.append(icon('mic'));
-    micBtn.addEventListener('click', () => store.toggleDictation());
+    micBtn.className = 'ae-tool-btn ae-mic-btn';
+    const micLabel = document.createElement('span');
+    micLabel.className = 'ae-mic-label';
+    micBtn.append(icon('mic'), micLabel);
+    micBtn.addEventListener('click', () => {
+      if (store.state.settings.dictation !== true) onVoiceSettings();
+      else store.toggleDictation();
+    });
 
     const dictModeBtn = document.createElement('button');
     dictModeBtn.type = 'button';
@@ -130,6 +133,19 @@
     dictModeBtn.className = 'ae-dict-chip';
     dictModeBtn.hidden = true;
     dictModeBtn.addEventListener('click', () => store.cycleDictationMode());
+
+    const agentBtn = document.createElement('button');
+    agentBtn.type = 'button';
+    agentBtn.id = 'agentModeBtn';
+    agentBtn.className = 'ae-agent-toggle';
+    agentBtn.setAttribute('aria-pressed', 'false');
+    agentBtn.title = 'Режим агента: пошаговые действия на экране и в системе';
+    const agentLabel = document.createElement('span');
+    agentLabel.textContent = 'Агент';
+    agentBtn.append(icon('sparkles'), agentLabel);
+    agentBtn.addEventListener('click', () => {
+      if (typeof store.toggleAgentMode === 'function') store.toggleAgentMode();
+    });
 
     // Выбор модели и обдумывания (#pickTrigger / #pickPanel — контракт model-pick-layout.test.js)
     const pickWrap = document.createElement('div');
@@ -241,7 +257,7 @@
     });
 
     pickWrap.append(pickTrigger, pickPanel);
-    leftTools.append(attachBtn, regionBtn, micBtn, dictModeBtn, pickWrap);
+    leftTools.append(attachBtn, regionBtn, micBtn, dictModeBtn, agentBtn, pickWrap);
 
     const rightTools = document.createElement('div');
     rightTools.className = 'ae-composer-send-wrap';
@@ -343,23 +359,41 @@
       renderFiles(st.currentDraftFiles || []);
       regionBtn.hidden = !bridge.has('pickRegion');
 
-      const dictEnabled = st.settings.dictation === true && bridge.has('dictationStart');
-      micBtn.hidden = !dictEnabled;
-      micBtn.classList.toggle('is-recording', Boolean(st.dictation.recording));
-      micBtn.setAttribute('aria-pressed', String(Boolean(st.dictation.recording)));
+      const dictAvailable = bridge.has('dictationStart');
+      const dictEnabled = st.settings.dictation === true && dictAvailable;
+      const dictError = dictEnabled ? st.dictation.error : '';
+      const recording = dictEnabled && st.dictation.recording && !dictError;
+      const namedMode = recording && (st.dictation.mode === 'quiet' || !st.dictation.full);
+      micBtn.hidden = !dictAvailable || (!dictEnabled && !store.isEmptyChat());
+      micBtn.classList.toggle('is-recording', Boolean(recording));
+      micBtn.classList.toggle('has-error', Boolean(dictError));
+      micLabel.textContent = !dictEnabled ? 'Настроить голос' : dictError ? 'Повторить' : recording ? 'Остановить' : 'Говорить';
+      micBtn.title = dictError || (recording ? 'Остановить голосовой ввод' : micLabel.textContent);
+      micBtn.setAttribute('aria-label', dictError ? `${dictError}. Повторить голосовой ввод` : micBtn.title);
+      if (dictEnabled) micBtn.setAttribute('aria-pressed', String(Boolean(recording)));
+      else micBtn.removeAttribute('aria-pressed');
 
       dictModeBtn.hidden = !dictEnabled;
       if (dictEnabled) {
-        const dMode = st.dictation.mode || 'listening';
-        dictModeBtn.textContent = DICT_LABELS[dMode] || DICT_LABELS.listening;
+        const dMode = !recording ? 'off' : namedMode ? 'quiet' : 'listening';
+        dictModeBtn.textContent = dictError ? 'Микрофон не готов' : DICT_LABELS[dMode];
         dictModeBtn.dataset.dmode = dMode;
-        dictModeBtn.title = 'Переключить режим микрофона (Ctrl+Alt+M)';
+        dictModeBtn.title = dictError || 'Переключить режим микрофона (Ctrl+Alt+M)';
       }
 
-      if (st.dictation.recording) {
-        ta.placeholder = (st.dictation.mode === 'quiet' || st.dictation.full === false)
+      const agentActive = Boolean(st.agentMode);
+      agentBtn.setAttribute('aria-pressed', String(agentActive));
+      agentBtn.classList.toggle('is-active', agentActive);
+      agentBtn.title = agentActive
+        ? 'Режим агента включён — нажмите, чтобы переключить в обычный чат'
+        : 'Режим агента: пошаговые действия на экране и в системе';
+
+      if (recording) {
+        ta.placeholder = namedMode
           ? 'Слушаю имя «Джарвис» перед командой…'
           : 'Говорите — речь попадёт сюда…';
+      } else if (agentActive) {
+        ta.placeholder = 'Опишите действие на экране или в системе — агент выполнит по шагам…';
       } else {
         ta.placeholder = 'Напишите поручение или задайте вопрос…';
       }
@@ -382,11 +416,15 @@
     return {
       el: wrap,
       focus: () => ta.focus(),
-      setValueAndSend: async (txt) => {
+      insertStarter: (txt) => {
+        if (ta.value.trim() || store.state.currentDraftFiles.length) return;
         ta.value = txt;
         syncHeight();
         store.setDraftText(txt);
-        await triggerSend();
+        updateSendBtn(store.state);
+        ta.focus();
+        ta.setSelectionRange(txt.length, txt.length);
+        if (typeof onTyping === 'function') onTyping(txt, txt.length);
       },
       render,
     };

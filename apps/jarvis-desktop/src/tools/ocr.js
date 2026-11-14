@@ -47,6 +47,119 @@ const OCR_SCRIPT = [
   '$lines = @($result.Lines | ForEach-Object { $text = ($_.Words | ForEach-Object { $_.Text }) -join " "; [pscustomobject]@{ text = $text; x = [math]::Round($_.BoundingRect.X); y = [math]::Round($_.BoundingRect.Y); width = [math]::Round($_.BoundingRect.Width); height = [math]::Round($_.BoundingRect.Height) } }); ConvertTo-Json -InputObject $lines -Depth 4 -Compress',
 ].join('\n');
 
+// Постраничный OCR сканов PDF встроенным движком Windows: путь и лимит страниц передаются только через env.
+const PDF_OCR_SCRIPT = [
+  '[Console]::OutputEncoding = [Text.Encoding]::UTF8',
+  'Add-Type -AssemblyName System.Runtime.WindowsRuntime',
+  '$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq "AsTask" -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -like "IAsyncOperation*" })[0]',
+  '$asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq "AsTask" -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq "IAsyncAction" })[0]',
+  'Function Await($op, $type) { $t = $asTaskGeneric.MakeGenericMethod($type).Invoke($null, @($op)); $t.Wait(-1) | Out-Null; $t.Result }',
+  'Function AwaitAction($op) { $t = $asTaskAction.Invoke($null, @($op)); $t.Wait(-1) | Out-Null }',
+  '[Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime] | Out-Null',
+  '[Windows.Storage.Streams.InMemoryRandomAccessStream, Windows.Storage.Streams, ContentType = WindowsRuntime] | Out-Null',
+  '[Windows.Data.Pdf.PdfDocument, Windows.Data.Pdf, ContentType = WindowsRuntime] | Out-Null',
+  '[Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime] | Out-Null',
+  '[Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics.Imaging, ContentType = WindowsRuntime] | Out-Null',
+  '[Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime] | Out-Null',
+  '[Windows.Media.Ocr.OcrResult, Windows.Foundation, ContentType = WindowsRuntime] | Out-Null',
+  '$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()',
+  'if (-not $engine) { [pscustomobject]@{ status = "no_engine"; pageCount = 0; pages = @() } | ConvertTo-Json -Compress; exit 0 }',
+  '$maxPages = 15',
+  'if ($env:JARVIS_PDF_MAX_PAGES) { [void][int]::TryParse($env:JARVIS_PDF_MAX_PAGES, [ref]$maxPages) }',
+  'if ($maxPages -lt 1) { $maxPages = 1 }',
+  'try {',
+  '  $file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($env:JARVIS_PDF)) ([Windows.Storage.StorageFile])',
+  '  $pdf = Await ([Windows.Data.Pdf.PdfDocument]::LoadFromFileAsync($file)) ([Windows.Data.Pdf.PdfDocument])',
+  '} catch {',
+  '  $msg = $_.Exception.ToString()',
+  '  $st = if ($msg -match "password|0x80070056|0x8007052b|decrypt") { "password" } else { "error" }',
+  '  [pscustomobject]@{ status = $st; pageCount = 0; pages = @(); error = $_.Exception.Message } | ConvertTo-Json -Compress',
+  '  exit 0',
+  '}',
+  '$total = [int]$pdf.PageCount',
+  'if ($total -le 0) { [pscustomobject]@{ status = "empty"; pageCount = 0; pages = @() } | ConvertTo-Json -Compress; exit 0 }',
+  '$limit = [Math]::Min($total, $maxPages)',
+  '$pages = @()',
+  'for ($i = 0; $i -lt $limit; $i++) {',
+  '  $page = $null; $stream = $null; $bitmap = $null',
+  '  try {',
+  '    $page = $pdf.GetPage([uint32]$i)',
+  '    $stream = New-Object Windows.Storage.Streams.InMemoryRandomAccessStream',
+  '    AwaitAction ($page.RenderToStreamAsync($stream))',
+  '    $stream.Seek(0)',
+  '    $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])',
+  '    $bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])',
+  '    $result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])',
+  '    $lines = @($result.Lines | ForEach-Object { ($_.Words | ForEach-Object { $_.Text }) -join " " })',
+  '    $txt = ($lines -join "`n").Trim()',
+  '    if ($txt) { $pages += [pscustomobject]@{ page = ($i + 1); text = $txt } }',
+  '  } finally {',
+  '    if ($bitmap -is [System.IDisposable]) { $bitmap.Dispose() }',
+  '    if ($stream -is [System.IDisposable]) { $stream.Dispose() }',
+  '    if ($page -is [System.IDisposable]) { $page.Dispose() }',
+  '  }',
+  '}',
+  '$status = if ($pages.Count -gt 0) { "ok" } else { "empty" }',
+  '[pscustomobject]@{ status = $status; pageCount = $total; pages = $pages } | ConvertTo-Json -Depth 4 -Compress',
+].join('\n');
+
+const VALID_PDF_OCR_STATUSES = new Set(['ok', 'no_engine', 'password', 'empty', 'error']);
+
+async function ocrPdfFile(absPath, { runner = runPowerShell, signal, maxPages = 15, timeoutMs = 90000 } = {}) {
+  if (!absPath || typeof absPath !== 'string') {
+    return { status: 'error', pageCount: 0, pages: [], error: 'не указан путь к PDF' };
+  }
+  const limit = Math.max(1, Math.min(50, Math.floor(Number(maxPages) || 15)));
+  try {
+    const res = await runner(
+      PDF_OCR_SCRIPT,
+      { JARVIS_PDF: absPath, JARVIS_PDF_MAX_PAGES: String(limit) },
+      { signal, timeoutMs, maxOutput: 131072 },
+    );
+    const out = String((res && res.data && res.data.stdout) || '').trim();
+    if (!out) {
+      return {
+        status: 'error',
+        pageCount: 0,
+        pages: [],
+        error: (res && res.summary) || 'пустой ответ OCR PDF',
+      };
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(out);
+    } catch {
+      return {
+        status: 'error',
+        pageCount: 0,
+        pages: [],
+        error: (res && !res.ok && res.summary) ? res.summary : 'не удалось разобрать ответ OCR PDF',
+      };
+    }
+    const rawPages = Array.isArray(parsed?.pages) ? parsed.pages : parsed?.pages ? [parsed.pages] : [];
+    const pages = rawPages
+      .map((p) => ({
+        page: Number(p && p.page),
+        text: String((p && p.text) || '').trim(),
+      }))
+      .filter((p) => Number.isInteger(p.page) && p.page >= 1 && p.text.length > 0);
+    let status = VALID_PDF_OCR_STATUSES.has(parsed?.status) ? parsed.status : 'error';
+    if (status === 'ok' && pages.length === 0) status = 'empty';
+    const pageCount = Math.max(0, Number(parsed?.pageCount) || pages.length);
+    const result = { status, pageCount, pages };
+    if (parsed?.error) result.error = String(parsed.error);
+    else if (!res?.ok && status === 'error' && res?.summary) result.error = res.summary;
+    return result;
+  } catch (err) {
+    return {
+      status: 'error',
+      pageCount: 0,
+      pages: [],
+      error: err && err.message ? err.message : String(err),
+    };
+  }
+}
+
 // Пути источника и результата — через переменные окружения, как в снимке экрана (src/tools/screen.js).
 // System.Drawing читает BMP и TIFF и сохраняет JPEG: внешние программы не нужны.
 const CONVERT_SCRIPT = [
@@ -123,7 +236,12 @@ function imageTools({ runner = runPowerShell, workspace = null } = {}) {
         catch { lines = out ? [{ text: out, x: 0, y: 0, width: 0, height: 0 }] : []; }
         lines = lines.filter((line) => line && typeof line.text === 'string').slice(0, 200);
         const text = lines.map((line) => line.text).join('\n').slice(0, MAX_TEXT);
-        return { ok: true, summary: text ? `распознано ${text.length} символов в ${lines.length} строках; координаты строк сохранены` : 'текста на картинке не нашёл', data: { text, lines, path: rel } };
+        const ocrStatus = text ? 'recognized' : 'empty';
+        return {
+          ok: true,
+          summary: text ? `распознано ${text.length} символов в ${lines.length} строках; координаты строк сохранены` : 'текста на картинке не нашёл',
+          data: { text, lines, lineCount: lines.length, ocrStatus, path: rel },
+        };
       },
     },
     {
@@ -186,4 +304,14 @@ function imageTools({ runner = runPowerShell, workspace = null } = {}) {
   ];
 }
 
-module.exports = { imageTools, OCR_SCRIPT, CONVERT_SCRIPT, MAX_TEXT, MAX_IMAGE_BYTES, IMAGE_EXT, LOOK_EXT };
+module.exports = {
+  imageTools,
+  ocrPdfFile,
+  OCR_SCRIPT,
+  PDF_OCR_SCRIPT,
+  CONVERT_SCRIPT,
+  MAX_TEXT,
+  MAX_IMAGE_BYTES,
+  IMAGE_EXT,
+  LOOK_EXT,
+};

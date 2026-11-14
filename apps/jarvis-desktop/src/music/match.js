@@ -66,10 +66,17 @@ function scoreTitle(query, title) {
   return { ratio: matched / qs.length, total: qs.length };
 }
 
-// Выбор видео. confident — все слова просьбы нашлись в названии лучшего видео.
+function isShortVideo(video) {
+  const hay = `${video && video.title ? video.title : ''} ${video && video.url ? video.url : ''}`;
+  return /#shorts\b|shorts\//i.test(hay);
+}
+
+// Выбор видео. confident — все слова просьбы нашлись в названии лучшего видео
+// (при mood=true выбираем лучшее длинное видео без Shorts и открываем сразу).
 // options — до трёх лучших вариантов, чтобы владелец выбрал сам.
-function chooseVideo(query, candidates, { options = 3 } = {}) {
-  const list = Array.isArray(candidates) ? candidates.filter((v) => v && v.url) : [];
+function chooseVideo(query, candidates, { options = 3, mood = false } = {}) {
+  const rawList = Array.isArray(candidates) ? candidates.filter((v) => v && v.url) : [];
+  const list = mood ? rawList.filter((v) => !isShortVideo(v)) : rawList;
   if (!list.length) return { video: null, confident: false, options: [] };
   const scored = list
     .map((video, index) => ({ video, index, ratio: scoreTitle(query, video.title).ratio }))
@@ -77,7 +84,7 @@ function chooseVideo(query, candidates, { options = 3 } = {}) {
   const best = scored[0];
   return {
     video: best.video,
-    confident: best.ratio >= 1,
+    confident: mood ? true : best.ratio >= 1,
     options: scored.slice(0, options).map((s) => s.video),
   };
 }
