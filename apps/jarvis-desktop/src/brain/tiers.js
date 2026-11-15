@@ -24,6 +24,13 @@ function createRouter({ clients, getSettings = () => ({}) }) {
     get model() {
       return clients.fast.model;
     },
+    modelFor(args = {}) {
+      const s = getSettings();
+      const tier = pick(args.tier || s.modelTier, TIERS, 'fast');
+      const used = clients[tier] ? tier : 'fast';
+      const client = clients[used] || clients.fast;
+      return (client && client.model) || '';
+    },
     cacheScope(args = {}) {
       const s = getSettings();
       const tier = pick(args.tier || s.modelTier, TIERS, 'fast');

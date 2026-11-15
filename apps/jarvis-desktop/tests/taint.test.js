@@ -176,7 +176,7 @@ describe('заражение контекста: цикл агента', () => {
     assert.equal(shotClicked, 1);
   });
 
-  test('заражение сбрасывается к следующему ходу', async () => {
+  test('заражение сохраняется между ходами одного чата и сбрасывается при очистке', async () => {
     let mailed = 0;
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-taint-'));
     const events = [];
@@ -186,6 +186,8 @@ describe('заражение контекста: цикл агента', () => {
       { content: 'прочитал' },
       { toolCalls: [{ id: 't2', name: 'mail_send', args: {} }] },
       { content: 'отправил' },
+      { toolCalls: [{ id: 't3', name: 'mail_send', args: {} }] },
+      { content: 'отправил в новом чате' },
     ]);
     const agent = new Agent({
       brain,
@@ -203,9 +205,15 @@ describe('заражение контекста: цикл агента', () => {
     });
     await agent.run('первый');
     await agent.run('второй');
-    fs.rmSync(dir, { recursive: true, force: true });
-    // В первом ходу было только чтение; во втором заражения уже нет — почта прошла без вопроса.
-    assert.equal(events.filter((e) => e.type === 'approval_request').length, 0);
+    // Заражение из первого хода остаётся в истории и на втором ходу требует подтверждения.
+    assert.equal(events.filter((e) => e.type === 'approval_request').length, 1);
     assert.equal(mailed, 1);
+
+    // Сброс / смена чата очищает историю и снимает заражение.
+    agent.history.length = 0;
+    await agent.run('третий');
+    fs.rmSync(dir, { recursive: true, force: true });
+    assert.equal(events.filter((e) => e.type === 'approval_request').length, 1);
+    assert.equal(mailed, 2);
   });
 });

@@ -312,6 +312,7 @@ class Agent {
     if (stop && typeof stop.onTrigger === 'function') stop.onTrigger(() => this.sessionAllow.clear());
     this._turnCalls = new Map();
     this._unknownCalls = new Map(); // ключ вызова → имя: действия с неизвестным исходом в этом ходу, вслепую не повторяем
+    this._pendingCallIds = new Set();
     this._turn = null; // замеры текущего хода
     this._emitFn = typeof emit === 'function' ? emit : () => {};
     this._agentId = randomUUID();
@@ -377,10 +378,11 @@ class Agent {
     this._controller = controller;
     this._ownerText = String(ownerText || '');
     this._installEvidence = null;
-    this._tainted = false; // в этом ходу уже был недоверенный текст (страница, экран, файл, MCP)
-    this._foreign = false; // а это — именно чужой текст (страница, файл, буфер, MCP), после которого руки идут с вопросом
+    this._tainted = this._hasTaintHistory(); // в этом ходу или ранее в истории уже был недоверенный текст
+    this._foreign = this._hasForeignHistory(); // а это — именно чужой текст (страница, файл, буфер, MCP), после которого руки идут с вопросом
     this._turnCalls = new Map(); // повторы вызовов считаем в пределах одного хода
     this._unknownCalls = new Map();
+    this._pendingCallIds = new Set();
     // Новый запуск: снимаем признак «итог отправлен» и обнуляем прогресс предыдущего запуска.
     this._runClosed = false;
     this._step = 0;
@@ -548,6 +550,7 @@ class Agent {
           assistant.provenance = { untrusted: true };
         }
       }
+      this._pendingCallIds = new Set(calls.map((c) => c.id).filter(Boolean));
       this.history.push(assistant);
 
       // Текст перед вызовом инструмента уже показан потоком: следующий текст начнётся с новой строки.
@@ -610,6 +613,7 @@ class Agent {
           }
         }
       }
+      this._pendingCallIds.clear();
       this._flushImages();
       this._turn.toolWallMs += Date.now() - roundStarted;
       if (signal.aborted) {
@@ -979,8 +983,8 @@ class Agent {
         ownerAllowed: typeof tool.ownerAllowed === 'function' && tool.ownerAllowed(args) === true,
         ownerText: this._ownerText || '',
         installEvidence: this._installEvidence,
-        tainted: this._tainted === true,
-        handsTainted: this._foreign === true,
+        tainted: this._tainted === true || (typeof this._hasTaintHistory === 'function' && this._hasTaintHistory()),
+        handsTainted: this._foreign === true || (typeof this._hasForeignHistory === 'function' && this._hasForeignHistory()),
         browserTainted: typeof this._hasBrowserContext === 'function' ? this._hasBrowserContext() : Boolean(this._browserTainted),
       });
     } catch {
@@ -994,6 +998,42 @@ class Agent {
   _hasBrowserContext() {
     return Array.isArray(this.history) && this.history.some((m) => m && Array.isArray(m.tool_calls)
       && m.tool_calls.some((c) => c && c.function && c.function.name === 'browser_tab_read'));
+  }
+
+  _hasHistorySource(predicate) {
+    if (!Array.isArray(this.history) || !this.history.length) return false;
+    const failedIds = new Set();
+    for (const m of this.history) {
+      if (!m || m.role !== 'tool' || !m.tool_call_id || typeof m.content !== 'string') continue;
+      try {
+        const parsed = JSON.parse(m.content);
+        if (parsed && parsed.ok === false) failedIds.add(m.tool_call_id);
+      } catch {
+        // Повреждённый/не-JSON результат не исключаем: считаем его потенциально недоверенным.
+      }
+    }
+    for (const m of this.history) {
+      if (!m || !Array.isArray(m.tool_calls)) continue;
+      for (const c of m.tool_calls) {
+        const toolName = c && c.function && c.function.name;
+        if (!toolName) continue;
+        if (c.id && this._pendingCallIds instanceof Set && this._pendingCallIds.has(c.id)) continue;
+        if (c.id && failedIds.has(c.id)) continue;
+        const spec = this.tools && typeof this.tools.get === 'function' ? this.tools.get(toolName) : null;
+        if (predicate(toolName, spec && spec.source)) return true;
+      }
+    }
+    return false;
+  }
+
+  _hasTaintHistory() {
+    const { isTaintSource } = require('../policy/taint');
+    return this._hasHistorySource(isTaintSource);
+  }
+
+  _hasForeignHistory() {
+    const { isForeignTextSource } = require('../policy/taint');
+    return this._hasHistorySource(isForeignTextSource);
   }
 
   // Причина ограничения от политики: «отклонено» без причины владельцу ничего не говорит.

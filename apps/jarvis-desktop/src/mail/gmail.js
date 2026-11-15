@@ -17,17 +17,27 @@ const REDIRECT = 'http://127.0.0.1:53682/oauth';
 const NOT_CONNECTED = 'почта не подключена';
 
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
+const SAFE_RECIPIENT = /^[^\s@<>,"';:\\\r\n]+@[^\s@<>,"';:\\\r\n]+\.[^\s@<>,"';:\\\r\n]+$/;
+
+function validateRecipient(to) {
+  const addr = typeof to === 'string' ? to.trim() : '';
+  if (!addr || /[\r\n]/.test(addr) || !SAFE_RECIPIENT.test(addr)) {
+    throw new Error('Некорректный адрес получателя');
+  }
+  return addr;
+}
 
 // Письмо в формате RFC 2822. Тема и текст в base64: перевод строки в них не станет новым заголовком.
 function mime({ to, subject, text }) {
+  const cleanTo = validateRecipient(to);
   return [
-    `To: ${to}`,
-    `Subject: =?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`,
+    `To: ${cleanTo}`,
+    `Subject: =?UTF-8?B?${Buffer.from(String(subject ?? ''), 'utf8').toString('base64')}?=`,
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
     '',
-    Buffer.from(text, 'utf8').toString('base64').replace(/.{76}/g, '$&\r\n'),
+    Buffer.from(String(text ?? ''), 'utf8').toString('base64').replace(/.{76}/g, '$&\r\n'),
   ].join('\r\n');
 }
 
@@ -202,6 +212,8 @@ class GmailAccount {
   }
 
   async send({ to, subject, text }) {
+    let cleanTo;
+    try { cleanTo = validateRecipient(to); } catch (err) { return { ok: false, error: err.message }; }
     const t = await this.accessToken();
     if (!t.ok) return t;
     let res;
@@ -209,7 +221,7 @@ class GmailAccount {
       res = await this.fetchImpl(SEND_URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${t.token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw: b64url(Buffer.from(mime({ to, subject, text }), 'utf8')) }),
+        body: JSON.stringify({ raw: b64url(Buffer.from(mime({ to: cleanTo, subject, text }), 'utf8')) }),
       });
     } catch {
       return { ok: false, error: 'нет связи с Gmail' };
@@ -223,4 +235,4 @@ class GmailAccount {
   }
 }
 
-module.exports = { GmailAccount, mime, NOT_CONNECTED, REDIRECT, READ_SCOPE };
+module.exports = { GmailAccount, mime, validateRecipient, NOT_CONNECTED, REDIRECT, READ_SCOPE };

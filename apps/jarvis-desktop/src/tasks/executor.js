@@ -22,6 +22,7 @@ const criteriaLib = require('./criteria');
 // Та же проверка «похоже на пароль или ключ», что применяют память, навыки и вывод команд (src/tools/project.js):
 // отдельной текстовой маскировки в журнале нет — журнал маскирует только аргументы (maskArgs/maskHistory).
 const { looksSecret } = require('../memory/store');
+const { isTaintSource } = require('../policy/taint');
 
 const MAX_STEP_ITERATIONS = 8; // обращений к модели за одну попытку шага
 const PLAN_ATTEMPTS = 2; // запрос плана и один повтор с напоминанием
@@ -682,6 +683,28 @@ const FILE_WRITE_TOOLS = new Set([
 ]);
 // Инструмент запуска тестов: его успешные вызовы попадают в факты шага (риск выше T0).
 const TEST_TOOLS = new Set(['code_test']);
+// Чтение собственных файлов песочницы/экрана — штатная часть локальной задачи без интернета.
+// Интернет, почта, браузер, буфер обмена и внешние MCP-серверы переводят задачу в «заражённый» режим.
+const LOCAL_TASK_READS = new Set([
+  'workspace_read', 'workspace_search', 'document_read', 'document_batch', 'code_read',
+  'project_brief', 'project_diagnostics', 'screen_look', 'screen_region_look',
+  'desktop_observe', 'ui_elements', 'image_read_text', 'image_look',
+]);
+
+function isExternalTaskTaint(name, source) {
+  return isTaintSource(name, source) && !LOCAL_TASK_READS.has(String(name || ''));
+}
+
+function isPackageJsonWrite(name, args) {
+  const n = String(name || '');
+  if (!FILE_WRITE_TOOLS.has(n) && n !== 'file_write') return false;
+  if (!args || typeof args !== 'object') return false;
+  for (const key of ['path', 'file', 'target', 'to', 'dest']) {
+    const val = args[key];
+    if (typeof val === 'string' && /(?:^|[\\/])package\.json$/i.test(val.trim())) return true;
+  }
+  return false;
+}
 
 const effectsOf = (step) => (step && step.result && Array.isArray(step.result.effects) ? step.result.effects : []);
 
@@ -1483,7 +1506,9 @@ function createExecutor({
     }
     const risk = known.risk || 'T1';
     let decision = 'allow';
-    if (known.requiresApproval === true) {
+    const taintedTestRun = state.tainted === true && TEST_TOOLS.has(name);
+    const taintedPackageWrite = state.tainted === true && !state.packageJsonApproved && isPackageJsonWrite(name, args);
+    if (known.requiresApproval === true || taintedTestRun || taintedPackageWrite) {
       const approvedAction = JSON.stringify({ name, args });
       decision = await askOwner(state, call, risk);
       if (JSON.stringify({ name: call.name, args }) !== approvedAction) decision = 'reject';
@@ -1510,6 +1535,16 @@ function createExecutor({
     note(taskId, { tool: name, args, risk: known.risk, decision, ok: result.ok, summary: result.summary });
     // Факт для вида шага и итога задачи: успешный вызов с риском выше T0 (нет метки — считается T1) — побочный эффект.
     if (result.ok) {
+      if (isExternalTaskTaint(name, known.source)) {
+        state.tainted = true;
+        const curTask = queue.get(taskId);
+        if (curTask) curTask.tainted = true;
+      }
+      if (taintedPackageWrite) {
+        state.packageJsonApproved = true;
+        const curTask = queue.get(taskId);
+        if (curTask) curTask.packageJsonApproved = true;
+      }
       if (!state.stepTools.has(step.id)) state.stepTools.set(step.id, new Set());
       state.stepTools.get(step.id).add(name);
       const exitCode = result.data && Number.isFinite(result.data.exitCode) ? result.data.exitCode : null;
@@ -1714,6 +1749,8 @@ function createExecutor({
     const state = {
       taskId, controller: new AbortController(), since: null, approvalId: null, started: false, failure: null, epoch: stopEpoch,
       stepTools: new Map(), // stepId → имена успешно выполненных инструментов (для причины «не применимо»)
+      tainted: Boolean(first && first.tainted),
+      packageJsonApproved: Boolean(first && first.packageJsonApproved),
     };
     // Стоп во время запуска: прерываем запрос к модели и отклоняем своё ожидающее подтверждение.
     const off = typeof stop.onTrigger === 'function'

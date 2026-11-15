@@ -19,6 +19,78 @@ const TIMEOUT_MS = 30000;
 const MAX_TOOLS = 500;
 const MAX_TEXT = 8000;
 const STDERR_TAIL = 1200;
+const MAX_STDIO_BUFFER = 1024 * 1024;
+const MAX_HTTP_BYTES = 10 * 1024 * 1024;
+const SAFE_ENV_KEYS = new Set([
+  'PATH', 'PATHEXT', 'SYSTEMROOT', 'COMSPEC', 'WINDIR',
+  'TEMP', 'TMP', 'USERPROFILE', 'HOME', 'HOMEDRIVE', 'HOMEPATH',
+  'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'PROGRAMFILES', 'PROGRAMFILES(X86)',
+  'COMMONPROGRAMFILES', 'SYSTEMDRIVE', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE',
+  'OS', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'NO_COLOR',
+]);
+
+function buildMcpEnv(explicitEnv) {
+  const env = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v !== undefined && SAFE_ENV_KEYS.has(k.toUpperCase())) env[k] = v;
+  }
+  if (explicitEnv && typeof explicitEnv === 'object') {
+    for (const [k, v] of Object.entries(explicitEnv)) {
+      if (v !== undefined) env[k] = v;
+    }
+  }
+  return env;
+}
+
+async function readHttpText(res, maxBytes = MAX_HTTP_BYTES) {
+  const lenHeader = res && res.headers && typeof res.headers.get === 'function' ? res.headers.get('content-length') : null;
+  const declared = lenHeader !== null ? Number(lenHeader) : NaN;
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    try { await res.body?.cancel?.(); } catch {}
+    throw new Error('ответ сервиса превысил допустимый размер');
+  }
+  if (res && res.body && typeof res.body.getReader === 'function') {
+    const reader = res.body.getReader();
+    const chunks = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      total += chunk.length;
+      if (total > maxBytes) {
+        try { await reader.cancel(); } catch {}
+        throw new Error('ответ сервиса превысил допустимый размер');
+      }
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  }
+  if (res && res.body && typeof res.body[Symbol.asyncIterator] === 'function') {
+    const chunks = [];
+    let total = 0;
+    for await (const value of res.body) {
+      const chunk = Buffer.from(value);
+      total += chunk.length;
+      if (total > maxBytes) {
+        if (typeof res.body.destroy === 'function') {
+          try { res.body.destroy(); } catch {}
+        }
+        throw new Error('ответ сервиса превысил допустимый размер');
+      }
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  }
+  if (res && typeof res.text === 'function') {
+    const text = String(await res.text());
+    if (Buffer.byteLength(text, 'utf8') > maxBytes) {
+      throw new Error('ответ сервиса превысил допустимый размер');
+    }
+    return text;
+  }
+  return null;
+}
 // Пределы настройки сервера: дочерний процесс получает только строки разумной длины.
 const MAX_NAME = 40;
 const MAX_URL = 400;
@@ -378,7 +450,7 @@ class McpClient {
   _start() {
     const child = this.spawnImpl(this.command, this.args, {
       cwd: this.cwd,
-      env: { ...process.env, ...this.env },
+      env: buildMcpEnv(this.env),
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
       // shortcut: .cmd и .bat Node запускает только через оболочку; «npx» в настройке пишется как «npx.cmd».
@@ -392,20 +464,10 @@ class McpClient {
       // Поток всё равно читаем: иначе процесс встанет на заполненном буфере.
       child.stderr.on('error', () => {});
     }
-    let buf = '';
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => {
-      buf += chunk;
-      let nl;
-      while ((nl = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, nl).trim();
-        buf = buf.slice(nl + 1);
-        if (line) this._onLine(line);
-      }
-    });
-    // Запись в упавший процесс: ошибку потока не бросаем, о сбое скажут события процесса ниже.
-    child.stdin.on('error', () => {});
+    let failed = false;
     const fail = (err) => {
+      if (failed) return;
+      failed = true;
       const tail = this.redact(this._stderrTail.trim());
       const message = `${err.message}${tail ? `; вывод сервиса: ${tail.slice(-300)}` : ''}`;
       for (const p of this.pending.values()) p.reject(new Error(message));
@@ -418,6 +480,26 @@ class McpClient {
         } catch { /* наблюдатель сбоя не должен ронять клиент */ }
       }
     };
+    let buf = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
+      if (failed) return;
+      if (buf.length + chunk.length > MAX_STDIO_BUFFER) {
+        buf = '';
+        try { child.kill(); } catch {}
+        fail(new Error('ответ сервиса превысил допустимый размер'));
+        return;
+      }
+      buf += chunk;
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (line) this._onLine(line);
+      }
+    });
+    // Запись в упавший процесс: ошибку потока не бросаем, о сбое скажут события процесса ниже.
+    child.stdin.on('error', () => {});
     child.on('error', (err) => fail(new Error(`сервис не запустился: ${err.message}`)));
     child.on('exit', (code, signal) => fail(new Error(`сервис завершился (код ${code}${signal ? `, ${signal}` : ''})`)));
   }
@@ -491,7 +573,10 @@ class McpClient {
   async _httpRequest(id, method, params) {
     const res = await this._post({ jsonrpc: '2.0', id, method, params });
     const type = res.headers.get('content-type') || '';
-    const messages = type.includes('text/event-stream') ? parseSse(await res.text()) : [await res.json()];
+    const raw = await readHttpText(res, MAX_HTTP_BYTES);
+    const messages = raw === null
+      ? [await res.json()]
+      : (type.includes('text/event-stream') ? parseSse(raw) : [JSON.parse(raw)]);
     const msg = messages.flat().find((m) => m && m.id === id);
     if (!msg) throw new Error('в ответе сервиса нет результата');
     try {
@@ -949,4 +1034,7 @@ module.exports = {
   friendlyConnectError,
   PROTOCOL,
   MAX_TOOLS,
+  MAX_STDIO_BUFFER,
+  MAX_HTTP_BYTES,
+  buildMcpEnv,
 };

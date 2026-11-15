@@ -6,8 +6,11 @@
 // web_research запоминает собранные источники в памяти, а web_check_claims
 // сверяет с ними утверждения модели: это проверка цитат, а не истинности мира.
 
+const http = require('http');
+const https = require('https');
 const net = require('net');
 const dns = require('dns').promises;
+const { Readable } = require('stream');
 const { registerBundle, getSources, latestBundle, checkClaims } = require('../research/claims');
 
 const USER_AGENT ='Mozilla/5.0 (Windows NT 10.0; Win64; x64) Jarvis/0.1';
@@ -148,27 +151,53 @@ function decodeBytes(bytes, contentType) {
 
 // Читает тело не больше maxBytes; при достижении лимита отменяет поток.
 async function readText(res, maxBytes) {
-  if (!res.body || typeof res.body.getReader !== 'function') {
-    return (await res.text()).slice(0, maxBytes);
+  const contentType = (headerValue(res, 'content-type') || '').toLowerCase();
+  const declaredLen = Number(headerValue(res, 'content-length'));
+  const hasReader = Boolean(res.body && typeof res.body.getReader === 'function');
+  const hasAsyncIter = Boolean(!hasReader && res.body && typeof res.body[Symbol.asyncIterator] === 'function');
+
+  if (!hasReader && !hasAsyncIter) {
+    if (Number.isFinite(declaredLen) && declaredLen > maxBytes) {
+      throw new UserError('ответ слишком большой');
+    }
+    const raw = await res.text();
+    if (Buffer.byteLength(String(raw ?? ''), 'utf8') > maxBytes) {
+      throw new UserError('ответ слишком большой');
+    }
+    return String(raw ?? '');
   }
-  const reader = res.body.getReader();
+
   const chunks = [];
   let total = 0;
-  while (total < maxBytes) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const chunk = Buffer.from(value);
-    chunks.push(chunk);
-    total += chunk.length;
-  }
-  if (total >= maxBytes) {
-    try {
-      await reader.cancel();
-    } catch {
-      // поток уже закрыт, это не ошибка
+  if (hasReader) {
+    const reader = res.body.getReader();
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      chunks.push(chunk);
+      total += chunk.length;
+    }
+    if (total >= maxBytes) {
+      try {
+        await reader.cancel();
+      } catch {
+        // поток уже закрыт, это не ошибка
+      }
+    }
+  } else {
+    for await (const value of res.body) {
+      const chunk = Buffer.from(value);
+      chunks.push(chunk);
+      total += chunk.length;
+      if (total >= maxBytes) {
+        if (typeof res.body.destroy === 'function') {
+          try { res.body.destroy(); } catch {}
+        }
+        break;
+      }
     }
   }
-  const contentType = (headerValue(res, 'content-type') || '').toLowerCase();
   return decodeBytes(Buffer.concat(chunks).subarray(0, maxBytes), contentType);
 }
 
@@ -320,8 +349,8 @@ function isBlockedHost(hostname) {
   return false;
 }
 
-// Имя сайта может указывать на локальный адрес (evil.example → 127.0.0.1): проверяем, куда оно ведёт на самом деле.
-// shortcut: fetch ищет адрес заново, так что подмена DNS между проверкой и запросом (rebinding) не закрыта; закрыть — подключением по проверенному адресу.
+// Имя сайта может указывать на локальный адрес (evil.example → 127.0.0.1): проверяем, куда оно ведёт на самом деле,
+// и возвращаем проверенный список адресов для привязки сокета без повторного DNS-запроса (защита от rebinding).
 async function checkResolved(url, lookup) {
   const host = url.hostname.replace(/^\[|\]$/g, '');
   let found;
@@ -330,10 +359,92 @@ async function checkResolved(url, lookup) {
   } catch {
     throw new UserError('не удалось найти адрес сайта');
   }
-  const list = Array.isArray(found) ? found : [found];
-  if (list.length === 0 || list.some((entry) => isPrivateAddress(entry && entry.address))) {
+  const list = (Array.isArray(found) ? found : [found])
+    .filter((entry) => entry && entry.address)
+    .map((entry) => ({
+      address: String(entry.address),
+      family: entry.family || (net.isIP(String(entry.address)) === 6 ? 6 : 4),
+    }));
+  if (list.length === 0 || list.some((entry) => isPrivateAddress(entry.address))) {
     throw new UserError('адрес не разрешён');
   }
+  return list;
+}
+
+function createPinnedLookup(expectedHost, verified) {
+  const targetHost = String(expectedHost || '').replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
+  const entries = (Array.isArray(verified) ? verified : []).map((entry) => ({
+    address: String(entry.address),
+    family: entry.family || (net.isIP(String(entry.address)) === 6 ? 6 : 4),
+  }));
+  return function pinnedLookup(hostname, options, callback) {
+    const cb = typeof options === 'function' ? options : callback;
+    const opts = typeof options === 'object' && options ? options : {};
+    const host = String(hostname || '').replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
+    if (host !== targetHost || entries.length === 0) {
+      return process.nextTick(() => cb(new UserError('адрес не разрешён')));
+    }
+    if (opts.all) {
+      return process.nextTick(() => cb(null, entries));
+    }
+    return process.nextTick(() => cb(null, entries[0].address, entries[0].family));
+  };
+}
+
+function nodeHeadersToFetch(raw) {
+  const pairs = [];
+  for (const [k, v] of Object.entries(raw || {})) {
+    if (v === undefined) continue;
+    if (Array.isArray(v)) {
+      for (const item of v) pairs.push([k, String(item)]);
+    } else {
+      pairs.push([k, String(v)]);
+    }
+  }
+  return new Headers(pairs);
+}
+
+function pinnedHttpFetch(url, { headers, signal, resolved } = {}) {
+  return new Promise((resolve, reject) => {
+    const transport = url.protocol === 'https:' ? https : http;
+    const pinnedLookup = createPinnedLookup(url.hostname, resolved);
+    let settled = false;
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    };
+    const req = transport.request(url, {
+      method: 'GET',
+      headers,
+      signal,
+      lookup: pinnedLookup,
+      ...(url.protocol === 'https:' ? { servername: url.hostname } : {}),
+    }, (res) => {
+      if (res.socket && res.socket.remoteAddress && isPrivateAddress(res.socket.remoteAddress)) {
+        res.destroy();
+        fail(new UserError('адрес не разрешён'));
+        return;
+      }
+      if (settled) return;
+      settled = true;
+      resolve({
+        ok: (res.statusCode || 0) >= 200 && (res.statusCode || 0) < 300,
+        status: res.statusCode || 0,
+        headers: nodeHeadersToFetch(res.headers),
+        body: Readable.toWeb(res),
+      });
+    });
+    req.on('socket', (socket) => {
+      socket.on('connect', () => {
+        if (socket.remoteAddress && isPrivateAddress(socket.remoteAddress)) {
+          req.destroy(new UserError('адрес не разрешён'));
+        }
+      });
+    });
+    req.on('error', (err) => fail(err));
+    req.end();
+  });
 }
 
 // Проверяет адрес для web_fetch и возвращает URL-объект, либо бросает UserError.
@@ -357,15 +468,20 @@ function checkFetchUrl(raw, base) {
 }
 
 // Перенаправления идут вручную, чтобы каждый шаг проходил проверку адреса и того, куда ведёт имя.
-async function fetchFollowingRedirects(fetchImpl, start, signal, lookup) {
+async function fetchFollowingRedirects(fetchImpl, start, signal, lookup, { usePinnedHttp = false } = {}) {
   let current = start;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    await checkResolved(current, lookup);
-    const res = await fetchImpl(current.href, {
-      headers: requestHeaders({ Accept: 'text/html,text/plain;q=0.9' }),
-      redirect: 'manual',
-      signal,
-    });
+    const resolved = await checkResolved(current, lookup);
+    const headers = requestHeaders({ Accept: 'text/html,text/plain;q=0.9' });
+    const res = usePinnedHttp
+      ? await pinnedHttpFetch(current, { headers, signal, resolved })
+      : await fetchImpl(current.href, {
+          headers,
+          redirect: 'manual',
+          signal,
+          resolved,
+          lookup: createPinnedLookup(current.hostname, resolved),
+        });
     const location = res.status >= 300 && res.status < 400 ? headerValue(res, 'location') : null;
     if (!location) return { res, url: current };
     try {
@@ -379,8 +495,10 @@ async function fetchFollowingRedirects(fetchImpl, start, signal, lookup) {
 }
 
 // lookup — как dns.promises.lookup; в тестах подменяется, чтобы не ходить в сеть.
-function webTools({ fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS, lookup = dns.lookup } = {}) {
-  if (typeof fetchImpl !== 'function') {
+function webTools({ fetchImpl, timeoutMs = DEFAULT_TIMEOUT_MS, lookup = dns.lookup } = {}) {
+  const effectiveFetch = fetchImpl === undefined ? globalThis.fetch : fetchImpl;
+  const usePinnedHttp = fetchImpl === undefined || fetchImpl === globalThis.fetch;
+  if (typeof effectiveFetch !== 'function') {
     throw new Error('webTools: нужна функция fetch');
   }
   if (typeof lookup !== 'function') {
@@ -406,7 +524,7 @@ function webTools({ fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS
 
         const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
         const html = await withTimeout(timeoutMs, async (signal) => {
-          const res = await fetchImpl(url, { headers: requestHeaders(), signal });
+          const res = await effectiveFetch(url, { headers: requestHeaders(), signal });
           if (!res.ok) throw new UserError(`поиск ответил HTTP ${res.status}`);
           return readText(res, MAX_BODY_BYTES);
         }, ctx.signal);
@@ -445,7 +563,7 @@ function webTools({ fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS
         const slug = encodeURIComponent(title.replace(/\s+/g, '_'));
         const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${slug}`;
         const body = await withTimeout(timeoutMs, async (signal) => {
-          const res = await fetchImpl(url, {
+          const res = await effectiveFetch(url, {
             headers: requestHeaders({ Accept: 'application/json' }),
             signal,
           });
@@ -498,7 +616,7 @@ function webTools({ fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS
         const start = checkFetchUrl(raw);
 
         const page = await withTimeout(timeoutMs, async (signal) => {
-          const { res, url } = await fetchFollowingRedirects(fetchImpl, start, signal, lookup);
+          const { res, url } = await fetchFollowingRedirects(effectiveFetch, start, signal, lookup, { usePinnedHttp });
           if (!res.ok) throw new UserError(`сервер ответил HTTP ${res.status}`);
           const type = (headerValue(res, 'content-type') || '').toLowerCase();
           if (!FETCH_TYPES.some((t) => type.includes(t))) throw new UserError('тип не поддерживается');
@@ -701,4 +819,4 @@ function webTools({ fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS
   return [webSearch, webWiki, webFetch, webResearch, webCheckClaims];
 }
 
-module.exports = { webTools, checkFetchUrl, isBlockedHost, isPrivateAddress, FETCH_NOTE, MAX_CLAIM_TEXT, MAX_CLAIM_QUOTE };
+module.exports = { webTools, checkFetchUrl, checkResolved, createPinnedLookup, pinnedHttpFetch, readText, isBlockedHost, isPrivateAddress, FETCH_NOTE, MAX_CLAIM_TEXT, MAX_CLAIM_QUOTE };

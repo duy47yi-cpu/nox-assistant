@@ -869,15 +869,17 @@ async function launchInteractiveCommand(runtimeForCommand, {
   emitResultToChat = true,
 } = {}) {
   const launcher = launcherForRuntime(runtimeForCommand);
+  const cmd = commandId ? runtimeForCommand.store.get(commandId) : (hotkey ? runtimeForCommand.store.findByHotkey(hotkey) : null);
+  const safeOwner = !(cmd && (cmd.origin === 'ai' || cmd.origin === 'model')) && ownerCommand !== false;
   if (busy && !interactiveLauncherTurn) {
     if (trigger === 'hotkey' && hotkey) {
-      return await launcher.fireHotkey(hotkey, { ownerCommand: ownerCommand !== false });
+      return await launcher.fireHotkey(hotkey, { ownerCommand: safeOwner });
     }
     return await launcher.triggerCommand(commandId, trigger, {
       triggerDetail,
       occurrenceKey,
       eventPayload,
-      ownerCommand: ownerCommand !== false,
+      ownerCommand: safeOwner,
       interactive: false,
     });
   }
@@ -886,7 +888,6 @@ async function launchInteractiveCommand(runtimeForCommand, {
   const emit = scope.emit || emitToWindow;
   const dealStore = scope.dealStore || deals;
   const runId = require('crypto').randomUUID();
-  const cmd = commandId ? runtimeForCommand.store.get(commandId) : (hotkey ? runtimeForCommand.store.findByHotkey(hotkey) : null);
   const cmdName = cmd ? cmd.name : (commandId || hotkey || 'Команда');
   let toolStep = 0;
   const emitTurn = (event) => {
@@ -914,13 +915,13 @@ async function launchInteractiveCommand(runtimeForCommand, {
       journal: commandTurnJournal(scope.journal || journal, runId),
     };
     if (trigger === 'hotkey' && hotkey) {
-      res = await launcher.fireHotkey(hotkey, { ownerCommand: ownerCommand !== false, deps });
+      res = await launcher.fireHotkey(hotkey, { ownerCommand: safeOwner, deps });
     } else {
       res = await launcher.triggerCommand(commandId, trigger, {
         triggerDetail,
         occurrenceKey,
         eventPayload,
-        ownerCommand: trigger === 'manual' || trigger === 'hotkey' ? ownerCommand !== false : false,
+        ownerCommand: trigger === 'manual' || trigger === 'hotkey' ? safeOwner : false,
         interactive: false, // Автоматические запуски никогда не обходят подтверждения
         deps,
       });
@@ -930,7 +931,7 @@ async function launchInteractiveCommand(runtimeForCommand, {
     throw err;
   } finally {
     if (commandAbort === abort) commandAbort = null;
-    escStop.disarm();
+    escStop.disarm('default');
     interactiveLauncherTurn = prevInteractive;
     if (holdsBusyLock) busy = false;
   }
@@ -1699,7 +1700,7 @@ function emitToWindow(event) {
     playSound('waiting', { dir: SOUND_PACKS_DIR, packId: DEFAULT_PACK_ID, volume: voiceOptionsFromSettings().volume, quiet: readSettings().quiet === true });
   }
   sendToWindow(visibleEvent);
-  if (event.type === 'done') escStop.disarm();
+  if (event.type === 'done' && !event.background) escStop.disarm(event.runId);
   if (event.type === 'approval_request') {
     // Задача чата «ждёт подтверждения»; задачи с мандатом link.js пропускает — их ведёт исполнитель.
     if (requestedApproval(runtime.queue)) runtime.saveTasks(runtime.queue.list());
@@ -2004,7 +2005,7 @@ async function runCommandNow(cmd, scope = {}) {
       emit: emitTurn,
       workspace,
       mode,
-      ownerCommand: true,
+      ownerCommand: !(cmd && (cmd.origin === 'ai' || cmd.origin === 'model')),
       stop: stopSwitch,
       signal: abort.signal,
     });
@@ -2013,7 +2014,7 @@ async function runCommandNow(cmd, scope = {}) {
     throw err;
   } finally {
     if (commandAbort === abort) commandAbort = null;
-    escStop.disarm();
+    escStop.disarm('default');
   }
   const failedStep = out.results.find((r) => !r.ok);
   try { closeTurn(dealStore, dealRef, out.ok ? 'answer' : 'error', failedStep ? `${failedStep.tool}: ${failedStep.summary}` : null); } catch {}
@@ -2342,7 +2343,7 @@ async function runLocalSequence(plan, scope = {}) {
     throw err;
   } finally {
     if (commandAbort === abort) commandAbort = null;
-    escStop.disarm();
+    escStop.disarm('default');
   }
   markExecutedCommandParts(store, plan, out);
   if (out && out.ok && plan && plan.source === 'music-context' && plan.musicQuery) {
@@ -3324,12 +3325,13 @@ async function runHotkeyCommand(id, workspaceId = 'default') {
   const launcher = launcherForRuntime(runtimeForCommand);
   const cmd = runtimeForCommand.store.get(id);
   if (!cmd) return;
+  const safeOwner = !(cmd.origin === 'ai' || cmd.origin === 'model');
   if (stopSwitch.isStopped() || !cmd.enabled || (cmd.triggers && cmd.triggers.hotkey && !cmd.triggers.hotkey.enabled)) {
-    await launcher.triggerCommand(cmd.id, 'hotkey', { ownerCommand: true });
+    await launcher.triggerCommand(cmd.id, 'hotkey', { ownerCommand: safeOwner });
     return;
   }
   if (busy) {
-    const skipped = await launcher.triggerCommand(cmd.id, 'hotkey', { ownerCommand: true });
+    const skipped = await launcher.triggerCommand(cmd.id, 'hotkey', { ownerCommand: safeOwner });
     reportBusy(skipped.reason || 'Джарвис сейчас занят другим делом');
     return;
   }
@@ -3338,7 +3340,7 @@ async function runHotkeyCommand(id, workspaceId = 'default') {
       commandId: cmd.id,
       trigger: 'hotkey',
       triggerDetail: (cmd.triggers && cmd.triggers.hotkey && cmd.triggers.hotkey.key) || cmd.hotkey,
-      ownerCommand: true,
+      ownerCommand: safeOwner,
       emitResultToChat: true,
     });
   } catch (err) {
@@ -3357,7 +3359,7 @@ ipcMain.handle('commands:run', async (event, id) => {
     commandId: cmd.id,
     trigger: 'manual',
     triggerDetail: 'кнопка «Запустить»',
-    ownerCommand: true,
+    ownerCommand: !(cmd.origin === 'ai' || cmd.origin === 'model'),
     emitResultToChat: true,
   });
   if (!res.ok && res.skipped && !res.error && res.reason) {
@@ -4264,7 +4266,7 @@ function answerApprovalsByVoice(text) {
     sendToWindow({ type: 'notice', message: count ? `Отменил ожидающие подтверждения: ${count}.` : 'Ожидающих подтверждений нет.' });
     return true;
   }
-  const targetId = voiceApprovalTarget(approvals.list());
+  const targetId = voiceApprovalTarget(approvals.list(), approvals);
   if (!targetId) {
     sendToWindow({ type: 'notice', message: 'Выберите подтверждение в окне.' });
     return true;

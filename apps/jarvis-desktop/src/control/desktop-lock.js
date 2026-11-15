@@ -61,10 +61,10 @@ class DesktopLock {
   }
 
   // Причина, по которой действие сейчас нельзя начать, или null.
-  _refusal(background) {
+  _refusal(background, { acquired = false } = {}) {
     if (this.locked) return 'экран заблокирован';
     if (!background) return null;
-    if (this.busy) return 'рабочий стол занят другим действием';
+    if (!acquired && this.busy) return 'рабочий стол занят другим действием';
     if (this.idleSeconds() < this.ownerIdleSeconds) return 'владелец работает за компьютером';
     return null;
   }
@@ -100,8 +100,9 @@ class DesktopLock {
     try {
       // Пока стояли в очереди, ход могли остановить — это касается и фоновой задачи.
       if (signal && signal.aborted) return { ok: false, summary: 'остановлено', data: { stopped: true } };
-      // Пока стояли в очереди, экран могли заблокировать.
-      if (this.locked) return blocked('экран заблокирован');
+      // Пока стояли в очереди, экран могли заблокировать или владелец вернулся за компьютер.
+      const postRefusal = this._refusal(background, { acquired: true });
+      if (postRefusal) return blocked(postRefusal);
       if (!background && !ownerFree && typeof this.inputAgoMs === 'function') {
         await this._waitOwner(signal);
         if (signal && signal.aborted) return { ok: false, summary: 'остановлено', data: { stopped: true } };

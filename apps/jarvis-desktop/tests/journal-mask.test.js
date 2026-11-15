@@ -53,12 +53,13 @@ test('журнал после вызова ui_type не содержит исх�
     { toolCalls: [{ id: 'u1', name: 'ui_type', args: { window: 'Вход', text: secret } }] },
     { content: 'Готово' },
   ]);
+  const approvals = new ApprovalBroker({ timeoutMs: 1000 });
   const agent = new Agent({
     brain,
     tools,
-    approvals: new ApprovalBroker({ timeoutMs: 1000 }),
+    approvals,
     journal: new Journal(file),
-    emit: () => {},
+    emit: (e) => { if (e.type === 'approval_request') approvals.respond(e.id, 'once'); },
     mode: 'auto',
     workspace: dir,
   });

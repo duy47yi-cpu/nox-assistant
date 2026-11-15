@@ -44,8 +44,22 @@ function isForeignTextSource(name, source) {
   return !SCENE_SOURCES.has(String(name || ''));
 }
 
-function isEgress(name) {
-  return EGRESS_TOOLS.has(String(name || ''));
+function toolWords(name) {
+  return String(name || '')
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replace(/[^a-zA-Zа-яА-ЯёЁ\d]+/g, ' ')
+    .trim();
+}
+
+const MCP_EGRESS_WORD = /\b(send|post|publish|reply|forward|share|upload|push|submit|broadcast|tweet|message|msg|dm|comment|create|update|write|append|put|patch|webhook|email|mail|notify|invite|dispatch|emit|request|export|fetch|отправ|напиш|опублик|перешл|подел|вылож|сообщ)\b/i;
+
+function isEgress(name, source) {
+  const n = String(name || '');
+  if (EGRESS_TOOLS.has(n)) return true;
+  if (source === 'mcp' || n.startsWith('mcp__')) {
+    return MCP_EGRESS_WORD.test(toolWords(n));
+  }
+  return false;
 }
 
 function isHandsAction(name) {

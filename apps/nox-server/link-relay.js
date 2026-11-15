@@ -106,9 +106,9 @@ function redact(text, secrets = []) {
     .replace(/nox_[A-Za-z0-9_-]{8,}/g, 'nox_***')
     .replace(/((?:Bearer|Basic)\s+)\S+/gi, '$1***')
     .replace(/(x-nox-join-ticket\s*[:=]\s*)[^\s,;'"}\]]+/gi, '$1***')
-    .replace(/("(?:hostTicket|clientTicket|joinTicket|ticket|token|accessToken|refreshToken|password|pass|secret|adminKey|authorization)"\s*:\s*")([^"]*)(")/gi, '$1***$3')
-    .replace(/(\b(?:hostTicket|clientTicket|joinTicket|ticket|token|password|secret|adminKey)\s*[=:]\s*)([^\s&;,'"\n\r]+)/gi, '$1***')
-    .replace(/([?&](?:token|ticket|joinTicket|hostTicket|clientTicket|key|secret|password)=)([^&#\s]+)/gi, '$1***')
+    .replace(/("(?:hostTicket|clientTicket|joinTicket|ticket|token|accessToken|refreshToken|password|pass|secret|adminKey|authorization|api[_-]?key|x-api-key)"\s*:\s*")([^"]*)(")/gi, '$1***$3')
+    .replace(/(\b(?:hostTicket|clientTicket|joinTicket|ticket|token|password|secret|adminKey|x-api-key|api[_-]?key)\s*[=:]\s*)([^\s&;,'"\n\r]+)/gi, '$1***')
+    .replace(/([?&](?:token|ticket|joinTicket|hostTicket|clientTicket|key|secret|password|api[_-]?key|x-api-key)=)([^&#\s]+)/gi, '$1***')
     .replace(/(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/g, '***')
     .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '***@***');
 }
@@ -553,12 +553,13 @@ function createLinkService(config) {
       }
     }
     const ip = clientIp(req);
+    const rateIp = proxy.rateLimitIpKey(ip);
     if (anonBucket === 'room') {
-      linkStore.checkRateLimit(`link-fail:anon:ip:${ip}`, t);
-      linkStore.recordFailure({ anonIp: ip, now: t });
+      linkStore.checkRateLimit(`link-fail:anon:ip:${rateIp}`, t);
+      linkStore.recordFailure({ anonIp: rateIp, now: t });
     } else if (anonBucket === 'auth') {
       const authMax = Math.max(linkStore.maxFailedAttempts * 4, 20);
-      const authKey = `link-fail:anon-auth:ip:${ip}`;
+      const authKey = `link-fail:anon-auth:ip:${rateIp}`;
       linkStore.checkRateLimitWithMax(authKey, authMax, t);
       store.recordAttempt(authKey, t);
     }

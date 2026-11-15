@@ -16,8 +16,11 @@ test('markShown: токен только у ждущего запроса, но�
   assert.ok(!b.isShown('A', undefined));
   assert.ok(!b.isShown('A', 'чужой'));
   const tB = b.markShown('B');
-  assert.ok(!b.isShown('A', tA), 'после показа B токен A недействителен');
+  assert.ok(b.isShown('A', tA), 'показ B в другом окне не гасит токен A (SEC-16)');
   assert.ok(b.isShown('B', tB));
+  const tA2 = b.markShown('A');
+  assert.ok(!b.isShown('A', tA), 'повторный показ A гасит прежний токен A');
+  assert.ok(b.isShown('A', tA2));
 });
 
 test('после ответа, отмены или автоотмены показ недействителен', async () => {

@@ -140,15 +140,40 @@ function maskHistory(history) {
 // токены и коды не должны попасть в файл ни в аргументах, ни в итоге вызова.
 const MAX_MASK_DEPTH = 8;
 // Имена полей, значение которых целиком является секретом.
-const SECRET_FIELD = /^(?:парол\p{L}*|password|passwd|pass|api[\s_-]?key|token|access[\s_-]?token|refresh[\s_-]?token|токен\p{L}*|secret|секрет\p{L}*|pin|cvv|cvc|otp|код[\s_-]?подтверждения)$/iu;
+const SECRET_FIELD = /^(?:парол\p{L}*|password|passwd|pass|api[\s_-]?key|token|access[\s_-]?token|refresh[\s_-]?token|токен\p{L}*|secret|секрет\p{L}*|pin|cvv|cvc|otp|код[\s_-]?подтверждения)$|(?:api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|token|secret|password|passwd|credential)$/iu;
 // Метка секрета со значением: «пароль: hunter22», «"password":"…"», «api key = …».
 const SECRET_LABEL = /((?:парол\p{L}*|password|passwd|api[\s_-]?key|токен\p{L}*|access[\s_-]?token|refresh[\s_-]?token|token|секрет\p{L}*|secret|пин[-\s]?код|pin|cvv|cvc|otp|код\s+подтверждения)\s*(?:[:=—–-]|это|is)\s*)("[^"]*"|'[^']*'|[^\s,;]+)/giu;
 // Известные форматы ключей и длинные токены без метки.
-const SECRET_KEY = /\b(?:sk|pk|ghp|xox[abp])[-_][A-Za-z0-9_-]{12,}\b/g;
+const SECRET_KEY = /\b(?:sk|pk|ghp|gho|ghu|ghs|ghr|glpat|xox[abp])[-_][A-Za-z0-9_-]{12,}\b|\bAIza[0-9A-Za-z_-]{20,}\b|\bAKIA[0-9A-Z]{16}\b/g;
 const SECRET_BLOCK = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
-// Длинные токены без метки прячем, но UUID (id команды/задачи/пространства) — не секрет:
-// без него история теряет связь с делом, поэтому форму 8-4-4-4-12 исключаем.
-const BARE_TOKEN = /\b(?![\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}\b)(?=[\w-]*\d)(?=[\w-]*[a-z])[\w-]{32,}\b/gi;
+// Короткие и длинные токены без метки прячем, но UUID (8-4-4-4-12) и обычные слова/пути оставляем.
+const UUID_RE = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
+const BARE_TOKEN_CANDIDATE = /(?<![A-Za-z0-9_-])(?=[\w-]*\d)(?=[\w-]*[a-z])[\w-]{16,}(?![A-Za-z0-9_-])/gi;
+
+function shannonEntropy(text) {
+  const counts = new Map();
+  for (const ch of text) counts.set(ch, (counts.get(ch) || 0) + 1);
+  let entropy = 0;
+  for (const c of counts.values()) {
+    const p = c / text.length;
+    entropy -= p * Math.log2(p);
+  }
+  return entropy;
+}
+
+function isBareTokenSecret(token) {
+  if (UUID_RE.test(token)) return false;
+  if (token.length >= 32) return true;
+  if (!/\d/.test(token) || !/[a-z]/i.test(token)) return false;
+  if (/_[A-Za-z]{5,}|^[a-zA-Z]+(?:-[a-zA-Z]+)+-\d+$/.test(token)) return false;
+  const digits = (token.match(/\d/g) || []).length;
+  const hasUpper = /[A-Z]/.test(token);
+  const hasLower = /[a-z]/.test(token);
+  const mixedTransitions = /\d[A-Za-z]|[A-Za-z]\d/.test(token) && (token.match(/\d[A-Za-z]|[A-Za-z]\d/g) || []).length >= 2;
+  const entropy = shannonEntropy(token);
+  if (hasUpper && hasLower && digits >= 2 && mixedTransitions && entropy >= 3.25) return true;
+  return digits >= 4 && mixedTransitions && entropy >= 3.35;
+}
 
 function hiddenLength(value) {
   return Array.from(String(value)).length;
@@ -161,7 +186,7 @@ function maskSecretText(value) {
     .replace(SECRET_BLOCK, '[скрыто: приватный ключ]')
     .replace(SECRET_LABEL, '$1[скрыто]')
     .replace(SECRET_KEY, '[скрыто: ключ]')
-    .replace(BARE_TOKEN, (token) => `[скрыто, ${hiddenLength(token)} симв.]`);
+    .replace(BARE_TOKEN_CANDIDATE, (token) => (isBareTokenSecret(token) ? `[скрыто, ${hiddenLength(token)} симв.]` : token));
 }
 
 // Глубокая копия значения без секретов. Неизвестные поля сохраняются, меняются только
@@ -190,9 +215,18 @@ function maskSecrets(value, depth = 0) {
 // Событие ядра для окна: аргументы действия и запроса разрешения — без секретов (ZM-008).
 // Путь, адресат и обычный текст остаются: владелец должен видеть, что именно разрешает.
 // Ядро, журнал и запись команд получают исходное событие, копия нужна только окну.
+const WINDOW_EVENT_FIELDS = ['args', 'summary', 'evidence', 'reason', 'target', 'preview', 'message', 'error'];
+
 function maskEventForWindow(event) {
-  if (!event || typeof event !== 'object' || !('args' in event)) return event;
-  return { ...event, args: maskSecrets(event.args) };
+  if (!event || typeof event !== 'object') return event;
+  let copy = null;
+  for (const field of WINDOW_EVENT_FIELDS) {
+    if (field in event) {
+      if (!copy) copy = { ...event };
+      copy[field] = maskSecrets(event[field]);
+    }
+  }
+  return copy || event;
 }
 
 // Журнал действий: одна JSON-строка на запись, только дописывание.

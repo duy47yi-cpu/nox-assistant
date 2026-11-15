@@ -55,13 +55,19 @@ const SNAPSHOT_SCRIPT = `(() => {
     // Состояние переключателей: без него нажатие на флажок или меню выглядело бы «ничего не изменилось».
     if (/^(checkbox|radio)$/i.test(el.type)) item.checked = el.checked;
     if (el.getAttribute('aria-expanded')) item.expanded = el.getAttribute('aria-expanded');
-    // Что уже введено: без значения модель не понимает, заполнено поле или нет. Пароль не читаем никогда.
+    // Что уже введено: без значения модель не понимает, заполнено поле или нет. Пароль, коды и карты не читаем никогда.
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-      if (el.tagName === 'INPUT' && /^password$/i.test(el.type)) {
-        hasPassword = true;
-      } else {
+      const ac = String(el.getAttribute('autocomplete') || '').trim().toLowerCase();
+      const fieldMeta = [el.name || '', el.id || '', el.placeholder || '', el.getAttribute('aria-label') || ''].join(' ');
+      const isPass = el.tagName === 'INPUT' && /^password$/i.test(el.type);
+      const isSensitiveField = isPass
+        || /^(?:current-password|new-password|one-time-code|cc-)/i.test(ac)
+        || /(?:парол|password|passwd|passcode|pin[-_\\s]?code|пин[-_\\s]?код|секрет|secret|api[-_\\s]?key|токен|token|cvv|cvc|card[-_\\s]?number|one[-_\\s]?time[-_\\s]?code|\\botp\\b)/i.test(fieldMeta);
+      const secretValRe = /\\b(?:sk-[a-zA-Z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{16,}|AIza[0-9A-Za-z_-]{20,}|xox[baprs]-[0-9A-Za-z-]{10,}|Bearer\\s+[A-Za-z0-9._~+/=-]{10,}|eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}|\\d{4}[-\\s]?\\d{4}[-\\s]?\\d{4}[-\\s]?\\d{4})\\b/;
+      if (isPass) hasPassword = true;
+      if (!isSensitiveField) {
         const value = clean(el.value);
-        if (value) item.value = value;
+        if (value && !secretValRe.test(value)) item.value = value;
       }
       if (el.tagName === 'INPUT') {
         const formats = { date: 'YYYY-MM-DD', time: 'HH:MM', 'datetime-local': 'YYYY-MM-DDTHH:MM', month: 'YYYY-MM', week: 'YYYY-Www' };
@@ -168,6 +174,32 @@ const AUTH_URL_RE = /\/(login|signin|sign-in|log-in|auth|oauth|passport|sso)(?:[
 function needsHuman({ status, title, text, textLength, widget }) {
   if (BLOCK_STATUSES.has(status) || widget) return true;
   return textLength <= MAX_BLOCK_PAGE_TEXT && HUMAN_RE.test(`${title}\n${text}`);
+}
+
+const SENSITIVE_AUTOCOMPLETE_RE = /^(?:current-password|new-password|one-time-code|cc-)/i;
+const SENSITIVE_FIELD_META_RE = /парол|password|passwd|passcode|pin[-_\s]?code|пин[-_\s]?код|секрет|secret|api[-_\s]?key|токен|token|cvv|cvc|card[-_\s]?number|one[-_\s]?time[-_\s]?code|\botp\b/i;
+const SECRET_VALUE_RE = /\b(?:sk-[a-zA-Z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{16,}|AIza[0-9A-Za-z_-]{20,}|xox[baprs]-[0-9A-Za-z-]{10,}|Bearer\s+[A-Za-z0-9._~+/=-]{10,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4})\b/;
+
+function sanitizeSnapshotElements(elements) {
+  if (!Array.isArray(elements)) return [];
+  return elements.map((el) => {
+    if (!el || typeof el !== 'object') return el;
+    const copy = { ...el };
+    if (copy.value !== undefined) {
+      const raw = String(copy.value ?? '');
+      const ac = String(copy.autocomplete || '').trim();
+      const meta = `${copy.name || ''} ${copy.id || ''} ${copy.placeholder || ''} ${copy.label || ''} ${copy.text || ''}`;
+      if (
+        /^password$/i.test(String(copy.type || ''))
+        || SENSITIVE_AUTOCOMPLETE_RE.test(ac)
+        || SENSITIVE_FIELD_META_RE.test(meta)
+        || SECRET_VALUE_RE.test(raw)
+      ) {
+        delete copy.value;
+      }
+    }
+    return copy;
+  });
 }
 
 function detectAuthNeeded(snap = {}) {
@@ -381,6 +413,7 @@ class BrowserPage {
     if (this.failed) throw new BrowserError(`страница не загрузилась: ${this.failed}`);
     if (!navigationAllowed(wc.getURL())) throw new BrowserError('страница не загрузилась');
     const snap = await wc.executeJavaScript(SNAPSHOT_SCRIPT);
+    snap.elements = sanitizeSnapshotElements(snap.elements);
     this.elements = snap.elements;
     this.listOwner = background;
     this.seen = JSON.stringify([snap.url, snap.title, snap.text, snap.elements]);
@@ -764,6 +797,7 @@ module.exports = {
   requestAllowed,
   navigationAllowed,
   detectAuthNeeded,
+  sanitizeSnapshotElements,
   MULTI_TAB_NOTE,
   NEEDS_HUMAN,
   PARTITION,

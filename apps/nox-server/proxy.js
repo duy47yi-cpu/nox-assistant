@@ -36,6 +36,26 @@ function normalizeIp(raw) {
   return ver === 6 ? canonicalizeIpv6(ip) : ip;
 }
 
+function ipv6Prefix64(ip) {
+  const halves = String(ip || '').split('::');
+  if (halves.length > 2) return ip;
+  const left = halves[0] ? halves[0].split(':').filter(Boolean) : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(':').filter(Boolean) : [];
+  const missing = 8 - left.length - right.length;
+  if (missing < 0) return ip;
+  const groups = [...left, ...Array(missing).fill('0'), ...right];
+  if (groups.length !== 8) return ip;
+  const first4 = groups.slice(0, 4).map((g) => Number.parseInt(g, 16).toString(16)).join(':');
+  return canonicalizeIpv6(`${first4}::`);
+}
+
+// Ключ для rate-limit: IPv4 остаётся точным, IPv6 режется до /64 (защита от ротации в подсети).
+function rateLimitIpKey(raw) {
+  const ip = normalizeIp(raw);
+  if (!ip) return String(raw ?? '').trim() || 'unknown';
+  return net.isIPv6(ip) ? ipv6Prefix64(ip) : ip;
+}
+
 const LOOPBACK_LIST = new net.BlockList();
 LOOPBACK_LIST.addSubnet('127.0.0.0', 8, 'ipv4');
 LOOPBACK_LIST.addAddress('::1', 'ipv6');
@@ -165,12 +185,17 @@ function createProxyResolver({ trustProxy = false, trustedProxies } = {}) {
     isTrustedPeer,
     peerAddress,
     clientIp,
+    rateLimitIp(req) {
+      return rateLimitIpKey(clientIp(req));
+    },
+    rateLimitIpKey,
     isSecureTransport,
   };
 }
 
 module.exports = {
   normalizeIp,
+  rateLimitIpKey,
   isLoopbackAddress,
   createProxyResolver,
 };

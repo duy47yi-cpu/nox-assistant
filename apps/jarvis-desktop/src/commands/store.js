@@ -60,7 +60,7 @@ const RUN_STATUSES = new Set(['started', 'succeeded', 'skipped', 'failed', 'canc
 const TRIGGER_KINDS = new Set(['hotkey', 'schedule', 'event', 'manual', 'phrase']);
 
 // Происхождение команды: кто её составил. Используется подписями в окне и при переносе.
-const ORIGINS = new Set(['manual', 'recorded', 'ai', 'imported', 'sample']);
+const ORIGINS = new Set(['manual', 'recorded', 'ai', 'model', 'imported', 'sample']);
 
 // Лимиты импорта: файл, число команд и шагов, глубина JSON. Отказ — до любой записи.
 const MAX_IMPORT_BYTES = 1024 * 1024;
@@ -320,7 +320,7 @@ function checkArgs(args, n, { strictArgs = false, warnings = [], prefix = '' } =
   return walkArgValue(args, { where, dropSecrets: false });
 }
 
-function checkSteps(steps, { strictArgs = false, warnings = [], prefix = '' } = {}) {
+function checkSteps(steps, { strictArgs = false, warnings = [], prefix = '', blockShiftDelete = false } = {}) {
   if (!Array.isArray(steps)) throw new Error(`${prefix}шаги: нужен массив`);
   if (steps.length < 1 || steps.length > MAX_STEPS) throw new Error(`${prefix}шагов от 1 до ${MAX_STEPS}`);
   return steps.map((step, i) => {
@@ -338,6 +338,9 @@ function checkSteps(steps, { strictArgs = false, warnings = [], prefix = '' } = 
     }
     const rawArgs = step.args === undefined ? {} : step.args;
     const args = checkArgs(rawArgs, n, { strictArgs, warnings, prefix });
+    if (blockShiftDelete && tool === 'ui_keys' && /(?:^|\s)shift\s*\+\s*(?:delete|del)(?:\s|$)/i.test(String(args.keys || ''))) {
+      throw new Error(`${prefix}шаг ${n}: «ui_keys» с shift+delete нельзя сохранить в команде`);
+    }
     return { tool, args };
   });
 }
@@ -864,7 +867,8 @@ function buildRecord(cmd, items, existing, { nowIso = new Date().toISOString(), 
   const optionalPhrases = cmd.optionalPhrases === undefined
     ? (existing && Array.isArray(existing.optionalPhrases) ? existing.optionalPhrases.slice() : [])
     : checkOptionalPhrases(cmd.optionalPhrases);
-  const steps = checkSteps(cmd.steps, { strictArgs, warnings });
+  const origin = checkOrigin(cmd.origin, existing && ORIGINS.has(existing.origin) ? existing.origin : 'manual');
+  const steps = checkSteps(cmd.steps, { strictArgs, warnings, blockShiftDelete: origin === 'ai' || origin === 'model' });
   const enabled = checkEnabled(cmd.enabled, existing ? existing.enabled : true);
   const createdAt = cmd.createdAt === undefined
     ? (existing && existing.createdAt ? existing.createdAt : nowIso)
@@ -886,7 +890,6 @@ function buildRecord(cmd, items, existing, { nowIso = new Date().toISOString(), 
   const collections = cmd.collections === undefined
     ? (existing && Array.isArray(existing.collections) ? existing.collections.slice() : [])
     : checkCollections(cmd.collections);
-  const origin = checkOrigin(cmd.origin, existing && ORIGINS.has(existing.origin) ? existing.origin : 'manual');
 
   const id = existing ? existing.id : crypto.randomUUID();
   for (const phrase of phrases) {
@@ -1417,14 +1420,14 @@ function sanitizeImportedCommand(raw, label, warnings) {
   const phrases = checkPhrases(raw.phrases);
   // Старый файл без поля читается как команда без стартовых глаголов.
   const optionalPhrases = checkOptionalPhrases(raw.optionalPhrases);
-  const steps = checkSteps(raw.steps, { strictArgs: true, warnings, prefix: `${label}, ` });
+  const origin = raw.origin === undefined
+    ? 'imported'
+    : checkOrigin(raw.origin, 'imported');
+  const steps = checkSteps(raw.steps, { strictArgs: true, warnings, prefix: `${label}, `, blockShiftDelete: origin === 'ai' || origin === 'model' });
   const enabled = checkEnabled(raw.enabled, true);
   const { triggers, hotkey } = normalizeTriggers({ hotkey: raw.hotkey, triggers: raw.triggers }, null);
   const folder = checkFolder(raw.folder);
   const collections = checkCollections(raw.collections);
-  const origin = raw.origin === undefined
-    ? 'imported'
-    : checkOrigin(raw.origin, 'imported');
   const id = typeof raw.id === 'string' && raw.id.trim() !== '' && len(raw.id.trim()) <= 80
     ? raw.id.trim()
     : undefined;

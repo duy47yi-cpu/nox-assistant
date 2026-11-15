@@ -110,7 +110,7 @@ function inSession(sessionAllow, name, args) {
 const HARD_TOOL_NAME = /(^|_)(delete|remove|send|pay|payment|transfer|purchase|buy)(_|$)/i;
 const HARD_SHELL = /Remove-Item|\bdel\b|\berase\b|\brmdir\b|\brd\b|Send-MailMessage|sendmail|smtp|checkout|payment/i;
 const HARD_WINDOW = /telegram|ayugram|whatsapp|discord|viber|gmail|outlook|почта|mail\.ru|сбер|тинькофф|tinkoff|альфа-банк|банк|bank|wallet|кошел|paypal|оплат|bitwarden|1password|keepass|lastpass|dashlane|enpass|credential\s*manager|диспетчер\s*учетных\s*данных/i;
-const HARD_UI = new Set(['mouse_click', 'mouse_scroll', 'windows_focus', 'ui_focus', 'ui_type', 'ui_keys', 'ui_click', 'ui_set_toggle']);
+const HARD_UI = new Set(['mouse_click', 'mouse_scroll', 'desktop_click', 'windows_focus', 'ui_focus', 'ui_type', 'ui_keys', 'ui_click', 'ui_set_toggle']);
 const READ_UI = new Set(['ui_elements', 'ui_wait']);
 
 // Браузер: у вызова только номер элемента, поэтому адрес сверяется с открытой страницей.
@@ -119,6 +119,47 @@ const HARD_BROWSER_HOST = /mail|outlook|proton|bank|sber|tinkoff|tbank|alfa|vtb|
 let browserHost = () => '';
 function setBrowserHost(source) {
   browserHost = source;
+}
+
+// Сцена рабочего стола: позволяет определить элемент под координатами mouse_click или по id для desktop_click.
+let sceneSource = () => null;
+function setSceneSource(source) {
+  sceneSource = typeof source === 'function' ? source : () => null;
+}
+
+function resolveSceneTarget(name, args) {
+  if (!args || typeof args !== 'object') return null;
+  const scene = args._scene && Array.isArray(args._scene.elements) ? args._scene : (typeof sceneSource === 'function' ? sceneSource() : null);
+  if (!scene || !Array.isArray(scene.elements)) return null;
+  if (args.id !== undefined && args.id !== null) {
+    const targetId = String(args.id);
+    const byId = scene.elements.find((el) => el && el.id !== undefined && el.id !== null && String(el.id) === targetId);
+    if (byId) return { name: String(byId.name || ''), element: byId, scene };
+  }
+  const x = Number(args.x);
+  const y = Number(args.y);
+  if ((name === 'mouse_click' || (args.name === undefined && args.id === undefined)) && Number.isFinite(x) && Number.isFinite(y)) {
+    let best = null;
+    let bestArea = Infinity;
+    for (const el of scene.elements) {
+      const box = el && (el.bounds || el.rect);
+      if (!box || typeof box !== 'object') continue;
+      const bx = Number(box.x ?? box.left);
+      const by = Number(box.y ?? box.top);
+      const bw = Number(box.w ?? box.width);
+      const bh = Number(box.h ?? box.height);
+      if (!Number.isFinite(bx) || !Number.isFinite(by) || !(bw > 0) || !(bh > 0)) continue;
+      if (x >= bx && x < bx + bw && y >= by && y < by + bh) {
+        const area = bw * bh;
+        if (area <= bestArea) {
+          best = el;
+          bestArea = area;
+        }
+      }
+    }
+    if (best) return { name: String(best.name || ''), element: best, scene };
+  }
+  return null;
 }
 
 function hostOf(url) {
@@ -130,6 +171,14 @@ function hostOf(url) {
 }
 
 // Признак оплаты в вызове инструмента. Оплата запрещена всегда, поэтому проверка идёт по всем признакам сразу.
+function matchesUiElement(name, args, pattern, { skipType = false } = {}) {
+  const n = String(name || '');
+  if (!HARD_UI.has(n) || (skipType && n === 'ui_type') || !args) return false;
+  if (typeof args.name === 'string' && pattern.test(args.name)) return true;
+  const hit = resolveSceneTarget(n, args);
+  return Boolean(hit && hit.name && pattern.test(hit.name));
+}
+
 function isPayment({ name, args } = {}) {
   const n = String(name || '');
   if (PAY_TOOL_NAME.test(toolWords(n))) return true;
@@ -137,8 +186,8 @@ function isPayment({ name, args } = {}) {
     const command = String((args && args.command) || '');
     if (!PLAIN_GIT_CHECKOUT.test(command) && PAY_SHELL.test(command)) return true;
   }
-  // Название элемента окна: кнопка «Оплатить».
-  if (HARD_UI.has(n) && args && typeof args.name === 'string' && PAY_ELEMENT.test(args.name)) return true;
+  // Название элемента окна: кнопка «Оплатить» или элемент сцены по координатам/id.
+  if (matchesUiElement(n, args, PAY_ELEMENT)) return true;
   if (HARD_BROWSER.has(n) && PAY_BROWSER_HOST.test(String(browserHost()))) return true;
   return false;
 }
@@ -151,8 +200,9 @@ const REPLACE_WINDOW = /подтвер\S*\s+сохранен|подтвер\S*\s
 // Признак удаления: инструмент удаляет что-то без возможности отмены.
 function isDeletion({ name, args } = {}) {
   if (DELETE_TOOL_NAME.test(toolWords(name))) return true;
-  if (!HARD_UI.has(String(name || '')) || !args) return false;
-  if ((typeof args.name === 'string' && DELETE_ELEMENT.test(args.name)) || REPLACE_WINDOW.test(String(args.window || ''))) return true;
+  const n = String(name || '');
+  if (!HARD_UI.has(n) || !args) return false;
+  if (matchesUiElement(n, args, DELETE_ELEMENT) || REPLACE_WINDOW.test(String(args.window || ''))) return true;
   // Сохранение редактируемого файла — запись; решение о ней принимает режим доступа.
   return false;
 }
@@ -169,7 +219,7 @@ function isInstall({ name, args } = {}) {
   if (INSTALL_TOOL_NAME.test(toolWords(name))) return true;
   const n = String(name || '');
   if (n === 'shell_run') return INSTALL_SHELL.test(String((args && args.command) || '')) || SYSTEM_CHANGE_SHELL.test(String((args && args.command) || ''));
-  return HARD_UI.has(n) && n !== 'ui_type' && Boolean(args) && typeof args.name === 'string' && INSTALL_ELEMENT.test(args.name);
+  return matchesUiElement(n, args, INSTALL_ELEMENT, { skipType: true });
 }
 
 // Выключение, перезагрузка, выход из системы: инструмент, команда или кнопка.
@@ -182,7 +232,7 @@ function isPowerOff({ name, args } = {}) {
   const n = String(name || '');
   if (n === 'pc_shutdown') return true;
   if (n === 'shell_run') return POWER_SHELL.test(String((args && args.command) || ''));
-  return HARD_UI.has(n) && n !== 'ui_type' && Boolean(args) && typeof args.name === 'string' && POWER_ELEMENT.test(args.name);
+  return matchesUiElement(n, args, POWER_ELEMENT, { skipType: true });
 }
 
 function isShellDeletion({ name, args } = {}) {
@@ -374,9 +424,11 @@ function isSensitive({ name, args } = {}) {
 
 // Секрет в исходящем: письмо, команда, ввод в браузере, ссылка или буфер. Спрашиваем даже в «Полном доступе»:
 // пароль и ключ не должны уйти наружу по невнимательности. Это вопрос, а не отказ: владелец подтвердит.
-const SECRET_EGRESS_TOOLS = new Set(['mail_send', 'shell_run', 'browser_type', 'url_open', 'clipboard_set']);
-function hasSecretEgress({ name, args } = {}) {
-  if (!SECRET_EGRESS_TOOLS.has(name)) return false;
+const SECRET_EGRESS_TOOLS = new Set(['mail_send', 'shell_run', 'browser_type', 'browser_open', 'url_open', 'web_fetch', 'clipboard_set', 'ui_type', 'desktop_type']);
+function hasSecretEgress({ name, args, source } = {}) {
+  const n = String(name || '');
+  const isMcp = source === 'mcp' || n.startsWith('mcp__');
+  if (!SECRET_EGRESS_TOOLS.has(n) && !isMcp && !isEgress(n, source)) return false;
   try {
     return looksSecretEgress(JSON.stringify(args || {}));
   } catch {
@@ -413,12 +465,12 @@ function decide({ mode, name, risk, args, workspace, sessionAllow, hasPathParam 
   if (EXTERNAL_SOURCES.has(source) && ownerAllowed !== true && !directMail && !selectedCommand) return 'ask';
   // Заражение контекста: если в этом ходу или в истории вкладки уже был недоверенный текст, исходящее действие
   // спрашиваем, кроме прямой просьбы владельца отправить.
-  if ((tainted || browserTainted) && isEgress(name) && !ownerSends) return 'ask';
+  if ((tainted || browserTainted) && isEgress(name, source) && !ownerSends) return 'ask';
   // Чужой текст и руки: клик или ввод после чужой страницы/файла могут выполнить чужое указание.
   // Прямая просьба владельца отправить («отправь», «ответь») это снимает.
   if (handsTainted && isHandsAction(name) && !ownerSends) return 'ask';
   // Секрет в исходящем аргументе — тоже вопрос в любом режиме.
-  if (hasSecretEgress({ name, args })) return 'ask';
+  if (hasSecretEgress({ name, args, source })) return 'ask';
   // Намеренное ужесточение (03.11.2026): профиль и договорённость попадают в каждый промпт, поэтому их запись
   // спрашивается в любом режиме и каждый раз: иначе текст сайта мог бы закрепиться в памяти навсегда.
   // Исключение (03.11.2026): текст записи целиком из сообщения владельца в этом ходу — это его слова, не сайта.
@@ -465,4 +517,4 @@ const POLICY_PATTERNS = Object.freeze({
   HARD_BROWSER_HOST,
 });
 
-module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe, POLICY_PATTERNS, BROWSER_TAINT_WRITES };
+module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, setSceneSource, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe, POLICY_PATTERNS, BROWSER_TAINT_WRITES };

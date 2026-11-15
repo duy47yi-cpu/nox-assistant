@@ -69,13 +69,23 @@ function createGuard({ brain, meter, model, maxOutputTokens = DEFAULT_MAX_OUTPUT
     return Math.min(maxTokens ?? maxOutputTokens, maxOutputTokens);
   }
 
+  function resolveModel(args = {}) {
+    if (typeof brain.modelFor === 'function') {
+      const resolved = brain.modelFor(args);
+      return typeof resolved === 'string' ? resolved : '';
+    }
+    return model;
+  }
+
   // Верхние границы: {inputTokens, outputTokens, attemptUsd, usd}. attemptUsd — одна HTTP-попытка,
   // usd — весь вызов в худшем случае (attemptUsd × MAX_ATTEMPTS). null — цена модели неизвестна.
   // maxTokens — потолок вызывающего, как в chat().
-  function estimate({ messages, tools, maxTokens } = {}) {
+  function estimate(args = {}) {
+    const { messages, tools, maxTokens } = args;
+    const targetModel = resolveModel(args);
     const inputTokens = Math.ceil(JSON.stringify({ messages, tools }).length / CHARS_PER_TOKEN);
     const outputTokens = outputCap(maxTokens);
-    const price = priceFor(model);
+    const price = targetModel ? priceFor(targetModel) : null;
     const attemptUsd = price ? upperBound(null, { inputTokens, outputTokens }, price) : null;
     const usd = attemptUsd === null ? null : attemptUsd * MAX_ATTEMPTS;
     return { inputTokens, outputTokens, attemptUsd, usd };
@@ -109,18 +119,20 @@ function createGuard({ brain, meter, model, maxOutputTokens = DEFAULT_MAX_OUTPUT
       throw argsError(`maxTokens должен быть целым числом больше 0, получено: ${maxTokens}`);
     }
 
+    const hasRouterModel = typeof brain.modelFor === 'function';
+    const callModel = resolveModel(args);
     const blocked = meter.blockedReason();
     if (blocked) throw budgetError(blocked, { scope: 'meter' });
-    if (!meter.enforceable(model)) throw budgetError(REASON_UNKNOWN_PRICE, { scope: 'price' });
+    if (!callModel || !meter.enforceable(callModel)) throw budgetError(REASON_UNKNOWN_PRICE, { scope: 'price' });
     // Мозг шлёт запросы от имени другой модели: проверка по цене model ничего бы не гарантировала.
-    if (typeof brain.model === 'string' && brain.model !== model) {
-      throw budgetError(`мозг работает с моделью ${brain.model}, а цена взята для ${model} — лимит не обеспечен`,
+    if (!hasRouterModel && typeof brain.model === 'string' && brain.model !== callModel) {
+      throw budgetError(`мозг работает с моделью ${brain.model}, а цена взята для ${callModel} — лимит не обеспечен`,
         { scope: 'price' });
     }
 
     // Ответ из ограниченного кеша не обращается к модели и не создаёт фиктивный расход.
     // Но ошибки учёта, цены и маршрута остаются выше этого раннего возврата.
-    const cacheScope = typeof brain.cacheScope === 'function' ? brain.cacheScope(args) : brain.model || model;
+    const cacheScope = typeof brain.cacheScope === 'function' ? brain.cacheScope(args) : brain.model || callModel;
     const cached = responseCache && typeof responseCache.get === 'function' ? responseCache.get(args, cacheScope) : null;
     if (cached) return cached;
     const { inputTokens, outputTokens, attemptUsd } = estimate(args);
@@ -132,8 +144,8 @@ function createGuard({ brain, meter, model, maxOutputTokens = DEFAULT_MAX_OUTPUT
     const gate = () => {
       const reason = meter.blockedReason();
       if (reason) throw budgetError(reason, { scope: 'meter' });
-      if (!meter.enforceable(model)) throw budgetError(REASON_UNKNOWN_PRICE, { scope: 'price' });
-      const r = meter.reserveWithin(attemptUsd, { purpose, model, taskId, taskBudgetUsd: hasTaskBudget ? taskBudgetUsd : undefined });
+      if (!meter.enforceable(callModel)) throw budgetError(REASON_UNKNOWN_PRICE, { scope: 'price' });
+      const r = meter.reserveWithin(attemptUsd, { purpose, model: callModel, taskId, taskBudgetUsd: hasTaskBudget ? taskBudgetUsd : undefined });
       if (r.ok) return r.id;
       if (r.scope === 'meter') throw budgetError(r.reason, { scope: 'meter' });
       if (r.scope === 'day') {
@@ -158,7 +170,7 @@ function createGuard({ brain, meter, model, maxOutputTokens = DEFAULT_MAX_OUTPUT
     };
     const onUsage = (info) => {
       try {
-        meter.record({ purpose, taskId, model, usage: info && info.usage ? info.usage : null, pessimisticTokens });
+        meter.record({ purpose, taskId, model: callModel, usage: info && info.usage ? info.usage : null, pessimisticTokens });
       } catch (err) {
         // Попытка, возможно, оплачена, но не записана: её резерв остаётся в файле, неизвестный расход не бесплатен.
         unrecorded = err;

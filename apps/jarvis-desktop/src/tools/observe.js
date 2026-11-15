@@ -4,7 +4,7 @@
 // Собираются из уже существующих ui_windows/ui_elements/ui_click/ui_type, поэтому не трогают их PowerShell,
 // политику и проверки. Снимок экрана сюда не входит: screen_look остаётся отдельным и спрашивает разрешение по режиму.
 const { buildScene, diffScene, sceneText, sceneSignature, expectMet } = require('../perception/scene');
-const { isPayment, isDeletion, isInstall, isPowerOff, describe, hardDeny } = require('../policy/modes');
+const { isPayment, isDeletion, isInstall, isPowerOff, describe, hardDeny, setSceneSource } = require('../policy/modes');
 
 const MAX_WINDOW = 120;
 const MAX_FILTER = 120;
@@ -63,6 +63,7 @@ function observeTools(ui = [], { mouse = [] } = {}) {
 
   // Последняя сцена — для дельты и для действий по id. Одна на инструмент: сцена рабочего стола общая.
   let last = null;
+  setSceneSource(() => last);
   // Счётчик действий подряд, после которых экран не изменился (застой),
   // и подпись прошлой сцены: по ней видно, менялся ли экран между действиями.
   let stalls = 0;

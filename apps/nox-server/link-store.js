@@ -4,6 +4,7 @@
 // Использует общую базу и аутентификацию apps/nox-server/store.js; открытые билеты в SQLite никогда не пишутся.
 const crypto = require('crypto');
 const { sha256 } = require('./store');
+const { rateLimitIpKey } = require('./proxy');
 
 const PAIR_TTL_MS = 120_000;
 const SESSION_TTL_MS = 15_000;
@@ -248,8 +249,8 @@ class LinkStore {
   }
 
   recordFailure({ anonIp, ip, accountId, now: t = this.now() }) {
-    if (anonIp) this.store.recordAttempt(`link-fail:anon:ip:${anonIp}`, t);
-    if (ip) this.store.recordAttempt(`link-fail:ip:${ip}`, t);
+    if (anonIp) this.store.recordAttempt(`link-fail:anon:ip:${rateLimitIpKey(anonIp)}`, t);
+    if (ip) this.store.recordAttempt(`link-fail:ip:${rateLimitIpKey(ip)}`, t);
     if (accountId) this.store.recordAttempt(`link-fail:acc:${accountId}`, t);
   }
 

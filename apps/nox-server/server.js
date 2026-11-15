@@ -65,9 +65,9 @@ function redact(text, secrets = []) {
     .replace(/nox_[A-Za-z0-9_-]{8,}/g, 'nox_***')
     .replace(/((?:Bearer|Basic)\s+)\S+/gi, '$1***')
     .replace(/(x-nox-join-ticket\s*[:=]\s*)[^\s,;'"}\]]+/gi, '$1***')
-    .replace(/("(?:hostTicket|clientTicket|joinTicket|ticket|token|accessToken|refreshToken|password|pass|secret|adminKey|authorization)"\s*:\s*")([^"]*)(")/gi, '$1***$3')
-    .replace(/(\b(?:hostTicket|clientTicket|joinTicket|ticket|token|password|secret|adminKey)\s*[=:]\s*)([^\s&;,'"\n\r]+)/gi, '$1***')
-    .replace(/([?&](?:token|ticket|joinTicket|hostTicket|clientTicket|key|secret|password)=)([^&#\s]+)/gi, '$1***')
+    .replace(/("(?:hostTicket|clientTicket|joinTicket|ticket|token|accessToken|refreshToken|password|pass|secret|adminKey|authorization|api[_-]?key|x-api-key)"\s*:\s*")([^"]*)(")/gi, '$1***$3')
+    .replace(/(\b(?:hostTicket|clientTicket|joinTicket|ticket|token|password|secret|adminKey|x-api-key|api[_-]?key)\s*[=:]\s*)([^\s&;,'"\n\r]+)/gi, '$1***')
+    .replace(/([?&](?:token|ticket|joinTicket|hostTicket|clientTicket|key|secret|password|api[_-]?key|x-api-key)=)([^&#\s]+)/gi, '$1***')
     .replace(/(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/g, '***')
     .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '***@***');
 }
@@ -190,13 +190,18 @@ async function readJson(req, max, timeoutMs = DEFAULT_BODY_TIMEOUT_MS, signal = 
 }
 
 function usageOf(u) {
-  if (!u || !Number.isFinite(u.prompt_tokens) || !Number.isFinite(u.completion_tokens)) return null;
+  const ok = (v) => Number.isFinite(v) && v >= 0 && v < 1e9;
+  if (!u || !ok(u.prompt_tokens) || !ok(u.completion_tokens)) return null;
   const details = u.prompt_tokens_details || {};
-  return { prompt: u.prompt_tokens, cached: details.cached_tokens ?? u.prompt_cache_hit_tokens ?? 0, completion: u.completion_tokens };
+  const rawCached = details.cached_tokens ?? u.prompt_cache_hit_tokens ?? 0;
+  const cached = ok(rawCached) ? Math.min(rawCached, u.prompt_tokens) : 0;
+  return { prompt: u.prompt_tokens, cached, completion: u.completion_tokens };
 }
 
 function costOf({ prompt, cached, completion }, price) {
-  return ((prompt - cached) * price.inputPerM + cached * price.cachedPerM + completion * price.outputPerM) / 1e6;
+  const billable = Math.max(0, prompt - cached);
+  const raw = (billable * price.inputPerM + Math.max(0, cached) * price.cachedPerM + Math.max(0, completion) * price.outputPerM) / 1e6;
+  return Number.isFinite(raw) && raw > 0 ? raw : 0;
 }
 
 // Из потока достаём только поле usage; содержимое идёт клиенту и нигде не остаётся.
@@ -340,10 +345,12 @@ function createServer(config) {
     return { email, password };
   }
 
+  const rateIp = (req) => proxy.rateLimitIpKey(clientIp(req));
+
   async function register(req, res) {
     const { email, password } = credentials(await readBodyJson(req, MAX_AUTH_BODY));
     const t = now();
-    if (!store.allowAttempt(`reg:${clientIp(req)}`, { max: registerPerDay, perMs: DAY, now: t })) {
+    if (!store.allowAttempt(`reg:${rateIp(req)}`, { max: registerPerDay, perMs: DAY, now: t })) {
       throw new HttpError(429, 'too_many', 'слишком много регистраций с этого адреса');
     }
     if (store.accountByEmail(email)) throw new HttpError(409, 'exists', 'такой аккаунт уже есть');
@@ -361,7 +368,7 @@ function createServer(config) {
 
   async function login(req, res) {
     const { email, password } = credentials(await readBodyJson(req, MAX_AUTH_BODY));
-    const ip = clientIp(req);
+    const ip = rateIp(req);
     // Два предела: по адресу в целом (перебор по разным почтам) и по адресу с почтой.
     if (!store.allowAttempt(`login-ip:${ip}`, { max: loginIpPer15Min, perMs: 15 * 60000, now: now() })) {
       throw new HttpError(429, 'too_many', 'слишком много попыток, подождите 15 минут');
@@ -511,11 +518,12 @@ function createServer(config) {
   function chargeFor(accountId, price, weight, usage, requestChars, sentBytes) {
     const estimated = !usage;
     const u = usage || { prompt: Math.ceil(requestChars / CHARS_PER_TOKEN), cached: 0, completion: Math.ceil(sentBytes / CHARS_PER_TOKEN) };
-    store.charge(accountId, { usd: costOf(u, price), weight, ...u, estimated, now: now() });
+    const usd = Math.max(0, costOf(u, price));
+    store.charge(accountId, { usd, weight: Math.max(0, weight || 0), ...u, estimated, now: now() });
   }
 
   function admin(req) {
-    const limitKey = `admin:${clientIp(req)}`;
+    const limitKey = `admin:${rateIp(req)}`;
     if (store.tooMany(limitKey, { max: adminPer15Min, perMs: 15 * 60000, now: now() })) {
       throw new HttpError(429, 'too_many', 'слишком много служебных запросов, подождите 15 минут');
     }

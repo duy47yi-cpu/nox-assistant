@@ -149,7 +149,7 @@ async function runStep(cmd, step, deps) {
       args,
       workspace,
       ownerText: typeof deps.ownerText === 'string' ? deps.ownerText : '',
-      ownerCommand: deps.forceOwnerFalse === true ? false : deps.ownerCommand === true,
+      ownerCommand: (deps.forceOwnerFalse === true || Boolean(cmd && (cmd.origin === 'ai' || cmd.origin === 'model'))) ? false : deps.ownerCommand === true,
       source: tool.source,
       ownerAllowed: typeof tool.ownerAllowed === 'function' && tool.ownerAllowed(args) === true,
       sessionAllow: new Set(),
@@ -887,12 +887,13 @@ class UnifiedCommandLauncher {
         }
       : resolvedDeps.approvals;
 
+    const isModelOrigin = Boolean(cmd && (cmd.origin === 'ai' || cmd.origin === 'model'));
     const runDeps = {
       ...resolvedDeps,
       stop: stopSwitch,
       approvals: safeApprovals,
-      ownerCommand: isAutomatic ? false : (ownerCommand === true || (ownerCommand === undefined && resolvedDeps.ownerCommand === true)),
-      forceOwnerFalse: isAutomatic,
+      ownerCommand: (isAutomatic || isModelOrigin) ? false : (ownerCommand === true || (ownerCommand === undefined && resolvedDeps.ownerCommand === true)),
+      forceOwnerFalse: isAutomatic || isModelOrigin,
       blockAutonomyTools: isAutomatic,
       onStepOutcome: (info) => stepOutcomes.push(info),
     };

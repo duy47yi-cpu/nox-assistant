@@ -65,7 +65,7 @@ function checkArgValue(tool, key, value, spec, n, errors, warnings) {
 }
 
 // Проверка шагов плана: известность инструмента, запрещённые действия и (если есть описания) аргументы.
-function checkPlanSteps(steps, known, defs, { maxSteps = MAX_STEPS_CHAT } = {}) {
+function checkPlanSteps(steps, known, defs = new Map(), { maxSteps = MAX_STEPS_CHAT } = {}) {
   const errors = [];
   const warnings = [];
   if (!Array.isArray(steps) || steps.length === 0) {
@@ -88,7 +88,10 @@ function checkPlanSteps(steps, known, defs, { maxSteps = MAX_STEPS_CHAT } = {}) 
       errors.push(`шаг ${n}: args должен быть объектом`);
       return { tool, args: {} };
     }
-    if (tool && known.has(tool) && !badStepTool(tool) && defs.has(tool)) {
+    if (tool === 'ui_keys' && /(?:^|\s)shift\s*\+\s*(?:delete|del)(?:\s|$)/i.test(String(args.keys || ''))) {
+      errors.push(`шаг ${n}: «ui_keys» с shift+delete нельзя запускать из сценария`);
+    }
+    if (tool && known.has(tool) && !badStepTool(tool) && defs && typeof defs.has === 'function' && defs.has(tool)) {
       const parameters = defs.get(tool).parameters || {};
       const props = parameters.properties || {};
       const required = Array.isArray(parameters.required) ? parameters.required : [];

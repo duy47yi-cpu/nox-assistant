@@ -349,6 +349,9 @@ class Store {
   }
 
   charge(accountId, { usd, weight = 1, prompt = null, cached = null, completion = null, estimated, now }) {
+    if (!Number.isFinite(usd) || usd < 0 || !Number.isFinite(weight) || weight < 0) {
+      throw new Error('отрицательный расход не разрешён');
+    }
     this._inTx(() => {
       this.db.prepare('INSERT INTO usage (account_id, at, usd, prompt, cached, completion, estimated) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(accountId, now, usd, prompt, cached, completion, estimated ? 1 : 0);

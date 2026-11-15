@@ -46,9 +46,12 @@ function parseApprovalAnswer(text) {
   return null;
 }
 
-function voiceApprovalTarget() {
-  // Задержанное распознавание не привязано к конкретному запросу.
-  return null;
+function voiceApprovalTarget(list, broker = null) {
+  if (!Array.isArray(list) || list.length !== 1) return null;
+  if (!broker || !(broker._shown instanceof Map)) return null;
+  const id = list[0] && list[0].id;
+  if (!id || broker._shown.size !== 1 || !broker._shown.has(id)) return null;
+  return id;
 }
 
 // Ожидание решения владельца с автоотменой. Явный timeoutMs (число) важнее автоотмены;
@@ -62,7 +65,7 @@ class ApprovalBroker {
     this._pending = new Map(); // id -> { resolve, timer, timerMs, payload }
     this._usedIds = new Set();
     this._closed = new Map(); // id -> причина отмены: отменённое подтверждение использовать нельзя
-    this._shown = null; // { id, token }: какой запрос окно показывает владельцу прямо сейчас
+    this._shown = new Map(); // id -> token: какие запросы сейчас показаны в окнах
   }
 
   // Если id не передан, генерируем и записываем обратно в payload,
@@ -125,14 +128,13 @@ class ApprovalBroker {
   markShown(id) {
     if (!this._pending.has(id)) return null;
     const token = randomUUID();
-    this._shown = { id, token };
+    this._shown.set(id, token);
     return token;
   }
 
-  // Разрешение из окна принимается, только если окно отвечает на тот показ, что сейчас на экране (R3-01).
+  // Разрешение из окна принимается, только если окно отвечает на актуальный показ этого запроса.
   isShown(id, token) {
-    return Boolean(this._shown) && this._pending.has(id) && this._shown.id === id
-      && typeof token === 'string' && this._shown.token === token;
+    return this._pending.has(id) && typeof token === 'string' && this._shown.get(id) === token;
   }
 
   // Почему запрос больше не принимает ответ (он был отменён), или null.
@@ -183,7 +185,7 @@ class ApprovalBroker {
     if (!entry) return false;
     if (entry.timer) clearTimeout(entry.timer);
     this._pending.delete(id);
-    if (this._shown && this._shown.id === id) this._shown = null;
+    this._shown.delete(id);
     entry.resolve(decision);
     return true;
   }
