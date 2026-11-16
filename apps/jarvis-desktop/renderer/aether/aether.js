@@ -20,6 +20,7 @@
     const mcpView = window.NoxAetherMcpView.createMcpView({ store, bridge });
     const personalView = window.NoxAetherPersonalView.createPersonalView({ store, bridge });
     const settingsView = window.NoxAetherSettingsView.createSettingsView({ store, bridge });
+    const aiModal = window.NoxAetherAiModal.createAiModal({ store, bridge });
     const chatView = window.NoxAetherChatView.createChatView({
       store, bridge, orbStage, onVoiceSettings: settingsView.openVoiceSettings,
     });
@@ -39,12 +40,59 @@
     toastHost.className = 'ae-toast-host';
     toastHost.setAttribute('aria-live', 'polite');
 
+    const { icon } = window.NoxAetherIcons;
+
     const rail = document.createElement('aside');
     rail.className = 'ae-utility-rail';
-    rail.setAttribute('aria-label', 'История, лимиты и аккаунт');
-    rail.append(historyDrawer.trigger, accountPanel.el);
+    rail.setAttribute('aria-label', 'Служебные кнопки');
+    function railButton(id, label, iconName) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.id = id;
+      button.className = 'ae-rail-button';
+      button.title = label;
+      button.setAttribute('aria-label', label);
+      button.append(icon(iconName));
+      return button;
+    }
 
-    appRoot.replaceChildren(topbar.el, rail, mainContent, toastHost);
+    const aiModalBtn = railButton('lxAiModalBtn', 'Настройки Nox AI', 'sparkles');
+    aiModalBtn.setAttribute('aria-haspopup', 'dialog');
+    aiModalBtn.addEventListener('click', () => aiModal.open());
+
+    const muteBtn = railButton('lxMuteBtn', 'Озвучка', 'volumeOff');
+    muteBtn.addEventListener('click', () => {
+      if (store.state.settings.voiceOutput !== 'cloud') {
+        settingsView.openVoiceSettings('speech');
+        return;
+      }
+      store.setSetting('quiet', !store.state.settings.quiet);
+    });
+
+    const stageBtn = railButton('aeStageToggle', 'Панель сферы', 'orb');
+    stageBtn.setAttribute('aria-controls', orbStage.el.id);
+    let stageCollapsed = false;
+    stageBtn.addEventListener('click', () => {
+      if (store.state.route !== 'chat') {
+        store.setRoute('chat');
+        if (!orbStage.el.hidden && document.documentElement.dataset.aeOrbPos !== 'hidden') return;
+      }
+      if (document.documentElement.dataset.aeOrbPos === 'hidden') {
+        const boot = window.NoxAetherBoot;
+        const workshop = { ...boot.readWorkshop(), orbPosition: 'right' };
+        try { localStorage.setItem(boot.WORKSHOP_KEY, JSON.stringify(workshop)); } catch { /* ignore */ }
+        boot.applyWorkshopToDom(workshop);
+        stageCollapsed = false;
+      } else {
+        stageCollapsed = !stageCollapsed;
+      }
+      syncAll(store.state);
+    });
+
+    historyDrawer.trigger.classList.add('ae-rail-button');
+    rail.append(aiModalBtn, muteBtn, historyDrawer.trigger, stageBtn, accountPanel.el);
+
+    appRoot.replaceChildren(topbar.el, rail, mainContent, toastHost, aiModal.el);
 
     // Отрисовка тостов
     let lastToastSig = '';
@@ -66,18 +114,35 @@
       const isChat = st.route === 'chat';
       chatStageShell.hidden = !isChat;
       if (!isChat) chatStageShell.querySelector('.ae-sources-popover:popover-open')?.hidePopover();
+      orbStage.el.hidden = !isChat || stageCollapsed;
+      const stageVisible = isChat && !stageCollapsed && document.documentElement.dataset.aeOrbPos !== 'hidden';
+      stageBtn.setAttribute('aria-expanded', String(stageVisible));
+      const stageLabel = stageVisible ? 'Свернуть панель сферы' : 'Показать панель сферы';
+      const stageState = store.getOrbEffectiveState();
+      const stageStatus = window.NoxAetherOrbStage.STATE_LABELS[stageState];
+      stageBtn.dataset.state = stageState;
+      stageBtn.title = stageStatus ? `${stageLabel} · ${stageStatus}` : stageLabel;
+      stageBtn.setAttribute('aria-label', stageBtn.title);
+      const cloudVoice = st.settings.voiceOutput === 'cloud';
+      const audible = cloudVoice && !st.settings.quiet;
+      const soundIcon = audible ? 'volume' : 'volumeOff';
+      if (muteBtn.dataset.icon !== soundIcon) {
+        muteBtn.dataset.icon = soundIcon;
+        muteBtn.replaceChildren(icon(soundIcon));
+      }
+      muteBtn.title = cloudVoice ? (audible ? 'Выключить звук' : 'Включить звук') : 'Настройки озвучки';
+      muteBtn.setAttribute('aria-label', muteBtn.title);
 
       topbar.render(st);
       accountPanel.render(st);
       historyDrawer.render(st);
-      if (isChat) {
-        chatView.render(st);
-        orbStage.render(st);
-      }
+      if (isChat) chatView.render(st);
+      orbStage.render(st);
       commandsView.render(st);
       mcpView.render(st);
       personalView.render(st);
       settingsView.render(st);
+      aiModal.update(st);
       renderToasts(st);
     }
 
@@ -88,10 +153,14 @@
       (ev) => {
         store.onAgentEvent(ev);
         commandsView.onEvent(ev);
+        if (mcpView && typeof mcpView.onEvent === 'function') mcpView.onEvent(ev);
         if ((store.state.account?.signedIn || accountPanel.isOpen())
           && ['done', 'limit_pause', 'limit_resume'].includes(ev.type)) store.refreshAccount();
       },
-      (dev) => store.onDictationEvent(dev)
+      (dev) => {
+        store.onDictationEvent(dev);
+        if (commandsView && typeof commandsView.onDictationEvent === 'function') commandsView.onDictationEvent(dev);
+      }
     );
 
     // Глобальные клавиши окна
@@ -140,6 +209,11 @@
       store,
       getRoute: () => store.state.route,
       setRoute: (r) => store.setRoute(r),
+      openAiModal: () => aiModal.open(),
+      closeAiModal: () => aiModal.close(),
+      setAddonsTab: (tab) => mcpView.setTab(tab),
+      commandsDebug: commandsView.getUiDebugApi ? commandsView.getUiDebugApi() : null,
+      openCommand: (id) => commandsView.openCommand(id),
       orbLibrary: window.NoxOrbLibrary,
     };
   });

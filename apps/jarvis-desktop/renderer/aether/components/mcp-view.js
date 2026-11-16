@@ -1,498 +1,642 @@
-/* Раздел «MCP-подключения» Nox Aether:
- * - честные 7 состояний подключения (подключён, подключается, выключен, настроено, drift, ошибка, при запуске);
- * - поиск, фильтры, добавление своего сервиса (stdio / http), каталог популярных сервисов;
- * - явное подтверждение изменения набора действий сервиса (mcpApprove — отдельно от approval:respond). */
+/* Раздел «Дополнения» (маршрут mcp):
+ * - Вкладки «Плагины», «Команды» и «Озвучка» + переключатель «Только установленные» и счётчик;
+ * - Каталог дополнений и команд с категориями справа, поиском и сортировкой;
+ * - Библиотека голосов Nox (под Озвучкой): 2-колоночная сетка карточек голосов, фильтр языка/порядка справа и настройки синтеза;
+ * - Сохраняет реальное подключение MCP-серверов, approve при drift и настройку голоса. */
 (() => {
   'use strict';
 
-  function statusInfo(s) {
-    if (!s) return { key: 'idle', label: 'Настроено', tone: 'muted' };
-    if (s.disabled) return { key: 'disabled', label: 'Выключен', tone: 'muted' };
-    if (s.drift && (s.drift.added?.length || s.drift.removed?.length || s.drift.changed?.length)) {
-      return { key: 'drift', label: 'Набор действий изменился', tone: 'warn' };
-    }
-    if (s.error) return { key: 'error', label: 'Ошибка подключения', tone: 'danger' };
-    if (s.status === 'connecting' || s.connecting) return { key: 'connecting', label: 'Подключается…', tone: 'info' };
-    if (s.connected || s.status === 'connected') {
-      const n = Number(s.toolCount) || (Array.isArray(s.tools) ? s.tools.length : 0);
-      return { key: 'connected', label: `Подключён · ${n} действ.`, tone: 'ok' };
-    }
-    if (s.status === 'legacy') return { key: 'legacy', label: 'Подключится при запуске', tone: 'muted' };
-    return { key: 'idle', label: 'Настроено, не подключён', tone: 'muted' };
-  }
+  const ADDON_CATEGORIES = [
+    { id: 'popular', label: 'Популярное' },
+    { id: 'social', label: 'Соцсети и общение' },
+    { id: 'browsers', label: 'Браузеры' },
+    { id: 'design', label: 'Дизайн и творчество' },
+    { id: 'media', label: 'Видео, музыка и стриминг' },
+    { id: 'dev', label: 'Работа и разработка' },
+    { id: 'games', label: 'Игровые сервисы' },
+    { id: 'default', label: 'Команды по умолчанию' },
+  ];
+
+  const PACK_UI_META = {
+    browser: { title: 'Браузер', desc: 'Вкладки, история, обновления страниц и переключение окон.', category: 'browsers', popular: true, icon: 'globe', tint: '#2559E8' },
+    windows: { title: 'Окна', desc: 'Сворачивание, развёртывание и распределение окон по экрану.', category: 'default', popular: true, icon: 'layers', tint: '#3D59D7' },
+    media: { title: 'Музыка и звук', desc: 'Пауза, переключение треков и быстрая регулировка громкости.', category: 'media', popular: true, icon: 'music', tint: '#5070DD' },
+    montage: { title: 'Монтаж', desc: 'Разрезание клипов, отмена, воспроизведение и рендер на таймлайне.', category: 'design', popular: true, icon: 'play', tint: '#346CDB' },
+    games: { title: 'Игры', desc: 'Оверлей, скриншоты и игровые функции без отвлечения от процесса.', category: 'games', popular: true, icon: 'gamepad', tint: '#3B66E8' },
+    photoshop: { title: 'Photoshop', desc: 'Слои, масштабирование, трансформация, экспорт и отмена в Photoshop.', category: 'design', popular: true, icon: 'palette', tint: '#4B6FEA' },
+    minecraft: { title: 'Minecraft', desc: 'Чат, координаты, инвентарь, быстрый бег и пауза в Minecraft.', category: 'games', popular: true, icon: 'gamepad', tint: '#2E7CF6' },
+    explorer: { title: 'Проводник', desc: 'Новая папка, переименование, поиск файлов и обновление.', category: 'default', popular: true, icon: 'folder', tint: '#2D5EE0' },
+    text: { title: 'Текст', desc: 'Копирование, вставка, выделение, поиск и сохранение в документах.', category: 'default', popular: false, icon: 'pencil', tint: '#2559E8' },
+    sites: { title: 'Сайты', desc: 'Быстрое открытие почты, музыки, видео и любимых веб-сервисов.', category: 'browsers', popular: false, icon: 'globe', tint: '#3D59D7' },
+    apps: { title: 'Программы', desc: 'Быстрый запуск редакторов, терминала и рабочих утилит.', category: 'dev', popular: true, icon: 'terminal', tint: '#235AE9' },
+  };
+
+  const COMMAND_ADDONS = Object.entries(PACK_UI_META).map(([packId, meta]) => ({
+    id: `pack-${packId}`,
+    packId,
+    title: meta.title,
+    desc: meta.desc,
+    category: meta.category,
+    popular: meta.popular,
+    icon: meta.icon,
+    tint: meta.tint,
+    installed: false,
+    installedCount: 0,
+    totalCount: 0,
+  }));
+
+  const PLUGIN_ADDONS = [
+    {
+      id: 'plugin-web-search',
+      title: 'Веб-поиск и чтение страниц',
+      desc: 'Безопасный поиск актуальных фактов и проверка источников прямо в ответе ассистента.',
+      category: 'browsers',
+      popular: true,
+      icon: 'search',
+      tint: '#2559E8',
+      installed: true,
+    },
+    {
+      id: 'plugin-files-index',
+      title: 'Поиск по локальным папкам',
+      desc: 'Индексация выбранных документов и проектов на компьютере с быстрым чтением нужных фрагментов.',
+      category: 'dev',
+      popular: true,
+      icon: 'folder',
+      tint: '#3D59D7',
+      installed: true,
+    },
+    {
+      id: 'plugin-calendar',
+      title: 'Календарь и встречи',
+      desc: 'Просмотр расписания дня, предупреждения о пересечениях и утренняя сводка дел.',
+      category: 'default',
+      popular: true,
+      icon: 'checkCircle',
+      tint: '#2E7CF6',
+      installed: true,
+    },
+    {
+      id: 'plugin-mail',
+      title: 'Почта и черновики',
+      desc: 'Подготовка вежливых писем и сводка непрочитанных сообщений с вашим подтверждением.',
+      category: 'social',
+      popular: true,
+      icon: 'chat',
+      tint: '#5070DD',
+      installed: false,
+    },
+    {
+      id: 'plugin-media',
+      title: 'Медиа-мост',
+      desc: 'Поиск видеороликов и фоновой музыки под текущую задачу или настроение.',
+      category: 'media',
+      popular: false,
+      icon: 'music',
+      tint: '#346CDB',
+      installed: true,
+    },
+  ];
 
   function createMcpView({ store, bridge }) {
-    const ui = window.JarvisUI || {};
     const { icon } = window.NoxAetherIcons;
-    const scrub = typeof ui.scrub === 'function' ? ui.scrub : (s) => String(s || '');
 
     const root = document.createElement('section');
-    root.className = 'ae-page ae-mcp-page';
     root.id = 'aeMcpView';
+    root.className = 'ae-page lx-addons-page';
     root.hidden = true;
-    root.setAttribute('aria-label', 'MCP-подключения');
+    root.setAttribute('aria-label', 'Дополнения');
 
-    let servers = [];
-    let catalog = [];
-    let mail = null;
-    let filterGroup = 'all'; // 'all' | 'connected' | 'attention' | 'disabled'
-    let query = '';
-    let selectedName = null;
-    let showAddForm = false;
-    let confirmRemoveName = null;
-    let loaded = false;
+    let activeTab = 'commands'; // 'plugins' | 'commands' | 'voices'
+    let onlyInstalled = false;
+    let searchQuery = '';
+    let activeCategory = 'popular';
+    let sortMode = 'popular'; // 'popular' | 'alpha' | 'installed'
+    let mcpServers = [];
+    let serverPacks = [];
+    let showMcpForm = false;
+    let groupCollapsed = false;
 
-    const head = document.createElement('div');
-    head.className = 'ae-page-head';
-    const tw = document.createElement('div');
-    const h1 = document.createElement('h1');
-    h1.className = 'ae-page-title';
-    h1.textContent = 'Подключения';
-    const sub = document.createElement('p');
-    sub.className = 'ae-page-sub';
-    sub.textContent = 'Внешние сервисы и аккаунты.';
-    tw.append(h1, sub);
+    // Состояние голосов
+    let voiceSubTab = 'list'; // 'list' | 'synth'
 
-    const headBtns = document.createElement('div');
-    headBtns.className = 'ae-head-actions';
-    const refreshBtn = document.createElement('button');
-    refreshBtn.type = 'button';
-    refreshBtn.className = 'ae-btn ae-btn-ghost';
-    refreshBtn.append(icon('refresh'), (() => { const s = document.createElement('span'); s.textContent = 'Обновить'; return s; })());
-    refreshBtn.addEventListener('click', () => loadState());
+    // ── Верхняя панель вкладок и счётчика ────────────────────────
+    const topBar = document.createElement('div');
+    topBar.className = 'lx-addons-topbar';
 
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'ae-btn ae-btn-primary';
-    addBtn.append(icon('plus'), (() => { const s = document.createElement('span'); s.textContent = 'Добавить сервис'; return s; })());
-    addBtn.addEventListener('click', () => {
-      showAddForm = !showAddForm;
-      renderBody();
-    });
+    const tabsWrap = document.createElement('div');
+    tabsWrap.className = 'lx-pill-tabs';
+    tabsWrap.setAttribute('role', 'tablist');
 
-    headBtns.append(refreshBtn, addBtn);
-    head.append(tw, headBtns);
-
-    // Строка фильтров и поиска
-    const filterBar = document.createElement('div');
-    filterBar.className = 'ae-filter-bar';
-
-    const chips = document.createElement('div');
-    chips.className = 'ae-chips-row';
-    const FILTERS = [
-      ['all', 'Все'],
-      ['connected', 'Подключённые'],
-      ['attention', 'Требуют внимания'],
-      ['disabled', 'Выключенные'],
-    ];
-    const chipBtns = new Map();
-    for (const [id, label] of FILTERS) {
-      const c = document.createElement('button');
-      c.type = 'button';
-      c.className = 'ae-subtab';
-      c.textContent = label;
-      c.addEventListener('click', () => {
-        filterGroup = id;
-        renderBody();
-      });
-      chips.append(c);
-      chipBtns.set(id, c);
+    const tabBtns = {};
+    for (const [id, text] of [
+      ['plugins', 'Плагины'],
+      ['commands', 'Команды'],
+      ['voices', 'Озвучка'],
+    ]) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = `lxAddonsTab_${id}`;
+      btn.className = 'lx-pill-tab';
+      btn.setAttribute('role', 'tab');
+      btn.textContent = text;
+      btn.addEventListener('click', () => setTab(id));
+      tabBtns[id] = btn;
+      tabsWrap.append(btn);
     }
 
-    const searchInp = document.createElement('input');
-    searchInp.type = 'search';
-    searchInp.className = 'ae-input ae-search-wide';
-    searchInp.placeholder = 'Поиск подключений…';
-    searchInp.setAttribute('aria-label', 'Поиск подключений');
-    searchInp.addEventListener('input', () => {
-      query = searchInp.value;
+    const topRight = document.createElement('div');
+    topRight.className = 'lx-addons-top-right';
+
+    const instToggleLabel = document.createElement('label');
+    instToggleLabel.className = 'lx-inline-check';
+    instToggleLabel.htmlFor = 'lxOnlyInstalledChk';
+    const instChk = document.createElement('input');
+    instChk.type = 'checkbox';
+    instChk.id = 'lxOnlyInstalledChk';
+    instChk.className = 'lx-checkbox-input';
+    instChk.addEventListener('change', () => {
+      onlyInstalled = instChk.checked;
       renderBody();
     });
+    const instTxt = document.createElement('span');
+    instTxt.textContent = 'Только установленные';
+    instToggleLabel.append(instChk, instTxt);
 
-    const search = document.createElement('label');
-    search.className = 'ae-page-search';
-    search.append(icon('search'), searchInp);
-    filterBar.append(chips, search);
+    const installedCount = document.createElement('span');
+    installedCount.id = 'lxInstalledCount';
+    installedCount.className = 'lx-installed-count';
 
-    const addWrap = document.createElement('div');
-    addWrap.className = 'ae-inline-panel';
-    addWrap.hidden = true;
+    topRight.append(installedCount, instToggleLabel);
+    topBar.append(tabsWrap, topRight);
 
-    const body = document.createElement('div');
-    body.className = 'ae-mcp-body';
+    const contentHost = document.createElement('div');
+    contentHost.className = 'lx-addons-content';
 
-    const listGroup = document.createElement('section');
-    listGroup.className = 'ae-mcp-list';
-    const listHeading = document.createElement('h2');
-    listHeading.className = 'ae-section-heading';
-    listHeading.textContent = 'Мои подключения';
-    const listSection = document.createElement('div');
-    listSection.className = 'ae-mcp-list';
-    listGroup.append(listHeading, filterBar, listSection);
-    const catalogSection = document.createElement('section');
-    catalogSection.className = 'ae-mcp-catalog';
-    catalogSection.hidden = true;
-    body.append(listGroup, catalogSection);
-    root.append(head, addWrap, body);
+    root.append(topBar, contentHost);
 
-    async function loadState() {
-      loaded = true;
-      if (!bridge.has('mcpState')) {
-        servers = [];
-        catalog = [];
-        renderBody();
-        return;
-      }
-      try {
-        const [res, mailState] = await Promise.all([
-          bridge.call('mcpState'),
-          bridge.has('mailState') ? bridge.call('mailState').catch(() => null) : null,
-        ]);
-        servers = Array.isArray(res && res.servers) ? res.servers : [];
-        catalog = Array.isArray(res && res.catalog) ? res.catalog : [];
-        mail = mailState;
-      } catch (err) {
-        store.toast(`Не удалось загрузить подключения: ${bridge.errText(err)}`, 'error');
-      }
+    function setTab(nextTab) {
+      if (!['plugins', 'commands', 'voices'].includes(nextTab)) return;
+      activeTab = nextTab;
       renderBody();
     }
 
-    function renderAddForm(prefill = null) {
-      if (!showAddForm && !prefill) {
-        addWrap.hidden = true;
-        addWrap.replaceChildren();
-        return;
+    function syncTabsHeader(installedN, totalN) {
+      for (const [id, btn] of Object.entries(tabBtns)) {
+        const active = id === activeTab;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-selected', String(active));
       }
-      addWrap.hidden = false;
-      const form = document.createElement('form');
-      form.className = 'ae-form-grid';
+      instToggleLabel.hidden = activeTab === 'voices';
+      installedCount.hidden = activeTab === 'voices';
+      installedCount.textContent = `Установлено: ${installedN}/${totalN}`;
+    }
 
-      const fTitle = document.createElement('h2');
-      fTitle.textContent = prefill ? `Подключение: ${prefill.title || prefill.name}` : 'Новое MCP-подключение';
+    // ── Отрисовка «Плагины» и «Команды» ─────────────────────────
+    function renderCatalogTab() {
+      const commandPackItems = serverPacks.length
+        ? serverPacks.map((p) => {
+            const meta = PACK_UI_META[p.id] || {};
+            const totalCount = Number(p.total) || 0;
+            const installedCount = Number(p.installed) || 0;
+            const isFull = totalCount > 0 && installedCount >= totalCount;
+            const partialText = installedCount > 0 && installedCount < totalCount
+              ? ` (установлено ${installedCount}/${totalCount})`
+              : (totalCount ? ` (${totalCount} команд)` : '');
+            return {
+              id: `pack-${p.id}`,
+              packId: p.id,
+              title: p.title || meta.title || p.id,
+              desc: `${p.hint || meta.desc || ''}${partialText}`,
+              category: meta.category || 'default',
+              popular: meta.popular !== undefined ? meta.popular : true,
+              icon: meta.icon || 'archive',
+              tint: meta.tint || '#2559E8',
+              installed: isFull,
+              installedCount,
+              totalCount,
+            };
+          })
+        : COMMAND_ADDONS;
 
-      const nmInp = document.createElement('input');
-      nmInp.type = 'text';
-      nmInp.className = 'ae-input';
-      nmInp.placeholder = 'Имя сервиса (например: github или notes)';
-      nmInp.value = prefill ? (prefill.id || prefill.name || '') : '';
-      nmInp.required = true;
+      const sourceItems = activeTab === 'plugins'
+        ? [
+            ...PLUGIN_ADDONS,
+            ...mcpServers.map((s) => ({
+              id: `mcp_${s.name}`,
+              mcpName: s.name,
+              title: s.name,
+              desc: `${s.transport || 'stdio'} · ${s.status || 'подключение'}${s.drift ? ' · требует подтверждения изменений' : ''}`,
+              category: 'dev',
+              popular: true,
+              icon: 'mcp',
+              tint: '#2559E8',
+              installed: s.enabled !== false,
+              drift: Boolean(s.drift),
+            })),
+          ]
+        : commandPackItems;
 
-      const tgtInp = document.createElement('input');
-      tgtInp.type = 'text';
-      tgtInp.className = 'ae-input';
-      tgtInp.placeholder = 'Адрес https://… или команда запуска (например: npx)';
-      tgtInp.value = prefill ? (prefill.command || prefill.url || '') : '';
-      tgtInp.required = true;
+      const installedN = sourceItems.filter((x) => x.installed).length;
+      syncTabsHeader(installedN, sourceItems.length);
 
-      const argsInp = document.createElement('input');
-      argsInp.type = 'text';
-      argsInp.className = 'ae-input';
-      argsInp.placeholder = 'Аргументы команды через пробел (необязательно)';
-      argsInp.value = prefill && Array.isArray(prefill.args) ? prefill.args.join(' ') : '';
+      const layout = document.createElement('div');
+      layout.className = 'lx-addons-grid';
 
-      const errP = document.createElement('p');
-      errP.className = 'ae-form-err';
-      errP.hidden = true;
+      // Левая колонка: поиск + карточки
+      const mainCol = document.createElement('div');
+      mainCol.className = 'lx-addons-main';
 
-      const actRow = document.createElement('div');
-      actRow.className = 'ae-form-actions';
-      const saveB = document.createElement('button');
-      saveB.type = 'submit';
-      saveB.className = 'ae-btn ae-btn-primary';
-      saveB.textContent = 'Подключить';
-      const cancelB = document.createElement('button');
-      cancelB.type = 'button';
-      cancelB.className = 'ae-btn ae-btn-ghost';
-      cancelB.textContent = 'Отмена';
-      cancelB.addEventListener('click', () => {
-        showAddForm = false;
-        renderAddForm(null);
+      const filterRow = document.createElement('div');
+      filterRow.className = 'lx-search-row';
+
+      const searchBox = document.createElement('div');
+      searchBox.className = 'lx-search-box';
+      const searchIco = icon('search', 'lx-search-ico');
+      const searchInput = document.createElement('input');
+      searchInput.type = 'search';
+      searchInput.className = 'lx-search-input';
+      searchInput.value = searchQuery;
+      searchInput.placeholder = activeTab === 'plugins' ? 'Поиск плагинов…' : 'Поиск команд…';
+      searchInput.addEventListener('input', () => {
+        searchQuery = searchInput.value;
+        renderCards();
       });
-      actRow.append(saveB, cancelB);
+      searchBox.append(searchIco, searchInput);
 
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const name = nmInp.value.trim();
-        const target = tgtInp.value.trim();
-        const args = argsInp.value.trim() ? argsInp.value.trim().split(/\s+/) : [];
-        if (!name || !target) return;
-        saveB.disabled = true;
-        errP.hidden = true;
-        try {
-          const r = await bridge.call('mcpAdd', name, target, args);
-          if (r && r.ok === false) throw new Error(r.error || 'не удалось подключить');
-          if (r?.error) store.toast('Сервис сохранён. Подключение пока не установлено.', 'error');
-          else store.toast(`Сервис «${name}» добавлен`, 'ok');
-          showAddForm = false;
-          await loadState();
-        } catch (err) {
-          errP.textContent = scrub(bridge.errText(err));
-          errP.hidden = false;
-        } finally {
-          saveB.disabled = false;
+      const sortBtn = document.createElement('button');
+      sortBtn.type = 'button';
+      sortBtn.className = 'lx-pill-btn lx-pill-secondary lx-sort-btn';
+      const SORT_LABELS = { popular: 'Сортировка', alpha: 'По алфавиту', installed: 'Установленные' };
+      sortBtn.append(icon('sort'), document.createTextNode(SORT_LABELS[sortMode]));
+      sortBtn.addEventListener('click', () => {
+        const order = ['popular', 'alpha', 'installed'];
+        sortMode = order[(order.indexOf(sortMode) + 1) % order.length];
+        renderBody();
+      });
+
+      filterRow.append(searchBox, sortBtn);
+
+      if (activeTab === 'plugins') {
+        const addMcpBtn = document.createElement('button');
+        addMcpBtn.type = 'button';
+        addMcpBtn.className = 'lx-pill-btn lx-pill-primary';
+        addMcpBtn.textContent = showMcpForm ? 'Скрыть форму' : '+ Свой MCP';
+        addMcpBtn.addEventListener('click', () => {
+          showMcpForm = !showMcpForm;
+          renderBody();
+        });
+        filterRow.append(addMcpBtn);
+      }
+
+      mainCol.append(filterRow);
+
+      // Форма добавления своего MCP при нажатии
+      if (activeTab === 'plugins' && showMcpForm) {
+        const form = document.createElement('form');
+        form.className = 'lx-card lx-mcp-form';
+        const fTitle = document.createElement('div');
+        fTitle.className = 'lx-card-subtitle';
+        fTitle.textContent = 'Подключить свой MCP-сервер';
+
+        const row = document.createElement('div');
+        row.className = 'lx-mcp-form-row';
+        const nameIn = document.createElement('input');
+        nameIn.className = 'lx-input';
+        nameIn.placeholder = 'Имя сервиса';
+        const cmdIn = document.createElement('input');
+        cmdIn.className = 'lx-input';
+        cmdIn.placeholder = 'Команда или адрес (http://...)';
+        const addSubmit = document.createElement('button');
+        addSubmit.type = 'submit';
+        addSubmit.className = 'lx-pill-btn lx-pill-primary';
+        addSubmit.textContent = 'Добавить';
+        row.append(nameIn, cmdIn, addSubmit);
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const name = nameIn.value.trim();
+          const cmd = cmdIn.value.trim();
+          if (!name || !cmd) {
+            store.toast('Укажите имя и команду или адрес', 'error');
+            return;
+          }
+          if (bridge.has('mcpAdd')) {
+            try {
+              const res = await bridge.call('mcpAdd', {
+                name,
+                transport: /^https?:\/\//i.test(cmd) ? 'http' : 'stdio',
+                command: /^https?:\/\//i.test(cmd) ? '' : cmd,
+                url: /^https?:\/\//i.test(cmd) ? cmd : '',
+              });
+              if (res?.ok === false) throw new Error(res.error || 'Не удалось добавить');
+              showMcpForm = false;
+              await load();
+            } catch (err) {
+              store.toast(bridge.errText(err), 'error');
+            }
+          }
+        });
+        form.append(fTitle, row);
+        mainCol.append(form);
+      }
+
+      const groupHead = document.createElement('button');
+      groupHead.type = 'button';
+      groupHead.className = groupCollapsed ? 'lx-group-head is-collapsed' : 'lx-group-head';
+      groupHead.setAttribute('aria-expanded', String(!groupCollapsed));
+      const groupTitleEl = document.createElement('span');
+      const groupChevronEl = document.createElement('span');
+      groupChevronEl.className = 'lx-group-chevron';
+      groupChevronEl.append(icon('chevronDown'));
+      groupHead.append(groupTitleEl, groupChevronEl);
+
+      const cardsHost = document.createElement('div');
+      cardsHost.className = 'lx-addon-cards';
+      cardsHost.hidden = groupCollapsed;
+
+      groupHead.addEventListener('click', () => {
+        groupCollapsed = !groupCollapsed;
+        groupHead.classList.toggle('is-collapsed', groupCollapsed);
+        groupHead.setAttribute('aria-expanded', String(!groupCollapsed));
+        cardsHost.hidden = groupCollapsed;
+      });
+
+      mainCol.append(groupHead, cardsHost);
+
+      function renderCards() {
+        const q = searchQuery.trim().toLowerCase();
+        let list = sourceItems.filter((item) => {
+          if (onlyInstalled && !item.installed) return false;
+          if (activeCategory === 'popular' && !item.popular && !q) return false;
+          if (activeCategory !== 'popular' && item.category !== activeCategory) return false;
+          if (q && !`${item.title} ${item.desc}`.toLowerCase().includes(q)) return false;
+          return true;
+        });
+
+        if (sortMode === 'alpha') {
+          list = [...list].sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+        } else if (sortMode === 'installed') {
+          list = [...list].sort((a, b) => Number(b.installed) - Number(a.installed));
         }
-      });
 
-      form.append(fTitle, nmInp, tgtInp, argsInp, errP, actRow);
-      addWrap.replaceChildren(form);
+        const catLabel = (ADDON_CATEGORIES.find((c) => c.id === activeCategory) || ADDON_CATEGORIES[0]).label;
+        groupTitleEl.textContent = `${catLabel} (${list.length})`;
+
+        if (!list.length) {
+          const empty = document.createElement('div');
+          empty.className = 'lx-empty-box';
+          empty.textContent = 'По выбранным фильтрам ничего не найдено.';
+          cardsHost.replaceChildren(empty);
+          return;
+        }
+
+        const activateCard = async (item) => {
+          if (item.mcpName && bridge.has('mcpToggle')) {
+            await bridge.call('mcpToggle', item.mcpName, !item.installed);
+            await load();
+            return;
+          }
+          if (item.packId && bridge.has('installPack')) {
+            try {
+              const r = await bridge.call('installPack', item.packId);
+              if (r && r.ok === false) throw new Error(r.error || 'Не удалось установить пак');
+              await refreshPacks();
+              if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+                window.dispatchEvent(new CustomEvent('nox:commands-updated'));
+              }
+              store.toast(
+                r && r.added
+                  ? `Пак «${item.title}» установлен (+${r.added})`
+                  : `Пак «${item.title}» уже установлен`,
+                'ok'
+              );
+              return;
+            } catch (err) {
+              store.toast(bridge.errText(err), 'error');
+              return;
+            }
+          }
+          item.installed = !item.installed;
+          renderBody();
+        };
+
+        cardsHost.replaceChildren(...list.map((item) => {
+          const card = document.createElement('div');
+          card.className = 'lx-addon-card';
+          card.setAttribute('role', 'button');
+          card.tabIndex = 0;
+          card.dataset.installed = String(Boolean(item.installed));
+          card.title = item.installed ? 'Нажмите для настройки или переключения' : 'Нажмите для подключения';
+
+          const badge = document.createElement('div');
+          badge.className = 'lx-addon-ico-box';
+          badge.append(icon(item.icon || 'personal'));
+
+          const info = document.createElement('div');
+          info.className = 'lx-addon-info';
+          const titleRow = document.createElement('div');
+          titleRow.className = 'lx-addon-title-row';
+          const titleEl = document.createElement('span');
+          titleEl.className = 'lx-addon-title';
+          titleEl.textContent = item.title;
+          titleRow.append(titleEl);
+
+          const descEl = document.createElement('p');
+          descEl.className = 'lx-addon-desc';
+          descEl.textContent = item.desc;
+          info.append(titleRow, descEl);
+
+          card.append(badge, info);
+
+          if (item.drift && bridge.has('mcpApprove')) {
+            const right = document.createElement('div');
+            right.className = 'lx-addon-act';
+            const approveBtn = document.createElement('button');
+            approveBtn.type = 'button';
+            approveBtn.className = 'lx-pill-btn lx-pill-primary';
+            approveBtn.textContent = 'Подтвердить';
+            approveBtn.addEventListener('click', async (e) => {
+              e.stopPropagation();
+              await bridge.call('mcpApprove', item.mcpName);
+              await load();
+            });
+            right.append(approveBtn);
+            card.append(right);
+          }
+
+          card.addEventListener('click', () => activateCard(item));
+          card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              activateCard(item);
+            }
+          });
+
+          return card;
+        }));
+      }
+
+      renderCards();
+
+      // Правая колонка категорий
+      const sideCol = document.createElement('aside');
+      sideCol.className = 'lx-cat-col';
+      sideCol.setAttribute('aria-label', 'Категории дополнений');
+
+      for (const cat of ADDON_CATEGORIES) {
+        const catBtn = document.createElement('button');
+        catBtn.type = 'button';
+        catBtn.className = cat.id === activeCategory ? 'lx-cat-btn is-active' : 'lx-cat-btn';
+        catBtn.textContent = cat.label;
+        catBtn.addEventListener('click', () => {
+          activeCategory = cat.id;
+          renderBody();
+        });
+        sideCol.append(catBtn);
+      }
+
+      layout.append(mainCol, sideCol);
+      contentHost.replaceChildren(layout);
     }
 
-    function matchesFilter(s) {
-      const info = statusInfo(s);
-      if (filterGroup === 'connected' && info.key !== 'connected') return false;
-      if (filterGroup === 'attention' && info.key !== 'error' && info.key !== 'drift') return false;
-      if (filterGroup === 'disabled' && info.key !== 'disabled') return false;
-      const q = query.trim().toLowerCase();
-      if (!q) return true;
-      return String(s.name || '').toLowerCase().includes(q) || String(s.target || s.url || s.command || '').toLowerCase().includes(q);
+    // ── Отрисовка «Озвучка → Голоса / Синтез голоса» ─────────────
+    function renderVoicesTab() {
+      syncTabsHeader(0, 0);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'lx-voices-wrap';
+
+      // Подвкладки: Голоса / Синтез голоса
+      const subTabs = document.createElement('div');
+      subTabs.className = 'lx-subtabs';
+      for (const [id, text] of [['list', 'Голоса'], ['synth', 'Синтез голоса']]) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = voiceSubTab === id ? 'lx-pill-tab is-active' : 'lx-pill-tab';
+        b.textContent = text;
+        b.addEventListener('click', () => {
+          voiceSubTab = id;
+          renderBody();
+        });
+        subTabs.append(b);
+      }
+      wrap.append(subTabs);
+
+      const settings = store.state.settings;
+      const cloud = settings.voiceOutput === 'cloud';
+      const available = settings.voiceCloudAvailable === true;
+      const card = document.createElement('div');
+      card.className = 'lx-card lx-synth-card';
+      const heading = document.createElement('h3');
+      heading.className = 'lx-section-title';
+      heading.textContent = voiceSubTab === 'synth' ? 'Настройки синтеза голоса Nox' : 'Облачный голос';
+      const status = document.createElement('p');
+      status.className = 'lx-hint';
+      status.setAttribute('role', 'status');
+      if (!available) status.textContent = 'Облачная озвучка не настроена.';
+      else if (!cloud) status.textContent = 'Озвучка выключена.';
+      else if (settings.quiet) status.textContent = 'Включён тихий режим.';
+      else status.textContent = 'Облачная озвучка включена.';
+      card.append(heading);
+
+      if (voiceSubTab === 'synth') {
+        const field = document.createElement('label');
+        field.className = 'ae-field';
+        field.textContent = 'Режим озвучки';
+        const select = document.createElement('select');
+        select.className = 'ae-select';
+        select.add(new Option('Выключена (по умолчанию)', 'off'));
+        select.add(new Option('Облачная', 'cloud'));
+        select.value = cloud ? 'cloud' : 'off';
+        select.addEventListener('change', async () => {
+          select.disabled = true;
+          await store.setSetting('voiceOutput', select.value);
+          renderBody();
+          contentHost.querySelector('.ae-select')?.focus();
+        });
+        field.append(select);
+        card.append(field);
+      }
+
+      const preview = document.createElement('button');
+      preview.type = 'button';
+      preview.className = 'lx-pill-btn lx-pill-primary';
+      preview.append(icon('play'), document.createTextNode(voiceSubTab === 'synth' ? 'Проверить озвучку' : 'Прослушать'));
+      preview.disabled = !cloud || !available || settings.quiet === true;
+      preview.addEventListener('click', async () => {
+        preview.disabled = true;
+        status.textContent = 'Воспроизводится…';
+        const result = await bridge.call('voiceTest').catch(() => null);
+        status.textContent = result?.ok ? 'Прослушивание завершилось.' : result?.error || 'Не удалось воспроизвести голос.';
+        preview.disabled = false;
+      });
+      card.append(status, preview);
+      wrap.append(card);
+      contentHost.replaceChildren(wrap);
     }
 
     function renderBody() {
-      for (const [id, b] of chipBtns.entries()) {
-        b.classList.toggle('is-active', id === filterGroup);
-        b.setAttribute('aria-pressed', String(id === filterGroup));
-      }
-      if (showAddForm && !addWrap.childElementCount) renderAddForm(null);
-      else if (!showAddForm) renderAddForm(null);
-
-      listSection.replaceChildren();
-      catalogSection.replaceChildren();
-
-      const filtered = servers.filter(matchesFilter);
-      const installedNames = new Set(servers.map((s) => s.name));
-      const mailMatches = mail?.connected && ['all', 'connected'].includes(filterGroup) &&
-        (!query.trim() || `Gmail ${mail.email || ''}`.toLowerCase().includes(query.trim().toLowerCase()));
-      const availableCatalog = catalog.filter((c) => c && !installedNames.has(c.id) && !(c.integration === 'mail' && mail?.connected));
-      if (!filtered.length && !mailMatches) {
-        const emp = document.createElement('div');
-        emp.className = 'ae-empty-pane';
-        emp.textContent = 'Подключений пока нет.';
-        if (servers.length || mail?.connected) emp.textContent = 'Подключения по этим условиям не найдены.';
-        else if (availableCatalog.length) emp.textContent = 'Добавьте сервис вручную или выберите его из каталога.';
-        listSection.append(emp);
-      } else {
-        if (mailMatches) {
-          const card = document.createElement('div');
-          card.className = 'ae-mcp-card';
-          const row = document.createElement('div');
-          row.className = 'ae-mcp-card-main';
-          const name = document.createElement('strong');
-          name.textContent = mail.email ? `Gmail · ${mail.email}` : 'Gmail';
-          const disconnect = document.createElement('button');
-          disconnect.type = 'button';
-          disconnect.className = 'ae-btn ae-btn-secondary ae-btn-sm';
-          disconnect.textContent = 'Отключить';
-          disconnect.addEventListener('click', () => runMailAction(disconnect, 'mailDisconnect'));
-          row.append(name, disconnect);
-          card.append(row);
-          listSection.append(card);
-        }
-        for (const s of filtered) {
-          const info = statusInfo(s);
-          const card = document.createElement('div');
-          card.className = 'ae-mcp-card';
-
-          const mainRow = document.createElement('div');
-          mainRow.className = 'ae-mcp-card-main';
-
-          const leftInfo = document.createElement('div');
-          leftInfo.className = 'ae-mcp-info';
-          const topLine = document.createElement('div');
-          topLine.className = 'ae-mcp-name-row';
-          const nameEl = document.createElement('strong');
-          nameEl.textContent = s.title || s.name;
-          const badge = document.createElement('span');
-          badge.className = `ae-badge is-${info.tone}`;
-          badge.textContent = info.label;
-          topLine.append(nameEl, badge);
-
-          const addr = document.createElement('div');
-          addr.className = 'ae-mcp-addr';
-          addr.textContent = scrub(s.url || [s.command, ...(Array.isArray(s.args) ? s.args : [])].filter(Boolean).join(' ') || '');
-
-          leftInfo.append(topLine, addr);
-
-          if (info.key === 'error' && s.error) {
-            const errL = document.createElement('div');
-            errL.className = 'ae-mcp-err';
-            errL.textContent = scrub(s.error);
-            leftInfo.append(errL);
-          }
-
-          const ctrls = document.createElement('div');
-          ctrls.className = 'ae-mcp-ctrls';
-
-          if (info.key === 'drift') {
-            const appBtn = document.createElement('button');
-            appBtn.type = 'button';
-            appBtn.className = 'ae-btn ae-btn-primary ae-btn-sm';
-            appBtn.textContent = 'Подтвердить изменения';
-            appBtn.addEventListener('click', async () => {
-              try {
-                await bridge.call('mcpApprove', s.name);
-                store.toast(`Изменения «${s.name}» подтверждены`, 'ok');
-                await loadState();
-              } catch (err) {
-                store.toast(`Ошибка: ${bridge.errText(err)}`, 'error');
-              }
-            });
-            ctrls.append(appBtn);
-          }
-
-          const toggleBtn = document.createElement('button');
-          toggleBtn.type = 'button';
-          toggleBtn.className = 'ae-btn ae-btn-secondary ae-btn-sm';
-          toggleBtn.textContent = s.disabled ? 'Включить' : 'Выключить';
-          toggleBtn.addEventListener('click', async () => {
-            toggleBtn.disabled = true;
-            try {
-              await bridge.call('mcpToggle', s.name, !s.disabled);
-              await loadState();
-            } catch (err) {
-              store.toast(`Ошибка: ${bridge.errText(err)}`, 'error');
-              toggleBtn.disabled = false;
-            }
-          });
-
-          const detBtn = document.createElement('button');
-          detBtn.type = 'button';
-          detBtn.className = 'ae-btn ae-btn-ghost ae-btn-sm';
-          detBtn.textContent = selectedName === s.name ? 'Скрыть' : 'Детали';
-          detBtn.addEventListener('click', () => {
-            selectedName = selectedName === s.name ? null : s.name;
-            renderBody();
-          });
-
-          const isConf = confirmRemoveName === s.name;
-          const delBtn = document.createElement('button');
-          delBtn.type = 'button';
-          delBtn.className = isConf ? 'ae-btn ae-btn-danger ae-btn-sm' : 'ae-btn ae-btn-ghost ae-btn-sm';
-          delBtn.textContent = isConf ? 'Удалить?' : 'Удалить';
-          delBtn.addEventListener('click', async () => {
-            if (confirmRemoveName !== s.name) {
-              confirmRemoveName = s.name;
-              renderBody();
-              setTimeout(() => { if (confirmRemoveName === s.name) { confirmRemoveName = null; renderBody(); } }, 3500);
-              return;
-            }
-            confirmRemoveName = null;
-            try {
-              await bridge.call('mcpRemove', s.name);
-              store.toast(`Сервис «${s.name}» удалён`);
-              await loadState();
-            } catch (err) {
-              store.toast(`Ошибка удаления: ${bridge.errText(err)}`, 'error');
-            }
-          });
-
-          ctrls.append(toggleBtn, detBtn, delBtn);
-          mainRow.append(leftInfo, ctrls);
-          card.append(mainRow);
-
-          if (selectedName === s.name) {
-            const det = document.createElement('div');
-            det.className = 'ae-mcp-details';
-            const tools = Array.isArray(s.tools) ? s.tools : [];
-            if (tools.length) {
-              const tTitle = document.createElement('div');
-              tTitle.className = 'ae-mcp-det-head';
-              tTitle.textContent = `Доступные действия (${tools.length}):`;
-              const tGrid = document.createElement('div');
-              tGrid.className = 'ae-chips-wrap';
-              for (const t of tools.slice(0, 24)) {
-                const tag = document.createElement('span');
-                tag.className = 'ae-tag';
-                tag.textContent = String(t.title || t.name || t);
-                tGrid.append(tag);
-              }
-              det.append(tTitle, tGrid);
-            } else {
-              const note = document.createElement('p');
-              note.className = 'ae-muted';
-              note.textContent = 'Набор действий будет известен после успешного подключения сервиса. Все действия выполняются по общим правилам доступа.';
-              det.append(note);
-            }
-            card.append(det);
-          }
-
-          listSection.append(card);
-        }
-      }
-
-      // Каталог популярных сервисов (без фейков — только то, что отдаёт ядро)
-      catalogSection.hidden = !availableCatalog.length;
-      if (availableCatalog.length) {
-        const catHead = document.createElement('h2');
-        catHead.className = 'ae-section-heading';
-        catHead.textContent = 'Популярные сервисы';
-
-        const grid = document.createElement('div');
-        grid.className = 'ae-cards-grid';
-        for (const item of availableCatalog) {
-          const card = document.createElement('div');
-          card.className = 'ae-grid-card';
-          card.dataset.service = item.id;
-          const title = document.createElement('strong');
-          title.textContent = item.title || item.name;
-          const desc = document.createElement('p');
-          desc.className = 'ae-grid-card-desc';
-          desc.textContent = item.description || '';
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'ae-btn ae-btn-secondary ae-btn-sm';
-          if (item.integration === 'mail') {
-            btn.textContent = 'Войти через Google';
-            btn.disabled = !mail?.credentials;
-            if (btn.disabled) desc.append(' Для входа нужно настроить Gmail в сборке Nox.');
-            btn.addEventListener('click', () => runMailAction(btn, 'mailConnect', true));
-          } else if (item.ready) {
-            btn.textContent = 'Настроить';
-            btn.addEventListener('click', () => {
-              showAddForm = true;
-              renderAddForm(item);
-              addWrap.scrollIntoView({ block: 'nearest' });
-              addWrap.querySelector('input')?.focus({ preventScroll: true });
-            });
-          } else {
-            if (item.accountKey) desc.append(` Для подключения укажите ${item.accountKey} в настройке сборки.`);
-            else if (item.transport === 'http') desc.append(' Для входа нужен совместимый клиент.');
-            else desc.append(' Требуется настройка доступа и сервера.');
-            btn.textContent = 'Инструкция ↗';
-            btn.disabled = !item.docs || !bridge.has('openSource');
-            btn.addEventListener('click', async () => {
-              try {
-                const result = await bridge.call('openSource', item.docs);
-                if (!result?.ok) throw new Error(result?.error || 'Не удалось открыть инструкцию');
-              } catch (err) { store.toast(scrub(bridge.errText(err)), 'error'); }
-            });
-          }
-          card.append(title, desc, btn);
-          grid.append(card);
-        }
-        catalogSection.append(catHead, grid);
-      }
+      if (activeTab === 'voices') renderVoicesTab();
+      else renderCatalogTab();
     }
 
-    async function runMailAction(button, action, ...args) {
-      button.disabled = true;
+    async function refreshPacks() {
+      if (!bridge.has('installPack')) return;
       try {
-        const result = await bridge.call(action, ...args);
-        if (!result?.ok) throw new Error(result?.error || 'Не удалось изменить подключение Gmail');
-        await loadState();
-      } catch (err) {
-        store.toast(scrub(bridge.errText(err)), 'error');
-      } finally {
-        button.disabled = false;
+        const packsRes = await bridge.call('installPack');
+        if (packsRes && packsRes.ok && Array.isArray(packsRes.packs)) {
+          serverPacks = packsRes.packs;
+          renderBody();
+        }
+      } catch { /* ignore */ }
+    }
+
+    async function load() {
+      const [mcpRes, packsRes] = await Promise.all([
+        bridge.has('mcpState') ? bridge.call('mcpState').catch(() => null) : null,
+        bridge.has('installPack') ? bridge.call('installPack').catch(() => null) : null,
+      ]);
+      if (mcpRes && Array.isArray(mcpRes.servers)) mcpServers = mcpRes.servers;
+      if (packsRes && packsRes.ok && Array.isArray(packsRes.packs)) serverPacks = packsRes.packs;
+      renderBody();
+    }
+
+    let dirtyPacksReload = false;
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('nox:commands-updated', () => {
+        if (!root.hidden) refreshPacks();
+        else dirtyPacksReload = true;
+      });
+    }
+
+    load();
+
+    let wasActive = false;
+    function render(st) {
+      const active = st.route === 'mcp';
+      root.hidden = !active;
+      if (active && (!wasActive || dirtyPacksReload)) {
+        dirtyPacksReload = false;
+        load();
+      }
+      wasActive = active;
+    }
+
+    function onEvent(ev) {
+      if (ev && ev.type === 'commands:changed') {
+        if (!root.hidden) refreshPacks();
+        else dirtyPacksReload = true;
       }
     }
 
-    function render(st) {
-      const show = st.route === 'mcp';
-      root.hidden = !show;
-      if (show && !loaded) loadState();
-    }
-
-    return { el: root, render, refresh: loadState };
+    return {
+      el: root,
+      load,
+      onEvent,
+      setTab,
+      render,
+    };
   }
 
   window.NoxAetherMcpView = { createMcpView };

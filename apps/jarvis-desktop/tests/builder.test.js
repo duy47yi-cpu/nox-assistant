@@ -38,7 +38,7 @@ const DRAFT_OK = {
 
 const text = 'утром открой блокнот и создай новый документ';
 
-test('валидный ответ модели даёт команду схемы v2 с нормализованными фразами', async () => {
+test('валидный ответ модели даёт команду схемы v3 с нормализованными фразами', async () => {
   const model = fakeModel([json({ ...DRAFT_OK, hotkey: 'ctrl+alt+y' })]);
   const res = await buildCommandFromText({ text, modelCall: model, tools: TOOLS });
 
@@ -47,11 +47,14 @@ test('валидный ответ модели даёт команду схем�
   assert.equal(res.attempts, 1);
   assert.deepEqual(res.questions, []);
   const command = res.command;
-  assert.equal(command.schemaVersion, 2);
+  assert.equal(command.schemaVersion, 3);
   assert.equal(command.name, 'Утро');
   assert.deepEqual(command.phrases, ['доброе утро', 'запусти утро']);
   assert.equal(command.steps.length, 2);
-  assert.deepEqual(command.steps[0], { tool: 'app_open', args: { name: 'notepad' } });
+  assert.equal(command.steps[0].tool, 'app_open');
+  assert.deepEqual(command.steps[0].args, { name: 'notepad' });
+  assert.equal(command.steps[0].type, 'app_start');
+  assert.ok(Array.isArray(command.steps[0].children));
   assert.equal(command.enabled, true);
   assert.equal(command.hotkey, 'Control+Alt+Y');
   assert.equal(command.folder, null);
@@ -220,7 +223,7 @@ test('происхождение всегда «ai», модель его не �
   );
   assert.equal(res.ok, true);
   assert.equal(res.command.origin, 'ai');
-  assert.equal(res.command.schemaVersion, 2);
+  assert.equal(res.command.schemaVersion, 3);
 });
 
 test('описания инструментов: обязательное поле не теряется', () => {

@@ -11,6 +11,11 @@ const {
   checkHotkey,
   checkFolder,
   checkCollections,
+  checkProgramRef,
+  checkConfirm,
+  resolveStepTypeAndTool,
+  flattenStepTree,
+  flattenStepTreeWithDepth,
   maskArgsForJournal,
   isSecretArgKey,
   DANGEROUS_TOOLS,
@@ -293,23 +298,27 @@ function checkStepAgainstDef(step, def, n, errors, warnings) {
   }
 }
 
-// Один шаг: объект {tool, args}, известный и разрешённый инструмент, args — простой JSON-объект.
+// Один шаг: объект {tool, args} или {type, params, children}, известный и разрешённый инструмент.
 // Типы, длина и вложенность аргументов проверяются тем же кодом, что и сохранение сценария.
-function checkDraftStep(step, n, { names, defs }, errors, questions, warnings) {
+function checkDraftStep(step, nLabel, source, errors, questions, warnings, depth = 0, usedIds = new Set()) {
+  const { names, defs } = source;
   if (!step || typeof step !== 'object' || Array.isArray(step)) {
-    errors.push(`шаг ${n}: нужен объект {tool, args}`);
+    errors.push(`шаг ${nLabel}: нужен объект шага`);
     questions.push('Какие действия должны быть в сценарии?');
     return null;
   }
-  if (typeof step.tool !== 'string' || step.tool.trim() === '') {
-    errors.push(`шаг ${n}: нужно имя инструмента`);
+  let resolved;
+  try {
+    resolved = resolveStepTypeAndTool(step, `шаг ${nLabel}`);
+  } catch (err) {
+    errors.push(err.message);
     questions.push('Какие действия должны быть в сценарии?');
     return null;
   }
-  const tool = step.tool.trim();
+  const { type, tool } = resolved;
   const denied = deniedReason(tool);
   if (denied) {
-    errors.push(`шаг ${n}: ${denied}`);
+    errors.push(`шаг ${nLabel}: ${denied}`);
     questions.push(`Чем заменить «${tool}»?`);
     return null;
   }
@@ -319,16 +328,39 @@ function checkDraftStep(step, n, { names, defs }, errors, questions, warnings) {
       .sort()
       .slice(0, 8)
       .join(', ');
-    errors.push(`шаг ${n}: нет такого инструмента «${tool}»${available ? `; доступны: ${available}` : ''}`);
+    errors.push(`шаг ${nLabel}: нет такого инструмента «${tool}»${available ? `; доступны: ${available}` : ''}`);
     questions.push(`Действия «${tool}» нет — чем его заменить?`);
     return null;
   }
+  const rawArgs = step.args !== undefined ? step.args : step.params;
+  let checkedChildren = [];
+  if (Array.isArray(step.children) && step.children.length > 0) {
+    step.children.forEach((child, idx) => {
+      const c = checkDraftStep(child, `${nLabel}.${idx + 1}`, source, errors, questions, warnings, depth + 1, usedIds);
+      if (c) checkedChildren.push(c);
+    });
+  } else if (step.children !== undefined && !Array.isArray(step.children)) {
+    errors.push(`шаг ${nLabel}: children должен быть массивом`);
+    return null;
+  }
   try {
-    const [checked] = checkSteps([{ tool, args: step.args }]);
-    checkStepAgainstDef(checked, defs.get(tool), n, errors, warnings);
+    const hasExplicitType = typeof step.type === 'string' && step.type.trim() !== '';
+    const candidate = { id: step.id, ...(hasExplicitType ? { type } : {}), tool, args: rawArgs, children: [] };
+    const [checked] = checkSteps([candidate]);
+    checked.children = checkedChildren;
+    if (step.id === undefined) {
+      let k = usedIds.size + 1;
+      while (usedIds.has(`step-${k}`)) k += 1;
+      checked.id = `step-${k}`;
+    } else if (usedIds.has(checked.id)) {
+      errors.push(`шаг ${nLabel}: дубль id шага «${checked.id}»`);
+      return null;
+    }
+    usedIds.add(checked.id);
+    checkStepAgainstDef(checked, defs.get(tool), nLabel, errors, warnings);
     return checked;
   } catch (err) {
-    errors.push(String(err.message).replace(/^шаг 1:\s*/, `шаг ${n}: `));
+    errors.push(String(err.message).replace(/^шаг 1:\s*/, `шаг ${nLabel}: `));
     return null;
   }
 }
@@ -341,25 +373,41 @@ function checkDraftSteps(draft, source, maxSteps, errors, questions, warnings) {
     questions.push('Что должно происходить по шагам?');
     return [];
   }
-  if (raw.length > maxSteps) {
+  const usedIds = new Set();
+  const clean = [];
+  raw.forEach((step, index) => {
+    const checked = checkDraftStep(step, String(index + 1), source, errors, questions, warnings, 0, usedIds);
+    if (checked) clean.push(checked);
+  });
+  const totalCount = flattenStepTree(clean).length;
+  if (totalCount > maxSteps) {
     errors.push(`шагов не больше ${maxSteps}`);
     questions.push('Сценарий длиннее предела — какие шаги оставить?');
     return [];
   }
-  const clean = [];
-  raw.forEach((step, index) => {
-    const checked = checkDraftStep(step, index + 1, source, errors, questions, warnings);
-    if (checked) clean.push(checked);
-  });
   return clean;
 }
 
-// Необязательные поля схемы v2: горячая клавиша, папка, коллекции, включённость.
+// Необязательные поля: программа, подтверждение, клавиша, папка, коллекции, включённость.
 function checkOptionalFields(draft, errors) {
-  const out = { enabled: true, hotkey: null, folder: null, collections: [] };
+  const out = { enabled: true, hotkey: null, folder: null, collections: [], program: null, confirm: false };
   if (draft.enabled !== undefined) {
     if (typeof draft.enabled !== 'boolean') errors.push('enabled: нужно true или false');
     else out.enabled = draft.enabled;
+  }
+  if (draft.confirm !== undefined) {
+    try {
+      out.confirm = checkConfirm(draft.confirm, false);
+    } catch (err) {
+      errors.push(err.message);
+    }
+  }
+  if (draft.program !== undefined) {
+    try {
+      out.program = checkProgramRef(draft.program, 'программа команды');
+    } catch (err) {
+      errors.push(err.message);
+    }
   }
   if (draft.hotkey !== undefined && draft.hotkey !== null && draft.hotkey !== '') {
     try {
@@ -400,11 +448,23 @@ function validateDraft(draft, { tools, maxSteps = MAX_STEPS_DRAFT } = {}) {
     ? draft.command
     : draft;
   const asked = cleanQuestions(raw.questions);
+  const rawMissing = Array.isArray(raw.missing) ? raw.missing.map((x) => String(x || '').trim()).filter(Boolean) : [];
   const hasCore = raw.name !== undefined && raw.steps !== undefined;
+  if (rawMissing.length && !hasCore) {
+    return {
+      ok: false,
+      command: null,
+      missing: rawMissing,
+      questions: asked,
+      errors: [],
+      error: `не хватает действий в каталоге: ${rawMissing.join('; ')}`,
+    };
+  }
   if (asked.length && !hasCore) {
     return {
       ok: false,
       command: null,
+      missing: rawMissing,
       questions: asked,
       errors: [],
       error: `нужно уточнить: ${asked.join('; ')}`,
@@ -422,13 +482,19 @@ function validateDraft(draft, { tools, maxSteps = MAX_STEPS_DRAFT } = {}) {
   const steps = checkDraftSteps(raw, source, limit, errors, questions, warnings);
   const optional = checkOptionalFields(raw, errors);
 
-  if (errors.length) return failResult(errors, questions);
+  if (errors.length) {
+    const failed = failResult(errors, questions);
+    if (rawMissing.length) failed.missing = rawMissing;
+    return failed;
+  }
 
   return {
     ok: true,
     command: {
       schemaVersion: COMMAND_SCHEMA_VERSION,
       name,
+      program: optional.program,
+      confirm: optional.confirm,
       phrases,
       steps,
       enabled: optional.enabled,
@@ -438,6 +504,7 @@ function validateDraft(draft, { tools, maxSteps = MAX_STEPS_DRAFT } = {}) {
       // Происхождение ставим сами: сценарий собран моделью по описанию, что бы она ни написала.
       origin: 'ai',
     },
+    missing: [],
     questions: [],
     errors: [],
     warnings,
@@ -463,7 +530,8 @@ function buildPrompt(text, source, { maxSteps = MAX_STEPS_DRAFT } = {}) {
     'инструменты — только из списка ниже, новые имена придумывать нельзя;',
     'опасные действия (удаление, отправка, оплата, установка, выключение, закрытие окон) запрещены;',
     'аргументы — только числа, строки и true/false, без лишних полей;',
-    'если описание неясное — верни {"questions":["вопрос владельцу"]} без шагов.',
+    'если описание неясное — верни {"questions":["вопрос владельцу"]} без шагов;',
+    'если нужного действия нет в списке — верни {"missing":["чего не хватает в каталоге"]} без шагов и пустышек.',
     '',
     `Доступные инструменты (${allowed.length}):`,
   ];
@@ -556,14 +624,18 @@ async function buildCommandFromText({ text, modelCall, tools, maxSteps = MAX_STE
       : failResult([parsed.error]);
 
     if (checked.ok) {
-      return { ok: true, command: checked.command, questions: [], error: null, attempts: attempt };
+      return { ok: true, command: checked.command, missing: [], questions: [], error: null, attempts: attempt };
     }
 
     lastError = checked.error || 'ответ не подошёл';
     lastQuestions = checked.questions || [];
+    const lastMissing = Array.isArray(checked.missing) ? checked.missing : [];
+    if (lastMissing.length) {
+      return { ok: false, command: null, missing: lastMissing, questions: lastQuestions, error: lastError, attempts: attempt };
+    }
     // Модель задала вопросы владельцу — повтор не поможет, отдаём их честно.
     if (lastQuestions.length && checked.errors.length === 0) {
-      return { ok: false, command: null, questions: lastQuestions, error: lastError, attempts: attempt };
+      return { ok: false, command: null, missing: [], questions: lastQuestions, error: lastError, attempts: attempt };
     }
     feedback = `\n\nПрошлая попытка не подошла: ${lastError}.\nВерни исправленный JSON строго по контракту, без пояснений.`;
   }
@@ -571,10 +643,238 @@ async function buildCommandFromText({ text, modelCall, tools, maxSteps = MAX_STE
   return {
     ok: false,
     command: null,
+    missing: [],
     questions: lastQuestions,
     error: `не удалось собрать сценарий: ${lastError}`,
     attempts: totalAttempts,
   };
+}
+
+const OFFLINE_APP_ALIASES = Object.freeze({
+  блокнот: 'notepad',
+  notepad: 'notepad',
+  калькулятор: 'calc',
+  calc: 'calc',
+  проводник: 'explorer',
+  explorer: 'explorer',
+  хром: 'chrome',
+  chrome: 'chrome',
+  'google chrome': 'chrome',
+  эйдж: 'msedge',
+  edge: 'msedge',
+  'microsoft edge': 'msedge',
+  спотифай: 'spotify',
+  spotify: 'spotify',
+  обс: 'obs64',
+  obs: 'obs64',
+  'obs studio': 'obs64',
+  телеграм: 'Telegram',
+  telegram: 'Telegram',
+  фотошоп: 'Photoshop',
+  photoshop: 'Photoshop',
+  майнкрафт: 'MinecraftLauncher',
+  minecraft: 'MinecraftLauncher',
+  код: 'code',
+  'vs code': 'code',
+  vscode: 'code',
+  диспетчер: 'taskmgr',
+  'диспетчер задач': 'taskmgr',
+});
+
+const OFFLINE_URL_ALIASES = Object.freeze({
+  ютуб: 'https://www.youtube.com',
+  youtube: 'https://www.youtube.com',
+  погода: 'https://yandex.ru/pogoda',
+  'яндекс погода': 'https://yandex.ru/pogoda',
+  'яндекс.погода': 'https://yandex.ru/pogoda',
+  яндекс: 'https://ya.ru',
+  google: 'https://www.google.com',
+  гугл: 'https://www.google.com',
+  github: 'https://github.com',
+  гитхаб: 'https://github.com',
+  вк: 'https://vk.com',
+  vk: 'https://vk.com',
+});
+
+function parseClauseToCatalogStep(clause, source) {
+  const { names } = source;
+  const clean = String(clause || '').trim().replace(/^[.,;:\-\s]+|[.,;:\-\s]+$/g, '');
+  if (!clean) return { skip: true };
+  const low = clean.toLowerCase().replace(/ё/g, 'е');
+
+  // Запрещённые / отсутствующие в каталоге команд категории — честно говорим, чего не хватает.
+  if (/(?:отправ|пошл|напиши\s+письм|почт|email|e-?mail|gmail)/i.test(low)) {
+    return { missing: 'отправка писем (в каталоге команд не разрешена)' };
+  }
+  if (/(?:удал|сотр|очист.*корзин|выключ.*пк|перезагруз|выключ.*компьютер)/i.test(low)) {
+    return { missing: 'удаление файлов или выключение ПК (опасные действия запрещены в автокомандах)' };
+  }
+  if (/(?:оплат|перевед\S*\s+(?:деньг|денег|средств)|куп|закаж|чек)/i.test(low)) {
+    return { missing: 'финансовые действия и оплата запрещены' };
+  }
+  if (/(?:powershell|консол|терминал|скрипт|bash|cmd\s+)/i.test(low)) {
+    return { missing: 'произвольные команды оболочки (shell_run запрещён в сохранённых командах)' };
+  }
+
+  // Громкость
+  let m = low.match(/(?:громкост[ьи]|звук)\s*(?:на)?\s*(\d{1,3})\s*%?/i);
+  if (m) {
+    if (!names.has('volume_set')) return { missing: 'управление громкостью (нет в текущем каталоге действий)' };
+    const percent = Math.max(0, Math.min(100, Number(m[1])));
+    return { step: { tool: 'volume_set', args: { percent }, label: `Громкость ${percent}%` } };
+  }
+  if (/(?:выключ[иь]|убер[иь]|отключ[иь])\s+звук|без\s+звука/i.test(low)) {
+    if (!names.has('volume_set')) return { missing: 'управление громкостью (нет в текущем каталоге действий)' };
+    return { step: { tool: 'volume_set', args: { percent: 0 }, label: 'Выключить звук' } };
+  }
+
+  // Пауза / ожидание
+  m = low.match(/(?:подожд[иь]|пауз[ау]|ожидан(?:ие|ия)|жди)\s+(\d+)\s*(?:(мс|миллисекунд\w*)|(с|сек|секунд\w*)|(м|мин|минут\w*))?/i);
+  if (m) {
+    if (!names.has('wait')) return { missing: 'пауза/ожидание (нет в текущем каталоге действий)' };
+    const n = Number(m[1]);
+    let ms = m[2] ? n : m[4] ? n * 60000 : n * 1000;
+    ms = Math.max(50, Math.min(120000, ms));
+    return { step: { tool: 'wait', args: { ms }, label: `Пауза ${ms >= 1000 ? `${Math.round(ms / 1000)} с` : `${ms} мс`}` } };
+  }
+
+  // Сказать вслух
+  m = clean.match(/^(?:скажи|произнеси|озвучь)\s+(.+)$/i);
+  if (m) {
+    if (!names.has('speak')) return { missing: 'озвучивание речи (нет в текущем каталоге действий)' };
+    return { step: { tool: 'speak', args: { text: m[1].trim() }, label: `Сказать: ${m[1].trim()}` } };
+  }
+
+  // Ввод текста
+  m = clean.match(/^(?:введи|напечатай|набери)(?:\s+текст)?\s+(.+)$/i);
+  if (m) {
+    if (!names.has('ui_type')) return { missing: 'ввод текста в окно (нет в текущем каталоге действий)' };
+    return { step: { tool: 'ui_type', args: { text: m[1].trim() }, label: `Ввести текст: ${m[1].trim()}` } };
+  }
+
+  // Горячие клавиши
+  m = clean.match(/(?:нажм[иь](?:\s+клавиш[иу])?|сочетани[ея]\s+клавиш|клавиш[иу])\s+([a-z0-9_+ ]+)/i);
+  if (m) {
+    if (!names.has('ui_keys')) return { missing: 'нажатие клавиш (нет в текущем каталоге действий)' };
+    const keys = m[1].trim().toLowerCase().replace(/\s*\+\s*/g, '+');
+    return { step: { tool: 'ui_keys', args: { keys }, label: `Клавиши: ${keys}` } };
+  }
+  if (/(?:пауза\s+музык|play\s*\/?\s*pause|плей\s*пауз)/i.test(low)) {
+    if (!names.has('ui_keys')) return { missing: 'медиаклавиши (нет в текущем каталоге действий)' };
+    return { step: { tool: 'ui_keys', args: { keys: 'media_playpause' }, label: 'Play / Pause' } };
+  }
+
+  // Сайт / URL
+  m = clean.match(/(?:открой|открыть|запусти|перейди\s+(?:на|в))\s+(https?:\/\/\S+)/i);
+  if (m) {
+    if (!names.has('url_open')) return { missing: 'открытие ссылок (нет в текущем каталоге действий)' };
+    return { step: { tool: 'url_open', args: { url: m[1].trim() }, label: `Открыть: ${m[1].trim()}` } };
+  }
+
+  // Запуск программы или известного сайта по слову
+  m = clean.match(/^(?:открой|открыть|запусти|запустить|включи|включить|старт)\s+(.+)$/i);
+  if (m) {
+    const targetRaw = m[1].trim().replace(/[«»"']/g, '');
+    const targetLow = targetRaw.toLowerCase().replace(/ё/g, 'е');
+    if (OFFLINE_URL_ALIASES[targetLow]) {
+      if (!names.has('url_open')) return { missing: 'открытие сайтов (нет в текущем каталоге действий)' };
+      const url = OFFLINE_URL_ALIASES[targetLow];
+      return { step: { tool: 'url_open', args: { url }, label: `Открыть: ${targetRaw}` } };
+    }
+    if (!names.has('app_open')) return { missing: 'запуск программ (нет в текущем каталоге действий)' };
+    const appName = OFFLINE_APP_ALIASES[targetLow] || targetRaw;
+    return { step: { tool: 'app_open', args: { name: appName }, label: `Запустить: ${appName}` } };
+  }
+
+  return { missing: `действие «${clean}» — в каталоге нет подходящего готового шага` };
+}
+
+function parseDescriptionOffline(input = {}, maybeOpts = {}) {
+  const opts = typeof input === 'string'
+    ? { ...(maybeOpts && typeof maybeOpts === 'object' ? maybeOpts : {}), text: input }
+    : (input && typeof input === 'object' ? input : {});
+  const { text, tools, existingCommands = [], maxSteps = MAX_STEPS_DRAFT } = opts;
+  const ownerText = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
+  if (!ownerText) {
+    return {
+      ok: false,
+      command: null,
+      missing: [],
+      questions: ['Опишите сценарий словами: что и в каком порядке делать?'],
+      error: 'нужно описание сценария словами',
+    };
+  }
+  const source = toolSourceOf(tools);
+  const clauses = ownerText
+    .split(/(?:[,;\n]+|\s+(?:а\s+затем|а\s+потом|после\s+этого|затем|потом|и)\s+)/i)
+    .map((c) => c.trim())
+    .filter(Boolean);
+
+  const steps = [];
+  const missing = [];
+  for (const clause of clauses) {
+    const res = parseClauseToCatalogStep(clause, source);
+    if (res.skip) continue;
+    if (res.missing) {
+      missing.push(res.missing);
+      continue;
+    }
+    if (res.step) steps.push(res.step);
+  }
+
+  if (missing.length > 0 || steps.length === 0) {
+    const missList = missing.length ? missing : [`не удалось сопоставить с действиями каталога: «${ownerText}»`];
+    return {
+      ok: false,
+      command: null,
+      missing: missList,
+      questions: [],
+      error: `Не хватает возможностей в каталоге: ${missList.join('; ')}`,
+    };
+  }
+
+  const baseTitle = buildHumanCommandName(ownerText, steps[0], existingCommands);
+  const normPhrase = normalizeDraftPhrase(ownerText).slice(0, 120) || 'моя команда';
+  const validated = validateDraft({
+    name: baseTitle,
+    phrases: [normPhrase],
+    steps: steps.slice(0, normalMaxSteps(maxSteps)),
+    origin: 'ai',
+  }, { tools: source, maxSteps });
+
+  if (!validated.ok) {
+    return {
+      ok: false,
+      command: null,
+      missing: validated.errors || [],
+      questions: validated.questions || [],
+      error: validated.error,
+    };
+  }
+
+  return {
+    ok: true,
+    command: validated.command,
+    missing: [],
+    questions: [],
+    error: null,
+  };
+}
+
+async function assembleCommandFromDescription({ text, modelCall = null, tools, existingCommands = [], maxSteps = MAX_STEPS_DRAFT } = {}) {
+  if (typeof modelCall === 'function') {
+    const aiRes = await buildCommandFromText({ text, modelCall, tools, maxSteps });
+    if (aiRes.ok || (Array.isArray(aiRes.missing) && aiRes.missing.length > 0)) {
+      return aiRes;
+    }
+    // Если модель не ответила (сеть/ключ), честно пробуем разобрать локальным разборщиком каталога;
+    // если и там не хватает действий — возвращаем честный список того, чего не хватает.
+    if (/модель не ответила|нет ключа|не настроена/i.test(String(aiRes.error || ''))) {
+      return parseDescriptionOffline({ text, tools, existingCommands, maxSteps });
+    }
+    return aiRes;
+  }
+  return parseDescriptionOffline({ text, tools, existingCommands, maxSteps });
 }
 
 // ── Предпросмотр ─────────────────────────────────────────────────
@@ -637,10 +937,22 @@ function dryRunCommand(command, { tools } = {}) {
 
   const names = toolSourceOf(tools).names;
   const warnings = [];
-  const described = steps.map((step, index) => {
+  const flat = flattenStepTreeWithDepth(steps);
+  const described = flat.map(({ node: step, depth }, index) => {
     const item = describeStep(step, index + 1, { names });
     for (const note of item.notes) warnings.push(`шаг ${index + 1}: ${note}`);
-    return { n: item.n, tool: item.tool, title: item.title, detail: item.detail, text: item.text, warnings: item.notes.slice() };
+    const prefix = depth > 0 ? `${'  '.repeat(depth)}↳ ` : '';
+    return {
+      n: item.n,
+      depth,
+      id: step.id || null,
+      type: step.type || null,
+      tool: item.tool,
+      title: item.title,
+      detail: item.detail,
+      text: `${prefix}${item.text}`,
+      warnings: item.notes.slice(),
+    };
   });
 
   const name = typeof command.name === 'string' ? command.name.trim() : '';
@@ -935,6 +1247,8 @@ function draftCommandFromTurn({ phrase, actions, existingCommands } = {}) {
 module.exports = {
   validateDraft,
   buildCommandFromText,
+  assembleCommandFromDescription,
+  parseDescriptionOffline,
   dryRunCommand,
   draftCommandFromTurn,
   buildPrompt,

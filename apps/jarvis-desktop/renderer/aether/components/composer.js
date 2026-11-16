@@ -19,13 +19,17 @@
     smart: 'Сильнее в сложных поручениях и длинных текстах.',
   };
   const DICT_LABELS = { listening: 'Слушаю', quiet: 'Только имя', off: 'Микрофон выкл' };
+  const fileSizeNumber = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });
 
-  function formatBytes(bytes) {
-    const n = Number(bytes) || 0;
-    if (n <= 0) return '';
-    if (n < 1024) return `${n} Б`;
-    if (n < 1024 * 1024) return `${Math.round(n / 1024)} КБ`;
-    return `${(n / (1024 * 1024)).toFixed(1)} МБ`;
+  function formatFileSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return '';
+    const units = ['Б', 'КБ', 'МБ', 'ГБ'];
+    let unit = 0;
+    while (bytes >= 1024 && unit < units.length - 1) {
+      bytes /= 1024;
+      unit += 1;
+    }
+    return `${fileSizeNumber.format(bytes)} ${units[unit]}`;
   }
 
   function createComposer({ store, bridge, onSendTrigger, onTyping, onVoiceSettings }) {
@@ -279,12 +283,10 @@
     footer.append(leftTools, rightTools);
     wrap.append(filesRow, ta, footer);
 
-    async function triggerSend() {
+    async function triggerSend(rawToSend = ta.value, files = store.state.currentDraftFiles) {
       const st = store.state;
       if (st.sendingLock || st.trackerBusy) return;
-      const rawToSend = ta.value;
       const text = rawToSend.trim();
-      const files = st.currentDraftFiles;
       if (!text && !files.length) return;
       if (typeof onSendTrigger === 'function') onSendTrigger();
       ta.value = '';
@@ -320,22 +322,22 @@
       }
       filesRow.hidden = false;
       filesRow.replaceChildren();
-      files.forEach((f, idx) => {
+      for (const f of files) {
         const chip = document.createElement('span');
         chip.className = 'ae-file-chip';
         const nm = document.createElement('span');
         nm.className = 'ae-file-name';
-        const size = formatBytes(f.size);
+        const size = formatFileSize(f.size);
         nm.textContent = size ? `${f.name} · ${size}` : f.name;
         const rm = document.createElement('button');
         rm.type = 'button';
         rm.className = 'ae-file-rm';
         rm.setAttribute('aria-label', `Убрать файл ${f.name}`);
         rm.append(icon('x'));
-        rm.addEventListener('click', () => store.removeDraftFile(idx));
+        rm.addEventListener('click', () => store.removeDraftFile(f.path));
         chip.append(nm, rm);
         filesRow.append(chip);
-      });
+      }
     }
 
     let prevDraftRef = '';
@@ -426,9 +428,18 @@
         ta.setSelectionRange(txt.length, txt.length);
         if (typeof onTyping === 'function') onTyping(txt, txt.length);
       },
+      sendChoice: (txt) => {
+        if (ta.value.trim() || store.state.currentDraftFiles.length) {
+          store.toast('Чтобы выбрать вариант, отправьте или очистите черновик.');
+          ta.focus();
+          return;
+        }
+        ta.focus();
+        return triggerSend(txt, []);
+      },
       render,
     };
   }
 
-  window.NoxAetherComposer = { createComposer };
+  window.NoxAetherComposer = { createComposer, formatFileSize };
 })();

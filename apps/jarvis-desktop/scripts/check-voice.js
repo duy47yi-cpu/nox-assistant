@@ -1,76 +1,55 @@
-#!/usr/bin/env node
 'use strict';
 
-// Проверка голоса без окна: читает .env, синтезирует пробную фразу и проигрывает её.
-//   node scripts/check-voice.js
-//   node scripts/check-voice.js "Своя фраза"
-//   node scripts/check-voice.js --no-play "Только синтез"
-// Ключ и модель нигде не печатаются: только результат и время.
-const fs = require('fs');
-const path = require('path');
-const { loadEnvFile } = require('../src/config/env');
-const { FishSpeech } = require('../src/voice/fish');
-const { SpeechClient } = require('../src/voice/tts');
+// node scripts/check-voice.js [rev directory]
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const { cloudSpeech, voiceOutputMode, voiceOutputError } = require('../src/voice/output');
+const { createSttRouter, cloudProvider, localGigaam, wavFromPcm } = require('../src/voice/stt');
 
-const ROOT = path.join(__dirname, '..', '..', '..');
-const args = process.argv.slice(2);
-const noPlay = args.includes('--no-play');
-const text = args.find((arg) => !arg.startsWith('--')) || 'Привет! Это проверка голоса. Слышно хорошо?';
+async function main() {
+  const rev = process.argv[2];
+  const samples = rev
+    ? execFileSync('ffmpeg', ['-v', 'error', '-i', path.join(rev, '_probe', 'cmd', 's1.wav'), '-ac', '1', '-ar', '16000', '-f', 's16le', '-'])
+    : Buffer.alloc(640);
+  const local = rev
+    ? localGigaam({ folder: () => path.join(rev, '_models', 'gigaam'), script: path.join(__dirname, 'tts', 'gigaam-worker.py') })
+    : { name: 'локальный', isAvailable: () => true, transcribe: async () => ({ text: 'сверни все окна' }) };
 
-function report(payload) {
-  process.stdout.write(`${JSON.stringify(payload)}\n`);
-}
-
-function envFile() {
-  try { return loadEnvFile(path.join(ROOT, '.env')); } catch { return {}; }
-}
-
-(async () => {
-  const env = envFile();
-  const fish = new FishSpeech({
-    apiKey: env.FISH_API_KEY || '',
-    voiceId: env.FISH_VOICE_ID || null,
-    model: env.FISH_TTS_MODEL || undefined,
+  let cloudRequests = 0;
+  let failCloud = false;
+  const cloud = cloudProvider({
+    url: 'https://example.invalid/asr',
+    model: 'fixture',
+    request: async (_url, { body }) => {
+      cloudRequests++;
+      assert.deepEqual(Buffer.from(await body.get('file').arrayBuffer()), wavFromPcm(samples));
+      return failCloud ? { ok: false } : { ok: true, json: async () => ({ text: 'который час' }) };
+    },
   });
-  if (fish.isInstalled()) {
-    const started = Date.now();
-    try {
-      if (noPlay) {
-        const file = await fish.synthesize(text);
-        const bytes = fs.statSync(file).size;
-        fs.rmSync(file, { force: true });
-        report({ ok: true, provider: 'облачный', mode: 'синтез', ms: Date.now() - started, bytes });
-      } else {
-        await fish.speak(text);
-        report({ ok: true, provider: 'облачный', mode: 'синтез и проигрывание', ms: Date.now() - started });
-      }
-      return;
-    } catch (err) {
-      report({ ok: false, provider: 'облачный', error: String((err && err.message) || err) });
-      process.exitCode = 2;
-      return;
-    }
-  }
-
-  const local = new SpeechClient({ timeoutMs: 20000 });
-  if (!local.isInstalled()) {
-    report({ ok: false, error: 'Голос не настроен: впишите ключ в .env (FISH_API_KEY=).' });
-    process.exitCode = 3;
-    return;
-  }
-  const started = Date.now();
+  const router = createSttRouter({ local, cloud, online: () => true });
   try {
-    if (noPlay) {
-      const file = await local.synthesize(text);
-      report({ ok: true, provider: 'локальный', mode: 'синтез', ms: Date.now() - started, file });
-    } else {
-      await local.speak(text);
-      report({ ok: true, provider: 'локальный', mode: 'синтез и проигрывание', ms: Date.now() - started });
+    const { text } = await router.transcribe(samples, { engine: 'auto', language: 'ru' });
+    assert.match(text, /сверни все окна/u);
+    assert.equal(cloudRequests, 0);
+    assert.equal((await router.transcribe(samples, { engine: 'cloud' })).text, 'который час');
+    failCloud = true;
+    assert.match((await router.transcribe(samples, { engine: 'cloud', language: 'ru' })).text, /сверни все окна/u);
+    assert.equal(cloudRequests, 2);
+
+    const configured = cloudSpeech({ url: 'https://example.invalid/speak', model: 'fixture', voice: 'fixture' });
+    for (const voiceEngine of ['system', 'local', 'realistic', 'cloud', undefined]) {
+      const legacy = { voice: true, voiceEngine, voiceLatency: 'quality' };
+      assert.equal(voiceOutputMode(legacy), 'off');
+      assert.match(voiceOutputError(legacy, configured), /Озвучка выключена/u);
     }
-  } catch (err) {
-    report({ ok: false, provider: 'локальный', error: String((err && err.message) || err) });
-    process.exitCode = 2;
+    assert.equal(voiceOutputError({ voiceOutput: 'cloud' }, configured), null);
+    assert.match(voiceOutputError({ voiceOutput: 'cloud' }, cloudSpeech({})), /не настроена/u);
+
+    console.log(JSON.stringify({ ok: true, local: { text, fixture: !rev }, cloud: { requests: cloudRequests, fallback: true }, legacyOutput: 'off' }));
   } finally {
-    local.stop();
+    local.stop?.();
   }
-})();
+}
+
+main().catch((err) => { console.error(err); process.exitCode = 1; });

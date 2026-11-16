@@ -1,15 +1,14 @@
 'use strict';
 
 // Electron: notification-voice-qa.js D:/nox-m4-qa save|restart
-// Синтез — локальный системный голос Windows; проигрывание — штатный код Nox.
+// Стенд облачной озвучки фиксирует фразы и громкость.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 const { app, globalShortcut } = require('electron');
 const { WatchNotifier } = require('../src/notify/watch');
 const { NotificationSpeech } = require('../src/voice/delivery');
-const { SpeechClient } = require('../src/voice/tts');
+const voiceOutput = require('../src/voice/output');
 
 const root = process.argv[2];
 const stage = process.argv[3];
@@ -20,6 +19,12 @@ fs.mkdirSync(root, { recursive: true });
 fs.writeFileSync(path.join(root, 'm4-fixture'), '');
 for (const key of Object.keys(process.env)) {
   if (/^(NOX_|JARVIS_|TELEGRAM_|FISH_|DEEPSEEK_)/i.test(key)) delete process.env[key];
+}
+process.env.NOX_DATA_DIR = path.join(root, 'fixture-data');
+fs.mkdirSync(process.env.NOX_DATA_DIR, { recursive: true });
+const fixtureSettings = path.join(process.env.NOX_DATA_DIR, 'settings.json');
+if (!fs.existsSync(fixtureSettings)) {
+  fs.writeFileSync(fixtureSettings, JSON.stringify({ uiShell: 'legacy', seededBrief: true, voiceOutput: 'cloud' }));
 }
 app.setPath('userData', path.join(root, 'profile'));
 require('../src/config/paths').projectRoot = () => root;
@@ -43,22 +48,20 @@ NotificationSpeech.prototype.enqueue = function (items) {
   drain = enqueue.call(this, items);
   return drain;
 };
-const wav = path.join(root, 'fixture.wav');
-SpeechClient.prototype.isInstalled = () => true;
-SpeechClient.prototype.synthesize = async (text) => {
-  attempted.push(text);
-  return wav;
-};
-const play = SpeechClient.prototype.play;
-SpeechClient.prototype.play = async function (file, opts) {
-  maxParallel = Math.max(maxParallel, ++parallel);
-  try {
-    await play.call(this, file, opts);
-    played.push(opts.volume);
-  } finally {
-    parallel -= 1;
-  }
-};
+voiceOutput.cloudSpeech = () => ({
+  isInstalled: () => true,
+  async speak(text, opts) {
+    attempted.push(text);
+    maxParallel = Math.max(maxParallel, ++parallel);
+    try {
+      await pause(15);
+      opts.signal?.throwIfAborted();
+      played.push(opts.volume);
+    } finally {
+      parallel -= 1;
+    }
+  },
+});
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const timeout = setTimeout(() => finish(new Error('таймаут проверки')), 50000);
@@ -115,15 +118,6 @@ app.on('browser-window-created', (_event, win) => {
       fs.writeFileSync(path.join(root, `${stage}-quiet-hours.png`), (await win.webContents.capturePage()).toPNG());
 
       if (stage === 'restart') {
-        const out = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', [
-          'Add-Type -AssemblyName System.Speech',
-          '$s = New-Object System.Speech.Synthesis.SpeechSynthesizer',
-          '$s.SetOutputToWaveFile($env:NOX_WAV)',
-          '$s.Speak("Nox notification test.")',
-          '$s.Dispose()',
-        ].join('; ')], { env: { ...process.env, NOX_WAV: wav }, timeout: 10000 });
-        assert.equal(out.status, 0, out.stderr?.toString());
-        assert.ok(fs.statSync(wav).size > 1000);
         const reminder = (key) => watch.add({ kind: 'reminder', key: `reminder:${key}`, detail: 'Reminder', channels: [] });
         const task = (key) => watch.add({ kind: 'task-failed', key, detail: 'Task', channels: [] });
         const tick = async () => { await watch.tick(clock); await drain; };

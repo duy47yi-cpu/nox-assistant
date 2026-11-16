@@ -12,6 +12,7 @@
 // Главное правило: лучше не найти команду, чем угадать не ту. Неоднозначность (две команды подходят
 // одинаково) — это null, а фраза целиком уходит обычным путём к модели.
 const { normalize } = require('./store');
+const { parseWakeWords } = require('../voice/wake');
 
 // Слова-связки: только целыми словами. Внутри слова («игры», «музыку») они не делят.
 const DEFAULT_LINK_WORDS = Object.freeze(['и', 'затем', 'потом']);
@@ -31,7 +32,7 @@ const DEFAULT_START_VERBS = Object.freeze([
 ]);
 
 // Слова-наполнители: их можно сказать, но в фразе команды их нет.
-const FILLER_WORDS = Object.freeze(['джарвис', 'пожалуйста', 'пожалуста', 'пожалуйсто', 'пжлста', 'плиз']);
+const FILLER_WORDS = Object.freeze(['джарвис', 'сэр', 'пожалуйста', 'пожалуста', 'пожалуйсто', 'пжлста', 'плиз']);
 
 // Числительные прописью из распознавания речи (whisper.cpp): «двадцать пять» → «25», «сто» → «100».
 const SPOKEN_NUMBERS = Object.freeze({
@@ -121,12 +122,48 @@ function clipWord(word) {
 
 // Обращение в начале: «Джарвис, ...», ««Джарвис» ...», «— Джарвис ...». Только целым словом:
 // «джарвисова дочка» обращением не считается.
-function stripWake(text, { word = 'джарвис' } = {}) {
+function resolveWakeCandidates(opts = {}) {
+  if (opts && opts.words !== undefined) return parseWakeWords(opts.words);
+  if (opts && opts.wakeWords !== undefined) return parseWakeWords(opts.wakeWords);
+  const single = opts && typeof opts.word === 'string'
+    ? opts.word
+    : (opts && typeof opts.wakeWord === 'string' ? opts.wakeWord : 'джарвис');
+  return parseWakeWords(single);
+}
+
+function wakeMatcherRegex(candidate, stripTrailingPunct = false) {
+  const letters = Array.from(candidate)
+    .map((ch) => {
+      if (ch === ' ') return '\\s+';
+      if (ch === 'е') return '[её]';
+      return regexEscape(ch);
+    })
+    .join('');
+  const tail = stripTrailingPunct ? '[^\\p{L}\\p{N}]*' : '';
+  return new RegExp(`^[^\\p{L}\\p{N}]*${letters}(?![\\p{L}\\p{N}])${tail}`, 'iu');
+}
+
+function stripWake(text, opts = {}) {
   const raw = String(text == null ? '' : text);
-  const clean = typeof word === 'string' ? word.trim() : '';
-  if (!raw || !clean) return raw;
-  const re = new RegExp(`^[^\\p{L}\\p{N}]*${regexEscape(clean)}(?![\\p{L}\\p{N}])[^\\p{L}\\p{N}]*`, 'iu');
-  return raw.replace(re, '');
+  if (!raw) return raw;
+  const list = resolveWakeCandidates(opts).sort((a, b) => b.length - a.length);
+  for (const candidate of list) {
+    const re = wakeMatcherRegex(candidate, true);
+    if (re.test(raw)) return raw.replace(re, '');
+  }
+  return raw;
+}
+
+// Проверяет, начинается ли ввод с обращения («Джарвис, …» или любого варианта из списка).
+// Если список обращений задан явно и пуст — обращение не требуется (возвращает true).
+function hasWakePrefix(text, opts = {}) {
+  const raw = String(text == null ? '' : text);
+  if (!raw.trim()) return false;
+  const hasExplicitList = Boolean(opts && (opts.words !== undefined || opts.wakeWords !== undefined));
+  const list = resolveWakeCandidates(opts).sort((a, b) => b.length - a.length);
+  if (hasExplicitList && list.length === 0) return true;
+  if (list.length === 0) return false;
+  return list.some((candidate) => wakeMatcherRegex(candidate, false).test(raw));
 }
 
 // Слова-наполнители убираем в любом месте: «открой, пожалуйста, ютуб» = «открой ютуб».
@@ -151,10 +188,10 @@ function stripFillers(text, { words = FILLER_WORDS } = {}) {
 // Нормализация фразы для сопоставления: нижний регистр, ё→е, без обращения и «пожалуйста»,
 // пунктуация как разделитель, одиночные пробелы. Сравниваем так обе стороны — и текст, и фразу команды,
 // поэтому старые сохранённые фразы с запятыми и точками тоже находятся.
-function normalizePhrase(text) {
+function normalizePhrase(text, opts = {}) {
   if (typeof text !== 'string') return '';
   let value = text.toLowerCase().replace(/ё/g, 'е');
-  value = stripWake(value);
+  value = stripWake(value, opts);
   value = value.replace(/[^\p{L}\p{N}\s-]+/gu, ' ');
   value = value.replace(/\s+/g, ' ').trim();
   value = stripFillers(value);
@@ -163,12 +200,12 @@ function normalizePhrase(text) {
 }
 
 // Фразы команды в нормализованном виде, без пустых и повторов.
-function phraseListOf(value) {
+function phraseListOf(value, opts = {}) {
   if (!Array.isArray(value)) return [];
   const seen = new Set();
   const out = [];
   for (const item of value) {
-    const phrase = normalizePhrase(typeof item === 'string' ? item : '');
+    const phrase = normalizePhrase(typeof item === 'string' ? item : '', opts);
     if (!phrase || seen.has(phrase)) continue;
     seen.add(phrase);
     out.push(phrase);
@@ -287,7 +324,7 @@ function prepareMatcher(commands, opts = {}) {
   for (const command of list) {
     if (!command || typeof command !== 'object') continue;
     if (!includeDisabled && command.enabled === false) continue;
-    const phrases = phraseListOf(command.phrases);
+    const phrases = phraseListOf(command.phrases, opts);
     if (phrases.length === 0) continue;
     for (const phrase of phrases) {
       const owners = byPhrase.get(phrase);
@@ -369,7 +406,10 @@ function matchPrepared(wanted, prepared) {
 
 // Одна фраза — одна команда. Неоднозначность — null: фраза уйдёт обычным путём к модели.
 function matchCommand(text, commands, opts = {}) {
-  const wanted = normalizePhrase(typeof text === 'string' ? text : '');
+  if ((opts.prefixMode === true || opts.requirePrefix === true) && !hasWakePrefix(text, opts)) {
+    return null;
+  }
+  const wanted = normalizePhrase(typeof text === 'string' ? text : '', opts);
   if (!wanted) return null;
   return matchPrepared(wanted, prepareMatcher(commands, opts));
 }
@@ -378,7 +418,10 @@ function matchCommand(text, commands, opts = {}) {
 // Целая фраза проверяется отдельно (в matchSequence), поэтому здесь ищем только склейку.
 // Каждая часть обязана найти команду — иначе деление не годится (половину сценария не запускаем).
 function matchSequence(text, commands, opts = {}) {
-  const normalized = normalizePhrase(typeof text === 'string' ? text : '');
+  if ((opts.prefixMode === true || opts.requirePrefix === true) && !hasWakePrefix(text, opts)) {
+    return [];
+  }
+  const normalized = normalizePhrase(typeof text === 'string' ? text : '', opts);
   if (!normalized || normalized.length > MAX_TEXT) return [];
 
   // Карты строим один раз: перебор частей не должен пересобирать их на каждый кусок.
@@ -436,6 +479,7 @@ function matchSequence(text, commands, opts = {}) {
 module.exports = {
   normalizePhrase,
   stripWake,
+  hasWakePrefix,
   stripFillers,
   splitLinkWords,
   matchCommand,

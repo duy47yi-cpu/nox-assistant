@@ -1,16 +1,9 @@
 /* Orb Library для Nox Aether.
  *
- * КРИТИЧЕСКОЕ ПРАВИЛО:
- * Обе существующие системы визуализации сфер (NoxOrb и JarvisOrb) сохраняются полностью
- * без изменения их движков, геометрии и визуального поведения:
- *   1. NoxOrb (orb-nox.js + orb-shutter.js):
- *      - 'nox:nox'     — Сфера Nox (точки Фибоначчи и мягкое ядро)
- *      - 'nox:wire'    — Сетка Nox (проволочная геометрия и пояс)
- *      - 'nox:shutter' — Затвор Nox (9 лепестков диафрагмы)
- *   2. JarvisOrb (orb.js + orb-variants.js + orb-tune.js):
- *      - 'jarvis:core'   — Ядро (тёплая матовая форма со светом внутри)
- *      - 'jarvis:sphere' — Точечная сфера JarvisOrb (не путать со «Сферой Nox»)
- *      - 'jarvis:iris'   — Диафрагма (объёмные лепестки со стеклом)
+ * Оставлено только 2 сферы по запросу владельца (скриншоты от 2026-11-15):
+ *   - 'nox:nox'  — Сфера Nox (точки Фибоначчи и мягкое ядро)
+ *   - 'nox:wire' — Сетка Nox (проволочная геометрия и пояс)
+ * Остальные варианты (nox:shutter, jarvis:core/sphere/iris) удалены из встроенного списка.
  *
  * Возможности библиотеки:
  * - независимые настройки для каждой сферы + сброс к умолчанию;
@@ -52,6 +45,7 @@
     error: 'error',
   };
 
+  // Оставлены только выбранные владельцем сферы — см. скриншоты Библиотеки сфер
   const BUILTIN_ORBS = [
     {
       id: 'nox:nox',
@@ -89,95 +83,6 @@
         default: { name: 'Баланс', patch: { scale: 1, animated: true, voiceReact: true } },
         calm: { name: 'Спокойная', patch: { scale: 0.9, animated: true, voiceReact: false } },
         vivid: { name: 'Выразительная', patch: { scale: 1.15, animated: true, voiceReact: true } },
-      },
-    },
-    {
-      id: 'nox:shutter',
-      engine: 'nox',
-      variant: 'shutter',
-      name: 'Затвор Nox',
-      systemLabel: 'Система Nox',
-      subtitle: 'Девятилепестковая диафрагма с тёплым световым ядром',
-      defaults: { scale: 1, animated: true, voiceReact: true },
-      fields: [
-        { key: 'scale', label: 'Масштаб сферы', min: 0.65, max: 1.35, step: 0.05, kind: 'range' },
-        { key: 'animated', label: 'Плавное движение', kind: 'switch' },
-        { key: 'voiceReact', label: 'Реакция на голос', kind: 'switch' },
-      ],
-      presets: {
-        default: { name: 'Баланс', patch: { scale: 1, animated: true, voiceReact: true } },
-        calm: { name: 'Спокойная', patch: { scale: 0.9, animated: true, voiceReact: false } },
-        vivid: { name: 'Выразительная', patch: { scale: 1.15, animated: true, voiceReact: true } },
-      },
-    },
-    {
-      id: 'jarvis:core',
-      engine: 'jarvis',
-      variant: 'core',
-      name: 'Ядро',
-      systemLabel: 'Классическая система',
-      subtitle: 'Матовая форма с мягким внутренним светом',
-      defaults: { glow: 1, speed: 1, motion: 1, depth: 1, voice: true, voiceGain: 1, animated: true },
-      fields: [
-        { key: 'glow', label: 'Яркость', min: 0.3, max: 1.6, step: 0.05, kind: 'range' },
-        { key: 'speed', label: 'Скорость света', min: 0.3, max: 2, step: 0.05, kind: 'range' },
-        { key: 'motion', label: 'Дыхание', min: 0, max: 1.6, step: 0.05, kind: 'range' },
-        { key: 'depth', label: 'Объём', min: 0.3, max: 1.6, step: 0.05, kind: 'range' },
-        { key: 'voice', label: 'Отклик на голос', kind: 'switch' },
-        { key: 'voiceGain', label: 'Сила отклика', min: 0.2, max: 2, step: 0.05, kind: 'range' },
-        { key: 'animated', label: 'Анимация', kind: 'switch' },
-      ],
-      presets: {
-        default: { name: 'Баланс', patch: { glow: 1, speed: 1, motion: 1, depth: 1, voice: true, voiceGain: 1, animated: true } },
-        calm: { name: 'Тихая', patch: { glow: 0.75, speed: 0.65, motion: 0.6, depth: 1, voice: true, voiceGain: 0.6, animated: true } },
-        vivid: { name: 'Яркая', patch: { glow: 1.35, speed: 1.35, motion: 1.25, depth: 1.25, voice: true, voiceGain: 1.4, animated: true } },
-      },
-    },
-    {
-      id: 'jarvis:sphere',
-      engine: 'jarvis',
-      variant: 'sphere',
-      name: 'Точечный вид',
-      systemLabel: 'Классическая система',
-      subtitle: 'Точечная сфера старой системы с настройкой плотности и бликов',
-      defaults: { glow: 1, speed: 1, motion: 1, depth: 1, density: 1, voice: true, voiceGain: 1, animated: true },
-      fields: [
-        { key: 'glow', label: 'Яркость', min: 0.3, max: 1.6, step: 0.05, kind: 'range' },
-        { key: 'speed', label: 'Скорость вращения', min: 0.3, max: 2, step: 0.05, kind: 'range' },
-        { key: 'motion', label: 'Движение', min: 0, max: 1.6, step: 0.05, kind: 'range' },
-        { key: 'depth', label: 'Объём', min: 0.3, max: 1.6, step: 0.05, kind: 'range' },
-        { key: 'density', label: 'Плотность точек', min: 0.5, max: 1.6, step: 0.05, kind: 'range' },
-        { key: 'voice', label: 'Отклик на голос', kind: 'switch' },
-        { key: 'voiceGain', label: 'Сила отклика', min: 0.2, max: 2, step: 0.05, kind: 'range' },
-        { key: 'animated', label: 'Анимация', kind: 'switch' },
-      ],
-      presets: {
-        default: { name: 'Баланс', patch: { glow: 1, speed: 1, motion: 1, depth: 1, density: 1, voice: true, voiceGain: 1, animated: true } },
-        calm: { name: 'Тихая', patch: { glow: 0.8, speed: 0.6, motion: 0.5, depth: 1, density: 0.85, voice: true, voiceGain: 0.6, animated: true } },
-        vivid: { name: 'Плотная', patch: { glow: 1.3, speed: 1.35, motion: 1.25, depth: 1.2, density: 1.45, voice: true, voiceGain: 1.4, animated: true } },
-      },
-    },
-    {
-      id: 'jarvis:iris',
-      engine: 'jarvis',
-      variant: 'iris',
-      name: 'Диафрагма',
-      systemLabel: 'Классическая система',
-      subtitle: 'Объёмная оптическая диафрагма с линзой',
-      defaults: { glow: 1, speed: 1, motion: 1, depth: 1, voice: true, voiceGain: 1, animated: true },
-      fields: [
-        { key: 'glow', label: 'Яркость', min: 0.3, max: 1.6, step: 0.05, kind: 'range' },
-        { key: 'speed', label: 'Скорость', min: 0.3, max: 2, step: 0.05, kind: 'range' },
-        { key: 'motion', label: 'Дыхание', min: 0, max: 1.6, step: 0.05, kind: 'range' },
-        { key: 'depth', label: 'Объём', min: 0.3, max: 1.6, step: 0.05, kind: 'range' },
-        { key: 'voice', label: 'Отклик на голос', kind: 'switch' },
-        { key: 'voiceGain', label: 'Сила отклика', min: 0.2, max: 2, step: 0.05, kind: 'range' },
-        { key: 'animated', label: 'Анимация', kind: 'switch' },
-      ],
-      presets: {
-        default: { name: 'Баланс', patch: { glow: 1, speed: 1, motion: 1, depth: 1, voice: true, voiceGain: 1, animated: true } },
-        calm: { name: 'Тихая', patch: { glow: 0.8, speed: 0.65, motion: 0.6, depth: 1, voice: true, voiceGain: 0.6, animated: true } },
-        vivid: { name: 'Выразительная', patch: { glow: 1.3, speed: 1.35, motion: 1.25, depth: 1.25, voice: true, voiceGain: 1.35, animated: true } },
       },
     },
   ];

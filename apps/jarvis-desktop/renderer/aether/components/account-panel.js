@@ -25,7 +25,6 @@
     const { icon } = window.NoxAetherIcons;
     const controls = node('div', 'ae-account-controls');
     let active = null;
-    let avatar = null;
     let formMode = '';
 
     function createPopover(id, label, buttonClass) {
@@ -65,6 +64,7 @@
     ring.setAttribute('aria-hidden', 'true');
     usage.trigger.append(ring);
     const profile = createPopover('aeAccount', 'Аккаунт', 'ae-account-trigger');
+    profile.trigger.append(icon('user'));
 
     function close(restoreFocus = true) {
       if (!active) return;
@@ -192,12 +192,6 @@
       const details = account?.account;
       profile.trigger.dataset.signedIn = String(Boolean(details));
       renderRing(details?.limits);
-      const name = details?.email?.split('@')[0] || '';
-      const initials = name.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase();
-      if (initials !== avatar) {
-        avatar = initials;
-        profile.trigger.replaceChildren(initials || icon('user'));
-      }
       if (!active || account === active.rendered) return;
       const { body, closeBtn } = active;
       active.rendered = account;

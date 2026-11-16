@@ -1,153 +1,103 @@
 'use strict';
 
-// Живая проверка чтения вслух на настоящем звуке.
-//
-// Речь синтезирует системный голос Windows (SAPI) в wav — без интернета, моделей и установок.
-// Проигрывает её тот же код, что и в продукте: SpeechClient.play → PowerShell (SoundPlayer).
-// Проверяется управление: пауза обрывает звук, продолжение начинает тот же кусок, стоп прекращает чтение.
-//
-// Запуск: node scripts/read-aloud-check.js [папка для wav]
-// Без звуковой карты проверка честно скажет, что играть некуда.
+// node scripts/read-aloud-check.js [--audio]
+// Стенд облачной озвучки возвращает WAV с контрольным тоном. --audio включает штатное проигрывание.
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const { desktopTools, getReader, setSpeaker } = require('../src/tools/desktop');
+const { cloudSpeech, voiceOutputError } = require('../src/voice/output');
+const { playWav } = require('../src/voice/tts');
+const { wavFromPcm } = require('../src/voice/stt');
 
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const { spawnSync } = require('child_process');
-const { SpeechClient } = require('../src/voice/tts');
-const { createReader } = require('../src/voice/reader');
+const parts = ['Первый фрагмент.', 'Второй фрагмент.', 'Третий фрагмент.'];
 
-const OUT = process.argv[2] || path.join(os.tmpdir(), 'nox-read-aloud-check');
-const SENTENCES = [
-  'Первое предложение читается спокойно и не спеша, чтобы его можно было прервать на середине.',
-  'Второе предложение нужно для проверки продолжения с того же места после паузы.',
-  'Третье предложение закрывает проверку, и после него чтение должно закончиться.',
-];
-
-// Системный голос Windows в wav. Ничего не скачивает и не ставит.
-function synthesize(text, file) {
-  const script = [
-    'Add-Type -AssemblyName System.Speech',
-    '$s = New-Object System.Speech.Synthesis.SpeechSynthesizer',
-    `$s.SetOutputToWaveFile($env:NOX_WAV)`,
-    `$s.Speak($env:NOX_TEXT)`,
-    '$s.Dispose()',
-    'if (Test-Path $env:NOX_WAV) { "OK" } else { "NO_FILE" }',
-  ].join('; ');
-  const res = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
-    env: { ...process.env, NOX_WAV: file, NOX_TEXT: text },
-    encoding: 'utf8',
-    timeout: 60000,
+function waitForPlayback(signal, start) {
+  return new Promise((resolve, reject) => {
+    const stop = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', stop);
+      resolve();
+    }, 200);
+    signal.addEventListener('abort', stop, { once: true });
+    start();
   });
-  const out = String((res.stdout || '') + (res.stderr || '')).trim();
-  return { ok: fs.existsSync(file) && fs.statSync(file).size > 1000, out: out.slice(-200) };
 }
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
-  fs.mkdirSync(OUT, { recursive: true });
-  const report = { out: OUT, device: null, synth: [], played: [], ok: false };
-
-  // Куда играть: если устройств вывода нет, SoundPlayer вернёт ошибку — это честный результат.
-  const dev = spawnSync('powershell.exe', ['-NoProfile', '-Command',
-    'Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Voice.Name'],
-  { encoding: 'utf8', timeout: 30000 });
-  report.systemVoice = String(dev.stdout || '').trim();
-
-  const files = SENTENCES.map((text, i) => {
-    const file = path.join(OUT, `fragment-${i + 1}.wav`);
-    const res = synthesize(text, file);
-    report.synth.push({ file: path.basename(file), ok: res.ok, note: res.ok ? null : res.out });
-    return file;
-  });
-  if (!report.synth.every((s) => s.ok)) {
-    report.note = 'системный голос не смог сделать wav — проверять нечего';
-    return report;
+  const audio = process.argv.includes('--audio');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nox-read-aloud-check-'));
+  const fixture = path.join(root, 'document.txt');
+  const pcm = Buffer.alloc(16000 * 2 * 2);
+  for (let sample = 0; sample < pcm.length / 2; sample++) {
+    pcm.writeInt16LE(Math.round(Math.sin(sample * 2 * Math.PI * 440 / 16000) * 1200), sample * 2);
   }
-
-  const client = new SpeechClient();
-  const said = [];
-  const playedAt = [];
-  let currentNote = null;
-
-  const reader = createReader({
-    speak: async (text, signal) => {
-      const index = SENTENCES.indexOf(text);
-      said.push({ text: text.slice(0, 20), at: Date.now() });
-      playedAt.push(Date.now());
-      if (index < 0) return;
-      currentNote = path.basename(files[index]);
-      const started = Date.now();
-      await client.play(files[index], { signal });
-      report.played.push({ file: currentNote, ms: Date.now() - started });
+  const wav = wavFromPcm(pcm);
+  const requests = [];
+  const played = [];
+  let playback = Promise.withResolvers();
+  let settings = {};
+  const provider = cloudSpeech({
+    url: 'https://example.invalid/speak',
+    model: 'fixture',
+    voice: 'fixture',
+    fetchImpl: async (_url, { body }) => {
+      requests.push(JSON.parse(body).input);
+      return new Response(wav);
+    },
+    play: async (file, opts) => {
+      assert.deepEqual(await fs.readFile(file), wav);
+      const start = () => playback.resolve(requests.at(-1));
+      if (audio) {
+        const playing = playWav(file, opts);
+        start();
+        await playing;
+      } else {
+        await waitForPlayback(opts.signal, start);
+      }
+      played.push(requests.at(-1));
     },
   });
-
-  reader.start(SENTENCES.join(' '), { label: 'проверка' });
-  report.parts = reader.snapshot().total;
-  // Ждём, пока первый кусок прозвучит целиком: так видно, что звук действительно играет.
-  const waitFor = async (check, ms = 20000) => {
-    const t0 = Date.now();
-    while (!check() && Date.now() - t0 < ms) await sleep(50);
-    return check();
-  };
-  await waitFor(() => report.played.length >= 1);
-  report.firstPartMs = report.played[0] ? report.played[0].ms : 0;
-  // Пауза приходится на второй кусок.
-
-  // Пауза посреди первого предложения: звук должен оборваться сразу.
-  await sleep(300);
-  const beforePause = reader.snapshot();
-  const pauseAt = Date.now();
-  const paused = reader.pause();
-  await sleep(400);
-  const pauseLatencyMs = Date.now() - pauseAt;
-  report.pause = {
-    state: paused.state,
-    index: paused.index,
-    wasPlayingIndex: beforePause.index,
-    latencyMs: pauseLatencyMs,
-    soundStopped: reader.snapshot().state === 'paused',
-  };
-  await sleep(600);
-  report.silenceWhilePaused = said.length;
-
-  // Продолжение: тот же кусок, а не следующий и не начало текста.
-  const resumed = reader.resume();
-  await sleep(600);
-  report.resume = {
-    state: resumed.state,
-    index: resumed.index,
-    // Кусок, который звучал до паузы, должен зазвучать снова — тот же, а не следующий.
-    repeatedSamePart: said.length > report.silenceWhilePaused
-      && said[said.length - 1].text === said[report.silenceWhilePaused - 1].text,
-    said: said.map((s) => s.text),
-  };
-
-  // Стоп: звук прекращается, новых кусков нет.
-  const stopped = reader.stop();
-  const countAtStop = said.length;
-  await sleep(700);
-  report.stop = { state: stopped.state, saidAfterStop: said.length - countAtStop, busy: reader.busy };
-  await reader.finished().catch(() => {});
-  report.finalState = reader.snapshot().state;
-  report.said = said.map((s) => s.text);
-  report.ok = report.pause.state === 'paused'
-    && report.pause.soundStopped
-    && report.resume.state === 'playing'
-    && report.resume.repeatedSamePart
-    && report.stop.state === 'stopped'
-    && report.stop.saidAfterStop === 0
-    && report.played.some((p) => p.ms > 300);
-  return report;
+  const speak = (text, signal) => provider.speak(text, { signal, volume: 0.5 });
+  setSpeaker(speak, () => voiceOutputError(settings, provider));
+  const reader = getReader();
+  const tool = desktopTools.find(({ name }) => name === 'read_clipboard_aloud');
+  try {
+    await fs.writeFile(fixture, parts.join(' '));
+    assert.deepEqual(await tool.run({ source: 'file', path: fixture }), {
+      ok: false, summary: 'Озвучка выключена. Включите облачную озвучку в настройках.', data: {},
+    });
+    assert.equal(requests.length, 0);
+    settings = { voiceOutput: 'cloud' };
+    const read = await tool.run({ source: 'file', path: fixture });
+    assert.equal(read.data.total, 3);
+    assert.equal(await playback.promise, parts[0]);
+    playback = Promise.withResolvers();
+    assert.equal(await playback.promise, parts[1]);
+    assert.deepEqual(played, [parts[0]]);
+    assert.equal((await tool.run({ action: 'pause' })).data.state, 'paused');
+    playback = Promise.withResolvers();
+    assert.equal((await tool.run({ action: 'resume' })).data.state, 'playing');
+    assert.equal(await playback.promise, parts[1]);
+    assert.equal((await tool.run({ action: 'stop' })).data.state, 'stopped');
+    await reader.finished();
+    assert.deepEqual(requests, [parts[0], parts[1], parts[1]]);
+    assert.deepEqual(played, [parts[0]]);
+    assert.equal(reader.busy, false);
+    console.log('READ_ALOUD_CHECK ' + JSON.stringify({ ok: true, parts: read.data.total, resumedSamePart: true, stopped: true, silenceByDefault: true, audio }));
+  } finally {
+    reader.stop();
+    await reader.finished();
+    await fs.rm(root, { recursive: true, force: true });
+  }
 }
 
-main()
-  .then((report) => {
-    console.log('READ_ALOUD_CHECK ' + JSON.stringify(report));
-    process.exit(report.ok ? 0 : 1);
-  })
-  .catch((err) => {
-    console.log('READ_ALOUD_CHECK ' + JSON.stringify({ ok: false, error: err.message, out: OUT }));
-    process.exit(1);
-  });
+const timeout = setTimeout(() => {
+  console.error('Не дождались чтения вслух.');
+  process.exit(1);
+}, 15000);
+main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => clearTimeout(timeout));

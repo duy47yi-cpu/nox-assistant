@@ -24,6 +24,10 @@
 /* Узкое окно: плашка переносится на вторую строку, подсказка Esc не прячется. */
 .hands-banner { max-width: calc(100% - 16px); }
 .hands-banner .hands-pill { white-space: normal; flex-wrap: wrap; justify-content: center; row-gap: 4px; line-height: 1.2; }
-.hands-overlay .hands-pill { max-width: calc(100vw - 8px); }
+.hands-overlay .hands-pill { box-sizing: border-box; max-width: calc(100vw - 8px); }
+#voiceOverlayText { display: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+[data-voice-command="yes"] #voiceOverlayText { display: block; }
+[data-voice-command="yes"] .hands-pill > :not(.hands-dot, #voiceOverlayText) { display: none; }
+[data-voice-command="yes"] .hands-dot { flex: 0 0 8px; animation: none; }
 /* left:50% сжимал плашку до половины окна: растягиваем полосу на всю ширину, плашку — по центру по содержимому. */
 .hands-banner { left: 8px; right: 8px; transform: none; max-width: none; display: flex; justify-content: center; }

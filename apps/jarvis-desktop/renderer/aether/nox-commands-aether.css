@@ -1,0 +1,806 @@
+/* Стили редактора команд Nox Aether (Фаза 2).
+ * Использует только существующие токены --lx-* из nox-luxify.css без изменения Фазы 1. */
+
+.lx-cmd-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  padding: 14px 22px 18px 26px;
+  overflow: hidden;
+  color: var(--lx-text);
+  font-family: var(--lx-font);
+}
+
+/* ── Верхняя панель (сегмент + поиск + иконки + Сохранить) ────── */
+.lx-cmd-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.lx-cmd-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: var(--lx-r-pill);
+  background: rgba(17, 25, 45, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lx-cmd-seg-btn {
+  height: 32px;
+  padding: 0 18px;
+  border: none;
+  border-radius: var(--lx-r-pill);
+  background: transparent;
+  color: var(--lx-text-3);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.lx-cmd-seg-btn:hover {
+  color: var(--lx-text);
+}
+
+.lx-cmd-seg-btn.is-active {
+  background: linear-gradient(90deg, var(--lx-accent-glow) 0%, var(--lx-accent) 100%);
+  color: var(--lx-text);
+  box-shadow: 0 4px 14px rgba(37, 89, 232, 0.34);
+}
+
+.lx-cmd-tools-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.lx-cmd-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 220px;
+}
+
+.lx-cmd-search-ico {
+  position: absolute;
+  left: 11px;
+  width: 15px;
+  height: 15px;
+  color: var(--lx-text-3);
+  pointer-events: none;
+}
+
+.lx-cmd-search-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 12px 0 34px;
+  border-radius: var(--lx-r-pill);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(17, 25, 45, 0.72);
+  color: var(--lx-text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.lx-cmd-search-input::placeholder {
+  color: var(--lx-text-3);
+}
+
+.lx-cmd-search-input:focus {
+  border-color: var(--lx-accent-glow);
+  background: rgba(23, 37, 82, 0.72);
+}
+
+.lx-cmd-ico-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(26, 33, 49, 0.72);
+  color: var(--lx-text-2);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.lx-cmd-ico-btn:hover {
+  border-color: rgba(80, 112, 221, 0.45);
+  background: rgba(35, 90, 233, 0.22);
+  color: var(--lx-text);
+}
+
+.lx-cmd-ico-btn.is-active {
+  border-color: var(--lx-accent-glow);
+  background: rgba(37, 89, 232, 0.34);
+  color: var(--lx-text);
+}
+
+.lx-cmd-save-btn {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: var(--lx-r-pill);
+  border: 1px solid rgba(80, 112, 221, 0.28);
+  background: rgba(26, 33, 49, 0.85);
+  color: var(--lx-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, transform 120ms ease;
+}
+
+.lx-cmd-save-btn.is-dirty,
+.lx-cmd-save-btn.is-primary {
+  border-color: transparent;
+  background: linear-gradient(90deg, var(--lx-accent-glow) 0%, var(--lx-accent) 100%);
+  box-shadow: 0 4px 14px rgba(37, 89, 232, 0.32);
+}
+
+.lx-cmd-save-btn:hover:not(:disabled) {
+  border-color: var(--lx-accent-glow);
+}
+
+.lx-cmd-save-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.lx-cmd-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ── Полоса статуса голосовой записи / подсказок ─────────────── */
+.lx-cmd-voice-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: var(--lx-r-card);
+  border: 1px solid rgba(80, 112, 221, 0.35);
+  background: rgba(23, 37, 82, 0.7);
+  font-size: 13px;
+  color: var(--lx-text);
+  flex-shrink: 0;
+}
+
+.lx-cmd-voice-banner.is-error {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
+}
+
+/* ── Основная рабочая область (Дерево + инспектор / Новая / Паки / Журнал) ── */
+.lx-cmd-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lx-cmd-workspace.has-inspector {
+  grid-template-columns: minmax(0, 1.32fr) minmax(300px, 0.92fr);
+}
+
+.lx-cmd-tree-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lx-cmd-tree-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.lx-cmd-tree-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 99px;
+}
+
+.lx-cmd-tree-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--lx-accent-glow), var(--lx-accent));
+  border-radius: 99px;
+}
+
+/* ── Строка дерева (40 px, отступ 24 px на уровень) ──────────── */
+.lx-tree-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: calc(var(--depth, 0) * var(--lx-indent));
+}
+
+.lx-tree-guides {
+  position: absolute;
+  left: 0;
+  top: -4px;
+  bottom: -4px;
+  pointer-events: none;
+}
+
+.lx-tree-guide-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.lx-tree-row {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--lx-row);
+  min-height: var(--lx-row);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 0 13px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(16, 23, 40, 0.78);
+  color: var(--lx-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.lx-tree-row:hover {
+  border-color: rgba(80, 112, 221, 0.35);
+  background: rgba(23, 37, 82, 0.52);
+  color: var(--lx-text);
+}
+
+.lx-tree-row.is-selected {
+  border-color: rgba(124, 165, 255, 0.45);
+  background: linear-gradient(90deg, #5286ff 0%, #3164f4 58%, #2559e8 100%);
+  color: var(--lx-text);
+  box-shadow: 0 4px 18px rgba(37, 89, 232, 0.34);
+}
+
+.lx-tree-row.is-disabled {
+  opacity: 0.58;
+}
+
+.lx-tree-row.is-drag-before {
+  box-shadow: inset 0 2px 0 var(--lx-accent-glow);
+}
+
+.lx-tree-row.is-drag-inside {
+  outline: 1.5px dashed var(--lx-accent-glow);
+  background: rgba(37, 89, 232, 0.28);
+}
+
+.lx-tree-row.is-drag-after {
+  box-shadow: inset 0 -2px 0 var(--lx-accent-glow);
+}
+
+.lx-tree-row-ico {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  color: var(--lx-text-3);
+}
+
+.lx-tree-row.is-selected .lx-tree-row-ico,
+.lx-tree-row:hover .lx-tree-row-ico {
+  color: var(--lx-text);
+}
+
+.lx-tree-row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.lx-tree-row-meta {
+  font-size: 11.5px;
+  color: var(--lx-text-3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.lx-tree-row.is-selected .lx-tree-row-meta {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.lx-tree-row-chev {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--lx-text-3);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.lx-tree-row.is-selected .lx-tree-row-chev {
+  color: var(--lx-text);
+}
+
+.lx-tree-row-chev .ae-ico {
+  width: 14px;
+  height: 14px;
+}
+
+/* Три синие кнопки справа у выделенной строки (микрофон, карандаш, корзина) */
+.lx-tree-row-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.lx-tree-act-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 1px solid rgba(124, 165, 255, 0.35);
+  background: linear-gradient(180deg, #4b7cff 0%, #2559e8 100%);
+  color: var(--lx-text);
+  cursor: pointer;
+  box-shadow: 0 3px 12px rgba(37, 89, 232, 0.32);
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.lx-tree-act-btn:hover {
+  filter: brightness(1.1);
+}
+
+.lx-tree-act-btn.is-listening {
+  background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+  border-color: rgba(254, 202, 202, 0.55);
+}
+
+.lx-tree-act-btn .ae-ico {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── Правая панель инспектора (редактор выбранной команды / шага) ── */
+.lx-cmd-inspector {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  border-radius: var(--lx-r-card);
+  border: 1px solid rgba(80, 112, 221, 0.22);
+  background: rgba(16, 23, 40, 0.86);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lx-cmd-insp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lx-cmd-insp-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--lx-text);
+}
+
+.lx-cmd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.lx-cmd-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lx-text-2);
+}
+
+.lx-cmd-input,
+.lx-cmd-select,
+.lx-cmd-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: var(--lx-r-input);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(11, 20, 41, 0.85);
+  color: var(--lx-text);
+  font-family: var(--lx-font);
+  font-size: 13px;
+  padding: 8px 10px;
+  outline: none;
+}
+
+.lx-cmd-input:focus,
+.lx-cmd-select:focus,
+.lx-cmd-textarea:focus {
+  border-color: var(--lx-accent-glow);
+}
+
+.lx-cmd-textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.lx-cmd-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lx-cmd-check-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.lx-cmd-check-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--lx-text-2);
+  cursor: pointer;
+}
+
+.lx-cmd-phrases-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lx-cmd-phrase-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lx-cmd-step-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lx-cmd-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(23, 37, 82, 0.56);
+  color: var(--lx-text-2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.lx-cmd-mini-btn:hover:not(:disabled) {
+  border-color: var(--lx-accent-glow);
+  color: var(--lx-text);
+}
+
+.lx-cmd-mini-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.lx-cmd-mini-btn.is-primary {
+  background: var(--lx-accent);
+  border-color: transparent;
+  color: var(--lx-text);
+}
+
+.lx-cmd-insp-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── Режим «Новая команда»: табы Скажите / Напишите / Опишите словами ── */
+.lx-new-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.lx-new-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: var(--lx-r-card);
+  background: rgba(16, 23, 40, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  align-self: flex-start;
+}
+
+.lx-new-tab {
+  height: 32px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--lx-text-3);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lx-new-tab.is-active {
+  background: rgba(37, 89, 232, 0.28);
+  color: var(--lx-text);
+  box-shadow: inset 0 0 0 1px rgba(80, 112, 221, 0.45);
+}
+
+/* Промо-шаги 1 Описание -> 2 Проверка -> 3 Готово */
+.lx-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lx-stepper-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--lx-r-pill);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(16, 23, 40, 0.72);
+  color: var(--lx-text-3);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lx-stepper-pill.is-active {
+  border-color: transparent;
+  background: linear-gradient(90deg, var(--lx-accent-glow) 0%, var(--lx-accent) 100%);
+  color: var(--lx-text);
+}
+
+.lx-stepper-pill.is-done {
+  border-color: rgba(74, 222, 128, 0.38);
+  color: var(--lx-ok);
+}
+
+.lx-stepper-num {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 11px;
+}
+
+.lx-ai-card {
+  padding: 18px;
+  border-radius: var(--lx-r-card);
+  border: 1px solid rgba(80, 112, 221, 0.24);
+  background: rgba(26, 33, 49, 0.78);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lx-ai-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lx-ai-step-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(13, 22, 43, 0.72);
+}
+
+.lx-ai-step-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lx-ai-step-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--lx-text);
+}
+
+.lx-ai-step-detail {
+  font-size: 12px;
+  color: var(--lx-text-3);
+}
+
+.lx-missing-box {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(251, 191, 36, 0.42);
+  background: rgba(120, 53, 15, 0.28);
+  color: #fde68a;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.lx-error-box {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
+  font-size: 12.5px;
+}
+
+/* ── Паки и журнал запусков внутри Команд ─────────────────────── */
+.lx-cmd-packs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.lx-cmd-pack-card {
+  padding: 14px;
+  border-radius: var(--lx-r-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(26, 33, 49, 0.78);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lx-cmd-pack-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.lx-launch-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.lx-launch-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.3fr) 90px 104px 72px minmax(110px, 1.5fr);
+  align-items: center;
+  gap: 10px;
+  min-height: var(--lx-row);
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(16, 23, 40, 0.78);
+  font-size: 12.5px;
+}
+
+.lx-launch-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 9px;
+  border-radius: var(--lx-r-pill);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.lx-launch-badge.is-ok {
+  background: rgba(74, 222, 128, 0.16);
+  color: var(--lx-ok);
+}
+
+.lx-launch-badge.is-warn {
+  background: rgba(251, 191, 36, 0.16);
+  color: #fde68a;
+}
+
+.lx-launch-badge.is-bad {
+  background: rgba(248, 113, 113, 0.18);
+  color: #fecaca;
+}
+
+.lx-launch-badge.is-muted {
+  background: rgba(138, 147, 166, 0.18);
+  color: var(--lx-text-2);
+}
+
+/* ── Адаптив под окно 864x520 и меньше ───────────────────────── */
+@media (max-width: 960px) {
+  .lx-cmd-page {
+    padding: 10px 14px 14px 16px;
+    gap: 10px;
+  }
+
+  .lx-cmd-search-wrap {
+    width: 165px;
+  }
+
+  .lx-cmd-workspace.has-inspector {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(150px, 1fr) minmax(180px, 1.1fr);
+  }
+
+  .lx-launch-row {
+    grid-template-columns: minmax(100px, 1fr) 76px 94px 62px;
+  }
+
+  .lx-launch-row > :last-child {
+    grid-column: 1 / -1;
+    color: var(--lx-text-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lx-cmd-seg-btn,
+  .lx-cmd-search-input,
+  .lx-cmd-ico-btn,
+  .lx-cmd-save-btn,
+  .lx-tree-row,
+  .lx-tree-act-btn {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+html.reduce-motion .lx-cmd-seg-btn,
+html.reduce-motion .lx-cmd-search-input,
+html.reduce-motion .lx-cmd-ico-btn,
+html.reduce-motion .lx-cmd-save-btn,
+html.reduce-motion .lx-tree-row,
+html.reduce-motion .lx-tree-act-btn {
+  transition: none !important;
+  animation: none !important;
+}

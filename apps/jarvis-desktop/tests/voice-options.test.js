@@ -1,18 +1,15 @@
 'use strict';
 
-// Голос: выбор голоса/громкости/скорости, честные причины отказа, остановка посреди фразы.
-// Синтез не запускается: процесс подменён, Python и звук не нужны.
+// Проигрывание облачного аудио и сообщения об ошибках диктовки.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFile, execFileSync } = require('child_process');
-const { EventEmitter } = require('events');
-const { PassThrough } = require('stream');
+const { execFile } = require('child_process');
 const {
-  SpeechClient, PLAY_SCRIPT, PLAY_WPF_SCRIPT, playScriptFor,
-  clampVolume, clampRate, cleanSpeaker, wavDurationMs, VOLUME_MIN, VOLUME_MAX, RATE_MIN, RATE_MAX,
+  PLAY_SCRIPT, PLAY_WPF_SCRIPT, playScriptFor,
+  clampVolume, clampRate, wavDurationMs, VOLUME_MIN, VOLUME_MAX, RATE_MIN, RATE_MAX,
 } = require('../src/voice/tts');
 const { FishSpeech, PLAY_SCRIPT: FISH_PLAY_SCRIPT } = require('../src/voice/fish');
 const {
@@ -21,58 +18,6 @@ const {
 } = require('../src/voice/dictation');
 
 const win = process.platform === 'win32';
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// ── фейковый процесс синтеза
-
-class FakeProcess extends EventEmitter {
-  constructor() {
-    super();
-    this.received = [];
-    this.killed = false;
-    this.onRequest = null;
-    this.stdout = new PassThrough();
-    this.stderr = new PassThrough();
-    this.stdin = new EventEmitter();
-    this.stdin.write = (chunk) => {
-      for (const line of String(chunk).split('\n')) {
-        if (!line.trim()) continue;
-        const request = JSON.parse(line);
-        this.received.push(request);
-        if (this.onRequest) this.onRequest(request);
-      }
-      return true;
-    };
-  }
-
-  reply(obj) {
-    setImmediate(() => this.stdout.write(`${JSON.stringify(obj)}\n`));
-  }
-
-  kill() {
-    this.killed = true;
-    return true;
-  }
-}
-
-function fakeSpawn(behavior) {
-  const spawned = [];
-  const spawnImpl = () => {
-    const proc = new FakeProcess();
-    proc.onRequest = (request) => behavior(proc, request);
-    spawned.push(proc);
-    return proc;
-  };
-  return { spawnImpl, spawned };
-}
-
-function clientWith(behavior, options = {}) {
-  const fake = fakeSpawn(behavior);
-  const client = new SpeechClient({ spawnImpl: fake.spawnImpl, timeoutMs: 1000, ...options });
-  return { client, spawned: fake.spawned };
-}
-
-// ── настройки голоса
 
 test('громкость и скорость ограничены разумными пределами', () => {
   assert.equal(clampVolume(0.4), 0.4);
@@ -83,9 +28,6 @@ test('громкость и скорость ограничены разумны
   assert.equal(clampRate(0.1), RATE_MIN);
   assert.equal(clampRate(9), RATE_MAX);
   assert.equal(clampRate(undefined, 0.8), 0.8);
-  assert.equal(cleanSpeaker('  aidar '), 'aidar');
-  assert.equal(cleanSpeaker('   '), null);
-  assert.equal(cleanSpeaker(undefined), null);
 });
 
 test('настройки по умолчанию играют прежним SoundPlayer, изменённые — WPF с громкостью и скоростью', () => {
@@ -124,86 +66,6 @@ test('длительность wav считается по заголовку: �
   assert.equal(wavDurationMs(Buffer.from('не wav')), 0);
   assert.equal(wavDurationMs(null), 0);
 });
-
-test('клиент хранит голос, громкость и скорость и отдаёт их в синтез и проигрывание', async (t) => {
-  const played = [];
-  const { client, spawned } = clientWith((proc, request) => proc.reply({ id: request.id, ok: true, file: 'C:\\out\\a.wav' }), {
-    speaker: ' aidar ',
-    volume: 0.6,
-    rate: 1.25,
-    playFn: async (file, options) => { played.push({ file, options }); return { ok: true, summary: 'ok' }; },
-  });
-  t.after(() => client.stop());
-  assert.deepEqual(client.options(), { speaker: 'aidar', volume: 0.6, rate: 1.25 });
-  assert.deepEqual(client.setOptions({ volume: 2 }), { speaker: 'aidar', volume: 1, rate: 1.25 }, 'громкость не выше 1');
-  assert.deepEqual(client.options(), { speaker: 'aidar', volume: 1, rate: 1.25 });
-  client.setOptions({ volume: 0.5, rate: 0.75 });
-
-  await client.speak('привет');
-  assert.equal(spawned[0].received[0].speaker, 'aidar', 'голос уходит в запрос синтеза');
-  assert.equal(played.length, 1);
-  assert.equal(played[0].options.volume, 0.5);
-  assert.equal(played[0].options.rate, 0.75);
-
-  // Явные настройки вызова важнее сохранённых.
-  await client.play('C:\\out\\b.wav', { volume: 0.2, rate: 1.5 });
-  assert.equal(played[1].options.volume, 0.2);
-  assert.equal(played[1].options.rate, 1.5);
-});
-
-test('голос по умолчанию: speaker в запрос не добавляется, проигрывание получает 1 и 1', async (t) => {
-  const played = [];
-  const { client, spawned } = clientWith((proc, request) => proc.reply({ id: request.id, ok: true, file: 'C:\\out\\a.wav' }), {
-    playFn: async (file, options) => { played.push(options); return { ok: true, summary: 'ok' }; },
-  });
-  t.after(() => client.stop());
-  await client.speak('текст');
-  assert.equal('speaker' in spawned[0].received[0], false);
-  assert.equal(played[0].volume, 1);
-  assert.equal(played[0].rate, 1);
-});
-
-test('список голосов: сервер отвечает voices, клиент разбирает и не смешивает с синтезом', async (t) => {
-  const { client, spawned } = clientWith((proc, request) => {
-    if (request.op === 'voices') proc.reply({ id: request.id, ok: true, voices: ['aidar', 'baya', 'kseniya'] });
-  });
-  t.after(() => client.stop());
-  assert.deepEqual(await client.listVoices(), ['aidar', 'baya', 'kseniya']);
-  assert.equal(spawned[0].received[0].op, 'voices');
-});
-
-test('голос не установлен: причина называет, чего нет — модели или Python', () => {
-  const missingDir = path.join(__dirname, 'no-such-dir-voice');
-  const noScript = new SpeechClient({ command: process.execPath, scriptPath: path.join(missingDir, 'silero_server.py') });
-  const scriptState = noScript.availability();
-  assert.equal(scriptState.available, false);
-  assert.match(scriptState.reason, /Silero/);
-
-  const noPython = new SpeechClient({ command: path.join(missingDir, 'python.exe'), scriptPath: __filename });
-  const pythonState = noPython.availability();
-  assert.equal(pythonState.available, false);
-  assert.match(pythonState.reason, /Python/);
-
-  const present = new SpeechClient({ command: process.execPath, scriptPath: __filename });
-  assert.deepEqual(present.availability(), { available: true, provider: 'local', reason: null });
-  assert.equal(present.isInstalled(), true);
-
-  const disabled = new SpeechClient({ command: process.execPath, scriptPath: __filename });
-  disabled._disabledReason = 'локальный голос не отвечает';
-  assert.match(disabled.availability().reason, /не отвечает/);
-});
-
-test('остановка посреди фразы: ожидание синтеза завершается причиной, процесс убит', async (t) => {
-  const { client, spawned } = clientWith(() => {});
-  t.after(() => client.stop());
-  const pending = client.synthesize('длинная фраза');
-  await wait(10);
-  client.stop();
-  await assert.rejects(pending, /голос остановлен/);
-  assert.equal(spawned[0].killed, true);
-});
-
-// ── диктовка: скрипт и честные причины
 
 test('describeError: нет языка, нет микрофона, движок не запустился — свои слова', () => {
   assert.equal(describeError({ type: 'error', code: 'no_language' }), NO_LANGUAGE_MESSAGE);
@@ -290,58 +152,4 @@ test('Fish: без ключа причина отказа называет кл�
   });
   assert.equal(speech.isInstalled(), false);
   assert.equal(new FishSpeech({ apiKey: 'k' }).availability().available, true);
-});
-
-// ── протокол Silero-сервера (модель не грузится: синтез подменён)
-
-function hasPython() {
-  try {
-    execFileSync('python', ['--version'], { stdio: 'ignore', timeout: 10000 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const python = hasPython();
-
-test('Silero-сервер: список голосов, синтез выбранным голосом и отказ на чужой', { skip: !python, timeout: 30000 }, () => {
-  const serverDir = path.join(__dirname, '..', 'scripts', 'tts');
-  const program = [
-    'import json, sys',
-    `sys.path.insert(0, ${JSON.stringify(serverDir)})`,
-    'import silero_server',
-    'class FakeSynth:',
-    "    speakers = ['aidar', 'baya']",
-    "    default_speaker = 'aidar'",
-    '    def voices(self):',
-    '        return list(self.speakers)',
-    '    def synthesize(self, req_id, text, speaker):',
-    '        if self.speakers and speaker not in self.speakers:',
-    "            raise RuntimeError('голос «%s» не найден. Доступны: %s' % (speaker, ', '.join(self.speakers)))",
-    "        return 'C:/out/%s.wav' % req_id",
-    'synth = FakeSynth()',
-    'def call(payload):',
-    "    return silero_server.handle_request(synth, json.dumps(payload, ensure_ascii=False))",
-    "print(json.dumps([",
-    "    call({'id': 'v1', 'op': 'voices'}),",
-    "    call({'id': 'v2', 'text': 'привет', 'speaker': 'baya'}),",
-    "    call({'id': 'v3', 'text': 'привет', 'speaker': 'чужой'}),",
-    "    call({'id': 'плохой', 'text': 'привет'}),",
-    '], ensure_ascii=False))',
-  ].join('\n');
-  const result = execFileSync('python', ['-'], {
-    input: program,
-    encoding: 'utf8',
-    timeout: 20000,
-    env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
-  });
-  const [voices, synth, wrongVoice, badId] = JSON.parse(result);
-  assert.deepEqual(voices, { id: 'v1', ok: true, voices: ['aidar', 'baya'] });
-  assert.equal(synth.ok, true);
-  assert.equal(synth.file, 'C:/out/v2.wav');
-  assert.equal(wrongVoice.ok, false);
-  assert.match(wrongVoice.error, /не найден. Доступны: aidar, baya/);
-  assert.equal(badId.ok, false);
-  assert.match(badId.error, /id:/);
 });

@@ -53,8 +53,11 @@
 
     let section = 'workshop';
     let searchQuery = '';
-    let voicesLoaded = false;
-    let voicesList = [];
+    let modelBusy = false;
+    let modelMessage;
+    const unsubModelProgress = window.jarvis?.onVoiceModelProgress?.((percent) => {
+      if (modelMessage?.isConnected) modelMessage.textContent = `Загрузка · ${percent}%`;
+    });
     let quickHotkeyText = '';
     let previewHandle = null;
     let previewOrbId = null;
@@ -90,7 +93,8 @@
       ['window', 'Окно и чат', 'panelLeft'],
       ['appearance', 'Оформление', 'palette'],
       ['general', 'Основные и доступ', 'settings'],
-      ['voice', 'Голос и диктовка', 'mic'],
+      ['voice', 'Голосовой ввод', 'mic'],
+      ['speech', 'Озвучка', 'volume'],
     ];
     const tabBtns = new Map();
     for (const [id, label, glyph] of SEC_DEFS) {
@@ -871,160 +875,189 @@
       return wrap;
     }
 
-    function renderVoice() {
+    function voiceField(label, control, hint) {
+      const field = document.createElement('label');
+      field.className = 'ae-field ae-mt-sm';
+      const name = document.createElement('span');
+      name.textContent = label;
+      field.append(name, control);
+      if (hint) {
+        const detail = document.createElement('span');
+        detail.className = 'ae-item-meta';
+        detail.textContent = hint;
+        field.append(detail);
+      }
+      return field;
+    }
+
+    function voiceSelect(label, key, choices, fallback, hint) {
+      const select = document.createElement('select');
+      select.className = 'ae-select';
+      for (const [id, title] of choices) select.add(new Option(title, id));
+      select.value = store.state.settings[key] ?? fallback;
+      select.addEventListener('change', () => store.setSetting(key, select.value));
+      return voiceField(label, select, hint);
+    }
+
+    function voiceText(label, key, value, hint) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'ae-input';
+      input.value = Array.isArray(value) ? value.join(', ') : value;
+      input.maxLength = 512;
+      input.addEventListener('change', () => store.setSetting(key, input.value));
+      if (key === 'wakeWords') input.id = 'lxWakeWordsInput';
+      return voiceField(label, input, hint);
+    }
+
+    function speechButton(title, onClick) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'ae-btn ae-btn-secondary ae-btn-sm';
+      button.textContent = title;
+      button.addEventListener('click', onClick);
+      return button;
+    }
+
+    function voiceRange(label, key, fallback, min, max, format) {
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.min = min;
+      slider.max = max;
+      slider.step = 0.05;
+      slider.value = store.state.settings[key] ?? fallback;
+      const value = document.createElement('output');
+      value.textContent = format(Number(slider.value));
+      slider.addEventListener('input', () => { value.textContent = format(Number(slider.value)); });
+      slider.addEventListener('change', () => store.setSetting(key, Number(slider.value)));
+      const field = voiceField(label, slider);
+      field.append(value);
+      return field;
+    }
+
+    async function previewVoice(status) {
+      status.textContent = 'Воспроизводится…';
+      const result = await bridge.call('voiceTest').catch(() => null);
+      status.textContent = result?.ok ? 'Прослушивание завершилось.' : result?.error || 'Не удалось воспроизвести голос.';
+    }
+
+    async function fetchMicrophones(select, current) {
+      const devices = await bridge.call('voiceMicrophones').catch(() => []);
+      select.replaceChildren(new Option('По умолчанию в Windows', ''));
+      for (const device of devices || []) select.add(new Option(device.title, device.id));
+      if (current && !Array.from(select.options).some((item) => item.value === current)) {
+        select.add(new Option('Выбранный микрофон', current));
+      }
+      select.value = current;
+    }
+
+    function renderVoiceInput() {
       const wrap = document.createElement('div');
-      const s = store.state.settings;
       wrap.className = 'ae-stack';
+      if (!matchesSearch('Голосовой ввод распознавание микрофон диктовка язык обращение префикс джарвис подтверждение')) return wrap;
+      const s = store.state.settings;
+      const panel = makePanel('Голосовой ввод');
+      const modelRow = document.createElement('div');
+      modelRow.className = 'ae-set-row';
+      const modelStatus = document.createElement('span');
+      modelStatus.className = 'ae-item-meta';
+      modelStatus.setAttribute('role', 'status');
+      modelStatus.textContent = s.speechModelInstalled ? 'Локальный движок готов' : 'Локальный движок нужен для работы без интернета';
+      const download = speechButton('Скачать · 214 МБ', async () => {
+        if (modelBusy) return;
+        modelBusy = true;
+        download.disabled = true;
+        modelStatus.textContent = 'Начинаю загрузку…';
+        const result = await bridge.call('voiceModelDownload').catch(() => null);
+        modelBusy = false;
+        modelStatus.textContent = result?.ok ? 'Локальный движок готов' : result?.error || 'Загрузка не удалась.';
+        download.disabled = false;
+        if (result?.ok) await store.refreshSettings();
+      });
+      download.hidden = s.speechModelInstalled === true;
+      download.disabled = modelBusy;
+      const folder = speechButton('Папка модели', async () => {
+        const result = await bridge.call('voiceModelFolder').catch(() => null);
+        if (result?.ok) await store.refreshSettings();
+        else if (result?.error) modelStatus.textContent = result.error;
+      });
+      folder.title = s.sttModelFolder || 'Папка данных Nox';
+      modelMessage = modelStatus;
+      modelRow.append(modelStatus, download, folder);
 
-      if (matchesSearch('Голос озвучка ответы диктовка микрофон прослушивание громкость скорость характер режим')) {
-        const p = makePanel('Речь и распознавание голоса');
-        p.append(
-          makeToggleRow('Озвучивать ответы ассистента', '', s.voice, (v) => store.setSetting('voice', v)),
-          makeToggleRow('Голосовой ввод в чат (диктовка)', '', s.dictation, (v) => store.setSetting('dictation', v)),
-          makeToggleRow('Всегда слушать обращение «Джарвис»', '', s.alwaysListen, (v) => store.setSetting('alwaysListen', v)),
-          makeToggleRow('Диктовка в любое поле (Ctrl+Alt+D)', '', s.fieldDictation, (v) => store.setSetting('fieldDictation', v))
-        );
-
-        // Режим микрофона (Слушаю / Только имя / Выкл)
-        const curDictMode = (store.state.dictation && store.state.dictation.mode) || 'off';
-        const modeWrap = document.createElement('div');
-        modeWrap.className = 'ae-field ae-mt-sm';
-        const modeLbl = document.createElement('span');
-        modeLbl.textContent = 'Режим микрофона';
-        const modeRow = document.createElement('div');
-        modeRow.className = 'ae-chips-row';
-        for (const [mId, mTitle] of [
-          ['listening', 'Слушаю'],
-          ['quiet', 'Только имя «Джарвис»'],
-          ['off', 'Выключен'],
-        ]) {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.className = curDictMode === mId ? 'ae-subtab is-active' : 'ae-subtab';
-          b.textContent = mTitle;
-          b.disabled = !s.dictation;
-          b.addEventListener('click', async () => {
-            await bridge.call('dictationMode', mId).catch(() => {});
-            if (typeof store.refreshDictation === 'function') await store.refreshDictation();
-            renderBody();
-          });
-          modeRow.append(b);
-        }
-        modeWrap.append(modeLbl, modeRow);
-        p.append(modeWrap);
-
-        // Характер речи + Громкость + Скорость (как в конкурентах)
-        const personaRow = document.createElement('label');
-        personaRow.className = 'ae-field ae-mt-sm';
-        const personaLbl = document.createElement('span');
-        personaLbl.textContent = 'Характер речи';
-        const personaSel = document.createElement('select');
-        personaSel.className = 'ae-select';
-        for (const [pId, pTitle] of [
-          ['neutral', 'Как есть (из ручек ниже)'],
-          ['butler', 'Дворецкий (спокойнее, 0.95×)'],
-          ['assistant', 'Помощница (ровно, 1.00×)'],
-          ['engineer', 'Инженер (чётче, 1.05×)'],
-        ]) {
-          const o = document.createElement('option');
-          o.value = pId;
-          o.textContent = pTitle;
-          if ((s.voicePersona || 'neutral') === pId) o.selected = true;
-          personaSel.append(o);
-        }
-        personaSel.addEventListener('change', () => store.setSetting('voicePersona', personaSel.value));
-        personaRow.append(personaLbl, personaSel);
-        p.append(personaRow);
-
-        const voiceGrid = document.createElement('div');
-        voiceGrid.className = 'ae-workshop-grid ae-mt-sm';
-
-        const mkVoiceRange = (label, val, min, max, step, fmt, onCommit) => {
-          const box = document.createElement('div');
-          box.className = 'ae-range-row';
-          const hdr = document.createElement('div');
-          hdr.className = 'ae-range-head';
-          const lbl = document.createElement('span');
-          lbl.textContent = label;
-          const vEl = document.createElement('span');
-          vEl.className = 'ae-range-val';
-          vEl.textContent = fmt(val);
-          hdr.append(lbl, vEl);
-          const rng = document.createElement('input');
-          rng.type = 'range';
-          rng.min = String(min);
-          rng.max = String(max);
-          rng.step = String(step);
-          rng.value = String(val);
-          rng.addEventListener('input', () => { vEl.textContent = fmt(Number(rng.value)); });
-          rng.addEventListener('change', () => onCommit(Number(rng.value)));
-          box.append(hdr, rng);
-          return box;
-        };
-
-        const curVol = Number.isFinite(Number(s.voiceVolume)) ? Number(s.voiceVolume) : 1;
-        const curRate = Number.isFinite(Number(s.voiceRate)) ? Number(s.voiceRate) : 1;
-        voiceGrid.append(
-          mkVoiceRange('Громкость речи', curVol, 0, 1, 0.05, (v) => `${Math.round(v * 100)}%`, (v) => store.setSetting('voiceVolume', v)),
-          mkVoiceRange('Скорость речи', curRate, 0.5, 2, 0.05, (v) => `${v.toFixed(2)}×`, (v) => store.setSetting('voiceRate', v))
-        );
-        p.append(voiceGrid);
-
-        const rowTest = document.createElement('div');
-        rowTest.className = 'ae-head-actions ae-mt-sm';
-        const testBtn = document.createElement('button');
-        testBtn.type = 'button';
-        testBtn.className = 'ae-btn ae-btn-secondary ae-btn-sm';
-        testBtn.textContent = 'Прослушать голос';
-        testBtn.addEventListener('click', () => bridge.call('voiceTest').catch(() => {}));
-
-        const loadVBtn = document.createElement('button');
-        loadVBtn.type = 'button';
-        loadVBtn.className = 'ae-btn ae-btn-ghost ae-btn-sm';
-        loadVBtn.textContent = voicesLoaded ? `Голосов найдено: ${voicesList.length}` : 'Показать доступные голоса';
-        loadVBtn.addEventListener('click', async () => {
-          const r = await bridge.call('voiceVoices').catch(() => null);
-          voicesLoaded = true;
-          voicesList = r && r.ok && Array.isArray(r.voices) ? r.voices : [];
-          renderBody();
+      const mic = document.createElement('select');
+      mic.className = 'ae-select';
+      mic.add(new Option('По умолчанию в Windows', ''));
+      mic.addEventListener('change', () => store.setSetting('microphone', mic.value));
+      fetchMicrophones(mic, s.microphone || '');
+      const modes = document.createElement('div');
+      modes.className = 'ae-head-actions ae-voice-modes';
+      modes.setAttribute('role', 'group');
+      modes.setAttribute('aria-label', 'Режим микрофона');
+      for (const [id, title] of [['listening', 'Слушаю'], ['quiet', 'Только имя'], ['off', 'Микрофон выкл']]) {
+        const button = speechButton(title, async () => {
+          await bridge.call('dictationMode', id).catch(() => {});
+          await store.refreshDictation();
         });
-        rowTest.append(testBtn, loadVBtn);
-        p.append(rowTest);
-
-        if (voicesLoaded && voicesList.length) {
-          const vSel = document.createElement('select');
-          vSel.className = 'ae-select ae-mt-sm';
-          for (const v of voicesList) {
-            const o = document.createElement('option');
-            o.value = v.id;
-            o.textContent = v.title || v.id;
-            if (v.id === s.voiceSpeaker) o.selected = true;
-            vSel.append(o);
-          }
-          vSel.addEventListener('change', () => store.setSetting('voiceSpeaker', vSel.value));
-          p.append(vSel);
-        }
-
-        wrap.append(p);
+        button.disabled = s.dictation === false;
+        button.setAttribute('aria-pressed', String((store.state.dictation.mode || 'off') === id));
+        modes.append(button);
       }
+      panel.append(
+        voiceSelect('Распознавание речи', 'sttEngine', [['auto', 'Авто'], ['local', 'Локальное'], ['cloud', 'Облачное']], 'auto',
+          'В облачном режиме аудио отправляется настроенному сервису. При потере связи используется локальный движок.'),
+        ...(s.sttEngine === 'auto' || !s.sttEngine ? [
+          makeToggleRow('Разрешить облако в режиме «Авто»', s.speechCloudAvailable ? '' : 'Облачное распознавание пока не настроено',
+            s.sttCloudAllowed, (value) => store.setSetting('sttCloudAllowed', value)),
+        ] : []),
+        modelRow,
+        voiceSelect('Язык распознавания', 'sttLanguage', [['ru', 'Русский'], ['auto', 'Авто'], ['en', 'English']], 'ru',
+          'Локальный движок поддерживает русский язык.'),
+        voiceField('Микрофон', mic),
+        ...(s.dictation === false ? [makeToggleRow('Включить голосовой ввод', '', false, (value) => store.setSetting('dictation', value))] : []),
+        modes,
+        makeToggleRow('Автовключение микрофона', '', s.alwaysListen, (value) => store.setSetting('alwaysListen', value)),
+        voiceText('Обращение (префикс)', 'wakeWords', s.wakeWords ?? 'джарвис, жарвис, сэр',
+          'Несколько вариантов через запятую. Пустое поле отключает требование обращаться по имени.'),
+        makeToggleRow('Режим префикса', 'Для голосовой команды нужно обращение.', s.prefixMode, (value) => store.setSetting('prefixMode', value)),
+        makeToggleRow('Оверлей команды', 'Показывает распознанную команду поверх окон.', s.commandOverlay !== false, (value) => store.setSetting('commandOverlay', value)),
+        makeToggleRow('Диктовка в любое поле (Ctrl+Alt+D)', '', s.fieldDictation, (value) => store.setSetting('fieldDictation', value)),
+        voiceText('Слова «да»', 'voiceYes', s.voiceYes ?? 'да, правильно, подтверждаю'),
+        voiceText('Слова «нет»', 'voiceNo', s.voiceNo ?? 'нет, отмена, отменить'),
+        voiceText('Связки голосовых команд', 'voiceLinkWords', s.voiceLinkWords ?? 'и, затем, потом, после этого')
+      );
+      wrap.append(panel);
+      return wrap;
+    }
 
-      if (matchesSearch('Быстрое окно горячая клавиша вызов чат')) {
-        const p = makePanel('Быстрое окно вызова');
-        const row = document.createElement('div');
-        row.className = 'ae-set-row';
-        const txt = document.createElement('div');
-        txt.className = 'ae-set-text';
-        const nm = document.createElement('strong');
-        nm.textContent = 'Сочетание клавиш быстрого окна';
-        const h = document.createElement('span');
-        h.className = 'ae-item-meta';
-        h.textContent = quickHotkeyText || 'Загружается…';
-        txt.append(nm, h);
-        row.append(txt);
-        p.append(row);
-        wrap.append(p);
+    function renderVoiceOutput() {
+      const wrap = document.createElement('div');
+      wrap.className = 'ae-stack';
+      if (!matchesSearch('Озвучка облачная голос ответы громкость тихий режим')) return wrap;
+      const s = store.state.settings;
+      const panel = makePanel('Озвучка');
+      const cloud = s.voiceOutput === 'cloud';
+      panel.append(voiceSelect('Режим озвучки', 'voiceOutput', [
+        ['off', 'Выключена (по умолчанию)'], ['cloud', 'Облачная'],
+      ], 'off', cloud ? 'Текст для озвучки передаётся в облако. Ответы остаются в чате.' : 'Ответы всегда остаются в чате.'));
+      if (cloud) {
+        const status = document.createElement('p');
+        status.className = 'ae-item-meta';
+        status.setAttribute('role', 'status');
+        if (!s.voiceCloudAvailable) status.textContent = 'Облачная озвучка не настроена.';
+        const actions = document.createElement('div');
+        actions.className = 'ae-head-actions ae-mt-sm';
+        const preview = speechButton('Проверить озвучку', () => previewVoice(status));
+        preview.disabled = !s.voiceCloudAvailable || s.quiet;
+        actions.append(preview);
+        panel.append(
+          makeToggleRow('Тихий режим', '', s.quiet, (value) => store.setSetting('quiet', value)),
+          voiceRange('Громкость речи', 'voiceVolume', 0.8, 0, 1, (value) => Math.round(value * 100) + '%'),
+          actions,
+          status,
+        );
       }
-
+      wrap.append(panel);
       return wrap;
     }
 
@@ -1042,7 +1075,7 @@
         heading.className = 'ae-section-heading';
         heading.textContent = 'Результаты поиска';
         body.append(heading);
-        const matches = [renderWorkshop(section), renderGeneral(), renderVoice()].filter((group) => group.childElementCount > 0);
+        const matches = [renderWorkshop(section), renderGeneral(), renderVoiceInput(), renderVoiceOutput()].filter((group) => group.childElementCount > 0);
         if (matches.length) body.append(...matches);
         else {
           const empty = document.createElement('p');
@@ -1053,7 +1086,8 @@
         }
       } else if (['workshop', 'window', 'appearance'].includes(section)) body.append(renderWorkshop(section));
       else if (section === 'general') body.append(renderGeneral());
-      else if (section === 'voice') body.append(renderVoice());
+      else if (section === 'voice') body.append(renderVoiceInput());
+      else if (section === 'speech') body.append(renderVoiceOutput());
     }
 
     async function loadQuickHotkey() {
@@ -1079,7 +1113,9 @@
         document.documentElement.dataset.theme || '',
         typeof T?.getAccent === 'function' ? T.getAccent() : '',
         quickHotkeyText,
-        voicesLoaded ? voicesList.length : 0,
+        s.sttEngine, s.sttLanguage, s.sttCloudAllowed, s.speechCloudAvailable, s.speechModelInstalled,
+        s.sttModelFolder, s.microphone, s.commandOverlay, s.voiceYes, s.voiceNo, s.voiceLinkWords,
+        s.voiceOutput, s.voiceCloudAvailable, s.quiet,
         (s.connectedFolders || []).join('|'),
         s.motion !== false ? '1' : '0',
         s.autoStart ? '1' : '0',
@@ -1088,15 +1124,13 @@
         s.memoryAuto !== false ? '1' : '0',
         s.terseReplies !== false ? '1' : '0',
         s.clipboardHistory ? '1' : '0',
-        s.voice ? '1' : '0',
         s.dictation ? '1' : '0',
         s.alwaysListen ? '1' : '0',
+        s.prefixMode ? '1' : '0',
+        Array.isArray(s.wakeWords) ? s.wakeWords.join('|') : String(s.wakeWords || ''),
         s.fieldDictation ? '1' : '0',
-        s.voiceSpeaker || '',
         s.replyStyle || '',
-        s.voicePersona || '',
         s.voiceVolume ?? '',
-        s.voiceRate ?? '',
         s.desktopOverlay ? '1' : '0',
         st.dictation ? st.dictation.mode : '',
       ].join('::');
@@ -1121,18 +1155,19 @@
 
     return {
       el: root,
-      openVoiceSettings: () => {
-        section = 'voice';
+      openVoiceSettings: (target = 'voice') => {
+        section = target === 'speech' ? 'speech' : 'voice';
         clearSearch();
         root.scrollTop = 0;
         lastSig = '';
         store.setRoute('settings');
         render(store.state);
-        tabBtns.get('voice').focus();
+        tabBtns.get(section).focus();
       },
       render,
       destroy: () => {
         unsubLib();
+        unsubModelProgress?.();
         destroyPreview();
       },
     };

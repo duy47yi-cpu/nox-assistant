@@ -49,6 +49,13 @@
     }
     if (trackerState === 'verifying') return 'Проверяю результат…';
     if (currentAction && currentAction.status === 'running') {
+      const target = cleanOneLine(currentAction.target);
+      if (currentAction.tool === 'app_open' && target) {
+        const name = target.split(/[\\/]/).filter(Boolean).at(-1) || target;
+        const display = /^(?:cmd|wt|windowsterminal)(?:\.exe)?$/i.test(name) ? 'терминал'
+          : /^code\.exe$/i.test(name) ? 'VS Code' : name;
+        return `Открываю ${display}…`;
+      }
       const title = cleanOneLine(currentAction.title || 'Выполняю шаг');
       const brief = cleanOneLine(currentAction.brief);
       return brief ? `${title}: ${brief}` : `${title}…`;
@@ -169,8 +176,8 @@
     return {
       ok: true,
       draft: {
-        schemaVersion: 2,
-        version: 2,
+        schemaVersion: 3,
+        version: 3,
         kind: 'sequence',
         name,
         phrases: [normPhrase],
@@ -200,7 +207,7 @@
     const nextId = (prefix = 'n') => `${prefix}-${++seq}`;
 
     const state = {
-      route: 'chat',
+      route: 'personal',
       link: 'none',
       hasKey: false,
       stopped: false,
@@ -212,11 +219,14 @@
       replyStyle: 'normal',
       settings: {
         voice: false,
+        voiceOutput: 'off',
         dictation: false,
         clipboardHistory: false,
         alwaysOnTop: false,
         desktopOverlay: false,
         alwaysListen: false,
+        prefixMode: false,
+        wakeWords: ['джарвис', 'жарвис', 'сэр'],
         quiet: false,
         motion: true,
         autoStart: false,
@@ -320,7 +330,6 @@
       : null;
 
     function getOrbEffectiveState() {
-      if (state.link === 'none') return 'idle';
       if (state.stopped && !state.trackerBusy) return 'idle';
       if (state.approvals.queue.length > 0) return 'waiting_approval';
       if (state.dictation.recording && !state.trackerBusy) return 'listening';
@@ -421,7 +430,8 @@
       if (!state.activeTurn) return;
       const t = state.activeTurn;
       state.activeTurn = null;
-      const hasBody = Boolean(t.text.trim() || t.actions.length > 0 || t.sources.length > 0);
+      const { artifacts = [], clarification = [], partial = [] } = options;
+      const hasBody = Boolean(t.text.trim() || t.actions.length || t.sources.length || artifacts.length || clarification.length || partial.length);
       if (!hasBody && !options.cancelled && !options.forceKeep) {
         notify();
         return;
@@ -434,6 +444,9 @@
         actions: t.actions.map((a) => ({ ...a })),
         sources: t.sources.slice(),
         searchSources: options.searchSources || [],
+        artifacts,
+        clarification,
+        partial,
         detailsOpen: false,
         cancelled: Boolean(options.cancelled),
         workStatus: options.status || '',
@@ -458,12 +471,13 @@
 
     function humanErrorHeadline(raw) {
       const cleaned = scrub(raw || '');
-      const m5 = /^Модель ответила ошибкой\s+(\d{3})/i.exec(cleaned);
-      if (m5) return `Не удалось получить ответ (ошибка ${m5[1]}). Можно повторить запрос.`;
+      if (/ключ не указан|нет ключа|требуется вход/i.test(cleaned)) return 'Не удалось получить ответ. Проверьте настройки Nox AI.';
+      if (/лимит|квот/i.test(cleaned)) return 'Не удалось получить ответ. Проверьте лимиты.';
       if (/поток ответа модели оборвался|не ответила за|fetch failed|ECONN|ENOTFOUND|ETIMEDOUT/i.test(cleaned)) {
-        return 'Связь прервалась до завершения ответа. Попробуйте повторить запрос.';
+        return 'Не удалось получить ответ. Связь прервалась.';
       }
-      return cleaned || 'Не удалось выполнить запрос';
+      if (/Модель ответила ошибкой|HTTP|^ошибка модели/i.test(cleaned)) return 'Не удалось получить ответ. Сервис временно недоступен.';
+      return 'Не удалось выполнить запрос.';
     }
 
     function appendError(rawMessage, technical = '') {
@@ -485,6 +499,7 @@
       if (ev.type === 'tool_start' || ev.type === 'approval_request') {
         const id = ev.type === 'approval_request' ? (ev.callId || ev.id) : ev.id;
         const name = ev.name || ev.tool || '';
+        const target = ev.args?.name || (typeof ev.target === 'string' ? ev.target : ev.target?.name);
         let entry = turn.actionsMap.get(id);
         if (!entry) {
           entry = {
@@ -492,6 +507,8 @@
             tool: name,
             title: toolTitle(name),
             brief: argsBrief(ev.args, 64),
+            target: typeof target === 'string' ? scrub(target).slice(0, 260) : '',
+            step: ev.step,
             args: ev.args || null,
             risk: ev.risk || null,
             status: ev.type === 'approval_request' ? 'pending' : 'running',
@@ -724,6 +741,13 @@
       }
 
       switch (ev.type) {
+        case 'status': {
+          if (ev.status === 'running' && Number.isInteger(ev.step) && ev.step > 0) {
+            const action = state.activeTurn?.actions.find((a) => a.step === ev.step && a.status === 'pending');
+            if (action) action.status = 'running';
+          }
+          break;
+        }
         case 'quick_rearm_approval':
           if (state.approvals.view && state.approvals.view.id) showApprovalById(state.approvals.view.id);
           break;
@@ -790,7 +814,12 @@
         }
         case 'done': {
           const cancelled = ev.cancelled === true || ev.status === 'cancelled';
-          finalizeActiveTurn({ cancelled, status: ev.status, searchSources: ev.searchSources });
+          const artifacts = Array.isArray(ev.artifacts) ? ev.artifacts : [];
+          const clarification = Array.isArray(ev.clarification) ? ev.clarification : [];
+          const partial = Array.isArray(ev.partial) ? ev.partial : [];
+          if (typeof ev.replyText === 'string') ensureActiveTurn().text = ev.replyText;
+          if (artifacts.length || clarification.length || partial.length) ensureActiveTurn();
+          finalizeActiveTurn({ cancelled, status: partial.length ? 'partial' : ev.status, searchSources: ev.searchSources, artifacts, clarification, partial });
           clearApprovalsForChat(ev.runId);
           refreshChats().catch(() => {});
           break;
@@ -844,6 +873,8 @@
         state.currentDraftText = cmd;
         saveCurrentDraft();
         sendChatMessage(cmd, state.currentDraftFiles);
+      } else if (ev.type === 'fallback') {
+        if (ev.message) toast(ev.message);
       } else if (ev.type === 'error') {
         state.dictation.recording = false;
         state.dictation.error = String(ev.message || 'Голосовой ввод не запустился');
@@ -994,6 +1025,9 @@
             actions: [],
             sources: [],
             searchSources: Array.isArray(m.searchSources) ? m.searchSources : [],
+            artifacts: Array.isArray(m.artifacts) ? m.artifacts : [],
+            clarification: Array.isArray(m.clarification) ? m.clarification : [],
+            partial: Array.isArray(m.partial) ? m.partial : [],
             detailsOpen: false,
             savedCommandId: null,
             savedCommandName: '',
@@ -1345,6 +1379,10 @@
       try {
         const r = await bridge.call('setSetting', key, value);
         if (r && r.ok === false) throw new Error(r.error || 'отклонено');
+        if (r && r.value !== undefined && key === 'wakeWords') {
+          state.settings[key] = r.value;
+          notify(true);
+        }
         return true;
       } catch (err) {
         state.settings[key] = prev;
@@ -1402,12 +1440,15 @@
       removeDraftFile,
       toggleTurnDetails,
       isEmptyChat: () => isEmptyChatState(state),
-      getLiveWorkText: () => formatLiveWorkSummary({
-        trackerState: state.trackerState,
-        note: state.trackerNote,
-        currentAction: state.activeTurn && state.activeTurn.actions[state.activeTurn.actions.length - 1],
-        pendingApprovalCount: state.approvals.queue.length,
-      }),
+      getLiveWorkText: () => {
+        const action = state.activeTurn?.actions.at(-1);
+        return formatLiveWorkSummary({
+          trackerState: state.trackerState,
+          note: state.trackerNote,
+          currentAction: action && { tool: action.tool, title: action.title, target: action.target, status: action.status },
+          pendingApprovalCount: state.approvals.queue.length,
+        });
+      },
       getOrbEffectiveState,
       onAgentEvent,
       onDictationEvent,

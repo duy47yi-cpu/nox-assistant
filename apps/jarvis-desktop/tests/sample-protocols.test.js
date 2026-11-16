@@ -158,7 +158,7 @@ test('образцы: происхождение sample и версия схем
   seedSampleCommands(store);
   for (const saved of store.list()) {
     assert.equal(saved.origin, 'sample');
-    assert.equal(saved.schemaVersion, 2);
+    assert.equal(saved.schemaVersion, 3);
   }
   assert.equal(store.list().find((c) => c.name === 'Свернуть все окна').folder, 'Windows');
   assert.equal(store.list().find((c) => c.name === 'Работа').folder, null);

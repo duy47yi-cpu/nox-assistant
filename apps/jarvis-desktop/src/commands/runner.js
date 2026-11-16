@@ -9,6 +9,9 @@ const { checkEffect } = require('../agent/effects');
 const {
   maskArgsForJournal,
   checkSteps,
+  flattenStepTree,
+  hasTreeSteps,
+  resolveStepTypeAndTool,
   MAX_STEPS,
   CommandRunLog,
   DANGEROUS_TOOLS,
@@ -102,16 +105,37 @@ async function askApproval(approvals, emit, payload, signal) {
   }
 }
 
+function resolveRunnableStep(step) {
+  if (!step || typeof step !== 'object') return { name: '', args: {} };
+  let name = typeof step.tool === 'string' ? step.tool.trim() : '';
+  if (!name && typeof step.type === 'string' && step.type.trim()) {
+    try {
+      name = resolveStepTypeAndTool(step, 'шаг').tool;
+    } catch {
+      name = '';
+    }
+  }
+  const rawArgs = step.args !== undefined ? step.args : (step.params !== undefined ? step.params : {});
+  const args = (rawArgs && typeof rawArgs === 'object' && !Array.isArray(rawArgs)) ? { ...rawArgs } : {};
+  if ((name === 'app_open' || step.type === 'app_start') && args.name === undefined && typeof args.program === 'string') {
+    args.name = args.program;
+  }
+  if ((name === 'volume_set' || step.type === 'volume') && args.percent === undefined && args.level !== undefined) {
+    args.percent = args.level;
+  }
+  return { name, args };
+}
+
 // Выполняет один шаг. Всегда пишет журнал и tool_result, ровно один раз.
 async function runStep(cmd, step, deps) {
   const { tools, policy, journal, workspace, mode, signal, approvals } = deps;
   const emit = typeof deps.emit === 'function' ? deps.emit : noop;
   const id = randomUUID();
-  const name = typeof step?.tool === 'string' ? step.tool : '';
-  const args = step?.args ?? {};
+  const { name, args } = resolveRunnableStep(step);
   let risk = null;
   let verified = null;
   let evidence = null;
+  let verifiedEffect = null;
   let finished = false;
   let started = false;
 
@@ -125,7 +149,7 @@ async function runStep(cmd, step, deps) {
     const check = verified ? { verified, evidence: evidence || '' } : {};
     emit({ type: 'tool_result', id, name, ok, summary, ...check });
     if (typeof deps.onStepOutcome === 'function') {
-      deps.onStepOutcome({ tool: name, risk, verdict: verdictUsed, decision, ok, summary, verified, evidence });
+      deps.onStepOutcome({ tool: name, risk, verdict: verdictUsed, decision, ok, summary, verified, evidence }, { args, verifiedEffect });
     }
     return { tool: name, ok, summary, ...check };
   };
@@ -192,6 +216,7 @@ async function runStep(cmd, step, deps) {
     const r = await checkEffect(tool, args, result, ctx);
     if (signal?.aborted) return finish('reject', false, 'остановлено', verdict);
     verified = (r && r.verified) || null;
+    if (verified === 'confirmed' && typeof tool.verify === 'function') verifiedEffect = r;
     evidence = (r && r.evidence) || null;
     ok = Boolean(r && r.ok) && verified !== 'failed';
     summary = String(r && r.summary != null ? r.summary : '');
@@ -214,34 +239,38 @@ function isCancelledSummary(summary) {
 }
 
 // Дополнительные поля метаданных держим неперечислимыми, чтобы старые deepEqual-проверки
-// { ok, results } не ломались, а вызывающий код читал cancelled/executedCount/totalSteps.
+// { ok, results } не ломались, а вызывающий код читал cancelled/partial/executedCount/totalSteps.
 function buildRunResult(base, meta) {
   const out = { ...base };
   Object.defineProperties(out, {
     cancelled: { value: Boolean(meta.cancelled), enumerable: false, configurable: true },
+    partial: { value: Boolean(meta.partial), enumerable: false, configurable: true },
     executedCount: { value: Number(meta.executedCount || 0), enumerable: false, configurable: true },
     totalSteps: { value: Number(meta.totalSteps || 0), enumerable: false, configurable: true },
   });
   return out;
 }
 
-// Запускает команду. Возвращает {ok, results} (+ неперечислимые cancelled, executedCount, totalSteps).
-// ok = true только если выполнены и не провалены все шаги; пустая команда ok = false.
+// Запускает команду (в том числе вложенное дерево шагов pre-order). Возвращает {ok, results}
+// (+ неперечислимые cancelled, partial, executedCount, totalSteps).
+// ok = true только если выполнены и не провалены все узлы; при сбое родителя его children пропускаются.
 async function runCommand(cmd, deps = {}) {
   // Зафиксировать выбранную команду: последующие изменения редактора не должны
   // подменять шаги уже запущенного исполнения.
   cmd = cmd ? structuredClone(cmd) : cmd;
   const steps = cmd && Array.isArray(cmd.steps) ? cmd.steps : [];
+  const flatNodes = flattenStepTree(steps);
+  const totalSteps = flatNodes.length;
   // Выключенная команда не выполняется, даже если её вызвали в обход выключенной кнопки в окне.
   if (cmd && cmd.enabled === false) {
     return buildRunResult(
       { ok: false, error: 'команда выключена', results: [{ tool: '', ok: false, summary: 'команда выключена' }] },
-      { cancelled: false, executedCount: 0, totalSteps: steps.length },
+      { cancelled: false, partial: false, executedCount: 0, totalSteps },
     );
   }
   const results = [];
   if (steps.length === 0) {
-    return buildRunResult({ ok: false, results }, { cancelled: false, executedCount: 0, totalSteps: 0 });
+    return buildRunResult({ ok: false, results }, { cancelled: false, partial: false, executedCount: 0, totalSteps: 0 });
   }
   // Аварийный стоп обрывает и идущий шаг, а не только следующий.
   const stopped = new AbortController();
@@ -249,65 +278,112 @@ async function runCommand(cmd, deps = {}) {
   const signal = deps.signal ? AbortSignal.any([deps.signal, stopped.signal]) : stopped.signal;
   const isStoppedNow = () => Boolean(deps.stop && deps.stop.isStopped());
   const wasCancelled = () => Boolean(signal.aborted || isStoppedNow());
+  const emit = typeof deps.emit === 'function' ? deps.emit : noop;
 
   try {
-    for (const step of steps) {
-      if (isStoppedNow() || signal.aborted) {
-        const stepName = typeof step?.tool === 'string' ? step.tool : '';
-        const stepTool = deps.tools && typeof deps.tools.get === 'function' ? deps.tools.get(stepName) : null;
-        const stopId = randomUUID();
-        const stopSummary = isStoppedNow() ? 'остановлено: аварийный стоп' : 'отменено';
-        if (deps.journal && typeof deps.journal.append === 'function') {
-          deps.journal.append({
-            tool: stepName,
-            args: maskArgsForJournal(stepName, step?.args ?? {}),
-            risk: stepTool ? stepTool.risk : null,
-            mode: deps.mode,
-            decision: 'reject',
-            ok: false,
-            summary: stopSummary,
-            source: 'command',
-            command: cmd.id,
-            verified: null,
-            evidence: null,
-          });
-        }
-        if (typeof deps.emit === 'function') {
-          deps.emit({ type: 'tool_result', id: stopId, name: stepName, ok: false, summary: stopSummary });
-        }
-        if (typeof deps.onStepOutcome === 'function') {
-          deps.onStepOutcome({
-            tool: stepName,
-            risk: stepTool ? stepTool.risk : null,
-            verdict: null,
-            decision: 'reject',
-            ok: false,
-            summary: stopSummary,
-            verified: null,
-            evidence: null,
-          });
-        }
-        results.push({ tool: stepName, ok: false, summary: stopSummary });
+    if (cmd.confirm === true && deps.approvals && typeof deps.approvals.ask === 'function') {
+      const answer = await askApproval(deps.approvals, emit, {
+        id: randomUUID(),
+        name: 'command_confirm',
+        args: { command: commandLabel(cmd, null) },
+        risk: 'T1',
+        reason: `команда «${commandLabel(cmd, null)}» требует подтверждения`,
+      }, signal);
+      if (wasCancelled() || !ANSWERS.has(answer)) {
         return buildRunResult(
-          { ok: false, results },
-          { cancelled: true, executedCount: results.length, totalSteps: steps.length },
-        );
-      }
-      const result = await runStep(cmd, structuredClone(step), { ...deps, signal });
-      results.push(result);
-      if (!result.ok || result.verified === 'failed') {
-        const cancelled = wasCancelled() || isCancelledSummary(result.summary);
-        return buildRunResult(
-          { ok: false, results },
-          { cancelled, executedCount: results.length, totalSteps: steps.length },
+          { ok: false, results: [{ tool: 'command_confirm', ok: false, summary: 'отменено владельцем' }] },
+          { cancelled: true, partial: false, executedCount: 0, totalSteps },
         );
       }
     }
+
+    const allowSiblingContinue = hasTreeSteps(steps) || cmd.allowPartial === true;
+    let criticalAbort = false;
+
+    const recordAbortStep = (step) => {
+      const { name: stepName, args: stepArgs } = resolveRunnableStep(step);
+      const stepTool = deps.tools && typeof deps.tools.get === 'function' ? deps.tools.get(stepName) : null;
+      const stopId = randomUUID();
+      const stopSummary = isStoppedNow() ? 'остановлено: аварийный стоп' : 'отменено';
+      if (deps.journal && typeof deps.journal.append === 'function') {
+        deps.journal.append({
+          tool: stepName,
+          args: maskArgsForJournal(stepName, stepArgs),
+          risk: stepTool ? stepTool.risk : null,
+          mode: deps.mode,
+          decision: 'reject',
+          ok: false,
+          summary: stopSummary,
+          source: 'command',
+          command: cmd.id,
+          verified: null,
+          evidence: null,
+        });
+      }
+      emit({ type: 'tool_result', id: stopId, name: stepName, ok: false, summary: stopSummary });
+      if (typeof deps.onStepOutcome === 'function') {
+        deps.onStepOutcome({
+          tool: stepName,
+          risk: stepTool ? stepTool.risk : null,
+          verdict: null,
+          decision: 'reject',
+          ok: false,
+          summary: stopSummary,
+          verified: null,
+          evidence: null,
+        });
+      }
+      results.push({ tool: stepName, ok: false, summary: stopSummary });
+    };
+
+    const runBranch = async (list) => {
+      for (const step of list) {
+        if (criticalAbort) break;
+        if (isStoppedNow() || signal.aborted) {
+          recordAbortStep(step);
+          criticalAbort = true;
+          return;
+        }
+        let stepOutcomeMeta = null;
+        const stepDeps = {
+          ...deps,
+          signal,
+          onStepOutcome: (meta, details) => {
+            stepOutcomeMeta = meta;
+            if (typeof deps.onStepOutcome === 'function') deps.onStepOutcome(meta, { ...details, step });
+          },
+        };
+        const result = await runStep(cmd, structuredClone(step), stepDeps);
+        results.push(result);
+        const stepOk = result.ok && result.verified !== 'failed';
+        if (!stepOk) {
+          const cancelled = wasCancelled() || isCancelledSummary(result.summary);
+          const policyBlocked = Boolean(stepOutcomeMeta && (stepOutcomeMeta.decision === 'deny' || stepOutcomeMeta.decision === 'reject' || stepOutcomeMeta.verdict === 'deny'));
+          const shouldContinueSiblings = !cancelled && !policyBlocked
+            && (step.continueOnError === true || allowSiblingContinue)
+            && step.continueOnError !== false;
+          if (!shouldContinueSiblings) {
+            criticalAbort = true;
+            return;
+          }
+          // Не запускаем вложенные шаги children, если родительский шаг не выполнился.
+          continue;
+        }
+        if (Array.isArray(step.children) && step.children.length > 0) {
+          await runBranch(step.children);
+        }
+      }
+    };
+
+    await runBranch(steps);
+
     const cancelled = wasCancelled() || results.some((r) => isCancelledSummary(r?.summary));
-    const allOk = !cancelled && results.length === steps.length && results.every((r) => r && r.ok === true && r.verified !== 'failed');
+    const okCount = results.filter((r) => r && r.ok === true && r.verified !== 'failed').length;
+    const allOk = !cancelled && results.length === totalSteps && okCount === totalSteps;
+    const partial = !cancelled && !allOk && okCount > 0;
     return buildRunResult(
       { ok: allOk, results },
-      { cancelled, executedCount: results.length, totalSteps: steps.length },
+      { cancelled, partial, executedCount: results.length, totalSteps },
     );
   } finally {
     if (off) off();
@@ -317,7 +393,8 @@ async function runCommand(cmd, deps = {}) {
 // Честный отчёт о выполнении цепочки по всем шагам: без «Готово» при отмене или провале,
 // с перечислением выполненных, непроверенных и пропущенных шагов.
 function summarizeChainResult(plan = {}, out = {}) {
-  const steps = Array.isArray(plan?.steps) ? plan.steps : [];
+  const flatSteps = flattenStepTree(plan?.steps);
+  const steps = flatSteps.length ? flatSteps : (Array.isArray(plan?.steps) ? plan.steps : []);
   const results = Array.isArray(out?.results) ? out.results : [];
   const totalSteps = steps.length || results.length;
   const executedCount = typeof out?.executedCount === 'number' ? out.executedCount : results.length;
@@ -330,6 +407,8 @@ function summarizeChainResult(plan = {}, out = {}) {
     || results.some((r) => !r || r.ok !== true || r.verified === 'failed')
     || (steps.length > 0 && results.length < steps.length);
   const anyUnverified = results.some((r) => r && r.verified === 'unknown');
+  const okCount = results.filter((r) => r && r.ok === true && r.verified !== 'failed').length;
+  const partial = !anyCancelled && anyFailed && (out?.partial === true || okCount > 0);
 
   let status;
   if (anyCancelled) status = 'cancelled';
@@ -385,6 +464,7 @@ function summarizeChainResult(plan = {}, out = {}) {
   return {
     ok: status === 'succeeded' || status === 'unverified',
     status,
+    partial,
     cancelled: status === 'cancelled',
     executedCount,
     totalSteps,
@@ -398,6 +478,55 @@ function commandReply(cmd, out) {
   const head = out.ok ? `Команда «${cmd.name}» выполнена.` : `Команда «${cmd.name}» остановлена на шаге с ошибкой.`;
   const lines = (out.results || []).map((r) => `- ${r.tool}: ${String(r.summary || (r.ok ? 'готово' : 'ошибка')).slice(0, 200)}`);
   return [head, ...lines].join('\n');
+}
+
+function summarizeStepFact(r) {
+  if (!r) return '';
+  const summary = String(r.summary || '').trim();
+  if (summary && !/^готово$/i.test(summary)) return summary;
+  return String(r.tool || 'действие').trim();
+}
+
+// Честный частичный отказ (1–2 коротких предложения без выдуманного «готово»).
+function formatPartialCommandReport(cmd, out) {
+  const results = Array.isArray(out && out.results) ? out.results : [];
+  const okItems = results.filter((r) => r && r.ok === true && r.verified !== 'failed');
+  const failItems = results.filter((r) => !r || r.ok !== true || r.verified === 'failed');
+  const firstFail = failItems[0];
+  const failMsg = firstFail ? summarizeStepFact(firstFail) : (out && out.error) || 'ошибка выполнения шага';
+
+  if (okItems.length > 0 && failItems.length > 0) {
+    const donePart = okItems.map(summarizeStepFact).filter(Boolean).slice(0, 4).join(', ');
+    const notFound = String(failMsg).match(/программа не найдена:\s*(.+)$/i);
+    if (notFound) {
+      return `Выполнено частично: ${donePart || 'часть шагов выполнена'}. ${notFound[1].trim()} не найден, поэтому связанные действия выполнить не удалось.`;
+    }
+    return `Выполнено частично: ${donePart || 'часть шагов выполнена'}. Не удалось: ${failMsg}.`;
+  }
+  if (failItems.length > 0) {
+    return `Не удалось выполнить: ${failMsg}.`;
+  }
+  const title = safeLabel(cmd && cmd.name);
+  return title ? `Команда «${title}» выполнена.` : 'Команда выполнена.';
+}
+
+// Короткая квитанция в 1–2 предложения для чата и уведомлений (успех / частичный отказ / ошибка).
+function shortCommandReceipt(cmd, out) {
+  const results = Array.isArray(out && out.results) ? out.results : [];
+  const okCount = results.filter((r) => r && r.ok === true && r.verified !== 'failed').length;
+  const cancelled = Boolean(out && out.cancelled);
+  if (cancelled) return 'Выполнение команды остановлено.';
+  if (out && out.ok) {
+    const title = safeLabel(cmd && cmd.name);
+    return title ? `Команда «${title}» выполнена.` : 'Команда выполнена.';
+  }
+  if ((out && out.partial) || (okCount > 0 && results.some((r) => !r || !r.ok || r.verified === 'failed'))) {
+    return formatPartialCommandReport(cmd, out);
+  }
+  const failed = results.find((r) => !r || !r.ok || r.verified === 'failed');
+  const reason = (failed && failed.summary) || (out && out.reason) || (out && out.error) || 'не удалось выполнить шаг';
+  const title = safeLabel(cmd && cmd.name);
+  return title ? `Команда «${title}» не выполнена: ${reason}.` : `Не удалось выполнить: ${reason}.`;
 }
 
 // ── Запись действий ────────────────────────────────────────────
@@ -469,7 +598,7 @@ class CommandRecorder {
     let clean;
     const strictWarnings = [];
     try {
-      [clean] = checkSteps([{ tool, args }], { strictArgs: true, warnings: strictWarnings });
+      [clean] = checkSteps([{ id: `step-${n}`, tool, args }], { strictArgs: true, warnings: strictWarnings });
     } catch (err) {
       return { ok: false, error: err.message };
     }
@@ -616,6 +745,14 @@ function describeLaunchFailure({ cmd, trigger, isAutomatic, out, stepOutcomes, s
   }
   const errMsg = (failedStep && failedStep.summary) || (out && out.error) || 'ошибка выполнения шага';
   const stepLabel = failedStep && failedStep.tool ? `«${failedStep.tool}»: ` : '';
+  const okCount = results.filter((r) => r && r.ok === true && r.verified !== 'failed').length;
+  if (okCount > 0 || (out && out.partial)) {
+    return {
+      status: 'partial',
+      error: errMsg,
+      reason: formatPartialCommandReport(null, out),
+    };
+  }
   return {
     status: 'failed',
     error: errMsg,
@@ -856,7 +993,7 @@ class UnifiedCommandLauncher {
     }
 
     if (isAutomatic) {
-      for (const step of cmd.steps) {
+      for (const step of flattenStepTree(cmd.steps)) {
         const toolName = step && typeof step.tool === 'string' ? step.tool : '';
         if (DANGEROUS_TOOLS.has(toolName) || isForbidden(toolName) || excludedFromAutonomy(toolName)) {
           return finishEarly('blocked', `заблокировано: действие «${toolName}» недоступно при автоматическом запуске`);
@@ -941,7 +1078,7 @@ class UnifiedCommandLauncher {
       error: outcome.error,
       durationMs,
       stepsOk: results.filter((r) => r && r.ok).length,
-      stepsTotal: Array.isArray(cmd.steps) ? cmd.steps.length : 0,
+      stepsTotal: flattenStepTree(cmd.steps).length,
       occurrenceKey,
       workspaceId,
     });
@@ -950,6 +1087,7 @@ class UnifiedCommandLauncher {
     }
     return {
       ok: outcome.status === 'succeeded',
+      partial: outcome.status === 'partial',
       blocked: outcome.status === 'blocked',
       cancelled: outcome.status === 'cancelled',
       status: outcome.status,
@@ -1126,7 +1264,7 @@ class UnifiedCommandLauncher {
       name: cmd.name,
       enabled: cmd.enabled !== false,
       folder: cmd.folder || null,
-      stepsCount: Array.isArray(cmd.steps) ? cmd.steps.length : 0,
+      stepsCount: flattenStepTree(cmd.steps).length,
       triggers: cmd.triggers,
       triggerState: cmd.triggerState,
       lastRunAt: cmd.lastRunAt || null,
@@ -1144,6 +1282,8 @@ module.exports = {
   runCommand,
   summarizeChainResult,
   commandReply,
+  formatPartialCommandReport,
+  shortCommandReceipt,
   commandLabel,
   CommandRecorder,
   recordOverview,

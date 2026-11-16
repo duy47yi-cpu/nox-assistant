@@ -585,7 +585,12 @@ function documentTools(index, { renderPdf, ocrPdf = null } = {}) {
         return {
           ok: true,
           summary: exists ? 'перезаписал' : 'записал',
-          data: { path: relOf(abs), format, created: !exists, ...(format === 'pptx' ? { slides: slides.length + (title ? 1 : 0) } : {}) },
+          data: {
+            path: relOf(abs), format, created: !exists,
+            ...(format === 'pptx' ? { slides: slides.length + (title ? 1 : 0) } : {}),
+            ...(format === 'xlsx' ? { rows: rows.length || 1 } : {}),
+            ...(format === 'csv' ? { rows: parseCsv(body.toString('utf8')).length } : {}),
+          },
         };
       } catch (err) {
         return fail(err);

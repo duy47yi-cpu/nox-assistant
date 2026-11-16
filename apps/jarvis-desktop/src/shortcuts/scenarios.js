@@ -1,8 +1,8 @@
 'use strict';
 
 const { parseOffline } = require('./offline');
-const { stripWake, stripFillers, matchCommand, FILLER_WORDS } = require('../commands/match');
-const { normalize: storeNormalize, DANGEROUS_TOOLS } = require('../commands/store');
+const { stripWake, hasWakePrefix, stripFillers, matchCommand, FILLER_WORDS } = require('../commands/match');
+const { normalize: storeNormalize, DANGEROUS_TOOLS, TYPE_TO_TOOL, flattenStepTree } = require('../commands/store');
 const { SAMPLE_COMMANDS } = require('../commands/samples');
 const { MAX_MINUTES } = require('../tools/reminders');
 const { screenTask } = require('../screen/agent');
@@ -203,6 +203,24 @@ function cloneStep(step) {
   return { tool: String(step && step.tool || ''), args };
 }
 
+function cloneStepTree(step) {
+  if (!step || typeof step !== 'object') return { tool: '', args: {} };
+  const rawArgs = (step.args && typeof step.args === 'object' && !Array.isArray(step.args))
+    ? step.args
+    : (step.params && typeof step.params === 'object' && !Array.isArray(step.params) ? step.params : {});
+  const args = JSON.parse(JSON.stringify(rawArgs));
+  const tool = String(step.tool || (step.type && TYPE_TO_TOOL[step.type]) || '');
+  const out = { tool, args };
+  if (Array.isArray(step.children) && step.children.length) {
+    out.children = step.children.map(cloneStepTree);
+  }
+  return out;
+}
+
+function cloneStepTrees(steps) {
+  return Array.isArray(steps) ? steps.map(cloneStepTree) : [];
+}
+
 function cloneSteps(steps) {
   return Array.isArray(steps) ? steps.map(cloneStep) : [];
 }
@@ -247,8 +265,14 @@ function cleanBaseText(text) {
     .trim();
 }
 
-function cleanWithFillersStripped(text) {
-  const withoutWake = stripWake(String(text || ''));
+function wakeOptsForCtx(ctx = {}) {
+  if (ctx && ctx.wakeWords !== undefined) return { words: ctx.wakeWords };
+  if (ctx && typeof ctx.wakeWord === 'string') return { word: ctx.wakeWord };
+  return { word: 'джарвис' };
+}
+
+function cleanWithFillersStripped(text, wakeOpts) {
+  const withoutWake = stripWake(String(text || ''), wakeOpts);
   const base = cleanBaseText(withoutWake);
   if (!base) return '';
   return stripFillers(base).replace(/\s+/g, ' ').trim();
@@ -257,7 +281,7 @@ function cleanWithFillersStripped(text) {
 function stripLeadingWakeAndFillers(text) {
   let out = String(text || '').trim();
   for (;;) {
-    const next = out.replace(/^(?:джарвис|пожалуйста|пожалуста|пожалуйсто|пжлста|плиз)(?:[\s,!?;:.-]+|$)/iu, '').trim();
+    const next = out.replace(/^(?:джарвис|сэр|пожалуйста|пожалуста|пожалуйсто|пжлста|плиз)(?:[\s,!?;:.-]+|$)/iu, '').trim();
     if (next === out) break;
     out = next;
   }
@@ -407,14 +431,18 @@ function getLibraryEntry(libraryByPhrase, phrase) {
 }
 
 function isStepAllowed(step, ctx = {}) {
-  if (!step || typeof step !== 'object' || typeof step.tool !== 'string' || !step.tool.trim()) return false;
-  const toolName = step.tool;
+  if (!step || typeof step !== 'object') return false;
+  const toolName = String(step.tool || (step.type && TYPE_TO_TOOL[step.type]) || '').trim();
+  if (!toolName) return false;
+  const stepArgs = (step.args && typeof step.args === 'object' && !Array.isArray(step.args))
+    ? step.args
+    : (step.params && typeof step.params === 'object' && !Array.isArray(step.params) ? step.params : {});
   if (DANGEROUS_TOOLS.has(toolName)) return false;
   if (FORBIDDEN_PREFIXES.some((prefix) => toolName.startsWith(prefix))) return false;
 
   if (typeof ctx.commandsToolCheck === 'function') {
     try {
-      const res = ctx.commandsToolCheck(toolName, step.args || {}, step);
+      const res = ctx.commandsToolCheck(toolName, stepArgs, step);
       if (!res || (typeof res === 'object' && res.ok === false)) return false;
     } catch {
       return false;
@@ -429,6 +457,10 @@ function isStepAllowed(step, ctx = {}) {
     } catch {
       return false;
     }
+  }
+
+  if (Array.isArray(step.children) && step.children.length > 0) {
+    return step.children.every((child) => isStepAllowed(child, ctx));
   }
 
   return true;
@@ -1020,9 +1052,9 @@ function cleanWithoutDestroyingUrls(text) {
 
 function matchUserCommandSingle(phrase, eligibleCommands, ctx = {}) {
   if (!eligibleCommands || eligibleCommands.length === 0) return null;
-  const hit = matchCommand(phrase, eligibleCommands);
+  const hit = matchCommand(phrase, eligibleCommands, wakeOptsForCtx(ctx));
   if (!hit || !hit.command) return null;
-  const steps = cloneSteps(hit.command.steps);
+  const steps = cloneStepTrees(hit.command.steps);
   if (!areStepsAllowed(steps, ctx)) return { result: null, blocked: true };
   return {
     result: {
@@ -1032,12 +1064,15 @@ function matchUserCommandSingle(phrase, eligibleCommands, ctx = {}) {
       name: hit.command.name,
       source: 'command',
       ownerCommand: true,
+      schemaVersion: hit.command.schemaVersion,
+      confirm: hit.command.confirm === true,
       parts: [{
         title: hit.command.name,
         source: 'command',
         commandId: hit.command.id,
         commandName: hit.command.name,
-        steps: cloneSteps(steps),
+        schemaVersion: hit.command.schemaVersion,
+        steps: cloneStepTrees(steps),
       }],
       steps,
       notes: [],
@@ -1205,8 +1240,14 @@ function tokenizeForCompound(rawText) {
   return collapsed;
 }
 
-function linkerWordLengthAt(tokens, index) {
-  for (const seq of LINK_SEQUENCES) {
+function compoundLinkSequences(words) {
+  if (!Array.isArray(words)) return LINK_SEQUENCES;
+  return words.map((word) => cleanBaseText(word).split(/\s+/).filter(Boolean))
+    .filter((tokens) => tokens.length > 0).sort((a, b) => b.length - a.length);
+}
+
+function linkerWordLengthAt(tokens, index, links) {
+  for (const seq of links) {
     if (index + seq.length > tokens.length) continue;
     let match = true;
     for (let k = 0; k < seq.length; k += 1) {
@@ -1222,7 +1263,7 @@ function linkerWordLengthAt(tokens, index) {
 }
 
 // Returns array of valid next-segment start indices reachable from separator position `sepStart`.
-function nextStartsFromSeparator(tokens, sepStart) {
+function nextStartsFromSeparator(tokens, sepStart, links) {
   const results = [];
   if (sepStart >= tokens.length) return results;
 
@@ -1237,7 +1278,7 @@ function nextStartsFromSeparator(tokens, sepStart) {
     results.push(idx);
   }
 
-  const linkLen = linkerWordLengthAt(tokens, idx);
+  const linkLen = linkerWordLengthAt(tokens, idx, links);
   if (linkLen > 0) {
     let afterLink = idx + linkLen;
     while (afterLink < tokens.length && (tokens[afterLink].kind === 'comma' || tokens[afterLink].kind === 'fcomma')) {
@@ -1274,8 +1315,8 @@ function finalizeCompoundParts(parts, ctx = {}) {
     if (Array.isArray(part.notes)) notes.push(...part.notes);
     for (const p of part.parts) flatParts.push(p);
     for (const s of part.steps) {
-      steps.push(cloneStep(s));
-      if (steps.length > MAX_STEPS) return null;
+      steps.push(cloneStepTree(s));
+      if (flattenStepTree(steps).length > MAX_STEPS) return null;
     }
   }
 
@@ -1284,6 +1325,7 @@ function finalizeCompoundParts(parts, ctx = {}) {
   const source = sources.size === 1 ? [...sources][0] : 'mixed';
   const ownerCommand = source === 'command';
   const title = flatParts.map((p) => p.title).filter(Boolean).join(', ');
+  const maxSchemaVersion = parts.reduce((m, p) => Math.max(m, Number(p.schemaVersion) || 0), 0);
 
   return {
     kind: 'command',
@@ -1292,6 +1334,7 @@ function finalizeCompoundParts(parts, ctx = {}) {
     name: title,
     source,
     ownerCommand,
+    ...(maxSchemaVersion >= 3 ? { schemaVersion: maxSchemaVersion } : {}),
     parts: flatParts,
     steps,
     notes,
@@ -1301,6 +1344,7 @@ function finalizeCompoundParts(parts, ctx = {}) {
 function resolveCompoundSync(rawText, eligibleCommands, ctx = {}) {
   const tokens = tokenizeForCompound(rawText);
   if (tokens.length < 2) return null;
+  const links = compoundLinkSequences(ctx.linkWords);
 
   const segCache = new Map();
   const memo = new Map();
@@ -1332,7 +1376,7 @@ function resolveCompoundSync(rawText, eligibleCommands, ctx = {}) {
         return found;
       }
 
-      const nextStarts = nextStartsFromSeparator(tokens, end + 1);
+      const nextStarts = nextStartsFromSeparator(tokens, end + 1, links);
       for (const nextStart of nextStarts) {
         const rest = dfs(nextStart, depth + 1);
         if (rest) {
@@ -1354,6 +1398,7 @@ function resolveCompoundSync(rawText, eligibleCommands, ctx = {}) {
 async function resolveCompoundAsync(rawText, eligibleCommands, ctx = {}) {
   const tokens = tokenizeForCompound(rawText);
   if (tokens.length < 2) return null;
+  const links = compoundLinkSequences(ctx.linkWords);
 
   const segCache = new Map();
   const memo = new Map();
@@ -1385,7 +1430,7 @@ async function resolveCompoundAsync(rawText, eligibleCommands, ctx = {}) {
         return found;
       }
 
-      const nextStarts = nextStartsFromSeparator(tokens, end + 1);
+      const nextStarts = nextStartsFromSeparator(tokens, end + 1, links);
       for (const nextStart of nextStarts) {
         const rest = await dfs(nextStart, depth + 1);
         if (rest) {
@@ -1517,14 +1562,20 @@ function resolveHintTurn(trimmed, ctx = {}) {
 
 function resolveLocalTurn(text, ctx = {}) {
   if (!passesProseGuardrails(text)) return null;
-  const trimmed = text.trim();
+  const rawTrimmed = text.trim();
+  const wakeOpts = wakeOptsForCtx(ctx);
+  if (ctx && ctx.prefixMode === true && !hasWakePrefix(rawTrimmed, wakeOpts)) {
+    return null;
+  }
+  const trimmed = stripWake(rawTrimmed, wakeOpts).trim();
+  if (!trimmed) return null;
 
   if (isWholeReminderText(trimmed)) {
     const off = tryOfflineSingle(trimmed, ctx);
     return off ? off.result : null;
   }
 
-  const cleaned = cleanWithFillersStripped(trimmed);
+  const cleaned = cleanWithFillersStripped(trimmed, wakeOpts);
   if (WORK_MODE_PHRASES.has(cleaned)) {
     return resolveWorkModeSync(trimmed, ctx);
   }
@@ -1554,7 +1605,13 @@ function resolveLocalTurn(text, ctx = {}) {
 
 async function resolveLocalTurnAsync(text, ctx = {}) {
   if (!passesProseGuardrails(text)) return null;
-  const trimmed = text.trim();
+  const rawTrimmed = text.trim();
+  const wakeOpts = wakeOptsForCtx(ctx);
+  if (ctx && ctx.prefixMode === true && !hasWakePrefix(rawTrimmed, wakeOpts)) {
+    return null;
+  }
+  const trimmed = stripWake(rawTrimmed, wakeOpts).trim();
+  if (!trimmed) return null;
 
   if (
     workModeNeedsAppCheck(trimmed, ctx)
@@ -1570,7 +1627,7 @@ async function resolveLocalTurnAsync(text, ctx = {}) {
     return off ? off.result : null;
   }
 
-  const cleaned = cleanWithFillersStripped(trimmed);
+  const cleaned = cleanWithFillersStripped(trimmed, wakeOpts);
   if (WORK_MODE_PHRASES.has(cleaned)) {
     return resolveWorkModeAsync(trimmed, ctx);
   }

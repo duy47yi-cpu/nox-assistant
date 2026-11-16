@@ -79,7 +79,8 @@ class ChatBook {
 const INTERRUPTED_TEXT = 'Ход прерван: приложение закрылось до ответа. Незаконченные действия я не повторял — проверьте результат и напишите, что продолжить.';
 function markCutTurn(history) {
   const last = history[history.length - 1];
-  if (last && !(last.role === 'assistant' && last.content)) history.push({ role: 'assistant', content: INTERRUPTED_TEXT });
+  const closed = last?.role === 'assistant' && !last.tool_calls?.length && (last.content || last.artifacts?.length || last.partial?.length);
+  if (last && !closed) history.push({ role: 'assistant', content: INTERRUPTED_TEXT });
   return history;
 }
 

@@ -50,3 +50,18 @@ test('Файлы обеих оригинальных систем сфер (NoxO
   assert.match(boot, /Times New Roman/);
   assert.match(boot, /IBM Plex Serif/);
 });
+
+test('Разделы остаются в шапке, служебные кнопки стоят в рейке слева', () => {
+  const aetherJs = fs.readFileSync(path.join(AETHER_DIR, 'aether.js'), 'utf8');
+  const topbarJs = fs.readFileSync(path.join(AETHER_DIR, 'components', 'topbar.js'), 'utf8');
+  const luxCss = fs.readFileSync(path.join(AETHER_DIR, 'nox-luxify.css'), 'utf8');
+
+  assert.match(aetherJs, /ae-utility-rail/);
+  assert.match(aetherJs, /rail\.append\(aiModalBtn, muteBtn, historyDrawer\.trigger, stageBtn, accountPanel\.el\)/);
+  assert.match(topbarJs, /lx-topbar-brand/);
+  assert.match(topbarJs, /Nox Assistant/);
+  assert.match(topbarJs, /role', 'tablist'/);
+  assert.match(topbarJs, /ArrowRight/);
+  assert.match(topbarJs, /ArrowLeft/);
+  assert.match(luxCss, /grid-template-columns:\s*56px minmax\(0,\s*1fr\)/);
+});

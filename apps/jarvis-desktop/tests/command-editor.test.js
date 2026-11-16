@@ -9,6 +9,9 @@ const { CommandStore, EDITOR_STEP_TOOLS, DANGEROUS_TOOLS, MAX_STEPS } = require(
 const {
   moveStep, describeSteps, stepWarning, warningsForSteps, foldersOf, groupCommands,
   diffLines, previewCountsLine, canApplyImport,
+  normalizeStepTree, countTreeSteps, flattenTreeForRender,
+  insertTreeNode, updateTreeNode, deleteTreeNode,
+  moveTreeNode, indentTreeNode, outdentTreeNode, moveTreeNodeTo,
 } = require('../renderer/cmd-steps');
 
 function makeStore(t) {
@@ -156,4 +159,64 @@ test('строки предпросмотра импорта и сводка п�
   assert.equal(canApplyImport({ applicable: true }), true);
   assert.equal(canApplyImport(null), false);
   assert.deepEqual(diffLines(null), []);
+});
+
+test('дерево шагов: нормализация, вложенный обход, перестановка, отступ и перенос без мутации исходника', () => {
+  const initial = normalizeStepTree([
+    { id: 's1', type: 'app_start', params: { name: 'notepad' }, children: [] },
+    { id: 's2', type: 'hotkey', params: { keys: 'Ctrl+S' }, children: [] },
+    { id: 's3', type: 'wait', params: { seconds: 1 }, children: [] },
+  ]);
+  assert.equal(countTreeSteps(initial), 3);
+
+  // Вложение s2 внутрь s1
+  const indented = indentTreeNode(initial, [1]);
+  assert.deepEqual(indented.path, [0, 0]);
+  assert.equal(indented.steps.length, 2);
+  assert.equal(indented.steps[0].children.length, 1);
+  assert.equal(indented.steps[0].children[0].id, 's2');
+  assert.equal(initial.length, 3, 'исходное дерево не мутируется');
+
+  // Преобразование в плоский список с глубиной и сворачиванием
+  const flatOpen = flattenTreeForRender(indented.steps);
+  assert.deepEqual(flatOpen.map((r) => [r.node.id, r.depth, r.labelIndex]), [
+    ['s1', 0, '1'],
+    ['s2', 1, '1.1'],
+    ['s3', 0, '2'],
+  ]);
+  const flatCollapsed = flattenTreeForRender(indented.steps, new Set(['s1']));
+  assert.deepEqual(flatCollapsed.map((r) => r.node.id), ['s1', 's3']);
+
+  // Рекурсивный describeSteps
+  const desc = describeSteps(
+    indented.steps,
+    (t) => ({ app_open: 'Программа', ui_keys: 'Клавиши', wait: 'Пауза' }[t] || t),
+    (args) => Object.values(args).join(', '),
+  );
+  assert.deepEqual(desc, ['1. Программа: notepad', '1.1. Клавиши: Ctrl+S', '2. Пауза: 1']);
+
+  // Вставка дочернего, перестановка и вынесение наружу
+  const withInserted = insertTreeNode(indented.steps, [0], 1, { id: 's2b', type: 'type_text', tool: 'ui_type', params: { text: 'Hi' }, args: { text: 'Hi' }, children: [] });
+  assert.equal(countTreeSteps(withInserted), 4);
+  const movedChild = moveTreeNode(withInserted, [0, 1], -1);
+  assert.deepEqual(movedChild.path, [0, 0]);
+  assert.deepEqual(movedChild.steps[0].children.map((c) => c.id), ['s2b', 's2']);
+
+  const outdented = outdentTreeNode(movedChild.steps, [0, 0]);
+  assert.deepEqual(outdented.path, [1]);
+  assert.deepEqual(outdented.steps.map((s) => s.id), ['s1', 's2b', 's3']);
+
+  // Перенос ветки и защита от цикла (нельзя перенести родителя внутрь потомка)
+  const loopGuard = moveTreeNodeTo(movedChild.steps, [0], [0, 0], 0);
+  assert.deepEqual(loopGuard.path, [0]);
+  assert.equal(countTreeSteps(loopGuard.steps), 4);
+
+  const reparented = moveTreeNodeTo(outdented.steps, [2], [0], 0);
+  assert.deepEqual(reparented.path, [0, 0]);
+  assert.deepEqual(reparented.steps[0].children.map((c) => c.id), ['s3', 's2']);
+
+  const updated = updateTreeNode(reparented.steps, [0, 0], { params: { seconds: 5 }, args: { seconds: 5 } });
+  assert.equal(updated[0].children[0].params.seconds, 5);
+  const removed = deleteTreeNode(updated, [0, 0]);
+  assert.deepEqual(removed[0].children.map((c) => c.id), ['s2']);
 });

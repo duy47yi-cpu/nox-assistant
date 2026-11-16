@@ -26,24 +26,29 @@ function normalizeAnswerText(text) {
     .replace(/ё/g, 'е')
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
-    .filter((word) => word && word !== 'джарвис' && word !== 'пожалуйста' && word !== 'плиз')
+    .filter((word) => word && word !== 'джарвис' && word !== 'сэр' && word !== 'пожалуйста' && word !== 'плиз')
     .join(' ');
 }
 
 // Что владелец сказал про ожидающее подтверждение:
 // 'once' — «да/давай/подтверждаю/правильно», 'reject' — «нет/отмена/не надо/стоп»,
 // 'cancelAll' — «останови команду», null — это не ответ (обычная речь).
-function parseApprovalAnswer(text) {
+function answerSet(raw, defaults) {
+  if (typeof raw !== 'string') return defaults;
+  return new Set(raw.split(/[,;\n]+/u).map(normalizeAnswerText).filter(Boolean));
+}
+
+function parseApprovalAnswer(text, { yes, no } = {}) {
   const phrase = normalizeAnswerText(text);
   if (!phrase) return null;
   if (CANCEL_ALL_PHRASES.some((item) => phrase === item || phrase.startsWith(item + ' '))) return 'cancelAll';
-  if (ACCEPT_ANSWERS.has(phrase)) return 'once';
-  if (REJECT_ANSWERS.has(phrase)) return 'reject';
-  // «да, давай», «нет, отмена» — все значимые слова из одного набора.
+  const accept = answerSet(yes, ACCEPT_ANSWERS);
+  const reject = answerSet(no, REJECT_ANSWERS);
   const words = phrase.split(' ');
-  if (words.every((word) => ACCEPT_ANSWERS.has(word))) return 'once';
-  if (words.every((word) => REJECT_ANSWERS.has(word))) return 'reject';
-  return null;
+  const accepted = accept.has(phrase) || words.every((word) => accept.has(word));
+  const rejected = reject.has(phrase) || words.every((word) => reject.has(word));
+  if (accepted === rejected) return null;
+  return accepted ? 'once' : 'reject';
 }
 
 function voiceApprovalTarget(list, broker = null) {

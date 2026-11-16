@@ -13,11 +13,292 @@
   }
 
   // Строки «1. Запуск программы: notepad» — что сделает команда, без запуска.
-  function describeSteps(steps, titleOf, briefOf) {
-    return steps.map((s, i) => {
-      const brief = briefOf(s.args);
-      return `${i + 1}. ${titleOf(s.tool)}${brief ? ': ' + brief : ''}`;
+  function describeSteps(steps, titleOf, briefOf, prefix = '') {
+    const out = [];
+    const list = Array.isArray(steps) ? steps : [];
+    list.forEach((s, i) => {
+      if (!s) return;
+      const num = prefix ? `${prefix}.${i + 1}` : `${i + 1}`;
+      const toolName = s.tool || STEP_TYPE_TO_TOOL[s.type] || s.type || '';
+      const stepArgs = (s.args && typeof s.args === 'object') ? s.args : (s.params || {});
+      const brief = briefOf(stepArgs, s);
+      out.push(`${num}. ${titleOf(toolName)}${brief ? ': ' + brief : ''}`);
+      if (Array.isArray(s.children) && s.children.length) {
+        out.push(...describeSteps(s.children, titleOf, briefOf, num));
+      }
     });
+    return out;
+  }
+
+  // ── Дерево шагов редактора (Phase 2) ─────────────────────────────
+  const STEP_TYPE_TO_TOOL = {
+    app_start: 'app_open',
+    hotkey: 'ui_keys',
+    click: 'ui_click',
+    volume: 'volume_set',
+    type_text: 'ui_type',
+    wait: 'wait',
+    ai: 'speak',
+    shell: 'shell_run',
+  };
+
+  const TOOL_TO_STEP_TYPE = {
+    app_open: 'app_start',
+    ui_keys: 'hotkey',
+    ui_click: 'click',
+    desktop_click: 'click',
+    mouse_click: 'click',
+    volume_set: 'volume',
+    ui_type: 'type_text',
+    desktop_type: 'type_text',
+    wait: 'wait',
+    speak: 'ai',
+    url_open: 'app_start',
+    shell_run: 'shell',
+  };
+
+  function makeStepId(existingIds, hint = 'step') {
+    let idx = 1;
+    while (existingIds.has(`${hint}-${idx}`)) idx += 1;
+    const id = `${hint}-${idx}`;
+    existingIds.add(id);
+    return id;
+  }
+
+  function cloneStepNode(node) {
+    if (!node || typeof node !== 'object') return null;
+    return {
+      ...node,
+      params: node.params && typeof node.params === 'object' ? { ...node.params } : {},
+      args: node.args && typeof node.args === 'object' ? { ...node.args } : {},
+      children: Array.isArray(node.children) ? node.children.map(cloneStepNode).filter(Boolean) : [],
+    };
+  }
+
+  function normalizeStepTree(steps, usedIds = new Set()) {
+    const list = Array.isArray(steps) ? steps : [];
+    return list.map((raw) => {
+      if (!raw || typeof raw !== 'object') return null;
+      let id = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : '';
+      if (!id || usedIds.has(id)) id = makeStepId(usedIds);
+      else usedIds.add(id);
+      const tool = typeof raw.tool === 'string' && raw.tool.trim()
+        ? raw.tool.trim()
+        : (STEP_TYPE_TO_TOOL[raw.type] || 'wait');
+      const type = typeof raw.type === 'string' && raw.type.trim()
+        ? raw.type.trim()
+        : (TOOL_TO_STEP_TYPE[tool] || 'wait');
+      const args = raw.args && typeof raw.args === 'object'
+        ? { ...raw.args }
+        : (raw.params && typeof raw.params === 'object' ? { ...raw.params } : {});
+      const params = raw.params && typeof raw.params === 'object'
+        ? { ...raw.params }
+        : { ...args };
+      return {
+        ...raw,
+        id,
+        type,
+        tool,
+        params,
+        args,
+        children: normalizeStepTree(raw.children, usedIds),
+      };
+    }).filter(Boolean);
+  }
+
+  function countTreeSteps(steps) {
+    let count = 0;
+    for (const s of Array.isArray(steps) ? steps : []) {
+      if (!s) continue;
+      count += 1;
+      if (Array.isArray(s.children) && s.children.length) {
+        count += countTreeSteps(s.children);
+      }
+    }
+    return count;
+  }
+
+  function flattenTreeForRender(steps, collapsedIds = new Set(), parentPath = [], prefixNum = '') {
+    const out = [];
+    const list = Array.isArray(steps) ? steps : [];
+    list.forEach((node, idx) => {
+      if (!node) return;
+      const path = [...parentPath, idx];
+      const children = Array.isArray(node.children) ? node.children : [];
+      const hasChildren = children.length > 0;
+      const collapsed = hasChildren && collapsedIds instanceof Set && collapsedIds.has(node.id);
+      const labelIndex = prefixNum ? `${prefixNum}.${idx + 1}` : `${idx + 1}`;
+      out.push({
+        node,
+        path,
+        depth: parentPath.length,
+        parentPath: parentPath.slice(),
+        indexInParent: idx,
+        siblingCount: list.length,
+        hasChildren,
+        collapsed,
+        labelIndex,
+      });
+      if (hasChildren && !collapsed) {
+        out.push(...flattenTreeForRender(children, collapsedIds, path, labelIndex));
+      }
+    });
+    return out;
+  }
+
+  function getNodeAtPath(steps, path) {
+    if (!Array.isArray(path) || path.length === 0) return null;
+    let list = Array.isArray(steps) ? steps : [];
+    let current = null;
+    for (let i = 0; i < path.length; i += 1) {
+      const idx = path[i];
+      if (!Array.isArray(list) || idx < 0 || idx >= list.length) return null;
+      current = list[idx];
+      list = current && Array.isArray(current.children) ? current.children : [];
+    }
+    return current;
+  }
+
+  function cloneTree(steps) {
+    return (Array.isArray(steps) ? steps : []).map(cloneStepNode).filter(Boolean);
+  }
+
+  function listAtParentPath(tree, parentPath) {
+    if (!Array.isArray(parentPath) || parentPath.length === 0) return tree;
+    const parent = getNodeAtPath(tree, parentPath);
+    if (!parent) return null;
+    if (!Array.isArray(parent.children)) parent.children = [];
+    return parent.children;
+  }
+
+  function insertTreeNode(steps, parentPath, index, newNode) {
+    const tree = cloneTree(steps);
+    const pPath = Array.isArray(parentPath) ? parentPath : [];
+    const list = listAtParentPath(tree, pPath);
+    if (!list) return tree;
+    const clampedIdx = typeof index === 'number' && Number.isInteger(index)
+      ? Math.max(0, Math.min(list.length, index))
+      : list.length;
+    const nodeClone = cloneStepNode(newNode);
+    if (!nodeClone) return tree;
+    list.splice(clampedIdx, 0, nodeClone);
+    return tree;
+  }
+
+  function updateTreeNode(steps, path, updater) {
+    if (!Array.isArray(path) || path.length === 0) return cloneTree(steps);
+    const tree = cloneTree(steps);
+    const parentPath = path.slice(0, -1);
+    const idx = path[path.length - 1];
+    const list = listAtParentPath(tree, parentPath);
+    if (!list || idx < 0 || idx >= list.length) return tree;
+    const prev = list[idx];
+    const next = typeof updater === 'function'
+      ? updater(cloneStepNode(prev))
+      : { ...prev, ...updater };
+    if (next) list[idx] = cloneStepNode(next);
+    return tree;
+  }
+
+  function deleteTreeNode(steps, path) {
+    if (!Array.isArray(path) || path.length === 0) return cloneTree(steps);
+    const tree = cloneTree(steps);
+    const parentPath = path.slice(0, -1);
+    const idx = path[path.length - 1];
+    const list = listAtParentPath(tree, parentPath);
+    if (!list || idx < 0 || idx >= list.length) return tree;
+    list.splice(idx, 1);
+    return tree;
+  }
+
+  function moveTreeNode(steps, path, dir) {
+    if (!Array.isArray(path) || path.length === 0) return { steps: cloneTree(steps), path };
+    const tree = cloneTree(steps);
+    const parentPath = path.slice(0, -1);
+    const idx = path[path.length - 1];
+    const list = listAtParentPath(tree, parentPath);
+    const targetIdx = idx + dir;
+    if (!list || idx < 0 || idx >= list.length || targetIdx < 0 || targetIdx >= list.length) {
+      return { steps: tree, path: path.slice() };
+    }
+    const [moved] = list.splice(idx, 1);
+    list.splice(targetIdx, 0, moved);
+    return { steps: tree, path: [...parentPath, targetIdx] };
+  }
+
+  function indentTreeNode(steps, path) {
+    if (!Array.isArray(path) || path.length === 0) return { steps: cloneTree(steps), path };
+    const tree = cloneTree(steps);
+    const parentPath = path.slice(0, -1);
+    const idx = path[path.length - 1];
+    const list = listAtParentPath(tree, parentPath);
+    if (!list || idx <= 0 || idx >= list.length) return { steps: tree, path: path.slice() };
+    const [moved] = list.splice(idx, 1);
+    const newParent = list[idx - 1];
+    if (!Array.isArray(newParent.children)) newParent.children = [];
+    newParent.children.push(moved);
+    return { steps: tree, path: [...parentPath, idx - 1, newParent.children.length - 1] };
+  }
+
+  function outdentTreeNode(steps, path) {
+    if (!Array.isArray(path) || path.length < 2) return { steps: cloneTree(steps), path: Array.isArray(path) ? path.slice() : [] };
+    const tree = cloneTree(steps);
+    const parentPath = path.slice(0, -1);
+    const grandParentPath = parentPath.slice(0, -1);
+    const idx = path[path.length - 1];
+    const parentIdx = parentPath[parentPath.length - 1];
+    const childrenList = listAtParentPath(tree, parentPath);
+    const grandList = listAtParentPath(tree, grandParentPath);
+    if (!childrenList || !grandList || idx < 0 || idx >= childrenList.length) {
+      return { steps: tree, path: path.slice() };
+    }
+    const [moved] = childrenList.splice(idx, 1);
+    const insertIdx = parentIdx + 1;
+    grandList.splice(insertIdx, 0, moved);
+    return { steps: tree, path: [...grandParentPath, insertIdx] };
+  }
+
+  function isPathPrefix(prefix, candidate) {
+    if (prefix.length > candidate.length) return false;
+    return prefix.every((val, i) => candidate[i] === val);
+  }
+
+  function moveTreeNodeTo(steps, fromPath, toParentPath, toIndex) {
+    if (!Array.isArray(fromPath) || fromPath.length === 0) return { steps: cloneTree(steps), path: fromPath };
+    const targetParent = Array.isArray(toParentPath) ? toParentPath : [];
+    // Нельзя перенести узел в самого себя или в своего потомка.
+    if (isPathPrefix(fromPath, targetParent)) {
+      return { steps: cloneTree(steps), path: fromPath.slice() };
+    }
+    const tree = cloneTree(steps);
+    const fromParentPath = fromPath.slice(0, -1);
+    const fromIdx = fromPath[fromPath.length - 1];
+    const sourceList = listAtParentPath(tree, fromParentPath);
+    if (!sourceList || fromIdx < 0 || fromIdx >= sourceList.length) {
+      return { steps: tree, path: fromPath.slice() };
+    }
+
+    // Корректируем целевой путь, если предок целевого пути шёл после удаляемого брата.
+    const adjustedParent = targetParent.slice();
+    if (adjustedParent.length > fromParentPath.length
+      && isPathPrefix(fromParentPath, adjustedParent)
+      && adjustedParent[fromParentPath.length] > fromIdx) {
+      adjustedParent[fromParentPath.length] -= 1;
+    }
+
+    const [moved] = sourceList.splice(fromIdx, 1);
+    const destList = listAtParentPath(tree, adjustedParent);
+    if (!destList) return { steps: cloneTree(steps), path: fromPath.slice() };
+
+    let insertIdx = typeof toIndex === 'number' && Number.isInteger(toIndex) ? toIndex : destList.length;
+    if (fromParentPath.length === adjustedParent.length
+      && isPathPrefix(fromParentPath, adjustedParent)
+      && insertIdx > fromIdx) {
+      insertIdx -= 1;
+    }
+    insertIdx = Math.max(0, Math.min(destList.length, insertIdx));
+    destList.splice(insertIdx, 0, moved);
+    return { steps: tree, path: [...adjustedParent, insertIdx] };
   }
 
   // Шаги, которые зависят от конкретного окна или координат. Их повтор после смены окна ненадёжен:
@@ -125,6 +406,7 @@
   const TRIGGER_STATUS_LABELS = {
     started: 'Выполняется',
     succeeded: 'Выполнена',
+    partial: 'Частично',
     skipped: 'Пропущена',
     failed: 'Ошибка',
     cancelled: 'Отменена',
@@ -135,6 +417,7 @@
   const TRIGGER_STATUS_TONES = {
     started: 'live',
     succeeded: 'ok',
+    partial: 'warn',
     skipped: 'muted',
     failed: 'bad',
     cancelled: 'warn',
@@ -387,7 +670,7 @@
         name: cmd.name || 'Без имени',
         commandEnabled: cmd.enabled !== false,
         folder: cmd.folder || null,
-        stepsCount: Array.isArray(cmd.steps) ? cmd.steps.length : (Number(cmd.stepsCount) || 0),
+        stepsCount: Array.isArray(cmd.steps) ? countTreeSteps(cmd.steps) : (Number(cmd.stepsCount) || 0),
         triggers,
         hotkey: hk,
         schedule: sch,
@@ -423,6 +706,19 @@
     describeSteps,
     stepWarning,
     warningsForSteps,
+    STEP_TYPE_TO_TOOL,
+    TOOL_TO_STEP_TYPE,
+    normalizeStepTree,
+    countTreeSteps,
+    flattenTreeForRender,
+    getNodeAtPath,
+    insertTreeNode,
+    updateTreeNode,
+    deleteTreeNode,
+    moveTreeNode,
+    indentTreeNode,
+    outdentTreeNode,
+    moveTreeNodeTo,
     foldersOf,
     groupCommands,
     diffLines,

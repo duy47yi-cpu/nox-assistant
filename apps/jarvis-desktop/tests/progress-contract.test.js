@@ -16,6 +16,10 @@ const { Journal } = require('../src/journal/journal');
 const { ApprovalBroker } = require('../src/policy/approvals');
 const { StopSwitch } = require('../src/control/stop');
 const { TurnLog } = require('../src/agent/turnlog');
+const { chatHistoryRows } = require('../src/agent/sources');
+const { artifactFile } = require('../src/agent/chat-reply');
+const { documentTools } = require('../src/tools/documents');
+const { WorkspaceIndex } = require('../src/rag');
 
 function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-progress-'));
@@ -51,6 +55,71 @@ function readJsonl(file) {
 
 const progressEvent = (e) => e && e.type === 'status' && typeof e.status === 'string';
 const lastDone = (events) => [...events].reverse().find((e) => e.type === 'done');
+
+test('чат показывает подтверждённые файлы и различает выполненные, непроверенные и пропущенные шаги', async (t) => {
+  const workspace = setup(t);
+  const events = [];
+  const write = documentTools(new WorkspaceIndex(workspace)).find((entry) => entry.name === 'document_write');
+  const tools = registry(write, tool('app_open', 'T1', async () => ({ ok: true, summary: 'запущено' }), async () => ({ status: 'unknown', evidence: 'Окно не найдено' })));
+  const brain = scriptedBrain([
+    { toolCalls: [
+      { name: 'document_write', args: { path: 'Китай.pptx', format: 'pptx', title: 'Китай', slides: [{ title: 'Пекин', bullets: ['Столица'] }] } },
+      { name: 'document_write', args: { path: 'Таблица.xlsx', format: 'xlsx', rows: [['Страна', 'Столица'], ['Китай', 'Пекин']] } },
+      { name: 'app_open', args: { name: 'Терминал' } },
+      { name: 'document_write', args: { path: 'Неверный.txt', format: 'pdf', text: 'Проверка' } },
+      { name: 'app_open', args: { name: 'VS Code' } },
+    ] },
+    { content: 'Готово.' },
+  ]);
+  const agent = new Agent({ brain, tools, workspace, mode: 'full', chatReplies: true,
+    journal: new Journal(path.join(workspace, 'journal.jsonl')), emit: (event) => events.push(event) });
+  await agent.run('Создай презентацию и таблицу, затем открой программы');
+
+  const done = lastDone(events);
+  assert.equal(done.status, 'failed');
+  assert.deepEqual(done.artifacts, [
+    { path: 'Китай.pptx', name: 'Китай.pptx', size: fs.statSync(path.join(workspace, 'Китай.pptx')).size, slides: 2 },
+    { path: 'Таблица.xlsx', name: 'Таблица.xlsx', size: fs.statSync(path.join(workspace, 'Таблица.xlsx')).size, rows: 2 },
+  ]);
+  assert.deepEqual(done.partial.map(({ status }) => status), ['done', 'done', 'unverified', 'failed', 'failed']);
+  assert.match(done.partial[2].reason, /Окно не найдено/);
+  assert.match(done.partial[4].label, /VS Code/);
+  assert.equal(done.replyText, 'Часть действий выполнена.');
+  assert.deepEqual(chatHistoryRows(JSON.parse(JSON.stringify(agent.history))).at(-1), {
+    role: 'assistant', text: 'Часть действий выполнена.', artifacts: done.artifacts, partial: done.partial,
+  });
+
+  const outside = setup(t);
+  fs.writeFileSync(path.join(outside, 'чужой.txt'), 'text');
+  fs.symlinkSync(outside, path.join(workspace, 'ссылка'), 'junction');
+  assert.equal(artifactFile(workspace, 'ссылка/чужой.txt'), null);
+  assert.equal(artifactFile(workspace, 'Таблица.xlsx:hidden'), null);
+  assert.equal(artifactFile(workspace, '../чужой.txt'), null);
+});
+
+test('чат сохраняет вопрос с вариантами и не запускает другие вызовы из этого ответа', async () => {
+  const events = [];
+  const requests = [];
+  const brain = { async chat(request) {
+    requests.push(request);
+    return requests.length === 1 ? { toolCalls: [
+      { name: 'clarify', args: { question: 'Какой формат нужен?', options: ['Доклад', 'Презентация', 'Таблица'] } },
+      { name: 'app_open', args: { name: 'Терминал' } },
+    ] } : { content: 'Принято.' };
+  } };
+  const agent = new Agent({ brain, tools: registry(tool('app_open', 'T1', async () => { throw new Error('запуск недопустим'); })),
+    mode: 'full', chatReplies: true, emit: (event) => events.push(event) });
+  await agent.run('Помоги с учёбой');
+  assert.ok(requests[0].tools.some((entry) => entry.function.name === 'clarify'));
+  assert.equal(events.some((event) => event.type === 'tool_start'), false);
+  assert.equal(lastDone(events).replyText, 'Какой формат нужен?');
+  assert.deepEqual(lastDone(events).clarification, ['Доклад', 'Презентация', 'Таблица']);
+  assert.deepEqual(chatHistoryRows(agent.history).at(-1).clarification, lastDone(events).clarification);
+
+  await agent.run('Доклад');
+  assert.deepEqual(requests[1].messages[1], { role: 'assistant', content: 'Какой формат нужен?' });
+  assert.equal(lastDone(events).clarification, undefined);
+});
 
 test('прогресс: планирование, шаг, проверка и честный итог unverified', async (t) => {
   const dir = setup(t);

@@ -42,12 +42,17 @@ function has(name) { return process.argv.includes(`--${name}`); }
 
 const motionArg = String(arg('motion', 'on')).toLowerCase();
 const systemArg = String(arg('system', 'free')).toLowerCase();
+const entryArg = String(arg('entry', 'auto')).toLowerCase();
 if (motionArg !== 'on' && motionArg !== 'off') {
   console.error(`motion-qa: --motion on|off, получено «${arg('motion')}»`);
   process.exit(2);
 }
 if (systemArg !== 'free' && systemArg !== 'reduce') {
   console.error(`motion-qa: --system free|reduce, получено «${arg('system')}»`);
+  process.exit(2);
+}
+if (!['auto', 'aether', 'classic'].includes(entryArg)) {
+  console.error(`motion-qa: --entry auto|aether|classic, получено «${arg('entry')}»`);
   process.exit(2);
 }
 const motion = motionArg === 'on';
@@ -98,7 +103,7 @@ app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 if (forceReduce) app.commandLine.appendSwitch('force-prefers-reduced-motion');
 
 const settingsPath = path.join(dataDir, 'settings.json');
-fs.writeFileSync(settingsPath, JSON.stringify({
+const initialSettings = {
   voice: false,
   backgroundModelRuns: false,
   alwaysListen: false,
@@ -109,7 +114,10 @@ fs.writeFileSync(settingsPath, JSON.stringify({
   seededBrief: true,
   modelTier: 'fast',
   thinking: 'low',
-}), 'utf8');
+};
+if (entryArg === 'classic') initialSettings.uiShell = 'legacy';
+else if (entryArg === 'aether') initialSettings.uiShell = 'aether';
+fs.writeFileSync(settingsPath, JSON.stringify(initialSettings), 'utf8');
 
 for (const key of Object.keys(process.env)) {
   if (/^(NOX_|JARVIS_|TELEGRAM_|FISH_|DEEPSEEK_)/i.test(key)) delete process.env[key];
@@ -178,9 +186,31 @@ async function waitFor(win, code, { timeout = 25000, interval = 100, label = 'у
 }
 
 // ── Что показывает окно ─────────────────────────────────────────────────────────────────────
-// Для каждого эффекта ставим html[data-fx] и читаем движение и рисунок обоих слоёв.
+// Для classic (renderer/index.html) проверяем 9 эффектов .theme-fx;
+// для aether (renderer/aether/index.html) — живые переходы интерфейса и орб/аватар.
+const AETHER_SELECTORS = ['.ae-nav-btn', '.ae-rail-button', '.lx-toggle-track'];
 const PROBE = `(async () => {
   const root = document.documentElement;
+  const isAether = root.hasAttribute('data-aether');
+  if (isAether) {
+    const selectors = ${JSON.stringify(AETHER_SELECTORS)};
+    const transitions = {};
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (!el) return { error: 'нет элемента ' + sel };
+      const st = getComputedStyle(el);
+      const durs = String(st.transitionDuration || '0s').split(',').map((s) => parseFloat(s) || 0);
+      const moving = st.transitionProperty !== 'none' && durs.some((d) => d > 0);
+      transitions[sel] = { moving, duration: st.transitionDuration, prop: st.transitionProperty };
+    }
+    return {
+      mode: 'aether',
+      reduce: matchMedia('(prefers-reduced-motion: reduce)').matches,
+      noPreference: matchMedia('(prefers-reduced-motion: no-preference)').matches,
+      animations: root.dataset.animations || '',
+      transitions,
+    };
+  }
   const layer = document.querySelector('.theme-fx');
   if (!layer) return { error: 'нет слоя .theme-fx' };
   const ids = ${JSON.stringify(FX_IDS)};
@@ -197,6 +227,7 @@ const PROBE = `(async () => {
   }
   if (saved) root.dataset.fx = saved; else root.removeAttribute('data-fx');
   return {
+    mode: 'classic',
     reduce: matchMedia('(prefers-reduced-motion: reduce)').matches,
     noPreference: matchMedia('(prefers-reduced-motion: no-preference)').matches,
     animations: root.dataset.animations || '',
@@ -223,11 +254,19 @@ function checkEffects(size, state, m, { allow = false } = {}) {
   const prefix = size ? `${size}: ` : '';
   check(`${prefix}prefers-reduced-motion ${reduce ? 'reduce' : 'no-preference'}`, state.reduce === reduce,
     JSON.stringify({ reduce: state.reduce, noPreference: state.noPreference, expected: reduce }));
-  for (const id of FX_IDS) {
-    const shouldMove = !reduce && !STATIC_FX.has(id);
-    check(`${prefix}эффект ${id} — ${shouldMove ? 'движется' : 'стоит'}`, (state.effects[id].moving.length > 0) === shouldMove,
-      JSON.stringify({ moving: state.effects[id].moving }));
-    check(`${prefix}эффект ${id} нарисован`, state.effects[id].painted && state.effects[id].layerDisplay !== 'none');
+  if (state.mode === 'aether') {
+    const shouldMove = !reduce && m;
+    for (const sel of AETHER_SELECTORS) {
+      check(`${prefix}переход ${sel} — ${shouldMove ? 'движется' : 'стоит'}`,
+        state.transitions[sel].moving === shouldMove, JSON.stringify(state.transitions[sel]));
+    }
+  } else {
+    for (const id of FX_IDS) {
+      const shouldMove = !reduce && !STATIC_FX.has(id);
+      check(`${prefix}эффект ${id} — ${shouldMove ? 'движется' : 'стоит'}`, (state.effects[id].moving.length > 0) === shouldMove,
+        JSON.stringify({ moving: state.effects[id].moving }));
+      check(`${prefix}эффект ${id} нарисован`, state.effects[id].painted && state.effects[id].layerDisplay !== 'none');
+    }
   }
   check(`${prefix}«Анимации» в окне: ${m ? 'включены' : 'выключены'}`, state.animations === (m ? 'on' : 'off'), state.animations);
 }
@@ -253,15 +292,16 @@ async function emulateAllow(win) {
   await sleep(250);
 }
 
-// Настоящий переключатель «Анимации» в Настройках: галочка и её обработчик в renderer/app.js.
+// Настоящий переключатель «Анимации» (в classic или в Aether).
 async function flipSetting(win, next) {
-  await js(win, `(() => {
-    const inp = document.querySelector('[data-setting="motion"]');
+  const ok = await js(win, `(() => {
+    const inp = document.querySelector('[data-setting="motion"], #lxCtrlAvatarAnim');
     if (!inp) return false;
     inp.checked = ${next};
     inp.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
   })()`);
+  if (!ok) throw new Error('переключатель анимаций не найден в DOM');
   await waitFor(win, `document.documentElement.dataset.animations === '${next ? 'on' : 'off'}'`, { label: 'переключатель сработал' });
   await sleep(400);
 }
@@ -298,13 +338,20 @@ async function main(win) {
   check('подмена «движение разрешено» подействовала', allow.noPreference === true && allow.reduce === false,
     JSON.stringify({ reduce: allow.reduce, noPreference: allow.noPreference }));
   check('1200x720 (движение разрешено): «Анимации» в окне не изменились', allow.animations === (motion ? 'on' : 'off'), allow.animations);
-  for (const id of FX_IDS) {
-    // При включённых «Анимациях» окно молчит и движение идёт; при выключенных — держит
-    // правило html[data-animations="off"] в themes.css, даже если окно разрешило движение.
-    const shouldMove = motion && !STATIC_FX.has(id);
-    check(`1200x720 (движение разрешено): эффект ${id} — ${shouldMove ? 'движется' : 'стоит'}`,
-      (allow.effects[id].moving.length > 0) === shouldMove, JSON.stringify({ moving: allow.effects[id].moving }));
-    check(`1200x720 (движение разрешено): эффект ${id} нарисован`, allow.effects[id].painted);
+  if (allow.mode === 'aether') {
+    for (const sel of AETHER_SELECTORS) {
+      check(`1200x720 (движение разрешено): переход ${sel} — ${motion ? 'движется' : 'стоит'}`,
+        allow.transitions[sel].moving === motion, JSON.stringify(allow.transitions[sel]));
+    }
+  } else {
+    for (const id of FX_IDS) {
+      // При включённых «Анимациях» окно молчит и движение идёт; при выключенных — держит
+      // правило html[data-animations="off"] в themes.css, даже если окно разрешило движение.
+      const shouldMove = motion && !STATIC_FX.has(id);
+      check(`1200x720 (движение разрешено): эффект ${id} — ${shouldMove ? 'движется' : 'стоит'}`,
+        (allow.effects[id].moving.length > 0) === shouldMove, JSON.stringify({ moving: allow.effects[id].moving }));
+      check(`1200x720 (движение разрешено): эффект ${id} нарисован`, allow.effects[id].painted);
+    }
   }
 
   // ── Переключатель вживую: в окне сейчас «движение разрешено» ────────────────────────────
@@ -320,12 +367,20 @@ async function main(win) {
   const afterReduce = expectReduce(next);
   check(`после переключения prefers-reduced-motion ${afterReduce ? 'reduce' : 'no-preference'}`, after.reduce === afterReduce,
     JSON.stringify({ reduce: after.reduce, noPreference: after.noPreference }));
-  for (const id of FX_IDS) {
-    const shouldMove = !afterReduce && !STATIC_FX.has(id);
-    check(`после переключения эффект ${id} — ${shouldMove ? 'движется' : 'стоит'}`,
-      (after.effects[id].moving.length > 0) === shouldMove, JSON.stringify({ moving: after.effects[id].moving }));
+  if (after.mode === 'aether') {
+    const shouldMove = !afterReduce && next;
+    for (const sel of AETHER_SELECTORS) {
+      check(`после переключения переход ${sel} — ${shouldMove ? 'движется' : 'стоит'}`,
+        after.transitions[sel].moving === shouldMove, JSON.stringify(after.transitions[sel]));
+    }
+  } else {
+    for (const id of FX_IDS) {
+      const shouldMove = !afterReduce && !STATIC_FX.has(id);
+      check(`после переключения эффект ${id} — ${shouldMove ? 'движется' : 'стоит'}`,
+        (after.effects[id].moving.length > 0) === shouldMove, JSON.stringify({ moving: after.effects[id].moving }));
+    }
+    check('после переключения эффекты нарисованы', FX_IDS.every((id) => after.effects[id].painted));
   }
-  check('после переключения эффекты нарисованы', FX_IDS.every((id) => after.effects[id].painted));
 
   // ── И обратно: «Анимации» сказали выключить при разрешённом движении ───────────────────
   currentStage = 'toggle-back';
@@ -335,9 +390,16 @@ async function main(win) {
   check('вернули «Анимации» выключенными', readSettingsFile().motion === false, JSON.stringify({ motion: readSettingsFile().motion }));
   check('при выключенных «Анимациях» окно просит reduce, даже если система разрешила движение', off.reduce === true,
     JSON.stringify({ reduce: off.reduce, noPreference: off.noPreference }));
-  for (const id of FX_IDS) {
-    check(`с выключенными «Анимациями» эффект ${id} стоит`, off.effects[id].moving.length === 0, JSON.stringify({ moving: off.effects[id].moving }));
-    check(`с выключенными «Анимациями» эффект ${id} нарисован`, off.effects[id].painted);
+  if (off.mode === 'aether') {
+    for (const sel of AETHER_SELECTORS) {
+      check(`с выключенными «Анимациями» переход ${sel} стоит`,
+        off.transitions[sel].moving === false, JSON.stringify(off.transitions[sel]));
+    }
+  } else {
+    for (const id of FX_IDS) {
+      check(`с выключенными «Анимациями» эффект ${id} стоит`, off.effects[id].moving.length === 0, JSON.stringify({ moving: off.effects[id].moving }));
+      check(`с выключенными «Анимациями» эффект ${id} нарисован`, off.effects[id].painted);
+    }
   }
 
   // ── И снова включить: окно снимает подмену, движение возвращается ──────────────────────
@@ -348,24 +410,32 @@ async function main(win) {
   const restoreReduce = expectReduce(true);
   check(`с включёнными «Анимациями» окно снова как система (${restoreReduce ? 'reduce' : 'no-preference'})`, on.reduce === restoreReduce,
     JSON.stringify({ reduce: on.reduce, noPreference: on.noPreference }));
-  for (const id of FX_IDS) {
-    const shouldMove = !restoreReduce && !STATIC_FX.has(id);
-    check(`с включёнными «Анимациями» эффект ${id} — ${shouldMove ? 'движется' : 'стоит'}`,
-      (on.effects[id].moving.length > 0) === shouldMove, JSON.stringify({ moving: on.effects[id].moving }));
+  if (on.mode === 'aether') {
+    const shouldMove = !restoreReduce;
+    for (const sel of AETHER_SELECTORS) {
+      check(`с включёнными «Анимациями» переход ${sel} — ${shouldMove ? 'движется' : 'стоит'}`,
+        on.transitions[sel].moving === shouldMove, JSON.stringify(on.transitions[sel]));
+    }
+  } else {
+    for (const id of FX_IDS) {
+      const shouldMove = !restoreReduce && !STATIC_FX.has(id);
+      check(`с включёнными «Анимациями» эффект ${id} — ${shouldMove ? 'движется' : 'стоит'}`,
+        (on.effects[id].moving.length > 0) === shouldMove, JSON.stringify({ moving: on.effects[id].moving }));
+    }
   }
 
   currentStage = 'final';
   check('окно не упало и ошибок страницы нет', !win.webContents.isCrashed() && consoleErrors.length === 0, JSON.stringify(consoleErrors.slice(0, 5)));
 
   const passed = checks.filter((c) => c.ok).length;
-  return { ok: passed === checks.length, passed, failed: checks.length - passed, checks };
+  return { ok: passed === checks.length, entry: on.mode, passed, failed: checks.length - passed, checks };
 }
 
 let mainWin = null;
 app.on('browser-window-created', (_event, win) => {
   win.webContents.once('did-finish-load', () => {
     if (mainWin) return;
-    if (!/renderer[\\/]index\.html/i.test(win.webContents.getURL())) return;
+    if (!/renderer[\\/](?:aether[\\/])?index\.html/i.test(win.webContents.getURL())) return;
     mainWin = win;
     main(win)
       .then((result) => finish({ ...result, profile: tempRoot }))

@@ -80,9 +80,14 @@ function chatHistoryRows(history) {
       } catch { /* В старой истории результат может быть скрыт или обрезан. */ }
       calls.delete(message.tool_call_id);
     }
-    if (!['user', 'assistant'].includes(message.role) || typeof message.content !== 'string' || !message.content.trim()) continue;
+    const isReply = message.role === 'assistant' && !message.tool_calls?.length;
+    const replyDetails = isReply && (message.artifacts?.length || message.clarification?.length || message.partial?.length);
+    if (!['user', 'assistant'].includes(message.role) || typeof message.content !== 'string' || (!message.content.trim() && !replyDetails)) continue;
     const row = { role: message.role, text: message.content.slice(0, 2000) };
-    if (message.role === 'assistant' && !message.tool_calls?.length) {
+    if (isReply) {
+      for (const field of ['artifacts', 'clarification', 'partial']) {
+        if (Array.isArray(message[field]) && message[field].length) row[field] = message[field];
+      }
       if (Array.isArray(message.searchSources)) mergeSources(sources, message.searchSources);
       if (sources.size) row.searchSources = [...sources.values()];
       sources.clear();

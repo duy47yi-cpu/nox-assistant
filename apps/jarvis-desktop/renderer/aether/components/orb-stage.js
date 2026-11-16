@@ -15,7 +15,7 @@
     verifying: 'Проверяет',
     waiting_approval: 'Ждёт решения',
     listening: 'Слушает',
-    speaking: 'Говорит',
+    speaking: 'Отвечает',
     success: 'Готово',
     cancelled: 'Остановлено',
     error: 'Ошибка',
@@ -92,7 +92,8 @@
     let elapsedTimer = null;
 
     function getGlobalMotionOn() {
-      return document.documentElement.dataset.animations !== 'off' && document.documentElement.dataset.motion !== 'off';
+      const { aeOrbPos, animations, motion } = document.documentElement.dataset;
+      return !stage.hidden && aeOrbPos !== 'hidden' && animations !== 'off' && motion !== 'off';
     }
 
     function applyWrapperLook(cfg) {
@@ -278,7 +279,7 @@
         if (mounted) mounted.setState(eff);
       }
       updateStatusAndHint(st);
-      syncElapsedTimer(Boolean(st.busy));
+      syncElapsedTimer(st.trackerBusy && !stage.hidden);
 
       if (mounted) {
         mounted.setVoice(st.dictation.recording ? st.dictation.level : 0);

@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { app, globalShortcut, Notification, powerMonitor } = require('electron');
 const { WatchNotifier } = require('../src/notify/watch');
-const { SpeechClient } = require('../src/voice/tts');
+const voiceOutput = require('../src/voice/output');
 const { NotificationSpeech } = require('../src/voice/delivery');
 
 const root = process.argv[2];
@@ -18,6 +18,12 @@ fs.mkdirSync(root, { recursive: true });
 fs.writeFileSync(path.join(root, 'm6-fixture'), '');
 for (const key of Object.keys(process.env)) {
   if (/^(NOX_|JARVIS_|TELEGRAM_|FISH_|DEEPSEEK_)/i.test(key)) delete process.env[key];
+}
+process.env.NOX_DATA_DIR = path.join(root, 'fixture-data');
+fs.mkdirSync(process.env.NOX_DATA_DIR, { recursive: true });
+const fixtureSettings = path.join(process.env.NOX_DATA_DIR, 'settings.json');
+if (!fs.existsSync(fixtureSettings)) {
+  fs.writeFileSync(fixtureSettings, JSON.stringify({ uiShell: 'legacy', seededBrief: true, voiceOutput: 'cloud' }));
 }
 app.setPath('userData', path.join(root, 'profile'));
 require('../src/config/paths').projectRoot = () => root;
@@ -40,8 +46,10 @@ Notification.prototype.show = function () {
   if (this.title === 'Режим отдыха') notices.push(this);
   return show.call(this);
 };
-SpeechClient.prototype.isInstalled = () => true;
-SpeechClient.prototype.speak = async (text, opts) => { spoken.push({ text, volume: opts.volume }); };
+voiceOutput.cloudSpeech = () => ({
+  isInstalled: () => true,
+  async speak(text, opts) { spoken.push({ text, volume: opts.volume }); },
+});
 const enqueue = NotificationSpeech.prototype.enqueue;
 NotificationSpeech.prototype.enqueue = function (items) {
   this.now = () => clock;

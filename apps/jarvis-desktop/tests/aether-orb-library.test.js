@@ -13,22 +13,22 @@ function makeMemStorage(seed = {}) {
   };
 }
 
-test('Библиотека сфер сохраняет обе системы и все 6 встроенных вариантов без путаницы', () => {
+test('Библиотека сфер сохраняет 2 встроенных варианта System Nox', () => {
   const storage = makeMemStorage();
   const lib = createOrbLibrary({ storage });
   const list = lib.list();
   const ids = list.map((o) => o.id);
 
-  assert.equal(BUILTIN_ORBS.length, 6);
-  for (const id of ['nox:nox', 'nox:wire', 'nox:shutter', 'jarvis:core', 'jarvis:sphere', 'jarvis:iris']) {
+  assert.equal(BUILTIN_ORBS.length, 2);
+  for (const id of ['nox:nox', 'nox:wire']) {
     assert.ok(ids.includes(id), `Отсутствует сфера ${id}`);
   }
 
-  const noxDot = lib.get('nox:nox');
-  const jarvisDot = lib.get('jarvis:sphere');
-  assert.equal(noxDot.engine, 'nox');
-  assert.equal(jarvisDot.engine, 'jarvis');
-  assert.notEqual(noxDot.id, jarvisDot.id);
+  const sphereNox = lib.get('nox:nox');
+  const gridNox = lib.get('nox:wire');
+  assert.equal(sphereNox.engine, 'nox');
+  assert.equal(gridNox.engine, 'nox');
+  assert.notEqual(sphereNox.id, gridNox.id);
   assert.equal(lib.getActiveId(), DEFAULT_ORB_ID);
 });
 
@@ -39,20 +39,20 @@ test('Настройки каждой сферы независимы, прес�
   lib.setActive('nox:nox');
   lib.updateSettings('nox:nox', { scale: 1.24 });
 
-  lib.setActive('jarvis:sphere');
-  lib.applyPreset('jarvis:sphere', 'vivid');
-  const afterVivid = lib.getSettings('jarvis:sphere');
-  assert.ok(afterVivid.glow > 1.0);
+  lib.setActive('nox:wire');
+  lib.applyPreset('nox:wire', 'vivid');
+  const afterVivid = lib.getSettings('nox:wire');
+  assert.ok(afterVivid.scale > 1.0);
 
-  // Переключились на третью и вернулись на первую — scale остался 1.24
+  // Переключились и вернулись — scale остался 1.24
   lib.setActive('nox:wire');
   lib.setActive('nox:nox');
   assert.equal(lib.getSettings('nox:nox').scale, 1.24);
 
-  // Сброс Jarvis Sphere не затрагивает Nox Orb
-  lib.resetOrb('jarvis:sphere');
+  // Сброс второй сферы не затрагивает первую
+  lib.resetOrb('nox:wire');
   assert.equal(lib.getSettings('nox:nox').scale, 1.24);
-  assert.equal(lib.getSettings('jarvis:sphere').glow, lib.get('jarvis:sphere').defaults.glow);
+  assert.equal(lib.getSettings('nox:wire').scale, lib.get('nox:wire').defaults.scale);
 
   // Перезагрузка из того же storage сохраняет выбор и параметры
   const reloaded = createOrbLibrary({ storage });
@@ -89,33 +89,25 @@ test('Маппинг состояний обеих систем переводи
   assert.equal(lib.mapState('jarvis', 'cancelled'), 'cancelled');
 });
 
-test('mount и applySettings всегда передают конечный числовой density в JarvisOrb.setTune', () => {
-  const tuneCalls = [];
-  const ctorCalls = [];
+test('mount и applySettings работают для оставшихся сфер Nox', () => {
   const prevWin = globalThis.window;
   globalThis.window = {
-    JarvisOrb: class FakeJarvisOrb {
-      constructor(_canvas, opts) {
-        ctorCalls.push(opts);
-      }
-      setTune(t) {
-        tuneCalls.push(t);
-      }
+    NoxOrb: class FakeNoxOrb {
+      constructor(_canvas, opts) { this.opts = opts; }
+      setState() {}
+      setScale() {}
       setAnimated() {}
       destroy() {}
     },
   };
   try {
     const lib = createOrbLibrary({ storage: makeMemStorage() });
-    for (const id of ['jarvis:core', 'jarvis:sphere', 'jarvis:iris']) {
-      const h = lib.mount({}, id, { density: 0.72 });
-      h.applySettings(lib.getSettings(id), true);
+    for (const id of ['nox:nox', 'nox:wire']) {
+      const h = lib.mount({}, id);
+      assert.ok(h.raw, `mount ${id} должен создать инстанс`);
+      h.applySettings({ scale: 1.2 }, true);
       h.destroy();
     }
-    assert.equal(ctorCalls.length, 3);
-    assert.equal(tuneCalls.length, 6);
-    for (const c of ctorCalls) assert.ok(Number.isFinite(c.density) && c.density > 0);
-    for (const t of tuneCalls) assert.ok(Number.isFinite(t.density) && t.density > 0);
   } finally {
     if (prevWin === undefined) delete globalThis.window;
     else globalThis.window = prevWin;

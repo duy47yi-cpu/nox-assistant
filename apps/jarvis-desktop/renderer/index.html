@@ -803,38 +803,21 @@
             </section>
 
             <section class="set-section" data-cat="voice" aria-labelledby="setAnswersTitle">
-              <h2 class="set-title" id="setAnswersTitle">Ответы</h2>
+              <h2 class="set-title" id="setAnswersTitle">Озвучка</h2>
               <label class="set-row">
-                <span class="set-text"><span class="set-name">Говорить ответы</span><span class="set-hint">Озвучивать ответ голосом</span></span>
-                <input type="checkbox" role="switch" class="switch" data-setting="voice">
+                <span class="set-text"><span class="set-name">Режим озвучки</span><span class="set-hint">Для облачной озвучки текст передаётся в облако. Ответы остаются в чате.</span></span>
+                <select class="input input-sm" id="voiceOutput">
+                  <option value="off">Выключена (по умолчанию)</option>
+                  <option value="cloud">Облачная</option>
+                </select>
               </label>
               <div class="set-row">
-                <span class="set-text"><span class="set-name">Проверить голос</span><span class="set-hint">Скажет пробную фразу; ключ голоса читается из .env</span></span>
-                <button class="btn btn-secondary btn-sm" type="button" id="voiceTest">Проверить</button>
+                <span class="set-text"><span class="set-name">Проверить озвучку</span></span>
+                <button class="btn btn-secondary btn-sm" type="button" id="voiceTest">Проверить озвучку</button>
               </div>
               <div class="set-row voice-opts">
-                <span class="set-text"><span class="set-name">Громкость голоса</span><span class="set-hint" id="voiceVolumeHint">100 %</span></span>
-                <input class="range" id="voiceVolume" type="range" min="0" max="100" step="5" value="100" aria-label="Громкость голоса" aria-describedby="voiceVolumeHint">
-              </div>
-              <div class="set-row voice-opts">
-                <span class="set-text"><span class="set-name">Скорость речи</span><span class="set-hint" id="voiceRateHint">1,0 из 2</span></span>
-                <input class="range" id="voiceRate" type="range" min="0.5" max="2" step="0.1" value="1" aria-label="Скорость речи" aria-describedby="voiceRateHint">
-              </div>
-              <div class="set-row voice-opts">
-                <span class="set-text"><span class="set-name">Голос</span><span class="set-hint" id="voicePickHint">По умолчанию первый голос; список можно загрузить отдельно</span></span>
-                <span class="voice-pick-tools">
-                  <select class="input input-sm" id="voiceSpeaker" aria-label="Голос"><option value="">По умолчанию</option></select>
-                  <button class="btn btn-secondary btn-sm" type="button" id="voiceList">Список голосов</button>
-                </span>
-              </div>
-              <div class="set-row voice-opts">
-                <span class="set-text"><span class="set-name">Характер речи</span><span class="set-hint" id="voicePersonaHint">Меняет только темп и громкость, голос остаётся выбранным</span></span>
-                <select class="input input-sm" id="voicePersona" aria-label="Характер речи" aria-describedby="voicePersonaHint">
-                  <option value="neutral">Как есть</option>
-                  <option value="butler">Дворецкий</option>
-                  <option value="assistant">Помощница</option>
-                  <option value="engineer">Инженер</option>
-                </select>
+                <span class="set-text"><span class="set-name">Громкость голоса</span><span class="set-hint" id="voiceVolumeHint">80%</span></span>
+                <input class="range" id="voiceVolume" type="range" min="0" max="100" step="5" value="80" aria-label="Громкость голоса" aria-describedby="voiceVolumeHint">
               </div>
               <p class="note" id="voiceOptionsNote" hidden></p>
               <label class="set-row">
@@ -842,11 +825,11 @@
                 <input type="checkbox" role="switch" class="switch" data-setting="terseReplies">
               </label>
               <label class="set-row">
-                <span class="set-text"><span class="set-name">Диктовка</span><span class="set-hint">Голосом в поле ввода; во время ответа речь остановит текущий ход. Работает без сети</span></span>
+                <span class="set-text"><span class="set-name">Диктовка</span><span class="set-hint">Распознаёт команды и прерывает озвучку, когда вы начинаете говорить.</span></span>
                 <input type="checkbox" role="switch" class="switch" data-setting="dictation" id="setDictation">
               </label>
               <label class="set-row">
-                <span class="set-text"><span class="set-name">Слушать «Джарвис» всегда</span><span class="set-hint">Распознавание Windows работает в фоне. В чат попадают только фразы, которые начинаются с «Джарвис». Звук не сохраняется и не уходит в сеть</span></span>
+                <span class="set-text"><span class="set-name">Автовключение микрофона</span><span class="set-hint">Голосовой ввод начинает работать сразу после запуска приложения</span></span>
                 <input type="checkbox" role="switch" class="switch" data-setting="alwaysListen">
               </label>
             </section>
@@ -854,7 +837,7 @@
             <section class="set-section" data-cat="voice" id="notificationVoiceSettings" aria-labelledby="setNotificationVoiceTitle">
               <h2 class="set-title" id="setNotificationVoiceTitle">Озвучка уведомлений</h2>
               <label class="set-row">
-                <span class="set-text"><span class="set-name">Озвучивать уведомления</span><span class="set-hint">Отдельно от ответов в чате</span></span>
+                <span class="set-text"><span class="set-name">Озвучивать уведомления</span><span class="set-hint">Требуется облачная озвучка.</span></span>
                 <input type="checkbox" role="switch" class="switch" data-notice-option="enabled">
               </label>
               <label class="set-row">

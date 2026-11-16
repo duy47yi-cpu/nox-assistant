@@ -1183,50 +1183,6 @@ html[data-ae-density="compact"] .ae-feed { gap: 10px; padding-top: 12px; }
 }
 
 .ae-approval-dock { width: 100%; }
-.ae-work-dock:has(> .ae-live-line[hidden] + .ae-approval-dock[hidden]) { display: none; }
-.ae-live-line {
-  --work-accent: var(--accent);
-  display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) auto auto auto;
-  align-items: center;
-  column-gap: 10px;
-  row-gap: 3px;
-  padding: 6px 10px 9px;
-  border: 1px solid var(--border);
-  border-inline-start: 2px solid var(--work-accent);
-  border-radius: 10px;
-  background: var(--surface);
-}
-.ae-live-line[hidden] { display: none; }
-.ae-live-line[data-state="waiting"] { --work-accent: var(--warn); }
-.ae-live-line[data-state="waiting"]:has(+ .ae-approval-dock:not([hidden])) {
-  border-radius: 10px 10px 0 0;
-  border-bottom: 0;
-}
-.ae-live-line[data-state="waiting"] + .ae-approval-dock .ae-approval-card {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
-.ae-live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--work-accent);
-}
-.ae-live-label,
-.ae-live-step,
-.ae-live-elapsed {
-  color: var(--text-2);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-.ae-live-text {
-  grid-column: 2 / -1;
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
 .ae-live-stop.ae-btn {
   min-height: 26px;
   padding: 2px 7px;
@@ -2224,3 +2180,32 @@ html[data-motion="off"] .ae-orb-stage * {
   .ae-save-cmd-btn,
   .ae-save-cmd-open { transition: none !important; }
 }
+
+.ae-voice-modes [aria-pressed="true"] {
+  border-color: var(--ae-accent, currentColor);
+  color: var(--ae-accent, inherit);
+}
+.ae-voice-dialog {
+  width: min(520px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  padding: 20px;
+  box-sizing: border-box;
+  border: 1px solid var(--ae-line, #3a3a3e);
+  border-radius: 14px;
+  background: var(--ae-bg, #1d1d20);
+  color: var(--ae-text, #f4f1ea);
+  overflow: auto;
+}
+.ae-voice-dialog::backdrop { background: #090909a0; }
+.ae-voice-dialog h2 { margin: 0 0 8px; font-size: 20px; }
+.ae-voice-dialog > .ae-btn { margin-top: 16px; }
+.ae-voice-choice { flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
+.ae-voice-choice .ae-head-actions { margin-left: auto; }
+.ae-voice-languages { display: flex; gap: 4px; }
+.ae-voice-languages > span {
+  padding: 2px 5px;
+  border: 1px solid var(--ae-line, currentColor);
+  border-radius: 4px;
+  font-size: 11px;
+}
+.ae-settings-body .ae-field input[type="range"] { width: 100%; }

@@ -10,6 +10,7 @@ const { checkEffect } = require('./effects');
 const { makeToolContext } = require('./tool-context');
 const { uniqueSearchMatch } = require('../tools/install');
 const { collectSearchSources } = require('./sources');
+const { CLARIFY_SPEC, clarificationFrom, artifactFrom, actionReport, partialReport, verifiedReceipt } = require('./chat-reply');
 
 // Лимит вызовов инструментов за один ход: защита от зацикливания модели.
 const MAX_TOOL_STEPS = 12;
@@ -236,8 +237,7 @@ function stampMessage(m, stamp) {
 // Сообщение для запроса. Картинка от инструмента (поле image) уходит модели только в текущем ходу,
 // в прошлых ходах остаётся текстом. Поле image в запрос не попадает.
 function wireMessage(m, current) {
-  const base = 'provenance' in m || 'searchSources' in m
-    ? (({ provenance: _p, searchSources: _s, ...rest }) => rest)(m) : m;
+  const { provenance, searchSources, artifacts, clarification, partial, ...base } = m;
   if (!base.image) return current ? base : compactOld(base);
   if (!current) return { role: base.role, content: base.content };
   return {
@@ -262,8 +262,10 @@ class Agent {
     plans = null,
     // Чат владельца: при лимите с незакрытым планом предложить доделать в фоне.
     backgroundOffer = false,
+    chatReplies = false,
   } = {}) {
     this.backgroundOffer = Boolean(backgroundOffer);
+    this.chatReplies = chatReplies;
     this._planRequest = ''; // просьба, с которой начался план
     this._planHands = false; // план уже работал руками: в фон без владельца его не отдаём
     this.toolView = typeof toolView === 'function' ? toolView : null;
@@ -348,8 +350,11 @@ class Agent {
   }
 
   // Ответы, которые дали без модели (музыка), тоже попадают в историю: иначе на следующей реплике модель их не видит.
-  remember(userText, assistantText) {
-    this.history.push({ role: 'user', content: String(userText) }, { role: 'assistant', content: String(assistantText) });
+  remember(userText, assistantText, { artifacts, partial } = {}) {
+    this.history.push({ role: 'user', content: String(userText) }, {
+      role: 'assistant', content: String(assistantText),
+      ...(artifacts?.length ? { artifacts } : {}), ...(partial?.length ? { partial } : {}),
+    });
   }
 
   // Переключились на другой разговор: «продолжай» не должен поднимать план из прежнего.
@@ -394,6 +399,7 @@ class Agent {
       id: randomUUID().slice(0, 8),
       started: Date.now(),
       searchSources: new Map(),
+      ...(this.chatReplies ? { artifacts: new Map(), actions: new Map() } : {}),
       userChars: text.length,
       modelCalls: 0,
       modelMs: 0,
@@ -537,6 +543,18 @@ class Agent {
       });
       // Инструменты на этом шаге запрещены: вызовы, если модель их всё же прислала, не выполняем.
       if (answerOnly) calls = [];
+      if (this.chatReplies) {
+        const clarification = calls.filter((call) => call.name === CLARIFY_SPEC.function.name && !call.argsError)
+          .map((call) => clarificationFrom(call.args)).find(Boolean);
+        if (clarification) {
+          const { question, options } = clarification;
+          this.history.push({ role: 'assistant', content: question, clarification: options });
+          this._turn.answerChars = question.length;
+          this._turn.outcome = 'answer';
+          this._emit({ type: 'text', delta: `${this._streamedChars ? '\n\n' : ''}${question}`, runId: this._runId });
+          return this._endTurn();
+        }
+      }
       const text = res.content || (answerOnly && calls.length === 0 ? LOOP_FALLBACK : '');
       const assistant = {
         role: 'assistant',
@@ -598,12 +616,15 @@ class Agent {
           if (signal.aborted) {
             this._pushToolResult(call.id, { ok: false, summary: 'остановлено' });
           } else if (broken && tool && tool.risk !== 'T0') {
-            const skipped = { ...(this._runId ? { runId: this._runId } : {}), step: this._step + 1, status: 'cancelled', target: safeTarget(call.args) };
+            const skipped = { ...(this._runId ? { runId: this._runId } : {}), step: ++this._step, status: 'cancelled', target: safeTarget(call.args) };
+            const skippedResult = { ok: false, summary: 'пропущено: предыдущий шаг серии не удался' };
             this._emit({ type: 'tool_start', id: call.id, name: call.name, args: call.args, risk: tool.risk, ...skipped });
-            this._emit({ type: 'tool_result', id: call.id, ok: false, summary: 'пропущено: предыдущий шаг серии не удался', decision: 'skip', ...skipped });
+            this._emit({ type: 'tool_result', id: call.id, name: call.name, ...skippedResult, decision: 'skip', ...skipped });
+            this._recordChatAction(call, skipped.step, skipped.target, 'failed', skippedResult);
             this._pushToolResult(call.id, { ok: false, summary: 'не выполнено: предыдущий шаг серии не удался. Сверь состояние чтением и реши заново' });
           } else if (steps >= this.maxSteps) {
             limitHit = true;
+            if (tool && tool.risk !== 'T0') this._recordChatAction(call, ++this._step, safeTarget(call.args), 'failed', { summary: 'Достигнут предел шагов' });
             this._pushToolResult(call.id, { ok: false, summary: `лимит шагов (${this.maxSteps}) исчерпан` });
           } else {
             steps += 1;
@@ -850,6 +871,11 @@ class Agent {
         callId: call.id, step, tool: call.name, risk, status: callStatus,
         verified: result.verified || null, decision: resolution,
       });
+    }
+    if (!afterStop && risk && risk !== 'T0' && !repeat && !result.quiet) this._recordChatAction(call, step, target, callStatus, result);
+    if (!afterStop && this.chatReplies && callStatus === 'succeeded' && typeof tool?.verify === 'function') {
+      const artifact = artifactFrom(this.workspace, call.name, result);
+      if (artifact) this._turn.artifacts.set(artifact.path, artifact);
     }
 
     // Журнал владельца: итог вызова вместе с проверкой результата. callId связывает запись со стартом в turnLog,
@@ -1267,7 +1293,7 @@ class Agent {
   _toolSpecs() {
     // toolView(список, история) — какие инструменты показать модели в этом запросе; запуск идёт по полному реестру.
     const all = this.tools.list();
-    return (this.toolView ? this.toolView(all, this.history) : all).map((t) => ({
+    const specs = (this.toolView ? this.toolView(all, this.history) : all).map((t) => ({
       type: 'function',
       function: {
         name: t.name,
@@ -1275,6 +1301,8 @@ class Agent {
         parameters: t.parameters || { type: 'object', properties: {} },
       },
     }));
+    if (this.chatReplies) specs.push(CLARIFY_SPEC);
+    return specs;
   }
 
   _logTurn() {
@@ -1326,6 +1354,15 @@ class Agent {
     return { confirmed, unverified, failed, reads: v.reads || 0, total: confirmed + unverified + failed };
   }
 
+  _recordChatAction(call, step, target, status, result) {
+    if (!this._turn?.actions) return;
+    const key = `${call.name}:${stableKey(call.args || {})}`;
+    const previous = this._turn.actions.get(key);
+    if (previous?.status === 'done' && status !== 'succeeded') return;
+    const action = actionReport({ name: call.name, step, target, status, result, hideDetails: this._hasBrowserContext() });
+    this._turn.actions.set(key, action);
+  }
+
   // Конец запуска: ровно один done и один idle. Повторный stop/cancel их не дублирует, и после
   // итога события этого запуска окну не идут — отменённый ход не воскресает поздним ответом.
   _endTurn({ idle = true } = {}) {
@@ -1338,6 +1375,26 @@ class Agent {
       !last.tool_calls?.length && typeof last.content === 'string' && last.content.trim() && this._turn?.searchSources.size
       ? [...this._turn.searchSources.values()] : null;
     if (searchSources) last.searchSources = searchSources;
+    const metadata = {};
+    let replyText;
+    if (this.chatReplies && status !== 'cancelled') {
+      const turn = this._turn;
+      if (turn.artifacts.size) metadata.artifacts = [...turn.artifacts.values()];
+      const actions = [...turn.actions.values()];
+      const partial = partialReport(actions);
+      if (partial) metadata.partial = partial;
+      if (last?.clarification) {
+        metadata.clarification = last.clarification;
+        replyText = last.content;
+      } else if (last?.role === 'assistant' && !last.tool_calls?.length && typeof last.content === 'string') {
+        const receipt = verifiedReceipt(last.content, actions);
+        if (receipt) last.content = replyText = receipt;
+      }
+      if (Object.keys(metadata).length) {
+        if (last?.role === 'assistant' && !last.tool_calls?.length) Object.assign(last, metadata);
+        else this.history.push({ role: 'assistant', content: '', ...metadata });
+      }
+    }
     this._emitRaw({
       type: 'done',
       ...(this._runId ? { runId: this._runId } : {}),
@@ -1347,6 +1404,8 @@ class Agent {
       ...(status === 'cancelled' ? { cancelled: true } : {}),
       ...(this._startedAt ? { startedAt: this._startedAt } : {}),
       ...(searchSources ? { searchSources } : {}),
+      ...metadata,
+      ...(replyText ? { replyText } : {}),
       verification: this._verificationSummary(),
       ...(plan ? { plan } : {}),
       ...(this._turn ? { steps: this._turn.toolCalls } : {}),

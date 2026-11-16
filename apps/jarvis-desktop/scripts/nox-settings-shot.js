@@ -89,7 +89,7 @@ for (const dir of [profileDir, dataDir, workspaceDir]) fs.mkdirSync(dir, { recur
 // Специально засеяны значения, которые проверяет QA: громкость/скорость голоса (доли 0..1),
 // характер «Дворецкий», terseReplies=false, keepAwake=always, модель/мышление по умолчанию.
 fs.writeFileSync(path.join(dataDir, 'settings.json'), JSON.stringify({
-  voice: false,
+  voiceOutput: 'off',
   backgroundModelRuns: false,
   alwaysListen: false,
   dictation: false,
@@ -98,8 +98,6 @@ fs.writeFileSync(path.join(dataDir, 'settings.json'), JSON.stringify({
   motion: true,
   seededBrief: true,
   voiceVolume: 0.7,
-  voiceRate: 1.1,
-  voicePersona: 'butler',
   terseReplies: false,
   keepAwake: 'always',
   modelTier: 'fast',
@@ -304,7 +302,7 @@ async function readGeometry(win, extra) {
       '#setNavList button[data-cat]', '#setNavList button[aria-current="true"]',
       '#settings-ai', '#setModelTier', '#setThinking', '#setModelHint', '#setThinkingHint',
       '#settings-mode', '#modeOptions', '#mailSettings', '#mailStatus', '#mailConnect',
-      '#voiceVolume', '#voiceRate', '#voicePersona', '#setKeepAwake', '#setDictation',
+      '#voiceVolume', '#voiceOutput', '#setKeepAwake', '#setDictation',
       '#memorySettings', '#memoryList', '#memoryEmpty', '#remindersSettings', '#remindersList',
       '#extensionsSettings', '#clipEnabled', '#snipForm', '#dlAnalyze', '#brainRecheck', '#chatClear',
       '#settings-sphere', '#sphereVariant', '#sphereSize', '#sphereGlow', '#spherePreview',
@@ -637,63 +635,28 @@ async function qaSettingsPhase1Page() {
     return { ok: radios.length === 3, detail: 'вариантов=' + radios.length + ' режим ' + orig + '→ask→' + orig };
   });
 
-  await check('8. Голос: seeded 0.7/1.1 и характер «Дворецкий», изменение громкости сохраняется', async () => {
-    const vol = q('#voiceVolume');
-    const rate = q('#voiceRate');
-    const persona = q('#voicePersona');
+  await check('8. Озвучка выключена по умолчанию, облачный режим и громкость сохраняются', async () => {
+    const mode = q('#voiceOutput');
+    const volume = q('#voiceVolume');
+    if (!mode || !volume || q('#voiceRate, #voicePersona, #voiceSpeaker')) return { ok: false };
     const s0 = await getSettings();
-    const personaText = persona && persona.selectedOptions && persona.selectedOptions[0] ? persona.selectedOptions[0].textContent.trim() : '';
-    // «Дворецкий» задаёт свой темп/громкость и перекрывает сохранённые доли — так устроен personas.js.
-    // Поэтому сохранение 0.7/1.1 проверяем, временно переключив характер на «Как есть», затем вернём «Дворецкого».
-    let personaNeutral = false;
-    if (persona) {
-      persona.value = 'neutral';
-      persona.dispatchEvent(new Event('change', { bubbles: true }));
-      await sleep(700);
-      personaNeutral = persona.value === 'neutral';
-      // Перечитываем карточку голоса: app.js обновляет ползунки при входе в раздел, не по смене характера.
-      window.JarvisNox.show('settings');
-      await sleep(900);
-    }
-    let volShown = null;
-    let rateShown = null;
-    try {
-      await until(() => { const v = q('#voiceVolume'); const r = q('#voiceRate'); return Boolean(v && Number(v.value) === Math.round(Number(s0.voiceVolume || 0.7) * 100) && Math.abs(Number(r && r.value) - Number(s0.voiceRate || 1.1)) < 0.01); }, 8000);
-      volShown = Number(q('#voiceVolume').value);
-      rateShown = Number(q('#voiceRate').value);
-    } catch (err) {
-      volShown = vol ? Number(vol.value) : null;
-      rateShown = rate ? Number(rate.value) : null;
-    }
-    let save55 = false;
-    let restore70 = false;
-    try {
-      const v = q('#voiceVolume');
-      v.value = '55';
-      v.dispatchEvent(new Event('input', { bubbles: true }));
-      v.dispatchEvent(new Event('change', { bubbles: true }));
-      await until(async () => { const s = await getSettings(); return s && Math.abs(Number(s.voiceVolume) - 0.55) < 0.011; }, 8000);
-      save55 = true;
-    } catch (err) { save55 = false; }
-    try {
-      const v = q('#voiceVolume');
-      v.value = '70';
-      v.dispatchEvent(new Event('input', { bubbles: true }));
-      v.dispatchEvent(new Event('change', { bubbles: true }));
-      await until(async () => { const s = await getSettings(); return s && Math.abs(Number(s.voiceVolume) - 0.7) < 0.011; }, 8000);
-      restore70 = true;
-    } catch (err) { restore70 = false; }
-    let personaRestored = false;
-    if (persona) {
-      persona.value = 'butler';
-      persona.dispatchEvent(new Event('change', { bubbles: true }));
-      await sleep(700);
-      personaRestored = persona.value === 'butler';
-    }
-    const volOk = volShown === 70;
-    const rateOk = rateShown !== null && Math.abs(rateShown - 1.1) < 0.001;
-    const ok = Boolean(vol && rate && volOk && rateOk && personaText === 'Дворецкий' && personaNeutral && save55 && restore70 && personaRestored);
-    return { ok, detail: 'характер="' + personaText + '"; при «Как есть» слайдеры показали ' + volShown + '/' + rateShown + '; 55→0.55=' + save55 + '; 70→0.7=' + restore70 + '; характер вернули=' + personaRestored + ' (persona перекрывает доли — это честное поведение)' };
+    await until(() => Number(volume.value) === Math.round(s0.voiceVolume * 100), 8000);
+    if (mode.value !== 'off' || !q('#voiceTest').disabled) return { ok: false };
+    const setMode = async (value) => {
+      mode.value = value;
+      mode.dispatchEvent(new Event('change', { bubbles: true }));
+      await until(async () => (await getSettings()).voiceOutput === value, 8000);
+    };
+    const setVolume = async (value) => {
+      volume.value = String(value);
+      volume.dispatchEvent(new Event('change', { bubbles: true }));
+      await until(async () => (await getSettings()).voiceVolume === value / 100, 8000);
+    };
+    await setMode('cloud');
+    await setVolume(55);
+    await setVolume(70);
+    await setMode('off');
+    return { ok: true, detail: 'off → cloud → off; 70% → 55% → 70%' };
   });
   await check('9. terseReplies: seeded false, переключатель включает и выключает настройку', async () => {
     const cb = q('[data-setting="terseReplies"]');

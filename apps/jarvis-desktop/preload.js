@@ -1,6 +1,63 @@
 // Узкий мост между окном и main-процессом: только явные методы, без общего invoke.
 const { contextBridge, ipcRenderer } = require('electron');
 
+ipcRenderer.on('voice:overlay', (_event, text) => {
+  const target = document.getElementById('voiceOverlayText');
+  if (!target) return;
+  target.textContent = typeof text === 'string' ? text : '';
+  document.body.dataset.voiceCommand = text ? 'yes' : 'no';
+});
+
+let microphoneCapture;
+ipcRenderer.on('voice:capture', async (_event, config) => {
+  microphoneCapture?.stop();
+  microphoneCapture = null;
+  if (!config) return;
+
+  let stream;
+  let audio;
+  let processor;
+  let active = true;
+  const send = (type, payload) => {
+    if (active) ipcRenderer.send('voice:capture-event', config.id, type, payload);
+  };
+  const stop = () => {
+    active = false;
+    processor?.disconnect();
+    stream?.getTracks().forEach((track) => track.stop());
+    audio?.close().catch(() => {});
+  };
+  microphoneCapture = { stop };
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: false,
+        ...(config.device ? { deviceId: { exact: config.device } } : {}),
+      },
+    });
+    if (!active) { stop(); return; }
+    const track = stream.getAudioTracks()[0];
+    track.addEventListener('ended', () => { send('error'); stop(); });
+    audio = new AudioContext({ sampleRate: 16000 });
+    const input = audio.createMediaStreamSource(stream);
+    processor = audio.createScriptProcessor(1024, 1, 1);
+    processor.onaudioprocess = ({ inputBuffer }) => {
+      const samples = inputBuffer.getChannelData(0);
+      const pcm = new ArrayBuffer(samples.length * 2);
+      const view = new DataView(pcm);
+      for (let i = 0; i < samples.length; i++) view.setInt16(i * 2, Math.max(-32768, Math.min(32767, samples[i] * 32768)), true);
+      send('pcm', pcm);
+    };
+    input.connect(processor);
+    processor.connect(audio.destination); // выход остаётся нулевым, вход не проигрывается
+    await audio.resume();
+    send('ready');
+  } catch (error) {
+    send('error', error.name);
+    stop();
+  }
+});
+
 contextBridge.exposeInMainWorld('jarvis', {
   send: (text, files, opts) => ipcRenderer.invoke('chat:send', String(text), Array.isArray(files) ? files : [], opts && typeof opts === 'object' ? opts : undefined),
   side: (text) => ipcRenderer.invoke('chat:side', String(text)),
@@ -48,8 +105,19 @@ contextBridge.exposeInMainWorld('jarvis', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSetting: (key, value) => ipcRenderer.invoke('settings:set', key, value),
   voiceTest: () => ipcRenderer.invoke('voice:test'),
+  voiceModelDownload: () => ipcRenderer.invoke('voice:model-download'),
+  voiceModelFolder: () => ipcRenderer.invoke('voice:model-folder'),
+  onVoiceModelProgress: (cb) => {
+    const listener = (_event, progress) => cb(progress);
+    ipcRenderer.on('voice:model-progress', listener);
+    return () => ipcRenderer.removeListener('voice:model-progress', listener);
+  },
+  voiceMicrophones: async () => {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.filter((device) => device.kind === 'audioinput' && device.deviceId && device.deviceId !== 'default')
+      .map((device, index) => ({ id: device.deviceId, title: device.label || `Микрофон ${index + 1}` }));
+  },
   voiceState: () => ipcRenderer.invoke('voice:state'),
-  voiceVoices: () => ipcRenderer.invoke('voice:voices'),
   setModelTier: (tier) => ipcRenderer.invoke('settings:setModelTier', tier),
   setThinking: (level) => ipcRenderer.invoke('settings:setThinking', level),
   setReplyStyle: (style) => ipcRenderer.invoke('settings:setReplyStyle', style),
@@ -82,12 +150,14 @@ contextBridge.exposeInMainWorld('jarvis', {
   pickRegion: () => ipcRenderer.invoke('region:pick'),
   openWorkspace: () => ipcRenderer.invoke('workspace:open'),
   openSource: (url) => ipcRenderer.invoke('source:open', String(url)),
+  artifactAction: (request) => ipcRenderer.invoke('artifact:action', request),
   sourceIcon: (host) => ipcRenderer.invoke('source:icon', host),
   addFolder: () => ipcRenderer.invoke('folders:add'),
   removeFolder: (dir) => ipcRenderer.invoke('folders:remove', String(dir)),
   listCommands: () => ipcRenderer.invoke('commands:list'),
   installPack: (id) => ipcRenderer.invoke('packs:install', id),
   saveCommand: (cmd) => ipcRenderer.invoke('commands:save', cmd),
+  buildCommandFromText: (payload) => ipcRenderer.invoke('commands:build-from-text', payload),
   draftCommandFromTurn: (payload) => ipcRenderer.invoke('commands:draft-from-turn', payload),
   deleteCommand: (id) => ipcRenderer.invoke('commands:delete', id),
   runCommand: (id) => ipcRenderer.invoke('commands:run', id),

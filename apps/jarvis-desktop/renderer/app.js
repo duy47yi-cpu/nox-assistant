@@ -49,7 +49,7 @@
     mode: null,
     hasKey: null,
     stateOk: null,
-    settings: { voice: false, quiet: false, alwaysOnTop: false, desktopOverlay: false, alwaysListen: false, autoStart: false, screenAuto: false, memoryAuto: true, motion: true, dictation: false, terseReplies: true },
+    settings: { voiceOutput: 'off', quiet: false, alwaysOnTop: false, desktopOverlay: false, alwaysListen: false, autoStart: false, screenAuto: false, memoryAuto: true, motion: true, dictation: false, terseReplies: true },
     tier: 'fast',
     workspace: '',
     folders: [],
@@ -735,8 +735,7 @@
     }
   }
 
-  // Проверка голоса: пробная фраза через настоящее ядро. Ключ голоса читается из .env заново,
-  // поэтому вписанный после запуска ключ подхватывается без перезапуска.
+  // Пробная фраза выбранным в ядре голосом.
   async function testVoice(btn) {
     if (!has('voiceTest')) {
       toast('Проверка голоса недоступна в этой версии ядра', 'error');
@@ -763,7 +762,13 @@
     }
     for (const inp of $$('[data-local="orbAnim"]')) inp.checked = S.orbAnim;
     const voiceTest = $('#voiceTest');
-    if (voiceTest) voiceTest.disabled = !has('voiceTest');
+    const voiceOutput = $('#voiceOutput');
+    if (voiceOutput) {
+      voiceOutput.value = S.settings.voiceOutput === 'cloud' ? 'cloud' : 'off';
+      voiceOutput.disabled = !can;
+    }
+    if (voiceTest) voiceTest.disabled = !has('voiceTest') || S.settings.voiceOutput !== 'cloud'
+      || !S.settings.voiceCloudAvailable || S.settings.quiet;
     const keepAwake = $('#setKeepAwake');
     if (keepAwake) {
       keepAwake.value = ['off', 'while-working', 'always'].includes(S.settings.keepAwake) ? S.settings.keepAwake : 'while-working';
@@ -3023,7 +3028,8 @@
       setRecordingUI(false); // ошибка запуска приходит без события stopped
       renderDictationIndicator();
       toast(String(ev.message || 'Диктовка не удалась'), 'error');
-    } else if (ev.type === 'text') dictationText(ev.text);
+    } else if (ev.type === 'fallback') toast(String(ev.message || 'Распознавание не удалось'));
+    else if (ev.type === 'text') dictationText(ev.text);
     else if (ev.type === 'wake') wakeCommand(ev.command);
   }
 
@@ -5436,128 +5442,16 @@
     if (rr) rr.addEventListener('click', loadReminders);
   }
 
-  // ── Голос: громкость, скорость, характер и выбор голоса (Настройки → Ответы) ──
-  function renderVoicePersonas(personas, current) {
-    const sel = $('#voicePersona');
-    if (!sel) return;
-    if (Array.isArray(personas) && personas.length > 0) {
-      sel.innerHTML = '';
-      for (const persona of personas) {
-        if (!persona || typeof persona.id !== 'string' || !persona.id) continue;
-        const option = document.createElement('option');
-        option.value = persona.id;
-        option.textContent = persona.name || persona.id;
-        if (persona.description) option.title = persona.description;
-        sel.appendChild(option);
-      }
-    }
-    if (typeof current === 'string' && current) sel.value = current;
-    const hint = $('#voicePersonaHint');
-    if (hint) {
-      const found = (Array.isArray(personas) ? personas : []).find((persona) => persona && persona.id === sel.value);
-      hint.textContent = found && found.description
-        ? found.description
-        : 'Меняет только темп и громкость, голос остаётся выбранным';
-    }
-  }
-
-  function renderVoiceOptions(opts = {}) {
-    const vol = Number.isFinite(opts.volume) ? Math.min(1, Math.max(0, opts.volume)) : 1;
-    const rate = Number.isFinite(opts.rate) ? Math.min(2, Math.max(0.5, opts.rate)) : 1;
-    const volEl = $('#voiceVolume');
-    if (volEl) {
-      volEl.value = String(Math.round(vol * 100));
-      const hint = $('#voiceVolumeHint');
-      if (hint) hint.textContent = Math.round(vol * 100) + ' %';
-    }
-    const rateEl = $('#voiceRate');
-    if (rateEl) {
-      rateEl.value = String(rate);
-      const hint = $('#voiceRateHint');
-      if (hint) hint.textContent = String(rate).replace('.', ',') + ' из 2';
-    }
-  }
-
-  async function loadVoiceOptions() {
+  // ── Облачная озвучка ──
+  function loadVoiceOptions() {
     const note = $('#voiceOptionsNote');
     if (!note) return;
-    if (!has('voiceState')) {
-      note.textContent = 'Эта версия ядра не отдаёт настройки голоса.';
-      note.hidden = false;
-      return;
-    }
-    try {
-      const st = await call('voiceState');
-      if (!st || st.ok === false) {
-        note.textContent = 'Настройки голоса недоступны.';
-        note.hidden = false;
-        return;
-      }
-      renderVoiceOptions(st.options || {});
-      renderVoicePersonas(st.personas, st.persona);
-      const sel = $('#voiceSpeaker');
-      if (sel && st.options && st.options.speaker) sel.value = st.options.speaker;
-      const hint = $('#voicePickHint');
-      if (hint) {
-        const which = st.provider === 'cloud' ? 'облачный голос' : 'локальный голос';
-        hint.textContent = st.available
-          ? `Сейчас: ${which}. «Список голосов» загрузит голоса модели.`
-          : (st.reason || 'Голос не настроен — проверьте ключ или локальный синтез');
-      }
-      note.hidden = true;
-    } catch (err) {
-      note.textContent = 'Настройки голоса не загрузились: ' + errText(err);
-      note.hidden = false;
-    }
-  }
-
-  async function loadVoiceList(btn) {
-    const note = $('#voiceOptionsNote');
-    const sel = $('#voiceSpeaker');
-    if (!sel || !note) return;
-    if (!has('voiceVoices')) {
-      note.textContent = 'Список голосов недоступен в этой версии ядра.';
-      note.hidden = false;
-      return;
-    }
-    const was = btn.disabled;
-    btn.disabled = true;
-    note.textContent = 'Загружаю список голосов…';
-    note.hidden = false;
-    try {
-      const r = await call('voiceVoices');
-      if (!r || r.ok === false) {
-        note.textContent = 'Список голосов не загрузился: ' + U.scrub((r && r.error) || 'причина неизвестна');
-        note.hidden = false;
-        return;
-      }
-      const cur = sel.value;
-      const frag = [el('option', { value: '', text: 'По умолчанию' })];
-      for (const v of Array.isArray(r.voices) ? r.voices : []) frag.push(el('option', { value: v.id, text: v.title || v.id }));
-      sel.replaceChildren(...frag);
-      sel.value = (Array.isArray(r.voices) ? r.voices : []).some((v) => v.id === cur) ? cur : '';
-      note.textContent = r.voices && r.voices.length ? `Голосов: ${r.voices.length}` : 'Список голосов пуст.';
-      note.hidden = false;
-    } catch (err) {
-      note.textContent = 'Список голосов не загрузился: ' + errText(err);
-      note.hidden = false;
-    } finally {
-      btn.disabled = was;
-    }
-  }
-
-  async function saveVoiceOption(key, value, label) {
-    if (!has('setSetting')) return;
-    try {
-      const r = await call('setSetting', key, value);
-      if (r && r.ok === false) {
-        toast('Не сохранилось: ' + U.scrub(r.error || 'ядро отказало'), 'error');
-        return;
-      }
-      if (label) toast(label, 'ok');
-    } catch (err) {
-      toast('Не сохранилось: ' + errText(err), 'error');
-    }
+    const volume = Math.round((S.settings.voiceVolume ?? 0.8) * 100);
+    $('#voiceVolume').value = String(volume);
+    $('#voiceVolumeHint').textContent = volume + '%';
+    const unavailable = S.settings.voiceOutput === 'cloud' && !S.settings.voiceCloudAvailable;
+    note.textContent = unavailable ? 'Облачная озвучка не настроена.' : '';
+    note.hidden = !unavailable;
   }
 
   let noticeVoiceDirty = false;
@@ -5615,25 +5509,33 @@
 
   function initVoiceOptions() {
     initNotificationVoice();
-    const vol = $('#voiceVolume');
-    const rate = $('#voiceRate');
-    const sel = $('#voiceSpeaker');
-    const list = $('#voiceList');
-    if (!vol || !rate || !sel || !list) return;
-    const volHint = $('#voiceVolumeHint');
-    const rateHint = $('#voiceRateHint');
-    vol.addEventListener('input', () => { if (volHint) volHint.textContent = vol.value + ' %'; });
-    vol.addEventListener('change', () => { if (volHint) volHint.textContent = vol.value + ' %'; saveVoiceOption('voiceVolume', Number(vol.value) / 100, 'Громкость голоса: ' + vol.value + ' %'); });
-    rate.addEventListener('input', () => { if (rateHint) rateHint.textContent = String(rate.value).replace('.', ',') + ' из 2'; });
-    rate.addEventListener('change', () => { if (rateHint) rateHint.textContent = String(rate.value).replace('.', ',') + ' из 2'; saveVoiceOption('voiceRate', Number(rate.value), 'Скорость речи: ' + String(rate.value).replace('.', ',')); });
-    sel.addEventListener('change', () => saveVoiceOption('voiceSpeaker', sel.value, sel.value ? 'Голос выбран' : 'Голос по умолчанию'));
-    const persona = $('#voicePersona');
-    if (persona) {
-      persona.addEventListener('change', () => {
-        saveVoiceOption('voicePersona', persona.value, 'Характер речи: ' + (persona.selectedOptions[0] ? persona.selectedOptions[0].textContent : persona.value));
-      });
-    }
-    list.addEventListener('click', () => loadVoiceList(list));
+    const mode = $('#voiceOutput');
+    const volume = $('#voiceVolume');
+    if (!mode || !volume) return;
+    mode.addEventListener('change', async () => {
+      mode.disabled = true;
+      try {
+        const result = await call('setSetting', 'voiceOutput', mode.value);
+        if (!result?.ok) throw new Error('Не удалось сохранить настройки озвучки');
+        S.settings.voiceOutput = result.value;
+      } catch (err) {
+        toast(errText(err), 'error');
+      } finally {
+        syncToggles();
+        loadVoiceOptions();
+      }
+    });
+    volume.addEventListener('input', () => { $('#voiceVolumeHint').textContent = volume.value + '%'; });
+    volume.addEventListener('change', async () => {
+      try {
+        const result = await call('setSetting', 'voiceVolume', Number(volume.value) / 100);
+        if (!result?.ok) throw new Error('Не удалось сохранить громкость');
+        S.settings.voiceVolume = result.value;
+      } catch (err) {
+        toast(errText(err), 'error');
+        loadVoiceOptions();
+      }
+    });
   }
 
   // ── Запуск ────────────────────────────────────────────────────

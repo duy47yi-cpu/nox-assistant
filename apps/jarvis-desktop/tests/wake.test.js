@@ -5,6 +5,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   normalizeWord,
+  parseWakeWords,
   wordRegex,
   extractWake,
   createWakeRouter,
@@ -175,4 +176,32 @@ test('сбой onWake не ломает роутер', () => {
 test('роутеру нужны now и onWake: без времени изнутри модуль не работает', () => {
   assert.throws(() => createWakeRouter({ onWake: () => {} }), TypeError);
   assert.throws(() => createWakeRouter({ now: () => 0 }), TypeError);
+});
+
+test('parseWakeWords и extractWake поддерживают список вариантов (1–2 слова, ё/е, граница слова)', () => {
+  assert.deepEqual(parseWakeWords('джарвис, жарвис, Эй Сэр, Джарвис, ёжик'), ['джарвис', 'жарвис', 'эй сэр', 'ежик']);
+  assert.deepEqual(parseWakeWords('   '), []);
+  assert.deepEqual(parseWakeWords([]), []);
+
+  const words = ['джарвис', 'жарвис', 'эй нокс', 'сём'];
+  for (const input of ['Джарвис, открой ютуб', 'жарвис открой ютуб', 'Эй нокс, открой ютуб', 'сем, открой ютуб']) {
+    assert.deepEqual(extractWake(input, { words }), { woke: true, command: 'открой ютуб' });
+  }
+  assert.deepEqual(extractWake('джарвисова открой ютуб', { words }), { woke: false, command: '' });
+  assert.deepEqual(extractWake('эй открой ютуб', { words }), { woke: false, command: '' });
+  assert.deepEqual(extractWake('джарвис открой ютуб', { words: [] }), { woke: false, command: '' });
+
+  const commands = [];
+  let activeWords = ['джарвис'];
+  const route = createWakeRouter({
+    words: () => activeWords,
+    now: () => 1000,
+    cooldownMs: 0,
+    onWake: (cmd) => commands.push(cmd),
+  });
+  route({ type: 'text', text: 'Нокс, открой код' });
+  assert.deepEqual(commands, []);
+  activeWords = ['джарвис', 'нокс'];
+  route({ type: 'text', text: 'Нокс, открой код' });
+  assert.deepEqual(commands, ['открой код']);
 });

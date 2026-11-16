@@ -41,7 +41,7 @@
   };
   const mcpStub = [{ name: 'calendar', transport: 'http', target: 'https://mcp.example/calendar', disabled: false, connected: true }];
   const settings = {
-    voice: false, dictation: false, alwaysOnTop: false, quiet: false, autoStart: false,
+    voiceOutput: 'off', dictation: false, alwaysOnTop: false, quiet: false, autoStart: false,
     screenAuto: false, memoryAuto: true,
     modelTier: 'fast', workspace: 'D:\\nox-assistant\\workspace', connectedFolders: [],
   };
@@ -55,11 +55,14 @@
   const stubDownloads = [{ path: 'setup-old.exe', size: 52_000_000, mtimeMs: 1000, reason: 'старый установщик' }, { path: 'video.tmp', size: 3_400_000, mtimeMs: 2000, reason: 'временный файл' }];
 
   const CATALOG = [
-    { name: 'volume_set', risk: 'T0', description: 'Установить громкость системы в процентах (0–100).', parameters: { type: 'object', properties: { percent: { type: 'integer', minimum: 0, maximum: 100 } }, required: ['percent'] } },
     { name: 'app_open', risk: 'T1', description: 'Запустить программу по имени или по полному пути к exe.', parameters: { type: 'object', properties: { name: { type: 'string', minLength: 1, maxLength: 260 } }, required: ['name'] } },
+    { name: 'ui_keys', risk: 'T1', description: 'Нажать сочетание клавиш в активном окне.', parameters: { type: 'object', properties: { keys: { type: 'string', minLength: 1, maxLength: 60 } }, required: ['keys'] } },
+    { name: 'ui_click', risk: 'T1', description: 'Нажать кнопку или элемент окна по имени.', parameters: { type: 'object', properties: { name: { type: 'string' }, window: { type: 'string' } } } },
+    { name: 'ui_type', risk: 'T1', description: 'Ввести текст в активное окно или поле.', parameters: { type: 'object', properties: { text: { type: 'string' }, name: { type: 'string' }, window: { type: 'string' } }, required: ['text'] } },
+    { name: 'volume_set', risk: 'T0', description: 'Установить громкость системы в процентах (0–100).', parameters: { type: 'object', properties: { percent: { type: 'integer', minimum: 0, maximum: 100 } }, required: ['percent'] } },
+    { name: 'wait', risk: 'T0', description: 'Подождать указанное число миллисекунд или секунд.', parameters: { type: 'object', properties: { ms: { type: 'integer', minimum: 50, maximum: 60000 } } } },
     { name: 'url_open', risk: 'T1', description: 'Открыть адрес http или https в браузере по умолчанию.', parameters: { type: 'object', properties: { url: { type: 'string', maxLength: 2048 } }, required: ['url'] } },
-    { name: 'shell_run', risk: 'T2', description: 'Выполнить команду PowerShell и вернуть вывод. Таймаут 30 с.', parameters: { type: 'object', properties: { command: { type: 'string', minLength: 1, maxLength: 4000 } }, required: ['command'] } },
-    { name: 'remind_in', risk: 'T0', description: 'Напомнить через указанное число минут.', parameters: { type: 'object', properties: { minutes: { type: 'integer', minimum: 1, maximum: 1440, description: 'через сколько минут' }, text: { type: 'string', maxLength: 500, description: 'текст напоминания' }, sound: { type: 'boolean', description: 'со звуком' } }, required: ['minutes', 'text'] } },
+    { name: 'speak', risk: 'T0', description: 'Произнести короткую фразу вслух.', parameters: { type: 'object', properties: { text: { type: 'string', minLength: 1, maxLength: 500 } }, required: ['text'] } },
   ];
   const RISK = Object.fromEntries(CATALOG.map((t) => [t.name, t.risk]));
   RISK.windows_list = 'T0';
@@ -419,10 +422,13 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
     getSettings: async () => ({
       restEnabled: false, restInterval: 50,
       notificationVoice: { enabled: false, categories: ['reminders', 'tasks', 'apps', 'files', 'budget'], volume: 0.7, quietEnabled: true, quietFrom: '23:00', quietTo: '08:00', importantAtNight: false },
-      ...settings, voiceVolume: 1, voiceRate: 1, voiceSpeaker: null, clipboardHistory: settings.clipboardHistory === true,
+      voiceVolume: 0.8, voiceCloudAvailable: false,
+      ...settings, voice: settings.voiceOutput === 'cloud', clipboardHistory: settings.clipboardHistory === true,
     }),
-    voiceState: async () => ({ ok: true, provider: 'local', available: true, reason: null, cloudAvailable: false, options: { speaker: settings.voiceSpeaker || null, volume: settings.voiceVolume ?? 1, rate: settings.voiceRate ?? 1 } }),
-    voiceVoices: async () => ({ ok: true, voices: [{ id: 'baya', title: 'Бая' }, { id: 'aidar', title: 'Айдар' }] }),
+    voiceState: async () => ({ ok: true, provider: settings.voiceOutput, available: false,
+      reason: settings.voiceOutput === 'cloud' ? 'Облачная озвучка не настроена.' : 'Озвучка выключена.',
+      cloudAvailable: false, options: { volume: settings.voiceVolume ?? 0.8 } }),
+    voiceMicrophones: async () => [],
     setSetting: async (key, value) => {
       await sleep(120);
       if (params.get('failset') === '1' || window.__jarvisStub.failSettings) return { ok: false };
@@ -441,17 +447,12 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
         settings.voiceVolume = n;
         return { ok: true, value: n };
       }
-      if (key === 'voiceRate') {
-        const n = Number(value);
-        if (!Number.isFinite(n) || n < 0.5 || n > 2) return { ok: false };
-        settings.voiceRate = n;
-        return { ok: true, value: n };
+      if (key === 'voiceOutput') {
+        if (!['off', 'cloud'].includes(value)) return { ok: false };
+        settings.voiceOutput = value;
+        return { ok: true, value };
       }
-      if (key === 'voiceSpeaker') {
-        settings.voiceSpeaker = typeof value === 'string' && value.trim() ? value.trim() : null;
-        return { ok: true, speaker: settings.voiceSpeaker };
-      }
-      if (!['voice', 'alwaysOnTop', 'quiet', 'autoStart', 'screenAuto', 'memoryAuto', 'dictation', 'clipboardHistory', 'restEnabled'].includes(key) || typeof value !== 'boolean') return { ok: false };
+      if (!['alwaysOnTop', 'quiet', 'autoStart', 'screenAuto', 'memoryAuto', 'dictation', 'clipboardHistory', 'restEnabled'].includes(key) || typeof value !== 'boolean') return { ok: false };
       settings[key] = value;
       return { ok: true };
     },
@@ -695,6 +696,7 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
     },
     openWorkspace: async () => { console.info('[dev-stub] открыть папку', settings.workspace); return { ok: true }; },
     openSource: async (url) => { console.info('[dev-stub] открыть источник', url); return { ok: true }; },
+    artifactAction: async () => ({ ok: false, error: 'Открытие файла доступно в приложении.' }),
     addFolder: async () => {
       settings.connectedFolders = [...settings.connectedFolders, `D:\\Проекты\\папка-${settings.connectedFolders.length + 1}`];
       return { ok: true, folders: [...settings.connectedFolders] };
@@ -740,19 +742,58 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
     installPack: async (id) => {
       const have0 = new Set(commands.map((c) => c.name));
       const packs = [
-        { id: 'montage', title: 'Монтаж', description: 'Монтаж: нажатия в активном окне редактора. Окно редактора должно быть на переднем плане.', hint: 'Нужно окно редактора на переднем плане', total: 2, installed: ['Монтаж: сохранить', 'Монтаж: отменить'].filter((n) => have0.has(n)).length, commands: [{ name: 'Монтаж: сохранить', phrase: 'сохрани монтаж' }, { name: 'Монтаж: отменить', phrase: 'отмени в монтаже' }] },
-        { id: 'sites', title: 'Сайты', description: 'Открывает сайт в браузере по умолчанию.', hint: 'Открывает сайт в браузере по умолчанию', total: 1, installed: 0, commands: [{ name: 'Сайт: почта', phrase: 'зайди в почту' }] },
+        { id: 'montage', title: 'Монтаж', description: 'Монтаж: нажатия в активном окне редактора.', hint: 'Нужно окно редактора на переднем плане', total: 2, installed: ['Монтаж: сохранить', 'Монтаж: отменить'].filter((n) => have0.has(n)).length, commands: [{ name: 'Монтаж: сохранить', phrase: 'сохрани монтаж' }, { name: 'Монтаж: отменить', phrase: 'отмени в монтаже' }] },
+        { id: 'photoshop', title: 'Photoshop', description: 'Фотошоп: новый холст, слой, сохранение, шаг назад и масштаб.', hint: 'Нужно окно Adobe Photoshop', total: 2, installed: ['Фотошоп: новый слой', 'Фотошоп: сохранить'].filter((n) => have0.has(n)).length, commands: [{ name: 'Фотошоп: новый слой', phrase: 'новый слой фотошоп' }, { name: 'Фотошоп: сохранить', phrase: 'сохрани фотошоп' }] },
+        { id: 'minecraft', title: 'Minecraft', description: 'Minecraft: инвентарь, бросить предмет, вид камеры и пауза.', hint: 'Нужно окно Minecraft', total: 2, installed: ['Minecraft: инвентарь', 'Minecraft: пауза'].filter((n) => have0.has(n)).length, commands: [{ name: 'Minecraft: инвентарь', phrase: 'открой инвентарь' }, { name: 'Minecraft: пауза', phrase: 'пауза майнкрафт' }] },
+        { id: 'sites', title: 'Сайты', description: 'Открывает сайт в браузере по умолчанию.', hint: 'Открывает сайт в браузере по умолчанию', total: 1, installed: ['Сайт: почта'].filter((n) => have0.has(n)).length, commands: [{ name: 'Сайт: почта', phrase: 'зайди в почту' }] },
       ];
       if (id == null) return { ok: true, packs };
-      if (!packs.some((p) => p.id === id)) return { ok: false, error: 'пак не найден' };
+      const chosen = packs.find((p) => p.id === id);
+      if (!chosen) return { ok: false, error: 'пак не найден' };
       const have = new Set(commands.map((c) => c.name));
       let added = 0;
-      for (const name of ['Монтаж: сохранить', 'Монтаж: отменить']) {
-        if (have.has(name)) continue;
-        commands.push({ id: 'pack-' + added + Date.now(), name, phrases: [name.toLowerCase()], steps: [{ tool: 'ui_keys', args: { keys: 'ctrl+s' } }], enabled: true });
+      for (const c of chosen.commands) {
+        if (have.has(c.name)) continue;
+        commands.push({ id: 'pack-' + chosen.id + '-' + added + '-' + Date.now(), schemaVersion: 3, name: c.name, phrases: [c.phrase], steps: [{ id: 's1', type: 'hotkey', params: { keys: 'ctrl+s' }, tool: 'ui_keys', args: { keys: 'ctrl+s' }, children: [] }], enabled: true });
         added++;
       }
+      if (added > 0) emit({ type: 'commands:changed' });
       return { ok: true, added };
+    },
+    buildCommandFromText: async (payload) => {
+      await failCmd();
+      const raw = typeof payload === 'string' ? payload : String(payload?.text || '');
+      const text = raw.trim();
+      if (!text) return { ok: false, error: 'Опишите словами, что должна делать команда.', missing: [] };
+      const steps = [];
+      const lower = text.toLowerCase();
+      if (/блокнот|notepad/i.test(lower)) steps.push({ id: 's1', type: 'app_start', params: { name: 'notepad' }, tool: 'app_open', args: { name: 'notepad' }, children: [] });
+      if (/громкост\D*(\d{1,3})/i.test(lower)) {
+        const pct = Math.min(100, Number(RegExp.$1));
+        steps.push({ id: 's' + (steps.length + 1), type: 'volume', params: { percent: pct }, tool: 'volume_set', args: { percent: pct }, children: [] });
+      }
+      if (/сохран|ctrl\+s/i.test(lower)) steps.push({ id: 's' + (steps.length + 1), type: 'hotkey', params: { keys: 'ctrl+s' }, tool: 'ui_keys', args: { keys: 'ctrl+s' }, children: [] });
+      if (!steps.length) {
+        return {
+          ok: false,
+          error: 'В каталоге действий пока нет подходящего шага для этого описания.',
+          missing: ['Указанное действие отсутствует в безопасном каталоге команд'],
+          questions: ['Попробуйте: открыть программу, громкость, сочетание клавиш, пауза или ввод текста.'],
+        };
+      }
+      return {
+        ok: true,
+        source: 'offline',
+        missing: [],
+        command: {
+          schemaVersion: 3,
+          name: text.slice(0, 48),
+          phrases: [text.toLowerCase().slice(0, 60)],
+          enabled: true,
+          confirm: false,
+          steps,
+        },
+      };
     },
     draftCommandFromTurn: async ({ phrase, actions, existingCommands } = {}) => {
       await failCmd();
@@ -768,7 +809,7 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       if (!steps.length) return { ok: false, reason: 'Нет подходящих повторяемых действий для сохранения' };
       return {
         ok: true,
-        draft: { schemaVersion: 2, version: 2, kind: 'sequence', name: p.slice(0, 64), phrases: [p.toLowerCase()], steps, enabled: true, origin: 'ai' },
+        draft: { schemaVersion: 3, version: 3, kind: 'sequence', name: p.slice(0, 64), phrases: [p.toLowerCase()], steps, enabled: true, origin: 'ai' },
       };
     },
     listCommands: async () => { await failCmd(); return commands.map((c) => JSON.parse(JSON.stringify(c))); },
@@ -777,11 +818,22 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       await sleep(150);
       const err = validate(cmd);
       if (err) return { ok: false, error: err };
+      const cloneNode = (s, i) => ({
+        ...(s.id ? { id: String(s.id) } : { id: `step-${i + 1}` }),
+        ...(s.type ? { type: String(s.type) } : {}),
+        ...(s.params ? { params: JSON.parse(JSON.stringify(s.params)) } : {}),
+        tool: s.tool,
+        args: { ...s.args },
+        children: Array.isArray(s.children) ? s.children.map((c, j) => cloneNode(c, j)) : [],
+      });
       const clean = {
         id: cmd.id || 'cmd-' + Math.random().toString(36).slice(2, 8),
+        schemaVersion: 3,
         name: String(cmd.name).trim(),
+        program: cmd.program ? String(cmd.program).trim() : null,
+        confirm: cmd.confirm === true,
         phrases: cmd.phrases.map((p) => String(p).trim()),
-        steps: cmd.steps.map((s) => ({ tool: s.tool, args: { ...s.args } })),
+        steps: cmd.steps.map(cloneNode),
         enabled: cmd.enabled !== false,
         origin: cmd.origin || 'manual',
         folder: cmd.folder || null,
@@ -791,6 +843,7 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       };
       const i = commands.findIndex((c) => c.id === clean.id);
       if (i >= 0) commands[i] = clean; else commands.push(clean);
+      emit({ type: 'commands:changed' });
       return { ok: true, command: JSON.parse(JSON.stringify(clean)) };
     },
     deleteCommand: async (id) => {
@@ -884,7 +937,7 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
   };
 
   if (params.get('oldcore') === '1') {
-    for (const k of ['draftCommandFromTurn', 'installPack', 'listCommands', 'saveCommand', 'deleteCommand', 'runCommand', 'toolCatalog', 'updateCommandTriggers', 'getCommandLaunches', 'triggerCommandLaunch', 'fireCommandEvent', 'clearCommandLaunchLog', 'openMini',
+    for (const k of ['draftCommandFromTurn', 'buildCommandFromText', 'installPack', 'listCommands', 'saveCommand', 'deleteCommand', 'runCommand', 'toolCatalog', 'updateCommandTriggers', 'getCommandLaunches', 'triggerCommandLaunch', 'fireCommandEvent', 'clearCommandLaunchLog', 'openMini',
       'chatHistory', 'clearChat', 'chatList', 'chatNew', 'chatSelect', 'chatClose', 'pickFiles', 'openWorkspace', 'addFolder', 'removeFolder', 'setModelTier', 'libraryList', 'libraryRun']) delete api[k];
   }
 

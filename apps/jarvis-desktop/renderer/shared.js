@@ -190,6 +190,7 @@
     command_build: 'Сценарий по описанию',
     command_list: 'Список команд',
     command_set_hotkey: 'Горячая клавиша',
+    command_confirm: 'Подтверждение команды',
     screen_look: 'Снимок экрана',
     screen_region_look: 'Обведённая область экрана',
     url_open: 'Открыть адрес',

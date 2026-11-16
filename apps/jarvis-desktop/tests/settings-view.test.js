@@ -758,8 +758,8 @@ test('index.html: 15 карточек с категориями, новые ка
   // Прежняя разметка — регрессионный страж «не удали настройку».
   const legacyIds = [
     'settings-mode', 'modeOptions', 'mailSettings', 'mailStatus', 'mailRead', 'mailConnect', 'mailDisconnect', 'mailDisconnectRow',
-    'setAnswersTitle', 'voiceTest', 'voiceVolume', 'voiceVolumeHint', 'voiceRate', 'voiceRateHint', 'voiceSpeaker', 'voicePickHint',
-    'voiceList', 'voicePersona', 'voicePersonaHint', 'voiceOptionsNote', 'setDictation', 'orbAnimHint', 'setKeepAwake',
+    'setAnswersTitle', 'voiceTest', 'voiceVolume', 'voiceVolumeHint', 'voiceOutput',
+    'voiceOptionsNote', 'setDictation', 'orbAnimHint', 'setKeepAwake',
     'memorySettings', 'memoryList', 'memoryCount', 'memoryEmpty', 'memoryNote', 'memoryReload', 'memoryClear',
     'remindersSettings', 'remindersList', 'remindersCount', 'remindersEmpty', 'remindersNote', 'remindersReload',
     'extensionsSettings', 'clipEnabled', 'clipTtl', 'clipPause', 'clipReload', 'clipClear', 'clipList', 'clipNote', 'clipEmpty',
@@ -773,7 +773,9 @@ test('index.html: 15 карточек с категориями, новые ка
   assert.deepEqual(lost, [], 'потерянные id настроек');
 
   const settings = [...view.matchAll(/data-setting="([a-zA-Z]+)"/g)].map((match) => match[1]).sort();
-  assert.deepEqual(settings, ['alwaysListen', 'alwaysOnTop', 'autoStart', 'desktopOverlay', 'dictation', 'memoryAuto', 'motion', 'quiet', 'restEnabled', 'screenAuto', 'terseReplies', 'voice'].sort());
+  assert.deepEqual(settings, ['alwaysListen', 'alwaysOnTop', 'autoStart', 'desktopOverlay', 'dictation', 'memoryAuto', 'motion', 'quiet', 'restEnabled', 'screenAuto', 'terseReplies'].sort());
+  assert.match(view, /<option value="off">Выключена \(по умолчанию\)<\/option>\s+<option value="cloud">Облачная<\/option>/u);
+  assert.doesNotMatch(view, /id="voice(?:Speaker|List|Persona|Rate)"/u);
   assert.ok(view.includes('data-local="orbAnim"'), 'настройка анимации шара на месте');
 
   assert.match(html, /href="nox-settings\.css"/, 'стиль Nox-настроек подключён');

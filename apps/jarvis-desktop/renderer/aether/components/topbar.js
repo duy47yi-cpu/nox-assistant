@@ -3,11 +3,11 @@
   'use strict';
 
   const NAV_ITEMS = [
-    { id: 'chat', label: 'Чат', icon: 'chat' },
-    { id: 'commands', label: 'Готовые команды', caption: 'Команды', icon: 'commands' },
-    { id: 'mcp', label: 'MCP-подключения', caption: 'Подключения', icon: 'mcp' },
-    { id: 'personal', label: 'Личное пространство', caption: 'Пространство', icon: 'personal' },
-    { id: 'settings', label: 'Настройки', icon: 'settings' },
+    { id: 'personal', label: 'Личное пространство', caption: 'Главная', icon: 'home' },
+    { id: 'commands', label: 'Готовые команды', caption: 'Команды', icon: 'listChecks' },
+    { id: 'mcp', label: 'MCP-подключения', caption: 'Дополнения', icon: 'personal' },
+    { id: 'chat', label: 'Чат', caption: 'Nox AI', icon: 'sparkles' },
+    { id: 'settings', label: 'Настройки', caption: 'Настройки', icon: 'settings' },
   ];
 
   const MODE_INFO = [
@@ -17,18 +17,23 @@
   ];
 
   function createTopbar({ store, bridge }) {
-    const { icon } = window.NoxAetherIcons;
+    const { icon, logoSphere } = window.NoxAetherIcons;
 
     const header = document.createElement('header');
     header.className = 'ae-topbar';
     header.id = 'aeTopbar';
 
-    const brandBtn = document.createElement('button');
-    brandBtn.type = 'button';
-    brandBtn.className = 'ae-brand-mark';
-    brandBtn.title = 'Вернуться в чат';
-    brandBtn.textContent = 'Nox';
-    brandBtn.addEventListener('click', () => store.setRoute('chat'));
+    const logoBtn = document.createElement('button');
+    logoBtn.type = 'button';
+    logoBtn.id = 'lxLogoBtn';
+    logoBtn.className = 'lx-topbar-brand';
+    logoBtn.title = 'Nox Assistant — Главная';
+    logoBtn.setAttribute('aria-label', 'Nox Assistant — на главную');
+    const brandTitle = document.createElement('span');
+    brandTitle.className = 'lx-brand-title';
+    brandTitle.textContent = 'Nox Assistant';
+    logoBtn.append(logoSphere(), brandTitle);
+    logoBtn.addEventListener('click', () => store.setRoute('personal'));
 
     // ── Разделы окна ──
     const nav = document.createElement('nav');
@@ -49,6 +54,7 @@
       btn.title = item.label;
       btn.append(icon(item.icon, 'ae-nav-ico'));
       const txt = document.createElement('span');
+      txt.className = 'ae-nav-label';
       txt.textContent = item.caption || item.label;
       btn.append(txt);
       btn.addEventListener('click', () => store.setRoute(item.id));
@@ -76,6 +82,9 @@
       } else if (e.key === 'End') {
         e.preventDefault();
         visible[visible.length - 1].focus();
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        visible[idx].click();
       }
     });
 
@@ -180,7 +189,7 @@
       return quickField(label, input);
     }
     const quiet = toggle('Тихий режим', (v) => store.setSetting('quiet', v));
-    const named = toggle('Слушать имя «Джарвис»', (v) => store.setSetting('alwaysListen', v));
+    const named = toggle('Автовключение микрофона', (v) => store.setSetting('alwaysListen', v));
     const pinned = toggle('Поверх других окон', (v) => store.setSetting('alwaysOnTop', v));
     const volume = document.createElement('input');
     volume.type = 'range';
@@ -239,7 +248,7 @@
     }
 
     right.append(attentionBtn, modeWrap, quickWrap, winControls);
-    header.append(brandBtn, nav, right);
+    header.append(logoBtn, nav, right);
 
     function closeMenus() {
       quick.hidden = true;
@@ -264,7 +273,7 @@
       quiet.checked = Boolean(st.settings.quiet);
       named.checked = Boolean(st.settings.alwaysListen);
       pinned.checked = Boolean(st.settings.alwaysOnTop);
-      if (document.activeElement !== volume) volume.value = String(Math.round((st.settings.voiceVolume ?? 1) * 100));
+      if (document.activeElement !== volume) volume.value = String(Math.round((st.settings.voiceVolume ?? 0.8) * 100));
 
       const mode = st.mode || 'ask';
       const curMode = MODE_INFO.find((m) => m.id === mode) || MODE_INFO[0];

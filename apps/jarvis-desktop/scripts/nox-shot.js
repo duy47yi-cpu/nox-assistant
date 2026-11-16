@@ -72,6 +72,17 @@ const checkModelPick = has('check-model-pick');
 let lookArg = null;
 try { lookArg = JSON.parse(arg('look', 'null')); } catch { bad('--look: нужен JSON'); }
 const ownBg = has('own-bg');
+const routeArg = String(arg('route', '')).trim();
+const addonsTabArg = String(arg('addons-tab', '')).trim();
+const modalArg = String(arg('modal', '')).trim();
+const expandedArg = has('expanded');
+const commandsFileArg = String(arg('commands-file', '')).trim();
+const commandsLogArg = String(arg('commands-log', '')).trim();
+const cmdModeArg = String(arg('cmd-mode', '')).trim();
+const cmdSubTabArg = String(arg('cmd-subtab', '')).trim();
+const cmdStepArg = Number.parseInt(arg('cmd-step', '0'), 10) || 0;
+const selectCmdArg = String(arg('select-cmd', '')).trim();
+const openInspectorArg = has('cmd-inspector');
 
 // ── Временный профиль и данные ────────────────────────────────────
 // Прошлые запуски на Windows не всегда успевают удалить профиль Chromium до выхода
@@ -153,6 +164,12 @@ function fullConversation() {
 
 if (state === 'full') {
   fs.writeFileSync(path.join(dataDir, 'conversation.json'), JSON.stringify(fullConversation(), null, 2), 'utf8');
+}
+if (commandsFileArg && fs.existsSync(commandsFileArg)) {
+  fs.copyFileSync(commandsFileArg, path.join(dataDir, 'commands.json'));
+}
+if (commandsLogArg && fs.existsSync(commandsLogArg)) {
+  fs.copyFileSync(commandsLogArg, path.join(dataDir, 'command-runs.json'));
 }
 
 // Сессия, кэш и Chromium — во временном профиле, а не у владельца.
@@ -356,6 +373,59 @@ async function capture(win) {
     return feed ? feed.scrollTop : null;
   })()`).catch(() => null);
   await sleep(250);
+  const targetRoute = routeArg || (checkModelPick ? 'chat' : '');
+  if (targetRoute || addonsTabArg || modalArg || expandedArg || cmdModeArg || selectCmdArg || cmdStepArg) {
+    await win.webContents.executeJavaScript(`(async () => {
+      if (${JSON.stringify(expandedArg)}) document.documentElement.classList.add('lx-rail-expanded');
+      if (window.__noxAether) {
+        if (${JSON.stringify(targetRoute)}) window.__noxAether.setRoute(${JSON.stringify(targetRoute)});
+        if (${JSON.stringify(addonsTabArg)} && typeof window.__noxAether.setAddonsTab === 'function') {
+          window.__noxAether.setAddonsTab(${JSON.stringify(addonsTabArg)});
+        }
+        if (['ai', 'ai-settings'].includes(${JSON.stringify(modalArg)}) && typeof window.__noxAether.openAiModal === 'function') {
+          window.__noxAether.openAiModal();
+        }
+        await new Promise((r) => setTimeout(r, 220));
+        if (${JSON.stringify(selectCmdArg)}) {
+          if (window.__noxAether.commandsDebug && typeof window.__noxAether.commandsDebug.selectCommand === 'function') {
+            window.__noxAether.commandsDebug.selectCommand(${JSON.stringify(selectCmdArg)}, ${JSON.stringify(openInspectorArg)});
+          } else if (typeof window.__noxAether.openCommand === 'function') {
+            await window.__noxAether.openCommand(${JSON.stringify(selectCmdArg)});
+          }
+        }
+        if (window.__noxAether.commandsDebug) {
+          if (${JSON.stringify(cmdModeArg)}) {
+            await window.__noxAether.commandsDebug.setMode(${JSON.stringify(cmdModeArg)}, ${JSON.stringify(cmdSubTabArg || undefined)});
+          }
+          if (${JSON.stringify(cmdStepArg)} > 0) {
+            const sample = 'Открой Блокнот, подожди 2 секунды и сделай громкость 40%';
+            let draftObj = null;
+            if (${JSON.stringify(cmdStepArg)} >= 2 && window.NoxAetherBridge && window.NoxAetherBridge.has('buildCommandFromText')) {
+              const built = await window.NoxAetherBridge.call('buildCommandFromText', { text: sample }).catch(() => null);
+              if (built && built.command) {
+                draftObj = {
+                  name: built.command.name,
+                  program: built.command.program || '',
+                  phrases: built.command.phrases || [sample.toLowerCase()],
+                  hotkey: '',
+                  confirm: false,
+                  steps: (built.command.steps || []).map((s) => ({ step: s, checked: true })),
+                };
+              }
+            }
+            window.__noxAether.commandsDebug.setDescribeState({
+              description: sample,
+              step: ${JSON.stringify(cmdStepArg)},
+              draftObj,
+            });
+          }
+        }
+      }
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 160))));
+      const feed = document.querySelector('#feed');
+      if (feed) feed.scrollTop = 1e9;
+    })()`);
+  }
   const geometry = await readGeometry(win);
   const modelPick = checkModelPick ? await openModelPick(win) : undefined;
 

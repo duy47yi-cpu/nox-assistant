@@ -26,14 +26,13 @@ test('«Джарвис на рабочем столе»: мини-окно от�
   assert.match(read('renderer', 'index.html'), /data-setting="desktopOverlay"/);
 });
 
-test('«Слушать «Джарвис» всегда»: фоновое распознавание без кнопки, в поле ввода только обращения', () => {
+test('Автовключение микрофона запускает захват только после готовности окна', () => {
   const main = read('main.js');
   assert.match(main, /function startDictation\(\{ uiRequested \}\)/);
   assert.match(main, /function stopDictation\(\)/);
-  assert.match(main, /if \(!uiRequested && ev\.type === 'text'\) return;/);
-  assert.match(main, /key === 'alwaysListen'\) \{ if \(value\) startDictation\(\{ uiRequested: false \}\); else stopDictation\(\); \}/);
-  assert.match(main, /readSettings\(\)\.alwaysListen === true\) startDictation\(\{ uiRequested: false \}\)/);
-  assert.match(main, /'desktopOverlay', 'alwaysListen', 'terseReplies'\]/);
+  assert.match(main, /let dictationMode = 'off'/);
+  assert.match(main, /win\.webContents\.once\('did-finish-load', \(\) => \{\s*if \(readSettings\(\)\.alwaysListen === true && readSettings\(\)\.dictation !== false\)/);
+  assert.match(main, /setDictationMode\(saved === 'quiet' \? 'quiet' : 'listening', \{ persist: false \}\)/);
   assert.match(read('renderer', 'index.html'), /data-setting="alwaysListen"/);
   assert.match(read('renderer', 'app.js'), /'alwaysListen'/);
 });

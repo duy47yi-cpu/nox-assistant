@@ -128,7 +128,7 @@ class WorkspaceChat {
       emit: this.options.emit, mode: this.options.mode, stop: this.options.stop,
       workspace: space.root, history: chats.active().history, systemPrompt: prompt,
       clock: this.options.clock, turnsLog: this.options.turnsLog, maxSteps: 24, stream: true, turnDeadlineMs: this.options.turnDeadlineMs || 0,
-      plans: this.options.plans,
+      plans: this.options.plans, chatReplies: true,
       context: (text) => [memoryContext(space.memory, text), skillHintForTurn(skills, text)].filter(Boolean).join('\n'),
     });
     return { space, conversation, chats, registry, agent, skills, skillsDir };
@@ -137,9 +137,9 @@ class WorkspaceChat {
   current() { return { id: this.session.space.id, name: this.session.space.name }; }
   root() { return this.session.space.root; }
   history() { return this.session.agent.history.slice(); }
-  remember(text, reply) {
+  remember(text, reply, metadata) {
     if (this.busy || this.session.agent._controller) throw new Error('Джарвис занят');
-    this.session.agent.remember(text, reply);
+    this.session.agent.remember(text, reply, metadata);
     saveChats(this.session.conversation, this.session.chats);
   }
   tools() { return this.session.registry; }

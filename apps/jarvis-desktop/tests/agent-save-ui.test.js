@@ -297,14 +297,14 @@ test('draftCommandFromTurn builds valid schema v2 draft accepted by CommandStore
   });
 
   assert.equal(res.ok, true);
-  assert.equal(res.draft.schemaVersion, 2);
-  assert.equal(res.draft.version, 2);
+  assert.equal(res.draft.schemaVersion, 3);
+  assert.equal(res.draft.version, 3);
   assert.equal(res.draft.kind, 'sequence');
   assert.equal(res.draft.enabled, true);
   assert.equal(res.draft.origin, 'ai');
   assert.equal(res.draft.name, 'Открой Telegram и сделай тише');
   assert.deepEqual(res.draft.phrases, ['открой telegram и сделай тише']);
-  assert.deepEqual(res.draft.steps, [
+  assert.deepEqual(res.draft.steps.map(({ tool, args }) => ({ tool, args })), [
     { tool: 'app_open', args: { name: 'Telegram' } },
     { tool: 'volume_set', args: { percent: 25 } },
   ]);
@@ -314,7 +314,7 @@ test('draftCommandFromTurn builds valid schema v2 draft accepted by CommandStore
     const cs = new CommandStore(path.join(dir, 'commands.json'));
     const saved = cs.save(res.draft);
     assert.ok(saved.id);
-    assert.equal(saved.schemaVersion, 2);
+    assert.equal(saved.schemaVersion, 3);
     assert.equal(saved.origin, 'ai');
     assert.deepEqual(saved.phrases, ['открой telegram и сделай тише']);
   } finally {
@@ -400,7 +400,7 @@ test('draftCommandFromTurn rejects or strips secrets in args/phrase while keepin
     ],
   });
   assert.equal(secretArgText.ok, true);
-  assert.deepEqual(secretArgText.draft.steps, [{ tool: 'app_open', args: { name: 'browser' } }]);
+  assert.deepEqual(secretArgText.draft.steps.map(({ tool, args }) => ({ tool, args })), [{ tool: 'app_open', args: { name: 'browser' } }]);
 
   const urlWithSecret = draftCommandFromTurn({
     phrase: 'открой ссылку',
@@ -525,7 +525,7 @@ test('store.saveTurnAsCommand works cleanly via client fallback when draftComman
   const r = await store.saveTurnAsCommand('a1');
   assert.equal(r.ok, true);
   assert.equal(r.id, 'cmd-fb-1');
-  assert.equal(saved[0].schemaVersion, 2);
+  assert.equal(saved[0].schemaVersion, 3);
   assert.deepEqual(saved[0].phrases, ['открой заметки']);
   assert.equal(store.state.feedItems[1].savedCommandId, 'cmd-fb-1');
 });

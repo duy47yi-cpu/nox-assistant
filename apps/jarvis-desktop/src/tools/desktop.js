@@ -27,6 +27,24 @@ function comboScript(keys) {
 // повтор не возвращает окна обратно. Текст постоянный, пользовательских данных в нём нет.
 const MINIMIZE_SCRIPT = '(New-Object -ComObject Shell.Application).MinimizeAll()';
 const RESTORE_SCRIPT = '(New-Object -ComObject Shell.Application).UndoMinimizeALL()';
+const MINIMIZE_WITH_CHECK = [
+  "$ErrorActionPreference = 'Stop'",
+  `$sig = '[DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); [DllImport("user32.dll", EntryPoint="GetWindowLongW")] public static extern int GetWindowLong(IntPtr h, int index); [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int val, int size);'`,
+  'Add-Type -MemberDefinition $sig -Name MinimizeWindows -Namespace Nox',
+  '$targets = @(Get-Process | ForEach-Object { $_.MainWindowHandle } | Where-Object {',
+  '  $h = $_; $cloaked = 0',
+  '  if ($h -eq [IntPtr]::Zero -or ![Nox.MinimizeWindows]::IsWindowVisible($h) -or [Nox.MinimizeWindows]::IsIconic($h)) { return $false }',
+  '  [void][Nox.MinimizeWindows]::DwmGetWindowAttribute($h, 14, [ref]$cloaked, 4)',
+  '  $cloaked -eq 0 -and ([Nox.MinimizeWindows]::GetWindowLong($h, -16) -band 0x20000) -ne 0',
+  '} | Select-Object -Unique)',
+  MINIMIZE_SCRIPT,
+  '$open = @($targets)',
+  'for ($i = 0; $i -lt 20 -and $open.Count -gt 0; $i++) {',
+  '  Start-Sleep -Milliseconds 50',
+  '  $open = @($open | Where-Object { [Nox.MinimizeWindows]::IsWindow($_) -and ![Nox.MinimizeWindows]::IsIconic($_) })',
+  '}',
+  'ConvertTo-Json -Compress -InputObject @{ checked = $targets.Count; open = $open.Count }',
+].join('\n');
 
 // Пауза между шагами сценария: например, чтобы программа успела открыться.
 function makeWaitTool() {
@@ -57,15 +75,18 @@ function makeWaitTool() {
   };
 }
 
-// Произнести фразу голосом. Сам синтез подключает main.js (SpeechClient); без установленного голоса шаг не выполняется.
+// Произнести фразу голосом. Синтез и доступность облачной озвучки определяет main.js.
 let speaker = null;
+let speakerUnavailable = () => null;
 
-function setSpeaker(fn) {
+function setSpeaker(fn, unavailable = () => null) {
   speaker = typeof fn === 'function' ? fn : null;
+  speakerUnavailable = unavailable;
 }
 
 function desktopToolsFactory({ runner = runPowerShell, speak: customSpeaker = null, fsImpl = fs } = {}) {
   const activeSpeaker = () => customSpeaker || speaker;
+  const unavailable = () => customSpeaker ? null : speakerUnavailable();
   const wait = makeWaitTool();
 
   // Win+D: свернуть все окна (рабочий стол).
@@ -75,10 +96,14 @@ function desktopToolsFactory({ runner = runPowerShell, speak: customSpeaker = nu
     risk: 'T1',
     parameters: { type: 'object', properties: {} },
     async run(args, ctx = {}) {
-      const res = await runner(MINIMIZE_SCRIPT, {}, { signal: ctx.signal, timeoutMs: 15000 });
+      const res = await runner(MINIMIZE_WITH_CHECK, {}, { signal: ctx.signal, timeoutMs: 15000 });
       return { ...res, summary: res.ok ? 'окна свёрнуты' : res.summary };
     },
-    verify: cannotVerify('состояние окон после команды не считывается'),
+    async verify(_args, result) {
+      const probe = JSON.parse(result.data.stdout);
+      if (probe.open > 0) return { status: 'failed', evidence: `остались развёрнутые окна: ${probe.open}` };
+      return { status: 'confirmed', evidence: probe.checked ? `проверены окна: ${probe.checked}` : 'подходящих открытых окон не было' };
+    },
   };
 
   // Win+Shift+M: вернуть свёрнутые окна.
@@ -168,7 +193,8 @@ function desktopToolsFactory({ runner = runPowerShell, speak: customSpeaker = nu
       const text = String(args.text || '').trim();
       if (!text) return { ok: false, summary: 'пустая фраза', data: {} };
       const say = activeSpeaker();
-      if (!say) return { ok: false, summary: 'голос не подключён', data: {} };
+      const reason = unavailable();
+      if (reason || !say) return { ok: false, summary: reason || 'голос не подключён', data: {} };
       try {
         await say(text, ctx.signal);
         return { ok: true, summary: 'сказано', data: {} };
@@ -214,6 +240,7 @@ function desktopToolsFactory({ runner = runPowerShell, speak: customSpeaker = nu
   const readClipboardAloud = createReadClipboardAloud({
     runner,
     activeSpeaker,
+    unavailable,
     fsImpl,
     readerProvider: activeReader,
   });
@@ -347,8 +374,7 @@ async function readDocumentText(file, { signal, runner = runPowerShell, fsImpl =
   return { ok: true, text };
 }
 
-// Голос для чтения вслух. Он берётся в момент чтения, а не при сборке инструментов: голос
-// подключается позже, а во время работы может смениться (локальный или облачный).
+// Голос для чтения вслух подключается после сборки инструментов. Доступность проверяем перед каждым куском.
 let reader = null;
 function getReader() {
   if (!reader) {
@@ -381,12 +407,13 @@ const READ_SOURCES = ['clipboard', 'selection', 'file'];
 function createReadClipboardAloud({
   runner = runPowerShell,
   activeSpeaker = () => speaker,
+  unavailable = () => speakerUnavailable(),
   fsImpl = fs,
   readerProvider = getReader,
 } = {}) {
   return {
     name: 'read_clipboard_aloud',
-    description: `Прочитать вслух текст: из буфера обмена, выделенное сейчас или файл (txt, md, html, docx, json, csv, log). Читаю кусками по предложениям, в фоне, до ${MAX_READ} символов. Управление: action "pause" — пауза, "resume" — продолжить с того же места, "stop" — остановить, "status" — где сейчас. Для файла укажи path.`,
+    description: `Прочитать вслух облачным голосом, если включена озвучка: из буфера обмена, выделенное сейчас или файл (txt, md, html, docx, json, csv, log). Читаю по предложениям в фоне, до ${MAX_READ} символов. Управление: action "pause" — пауза, "resume" — продолжить с того же места, "stop" — остановить, "status" — где сейчас. Для файла укажи path.`,
     risk: 'T1',
     parameters: {
       type: 'object',
@@ -403,6 +430,8 @@ function createReadClipboardAloud({
       if (action === 'status') return { ok: true, summary: readerSummary(book.snapshot()), data: book.snapshot() };
       if (action === 'pause' || action === 'resume' || action === 'stop') {
         const before = book.snapshot();
+        const reason = action === 'resume' && before.state === 'paused' ? unavailable() : null;
+        if (reason) return { ok: false, summary: reason, data: before };
         const after = action === 'pause' ? book.pause() : action === 'resume' ? book.resume() : book.stop();
         // Ничего не делали — так и говорим, без выдумки.
         if (before.state === after.state) return { ok: true, summary: readerSummary(after), data: after };
@@ -411,7 +440,8 @@ function createReadClipboardAloud({
 
       const source = String(args.source || 'clipboard');
       if (!READ_SOURCES.includes(source)) return { ok: false, summary: `не знаю источник «${source}»`, data: {} };
-      if (!activeSpeaker()) return { ok: false, summary: 'голос не подключён', data: {} };
+      const reason = unavailable();
+      if (reason || !activeSpeaker()) return { ok: false, summary: reason || 'голос не подключён', data: {} };
 
       let text = '';
       let label = null;
@@ -436,6 +466,8 @@ function createReadClipboardAloud({
         label = 'буфер обмена';
       }
 
+      const afterRead = unavailable();
+      if (afterRead) return { ok: false, summary: afterRead, data: {} };
       const started = book.start(text, { label });
       if (!started.total) return { ok: false, summary: 'нечего читать: текста нет', data: started };
       // Чтение идёт в фоне: ход не занимается на минуты, пауза и стоп приходят следующим поручением.

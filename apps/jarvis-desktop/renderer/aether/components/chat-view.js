@@ -8,8 +8,23 @@
 (() => {
   'use strict';
 
-  // Эти фразы распознаёт src/shortcuts/offline.js, в том числе без аккаунта.
-  const STARTERS = ['Открой Блокнот', 'Открой Калькулятор'];
+  const STARTERS = ['Сверни окна', 'Что по погоде?', 'Открой рабочую папку'];
+  const PARTIAL_LABELS = {
+    done: 'Выполнено', failed: 'Не удалось выполнить', unverified: 'Не подтверждено',
+  };
+  const WORK_LABELS = {
+    failed: 'Не выполнено', unverified: 'Не подтверждено', succeeded: 'Готово',
+    partial: 'Выполнено частично', cancelled: 'Остановлено',
+  };
+  const ARTIFACT_ICONS = {
+    pptx: 'layers', ppt: 'layers', odp: 'layers',
+    xlsx: 'listChecks', xls: 'listChecks', ods: 'listChecks', csv: 'listChecks', tsv: 'listChecks',
+  };
+  const countPlural = new Intl.PluralRules('ru');
+
+  function countLabel(value, words) {
+    return `${value} ${words[countPlural.select(value)] || words.many}`;
+  }
   const ACTION_LABELS = {
     confirmed: 'Результат проверен', unverified: 'Результат не подтверждён',
     failed: 'Проверка не прошла', error: 'Не удалось выполнить', refused: 'Действие отклонено',
@@ -96,17 +111,12 @@
     emptySub.className = 'ae-empty-sub';
     emptySub.textContent = 'Напишите поручение или выберите пример.';
 
-    const starterLabel = document.createElement('p');
-    starterLabel.className = 'ae-starter-label';
-    starterLabel.id = 'aeStarterLabel';
-    starterLabel.textContent = 'Примеры поручений';
-
     const starterRow = document.createElement('div');
     starterRow.className = 'ae-starters';
     starterRow.setAttribute('role', 'group');
-    starterRow.setAttribute('aria-labelledby', starterLabel.id);
+    starterRow.setAttribute('aria-label', 'Примеры поручений');
 
-    emptyHero.append(emptyTitle, emptySub, starterLabel, starterRow);
+    emptyHero.append(emptyTitle, emptySub, starterRow);
 
     // Лента сообщений
     const feedWrap = document.createElement('div');
@@ -131,37 +141,6 @@
 
     // Слот подтверждения (показывается над полем ввода, фокусируя внимание без шума)
     const approvalCard = window.NoxAetherApprovalCard.createApprovalCard({ store });
-
-    const workPanel = document.createElement('div');
-    workPanel.className = 'ae-live-line';
-    workPanel.hidden = true;
-    const workLabel = document.createElement('span');
-    workLabel.className = 'ae-live-label';
-    const workDot = document.createElement('span');
-    workDot.className = 'ae-live-dot';
-    workDot.setAttribute('aria-hidden', 'true');
-    const workText = document.createElement('span');
-    workText.className = 'ae-live-text';
-    workText.setAttribute('role', 'status');
-    const workStep = document.createElement('span');
-    workStep.className = 'ae-live-step';
-    const workElapsed = document.createElement('span');
-    workElapsed.className = 'ae-live-elapsed';
-    workElapsed.setAttribute('aria-hidden', 'true');
-    const workStop = document.createElement('button');
-    workStop.type = 'button';
-    workStop.className = 'ae-btn ae-btn-ghost ae-live-stop';
-    workStop.setAttribute('aria-label', 'Остановить текущий ход');
-    workStop.append(icon('stop'), 'Стоп');
-    workStop.addEventListener('click', async () => {
-      workStop.disabled = true;
-      try {
-        await store.stopRun();
-      } finally {
-        workStop.disabled = false;
-      }
-    });
-    workPanel.append(workDot, workLabel, workStep, workElapsed, workStop, workText);
 
     // Поле ввода (единый экземпляр без пересоздания при переходе empty -> docked)
     let stickBottom = true;
@@ -188,10 +167,7 @@
 
     const dockWrap = document.createElement('div');
     dockWrap.className = 'ae-composer-dock';
-    const workDock = document.createElement('div');
-    workDock.className = 'ae-work-dock';
-    workDock.append(workPanel, approvalCard.el);
-    dockWrap.append(workDock, composer.el);
+    dockWrap.append(approvalCard.el, composer.el);
 
     column.append(feedWrap, emptyHero, dockWrap);
     root.append(bannerWrap, column);
@@ -245,44 +221,81 @@
       return `${(Math.max(0, ms) / 1000).toFixed(1)} с`;
     }
 
-    function buildDetailsPanel(turn, { running, waiting }) {
+    function buildDetailsPanel(turn, liveWork) {
       const acts = Array.isArray(turn.actions) ? turn.actions : [];
       const searchUrls = new Set((turn.searchSources || []).map((source) => source.url));
       const srcs = Array.isArray(turn.sources) ? turn.sources.filter((source) => !searchUrls.has(source.url)) : [];
       const expandable = acts.length > 0 || srcs.length > 0;
-      if (!expandable && !running) return null;
+      if (!expandable && !liveWork) return null;
 
       const wrap = document.createElement('div');
       wrap.className = 'ae-details-wrap';
 
+      const row = document.createElement('div');
+      row.className = 'ae-step-line';
+      const panelId = `aeTurnDetails-${turn.id}`;
       const toggle = document.createElement(expandable ? 'button' : 'div');
       toggle.className = 'ae-details-toggle';
       if (expandable) {
         toggle.type = 'button';
         toggle.setAttribute('aria-expanded', String(Boolean(turn.detailsOpen)));
-        toggle.append(icon(turn.detailsOpen ? 'chevronDown' : 'chevronRight', 'ae-details-chev'));
+        toggle.setAttribute('aria-controls', panelId);
         toggle.addEventListener('click', () => {
           pendingFocusTurnId = turn.id;
           store.toggleTurnDetails(turn.id);
         });
       }
-      const status = turn.cancelled ? 'Остановлено'
-        : running ? (waiting ? 'Ждёт разрешения' : 'Выполняется')
-          : ({ failed: 'Не выполнено', unverified: 'Не подтверждено', succeeded: 'Готово' })[turn.workStatus];
-      toggle.append(status ? `Ход работы · ${status}` : 'Ход работы');
-      const elapsedMs = running ? Date.now() - turn.startedAt : turn.workElapsedMs;
+      const status = turn.cancelled ? 'cancelled' : turn.workStatus;
+      const labelText = liveWork?.text || WORK_LABELS[status] || 'Ход работы';
+      row.dataset.state = liveWork?.state || status || '';
+
+      const dot = document.createElement('span');
+      dot.className = 'ae-step-dot';
+      dot.setAttribute('aria-hidden', 'true');
+      const label = document.createElement('span');
+      label.className = 'ae-step-label';
+      label.textContent = labelText;
+      toggle.title = labelText;
+      if (liveWork) label.setAttribute('role', 'status');
+      toggle.append(dot, label);
+      const elapsedMs = liveWork ? Date.now() - turn.startedAt : turn.workElapsedMs;
       if (Number.isFinite(elapsedMs)) {
         const elapsed = document.createElement('span');
         elapsed.className = 'ae-work-time';
-        if (running) elapsed.setAttribute('aria-hidden', 'true');
-        elapsed.textContent = ` · ${elapsedLabel(elapsedMs)}`;
+        elapsed.setAttribute('aria-hidden', 'true');
+        elapsed.textContent = elapsedLabel(elapsedMs);
         toggle.append(elapsed);
       }
-      wrap.append(toggle);
+      if (expandable) toggle.append(icon(turn.detailsOpen ? 'chevronDown' : 'chevronRight', 'ae-details-chev'));
+      row.append(toggle);
+      if (liveWork) {
+        const stop = document.createElement('button');
+        stop.type = 'button';
+        stop.className = 'ae-btn ae-btn-ghost ae-live-stop';
+        stop.setAttribute('aria-keyshortcuts', 'Escape');
+        stop.title = 'Остановить текущий ход (Esc)';
+        stop.append(icon('stop'), 'Стоп');
+        stop.addEventListener('click', async () => {
+          stop.disabled = true;
+          try {
+            await store.stopRun();
+          } finally {
+            stop.disabled = false;
+          }
+        });
+        row.append(stop);
+      }
+      wrap.append(row);
 
-      if (expandable && turn.detailsOpen) {
+      if (expandable) {
         const panel = document.createElement('div');
         panel.className = 'ae-details-panel';
+        panel.id = panelId;
+        panel.hidden = !turn.detailsOpen;
+        if (!turn.detailsOpen) {
+          wrap.append(panel);
+          return wrap;
+        }
 
         if (acts.length) {
           const actList = document.createElement('div');
@@ -421,7 +434,141 @@
       return actionsBar;
     }
 
-    function renderTurnItem(item, { isActive = false, isLastError = false, existing = null, fallbackPhrase = '' } = {}) {
+    function buildArtifactCard(artifact) {
+      const card = document.createElement('div');
+      card.className = 'ae-artifact-card';
+      const extension = /\.([a-z\d]+)$/i.exec(artifact.path)?.[1].toLowerCase();
+      const typeIcon = icon(Object.hasOwn(ARTIFACT_ICONS, extension) ? ARTIFACT_ICONS[extension] : 'file', 'ae-artifact-icon');
+      const info = document.createElement('div');
+      info.className = 'ae-artifact-info';
+      const name = document.createElement('strong');
+      name.className = 'ae-artifact-name';
+      name.textContent = artifact.name || artifact.path.split(/[\\/]/).at(-1);
+      name.title = name.textContent;
+      info.append(name);
+
+      const meta = document.createElement('span');
+      meta.className = 'ae-artifact-meta';
+      const bits = [window.NoxAetherComposer.formatFileSize(artifact.size)];
+      if (Number.isInteger(artifact.slides)) bits.push(countLabel(artifact.slides, { one: 'слайд', few: 'слайда', many: 'слайдов' }));
+      if (Number.isInteger(artifact.rows)) bits.push(countLabel(artifact.rows, { one: 'строка', few: 'строки', many: 'строк' }));
+      meta.textContent = bits.filter(Boolean).join(' · ');
+      if (meta.textContent) info.append(meta);
+
+      if (artifact.path !== name.textContent) {
+        const location = document.createElement('span');
+        location.className = 'ae-artifact-path';
+        location.textContent = artifact.path;
+        location.title = artifact.path;
+        info.append(location);
+      }
+      const controls = document.createElement('div');
+      controls.className = 'ae-artifact-actions';
+      for (const [action, buttonText, glyph, failure] of [
+        ['open', 'Открыть', 'external', 'Не удалось открыть файл.'],
+        ['reveal', 'Показать в папке', 'folder', 'Не удалось показать файл в папке.'],
+      ]) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ae-btn ae-btn-secondary ae-btn-sm';
+        btn.disabled = !bridge.has('artifactAction');
+        btn.append(icon(glyph), buttonText);
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            const res = await bridge.call('artifactAction', { path: artifact.path, action });
+            if (res?.ok === false) store.toast(failure, 'error');
+          } catch {
+            store.toast(failure, 'error');
+          } finally {
+            btn.disabled = false;
+          }
+        });
+        controls.append(btn);
+      }
+      card.append(typeIcon, info, controls);
+      return card;
+    }
+
+    function buildPartialCard(items) {
+      const card = document.createElement('div');
+      card.className = 'ae-partial-card';
+      const title = document.createElement('strong');
+      title.className = 'ae-partial-title';
+      title.textContent = items.every((item) => item.status === 'done') ? 'Выполнено'
+        : items.some((item) => item.status === 'done') ? 'Выполнено частично'
+          : items.every((item) => item.status === 'unverified') ? 'Не подтверждено' : 'Не выполнено';
+      const list = document.createElement('ul');
+      for (const item of items) {
+        const row = document.createElement('li');
+        const status = document.createElement('span');
+        status.className = 'ae-partial-state';
+        status.dataset.status = item.status;
+        status.textContent = PARTIAL_LABELS[item.status];
+        const text = document.createElement('span');
+        text.textContent = scrub(item.label);
+        if (item.reason) {
+          const reason = document.createElement('span');
+          reason.className = 'ae-partial-reason';
+          reason.textContent = ` — ${scrub(item.reason)}`;
+          text.append(reason);
+        }
+        row.append(status, text);
+        list.append(row);
+      }
+      card.append(title, list);
+      return card;
+    }
+
+    function buildClarification(options, enabled) {
+      const row = document.createElement('div');
+      row.className = 'ae-clarification';
+      row.setAttribute('role', 'group');
+      row.setAttribute('aria-label', 'Варианты ответа');
+      for (const option of options) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ae-btn ae-btn-secondary ae-btn-sm';
+        btn.textContent = scrub(option);
+        btn.disabled = !enabled;
+        btn.addEventListener('click', () => composer.sendChoice(option));
+        row.append(btn);
+      }
+      return row;
+    }
+
+    const expandedReplies = new WeakSet();
+    function foldReply(item, body) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'ae-long-reply';
+      const preview = document.createElement('p');
+      preview.className = 'ae-long-preview';
+      const text = [...body.children].map((block) => block.textContent).join(' ').replace(/\s+/g, ' ').trim();
+      const characters = Array.from(text);
+      preview.textContent = characters.length > 360 ? `${characters.slice(0, 360).join('').replace(/\s+\S*$/, '')}…` : text;
+      const details = document.createElement('details');
+      details.open = expandedReplies.has(item);
+      details.addEventListener('toggle', () => {
+        if (details.open) expandedReplies.add(item);
+        else expandedReplies.delete(item);
+      });
+      const summary = document.createElement('summary');
+      const show = document.createElement('span');
+      show.className = 'ae-long-show';
+      show.textContent = 'Показать полностью';
+      const hide = document.createElement('span');
+      hide.className = 'ae-long-hide';
+      hide.textContent = 'Свернуть ответ';
+      summary.append(show, hide);
+      details.append(summary, body);
+      wrapper.append(preview, details);
+      return wrapper;
+    }
+
+    function renderTurnItem(item, {
+      isActive = false, isLastError = false, canClarify = false, existing = null,
+      fallbackPhrase = '', liveWork = null, keepWork = false,
+    } = {}) {
       if (item.kind === 'user') {
         const msg = document.createElement('article');
         msg.className = 'ae-msg is-user';
@@ -469,31 +616,19 @@
         const bar = document.createElement('div');
         bar.className = 'ae-error-actions';
 
-        if (isLastError && store.state.lastSentPayload && !store.state.trackerBusy) {
+        if (isLastError && (item.retryPayload || store.state.lastSentPayload)) {
           const retryBtn = document.createElement('button');
           retryBtn.type = 'button';
           retryBtn.className = 'ae-btn ae-btn-secondary ae-btn-sm';
-          retryBtn.append(icon('refresh'), (() => { const s = document.createElement('span'); s.textContent = 'Повторить'; return s; })());
+          retryBtn.append(icon('refresh'), 'Повторить');
           retryBtn.addEventListener('click', () => {
-            const p = store.state.lastSentPayload;
+            const p = item.retryPayload || store.state.lastSentPayload;
             if (p) store.sendChatMessage(p.text, p.files);
           });
           bar.append(retryBtn);
         }
 
-        const techText = String(item.technical || item.rawText || '').trim();
-        if (techText && techText !== item.text) {
-          const detailsEl = document.createElement('details');
-          detailsEl.className = 'ae-tech-details';
-          const sum = document.createElement('summary');
-          sum.textContent = 'Технические детали';
-          const pre = document.createElement('pre');
-          pre.textContent = scrub(techText);
-          detailsEl.append(sum, pre);
-          bar.append(detailsEl);
-        }
-
-        if (bar.childElementCount) row.append(bar);
+        if (bar.children.length) row.append(bar);
         card.append(row);
         return card;
       }
@@ -522,10 +657,14 @@
 
       const hasText = Boolean(item.text?.trim());
       const cancelled = !isActive && item.cancelled;
-      const preparing = isActive && showReplyPlaceholder;
+      const preparing = isActive && !hasText && !liveWork;
+      const savedWork = keepWork ? msg.querySelector('.ae-details-wrap') : null;
+      const focusedWork = document.activeElement?.closest?.('.ae-step-line');
+      const restoreStop = !savedWork && focusedWork?.closest('.ae-msg') === msg
+        && document.activeElement.classList.contains('ae-live-stop');
       let reply = msg.querySelector('.ae-reply');
       for (const child of Array.from(msg.children)) {
-        if (child !== reply) child.remove();
+        if (child !== reply && child !== savedWork) child.remove();
       }
       if (hasText || preparing || cancelled) {
         if (!reply) {
@@ -560,7 +699,7 @@
         const dots = document.createElement('span');
         dots.className = 'ae-reply-dots';
         dots.setAttribute('aria-hidden', 'true');
-        dots.textContent = '...';
+        dots.textContent = '…';
         status.append(label, dots);
         replyContent.replaceChildren(status);
       }
@@ -575,7 +714,8 @@
           stopped.textContent = hasText ? 'Остановлено. Ответ не завершён.' : 'Остановлено.';
           body.append(stopped);
         }
-        replyContent.replaceChildren(body);
+        const shouldFold = !isActive && !cancelled && item.text?.length > 1600;
+        replyContent.replaceChildren(shouldFold ? foldReply(item, body) : body);
       }
 
       if (reply?.parentElement === msg) {
@@ -590,10 +730,21 @@
         };
       }
 
-      const details = buildDetailsPanel(item, { running: isActive && showActiveWork, waiting: isActive && showApprovalWork });
-      if (details) {
+      const details = savedWork || buildDetailsPanel(item, liveWork);
+      if (details && !savedWork) {
         msg.insertBefore(details, reply?.parentElement === msg ? reply : null);
+        if (restoreStop) details.querySelector('.ae-live-stop')?.focus({ preventScroll: true });
       }
+
+      const partial = Array.isArray(item.partial) ? item.partial.filter((part) => part?.label && Object.hasOwn(PARTIAL_LABELS, part.status)) : [];
+      if (partial.length) msg.append(buildPartialCard(partial));
+
+      for (const artifact of Array.isArray(item.artifacts) ? item.artifacts : []) {
+        if (typeof artifact?.path === 'string' && artifact.path) msg.append(buildArtifactCard(artifact));
+      }
+
+      const options = Array.isArray(item.clarification) ? item.clarification.filter((option) => typeof option === 'string' && option.trim()) : [];
+      if (options.length >= 2) msg.append(buildClarification(options.slice(0, 3), canClarify));
 
       if (!isActive && hasText && item.searchSources?.length) {
         const loadIcon = bridge.has('sourceIcon') ? (host) => bridge.call('sourceIcon', host) : null;
@@ -602,7 +753,7 @@
 
       const actions = item.actions || [];
       const action = actions.length === 1 ? actions[0] : actions.findLast((a) => a.tool === 'presentation_open');
-      if (!isActive && !item.cancelled && ['confirmed', 'unverified', 'failed', 'error', 'refused'].includes(action?.status)) {
+      if (!isActive && !item.cancelled && !partial.length && ['confirmed', 'unverified', 'failed', 'error', 'refused'].includes(action?.status)) {
         const outcome = document.createElement('div');
         outcome.className = 'ae-action-outcome';
         outcome.dataset.status = action.status;
@@ -653,7 +804,7 @@
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'ae-link-btn';
-        btn.textContent = 'Открыть Настройки';
+        btn.textContent = 'Открыть настройки';
         btn.addEventListener('click', () => store.setRoute('settings'));
         b.append(sp, btn);
         bannerWrap.replaceChildren(b);
@@ -664,12 +815,11 @@
     }
 
     let wasEmptyPrev = true;
-    let lastFeedSig = '';
+    let lastFeedItems = null;
+    let lastInteractiveKey = '';
     let lastActiveSig = '';
+    let lastLiveWorkSig = '';
     let activeMessage = null;
-    let showReplyPlaceholder = false;
-    let showActiveWork = false;
-    let showApprovalWork = false;
     let liveElapsedTimer = null;
 
     function renderElapsed() {
@@ -677,27 +827,25 @@
       if (!Number.isFinite(startedAt)) return;
       const text = elapsedLabel(Date.now() - startedAt);
       const elapsed = activeMessage?.querySelector('.ae-work-time');
-      if (elapsed && elapsed.textContent !== ` · ${text}`) elapsed.textContent = ` · ${text}`;
-      if (!workPanel.hidden && workElapsed.textContent !== text) workElapsed.textContent = text;
+      if (elapsed && elapsed.textContent !== text) elapsed.textContent = text;
     }
 
-    function renderWork(st) {
+    function getLiveWork(st) {
       const active = st.activeTurn;
-      showApprovalWork = Boolean(active && (st.approvals.queue.length > 0 || st.trackerState === 'waiting_approval'));
-      showActiveWork = Boolean(active && (active.actions.length > 0 || showApprovalWork || st.handsActive || st.trackerState === 'searching' || st.trackerState === 'verifying'));
-      workPanel.hidden = !showApprovalWork;
-      showReplyPlaceholder = Boolean(active && !active.text.trim());
-      if (showApprovalWork) {
-        const steps = active.actions.length;
-        workPanel.dataset.state = 'waiting';
-        workLabel.textContent = 'Агент';
-        workStep.textContent = steps ? `Шаг ${steps}` : '';
-        const text = store.getLiveWorkText() || 'Ждёт разрешения';
-        if (workText.textContent !== text) workText.textContent = text;
+      if (!active || !(st.trackerBusy || st.sendingLock)) return null;
+      if (st.approvals.queue.length || st.trackerState === 'waiting_approval') {
+        return { state: 'waiting', text: 'Ждёт решения' };
       }
-      if (showActiveWork && !liveElapsedTimer) {
+      if (active.actions.length || st.handsActive || ['searching', 'verifying'].includes(st.trackerState)) {
+        return { state: 'running', text: store.getLiveWorkText() || 'Выполняется' };
+      }
+      return null;
+    }
+
+    function toggleElapsedTimer(on) {
+      if (on && !liveElapsedTimer) {
         liveElapsedTimer = setInterval(renderElapsed, 100);
-      } else if (!showActiveWork && liveElapsedTimer) {
+      } else if (!on && liveElapsedTimer) {
         clearInterval(liveElapsedTimer);
         liveElapsedTimer = null;
       }
@@ -707,7 +855,8 @@
       renderBanner(st);
       approvalCard.render(st);
       composer.render(st);
-      renderWork(st);
+      const liveWork = getLiveWork(st);
+      toggleElapsedTimer(Boolean(liveWork));
 
       const isEmpty = store.isEmptyChat();
       const shouldAnim = store.consumeComposeAnim() || (wasEmptyPrev && !isEmpty && Boolean(captureBeforeSendRect));
@@ -732,7 +881,8 @@
       emptyHero.hidden = true;
       feedWrap.hidden = false;
 
-      if (wasEmptyPrev && shouldAnim && beforeRect && document.documentElement.dataset.animations !== 'off') {
+      if (wasEmptyPrev && shouldAnim && beforeRect && document.documentElement.dataset.animations !== 'off'
+        && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         const afterRect = dockWrap.getBoundingClientRect();
         const dy = beforeRect.top - afterRect.top;
         if (Math.abs(dy) > 6 && typeof dockWrap.animate === 'function') {
@@ -749,29 +899,33 @@
 
       // При поступлении текста меняется только текущий ответ.
       const active = st.activeTurn;
-      const lastItem = st.feedItems[st.feedItems.length - 1];
-      const sig = [
-        st.activeChatId,
-        st.feedItems.length,
-        st.feedItems.map((x) => `${x.id}:${x.detailsOpen ? 1 : 0}:${(x.text || '').length}:${x.savedCommandId || ''}:${x.savingCommand ? 1 : 0}:${x.savedCommandError || ''}:${(x.actions || []).map((a) => `${a.tool || ''}:${a.status || ''}`).join(',')}`).join(','),
-        lastItem?.kind === 'error' && st.trackerBusy ? '1' : '0',
-      ].join('|');
-      const activeSig = active
-        ? `${active.id}:${active.text.length}:${active.actions.map((a) => a.status).join(',')}:${active.sources.length}:${active.detailsOpen ? 1 : 0}:${showReplyPlaceholder ? 1 : 0}:${showActiveWork ? 1 : 0}:${showApprovalWork ? 1 : 0}`
-        : '';
-      const rebuilt = sig !== lastFeedSig;
+      const interactive = !st.trackerBusy && !st.sendingLock;
+      const lastRetry = interactive ? st.feedItems.findLast((item) => item.kind === 'error' || item.kind === 'user') : null;
+      const lastDialogItem = interactive ? st.feedItems.findLast((item) => ['assistant', 'user', 'error'].includes(item.kind)) : null;
+      const retryId = lastRetry?.kind === 'error' ? lastRetry.id : '';
+      const clarifyId = lastDialogItem?.clarification?.length ? lastDialogItem.id : '';
+      const interactiveKey = `${st.activeChatId}:${retryId}:${clarifyId}`;
+      const liveWorkSig = active ? JSON.stringify([
+        active.id, liveWork, active.detailsOpen, active.sources.length,
+        active.actions.map((action) => [action.id, action.status, action.summary, action.evidence]),
+      ]) : '';
+      const activeSig = active ? `${liveWorkSig}:${active.text}` : '';
+      const rebuilt = st.feedItems !== lastFeedItems || interactiveKey !== lastInteractiveKey;
 
       if (rebuilt) {
-        lastFeedSig = sig;
+        lastFeedItems = st.feedItems;
+        lastInteractiveKey = interactiveKey;
         const frag = document.createDocumentFragment();
-        const len = st.feedItems.length;
         let prevUserPhrase = '';
-        for (let i = 0; i < len; i += 1) {
-          const item = st.feedItems[i];
+        for (const item of st.feedItems) {
           if (item.kind === 'user' && item.text) prevUserPhrase = String(item.text).trim();
-          const isLastErr = item.kind === 'error' && item === lastItem;
           const existing = activeMessage?.dataset.id === item.id ? activeMessage : null;
-          frag.append(renderTurnItem(item, { isLastError: isLastErr, existing, fallbackPhrase: prevUserPhrase }));
+          frag.append(renderTurnItem(item, {
+            isLastError: item.id === retryId,
+            canClarify: item.id === clarifyId,
+            existing,
+            fallbackPhrase: prevUserPhrase,
+          }));
         }
         feed.replaceChildren(frag);
         activeMessage = null;
@@ -783,7 +937,9 @@
           activeMessage = null;
         }
         if (active) {
-          activeMessage = renderTurnItem(active, { isActive: true, existing: activeMessage });
+          activeMessage = renderTurnItem(active, {
+            isActive: true, existing: activeMessage, liveWork, keepWork: liveWorkSig === lastLiveWorkSig,
+          });
           if (activeMessage.parentElement !== feed) feed.append(activeMessage);
         }
         if (pendingFocusTurnId) {
@@ -800,7 +956,8 @@
         }
         scrollBottom(false);
       }
-      if (showActiveWork) renderElapsed();
+      lastLiveWorkSig = liveWorkSig;
+      if (liveWork) renderElapsed();
     }
 
     return {

@@ -51,33 +51,70 @@ function trimPunctuation(text) {
     .trim();
 }
 
+// Разобрать список вариантов обращения из массива или строки через запятую/точку с запятой.
+// Пустое значение даёт пустой массив (обращение не требуется / отключено).
+function parseWakeWords(input) {
+  const raw = Array.isArray(input)
+    ? input
+    : typeof input === 'string'
+      ? input.split(/[,;\n]+/)
+      : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    const clean = normalizeWord(item);
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    out.push(clean);
+  }
+  return out;
+}
+
 // Разобрать сказанное: было ли обращение в начале и что осталось командой.
 // Пустой ввод — null; без обращения — { woke: false, command: '' }.
 function extractWake(text, options = {}) {
   if (typeof text !== 'string') return null;
   const phrase = text.trim();
   if (!phrase) return null;
-  const word = options && typeof options.word === 'string' ? options.word : defaultWord;
-  const match = wordRegex(word).exec(phrase);
-  if (!match) return { woke: false, command: '' };
-  const rest = phrase.slice(match[0].length);
-  return { woke: true, command: trimPunctuation(rest) };
+  let candidates;
+  if (options && options.words !== undefined) {
+    candidates = parseWakeWords(options.words);
+    if (candidates.length === 0) return { woke: false, command: '' };
+  } else {
+    const word = options && typeof options.word === 'string' ? options.word : defaultWord;
+    const single = normalizeWord(word);
+    candidates = single ? [single] : [defaultWord];
+  }
+  const ordered = [...candidates].sort((a, b) => b.length - a.length);
+  for (const candidate of ordered) {
+    const match = wordRegex(candidate).exec(phrase);
+    if (match) {
+      const rest = phrase.slice(match[0].length);
+      return { woke: true, command: trimPunctuation(rest) };
+    }
+  }
+  return { woke: false, command: '' };
 }
 
 // Превратить поток событий диктовки в вызовы onWake(command).
 // Правила: пустые команды не передаются, кулдаун гасит повтор, чужие события
 // (error/state/мусор) и сбой onWake роутер не ломают, close/stop прекращают работу.
-function createWakeRouter({ word = defaultWord, cooldownMs = DEFAULT_COOLDOWN_MS, now, onWake } = {}) {
+function createWakeRouter({ word = defaultWord, words, cooldownMs = DEFAULT_COOLDOWN_MS, now, onWake } = {}) {
   if (typeof now !== 'function') throw new TypeError('createWakeRouter: нужен now — время снаружи');
   if (typeof onWake !== 'function') throw new TypeError('createWakeRouter: нужен onWake');
   const pause = Number.isFinite(cooldownMs) && cooldownMs >= 0 ? cooldownMs : DEFAULT_COOLDOWN_MS;
   let closed = false;
   let lastAt = null;
+  const getWakeOpts = () => {
+    if (typeof words === 'function') return { words: words() };
+    if (words !== undefined) return { words };
+    return { word };
+  };
 
   const route = (event) => {
     if (closed || !event || typeof event !== 'object') return;
     if (event.type !== 'text') return; // ошибки и состояния диктовки к обращению не относятся
-    const found = extractWake(event.text, { word });
+    const found = extractWake(event.text, getWakeOpts());
     if (!found || !found.woke || !found.command) return;
     const at = now();
     if (lastAt !== null && Number.isFinite(at) && at - lastAt < pause) return;
@@ -100,6 +137,7 @@ function listWakeWords() {
 
 module.exports = {
   normalizeWord,
+  parseWakeWords,
   wordRegex,
   extractWake,
   createWakeRouter,

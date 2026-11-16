@@ -19,7 +19,7 @@ const {
   seedPackCommands, missingKeys,
 } = require('../src/commands/packs');
 
-const PACK_IDS = ['montage', 'games', 'browser', 'windows', 'explorer', 'text', 'media', 'sites', 'apps'];
+const PACK_IDS = ['montage', 'games', 'browser', 'windows', 'explorer', 'text', 'media', 'sites', 'apps', 'photoshop', 'minecraft'];
 
 // Реестр инструментов — из настоящих ui.js и system.js, а не из списка в тесте.
 const tools = new Map([...uiTools(), ...systemTools].map((tool) => [tool.name, tool]));
@@ -32,7 +32,7 @@ function tmpStore(t) {
   return new CommandStore(path.join(dir, 'commands.json'));
 }
 
-test('девять паков: монтаж, игры, браузер, окна, проводник, текст, музыка, сайты, программы', () => {
+test('11 паков: монтаж, игры, браузер, окна, проводник, текст, музыка, сайты, программы, Photoshop, Minecraft', () => {
   assert.deepEqual(PACKS.map((pack) => pack.id), PACK_IDS);
   for (const pack of PACKS) {
     assert.equal(typeof pack.title, 'string');
@@ -196,13 +196,13 @@ test('экспорт пака — файл команд Nox: preview видит 
     for (const command of availableCommands(pack)) {
       const saved = stored.find((item) => item.name === command.name);
       assert.ok(saved, `${pack.id}: не импортирована ${command.name}`);
-      assert.equal(saved.schemaVersion, 2);
+      assert.equal(saved.schemaVersion, 3);
       assert.equal(saved.origin, 'sample');
       assert.equal(saved.enabled, true);
       assert.equal(saved.folder, pack.title);
       assert.deepEqual(saved.collections, ['Паки']);
       assert.deepEqual(saved.phrases, command.phrases.map((phrase) => normalize(phrase)));
-      assert.deepEqual(saved.steps, command.steps);
+      assert.deepEqual(saved.steps.map(({ tool, args }) => ({ tool, args })), command.steps);
     }
   }
 });

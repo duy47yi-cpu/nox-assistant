@@ -22,11 +22,11 @@ const MAX_OPTIONAL_PHRASE = 80;
 const MAX_STEPS = 20;
 const MAX_TOOL = 60;
 
-// Версия схемы команды. 1 — старые записи без поля schemaVersion; 2 — текущая (версия, дата изменения,
-// происхождение, папка и коллекции). Файл обмена — отдельный формат со своей версией.
+// Версия схемы команды. 1 — старые записи без поля schemaVersion; 2 — плоские шаги с триггерами;
+// 3 — текущая: дерево шагов ({id, type, params, children}), программа, confirm.
 const { zonedFormatter, wallTime, resolveWallTime } = require('../schedule/store');
 
-const COMMAND_SCHEMA_VERSION = 2;
+const COMMAND_SCHEMA_VERSION = 3;
 const TRANSFER_FORMAT = 'nox.commands';
 const TRANSFER_VERSION = 1;
 
@@ -56,8 +56,36 @@ const EVENT_CATALOG = Object.freeze([
   Object.freeze({ type: 'user:custom', label: 'Пользовательское событие', description: 'Именованное событие сценария или внешней кнопки' }),
 ]);
 const SYSTEM_EVENT_TYPES = new Set(EVENT_CATALOG.map((e) => e.type));
-const RUN_STATUSES = new Set(['started', 'succeeded', 'skipped', 'failed', 'cancelled', 'blocked', 'interrupted']);
+const RUN_STATUSES = new Set(['started', 'succeeded', 'partial', 'skipped', 'failed', 'cancelled', 'blocked', 'interrupted']);
 const TRIGGER_KINDS = new Set(['hotkey', 'schedule', 'event', 'manual', 'phrase']);
+const STEP_TYPES = new Set(['app_start', 'hotkey', 'click', 'volume', 'type_text', 'wait', 'ai', 'shell']);
+const TYPE_TO_TOOL = Object.freeze({
+  app_start: 'app_open',
+  hotkey: 'ui_keys',
+  click: 'ui_click',
+  volume: 'volume_set',
+  type_text: 'ui_type',
+  wait: 'wait',
+  ai: 'ai',
+  shell: 'shell_run',
+});
+const TOOL_TO_TYPE = Object.freeze({
+  app_open: 'app_start',
+  ui_keys: 'hotkey',
+  ui_click: 'click',
+  desktop_click: 'click',
+  mouse_click: 'click',
+  volume_set: 'volume',
+  ui_type: 'type_text',
+  desktop_type: 'type_text',
+  wait: 'wait',
+  ai: 'ai',
+  shell_run: 'shell',
+});
+const MAX_STEP_ID = 80;
+const MAX_PROGRAM = 200;
+const MAX_TREE_DEPTH = 16;
+const INVALID_PROGRAM_CHARS_RE = /[\x00-\x1f\x7f*?"<>|]/;
 
 // Происхождение команды: кто её составил. Используется подписями в окне и при переносе.
 const ORIGINS = new Set(['manual', 'recorded', 'ai', 'model', 'imported', 'sample']);
@@ -320,29 +348,200 @@ function checkArgs(args, n, { strictArgs = false, warnings = [], prefix = '' } =
   return walkArgValue(args, { where, dropSecrets: false });
 }
 
+function checkProgramRef(raw, whereLabel = 'программа') {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'string') throw new Error(`${whereLabel}: нужна строка`);
+  const clean = raw.trim();
+  if (clean === '') return null;
+  if (len(clean) > MAX_PROGRAM) throw new Error(`${whereLabel}: не длиннее ${MAX_PROGRAM} символов`);
+  if (INVALID_PROGRAM_CHARS_RE.test(clean) || SECRET_ARG_KEY.test(clean) || /(?:password|passwd|secret|token|api[_-]?key)\s*[:=]/i.test(clean)) {
+    throw new Error(`${whereLabel}: недопустимая ссылка на программу «${clean.slice(0, 40)}»`);
+  }
+  const hasExplicitPath = /[\\/]/.test(clean) || /^[a-zA-Z]:/.test(clean);
+  if (hasExplicitPath) {
+    if (/(?:^|[\\/])\.\.(?:$|[\\/])/.test(clean)) {
+      throw new Error(`${whereLabel}: битая ссылка на программу «${clean}»`);
+    }
+    if (!fs.existsSync(clean)) {
+      throw new Error(`${whereLabel}: битая ссылка на программу «${clean}» — файл не найден`);
+    }
+  }
+  return clean;
+}
+
+function checkConfirm(value, fallback = false) {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'boolean') throw new Error('confirm: нужен логический флаг (true или false)');
+  return value;
+}
+
+function resolveStepTypeAndTool(step, label) {
+  const hasTool = typeof step.tool === 'string' && step.tool.trim() !== '';
+  const hasType = typeof step.type === 'string' && step.type.trim() !== '';
+  if (!hasTool && !hasType) {
+    throw new Error(`${label}: укажите имя инструмента (tool или type)`);
+  }
+  const rawType = hasType ? step.type.trim() : '';
+  const rawTool = hasTool ? step.tool.trim() : '';
+  let type = rawType;
+  let tool = rawTool;
+
+  if (!tool && type) {
+    if (TYPE_TO_TOOL[type]) tool = TYPE_TO_TOOL[type];
+    else tool = type;
+  }
+  if (!type && tool) {
+    type = TOOL_TO_TYPE[tool] || tool;
+  }
+  if (type === 'click' && step.params && step.params.x !== undefined && step.params.y !== undefined
+      && !step.params.window && !step.params.name && !step.params.automationId && !rawTool) {
+    tool = 'desktop_click';
+  }
+  if (tool === '' || len(tool) > MAX_TOOL) {
+    throw new Error(`${label}: имя инструмента от 1 до ${MAX_TOOL} символов`);
+  }
+  if (type === '' || len(type) > MAX_TOOL) {
+    throw new Error(`${label}: тип шага от 1 до ${MAX_TOOL} символов`);
+  }
+  return { type, tool };
+}
+
 function checkSteps(steps, { strictArgs = false, warnings = [], prefix = '', blockShiftDelete = false } = {}) {
   if (!Array.isArray(steps)) throw new Error(`${prefix}шаги: нужен массив`);
   if (steps.length < 1 || steps.length > MAX_STEPS) throw new Error(`${prefix}шагов от 1 до ${MAX_STEPS}`);
-  return steps.map((step, i) => {
-    const n = i + 1;
-    if (!step || typeof step !== 'object' || Array.isArray(step)) {
-      throw new Error(`${prefix}шаг ${n}: нужен объект {tool, args}`);
+
+  const usedIds = new Set();
+  const seenObjects = new Set();
+  let totalCount = 0;
+  let autoSeq = 0;
+
+  const nextAutoId = () => {
+    let candidate;
+    do {
+      autoSeq += 1;
+      candidate = `step-${autoSeq}`;
+    } while (usedIds.has(candidate));
+    return candidate;
+  };
+
+  const walk = (list, pathLabel, depth) => {
+    if (depth > MAX_TREE_DEPTH) {
+      throw new Error(`${prefix}дерево шагов вложено глубже ${MAX_TREE_DEPTH} уровней`);
     }
-    if (typeof step.tool !== 'string') throw new Error(`${prefix}шаг ${n}: нужно имя инструмента`);
-    const tool = step.tool.trim();
-    if (tool === '' || len(tool) > MAX_TOOL) {
-      throw new Error(`${prefix}шаг ${n}: имя инструмента от 1 до ${MAX_TOOL} символов`);
+    if (!Array.isArray(list)) throw new Error(`${prefix}${pathLabel}: children должен быть массивом`);
+    return list.map((step, i) => {
+      const nLabel = pathLabel ? `${pathLabel}.${i + 1}` : `${i + 1}`;
+      totalCount += 1;
+      if (totalCount > MAX_STEPS) {
+        throw new Error(`${prefix}шагов от 1 до ${MAX_STEPS}`);
+      }
+      if (!step || typeof step !== 'object' || Array.isArray(step)) {
+        throw new Error(`${prefix}шаг ${nLabel}: нужен объект шага`);
+      }
+      if (seenObjects.has(step)) {
+        throw new Error(`${prefix}шаг ${nLabel}: циклическая ссылка в дереве шагов`);
+      }
+      seenObjects.add(step);
+
+      const { type, tool } = resolveStepTypeAndTool(step, `${prefix}шаг ${nLabel}`);
+      if (DANGEROUS_TOOLS.has(tool) || tool.startsWith('mission_') || tool.startsWith('command_')) {
+        throw new Error(`${prefix}шаг ${nLabel}: «${tool}» нельзя сохранить в команде`);
+      }
+
+      let rawParams = step.args !== undefined ? step.args : (step.params !== undefined ? step.params : {});
+      if (step.args === undefined && step.params !== undefined) rawParams = step.params;
+      const args = checkArgs(rawParams, nLabel, { strictArgs, warnings, prefix });
+      // Синхронизация параметров для app_start / volume / hotkey / type_text / click
+      const hasExplicitProg = args.name !== undefined || args.program !== undefined;
+      if ((type === 'app_start' || tool === 'app_open') && (step.type === 'app_start' || hasExplicitProg)) {
+        const progVal = args.name !== undefined ? args.name : args.program;
+        if (typeof progVal !== 'string' || progVal.trim() === '') {
+          throw new Error(`${prefix}шаг ${nLabel}: не указана программа для запуска`);
+        }
+        const checkedProg = checkProgramRef(progVal, `${prefix}шаг ${nLabel}`);
+        args.name = checkedProg;
+      }
+      if ((type === 'volume' || tool === 'volume_set') && args.percent === undefined && args.level !== undefined) {
+        args.percent = args.level;
+        delete args.level;
+      }
+      if (blockShiftDelete && tool === 'ui_keys' && /(?:^|\s)shift\s*\+\s*(?:delete|del)(?:\s|$)/i.test(String(args.keys || ''))) {
+        throw new Error(`${prefix}шаг ${nLabel}: «ui_keys» с shift+delete нельзя сохранить в команде`);
+      }
+
+      let id;
+      if (step.id !== undefined && step.id !== null) {
+        if (typeof step.id !== 'string' || step.id.trim() === '') {
+          throw new Error(`${prefix}шаг ${nLabel}: id шага должен быть непустой строкой`);
+        }
+        id = step.id.trim();
+        if (len(id) > MAX_STEP_ID) {
+          throw new Error(`${prefix}шаг ${nLabel}: id шага длиннее ${MAX_STEP_ID} символов`);
+        }
+        if (usedIds.has(id)) {
+          throw new Error(`${prefix}шаг ${nLabel}: дубль id шага «${id}»`);
+        }
+      } else {
+        id = nextAutoId();
+      }
+      usedIds.add(id);
+
+      const rawChildren = step.children === undefined ? [] : step.children;
+      const children = walk(rawChildren, nLabel, depth + 1);
+      seenObjects.delete(step);
+
+      const params = JSON.parse(JSON.stringify(args));
+      if (type === 'app_start' && params.program === undefined && typeof params.name === 'string') {
+        params.program = params.name;
+      }
+      const normalizedNode = { id, type, params, children, tool, args };
+      if (typeof step.continueOnError === 'boolean') normalizedNode.continueOnError = step.continueOnError;
+      if (typeof step.label === 'string' && step.label.trim()) normalizedNode.label = step.label.trim().slice(0, 80);
+      return normalizedNode;
+    });
+  };
+
+  return walk(steps, '', 0);
+}
+
+function flattenStepTreeWithDepth(steps) {
+  const out = [];
+  const walk = (list, depth = 0, parentId = null) => {
+    if (!Array.isArray(list)) return;
+    for (const node of list) {
+      if (!node || typeof node !== 'object') continue;
+      out.push({ node, depth, parentId });
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        walk(node.children, depth + 1, node.id || null);
+      }
     }
-    if (DANGEROUS_TOOLS.has(tool) || tool.startsWith('mission_') || tool.startsWith('command_')) {
-      throw new Error(`${prefix}шаг ${n}: «${tool}» нельзя сохранить в команде`);
-    }
-    const rawArgs = step.args === undefined ? {} : step.args;
-    const args = checkArgs(rawArgs, n, { strictArgs, warnings, prefix });
-    if (blockShiftDelete && tool === 'ui_keys' && /(?:^|\s)shift\s*\+\s*(?:delete|del)(?:\s|$)/i.test(String(args.keys || ''))) {
-      throw new Error(`${prefix}шаг ${n}: «ui_keys» с shift+delete нельзя сохранить в команде`);
-    }
-    return { tool, args };
-  });
+  };
+  walk(steps, 0, null);
+  return out;
+}
+
+function flattenStepTree(steps) {
+  return flattenStepTreeWithDepth(steps).map((entry) => entry.node);
+}
+
+function countStepNodes(steps) {
+  return flattenStepTree(steps).length;
+}
+
+function hasTreeSteps(steps) {
+  return Array.isArray(steps) && steps.some((s) => s && Array.isArray(s.children) && s.children.length > 0);
+}
+
+function stepNeedsMigration(steps) {
+  if (!Array.isArray(steps)) return true;
+  for (const s of steps) {
+    if (!s || typeof s !== 'object') return true;
+    if (typeof s.id !== 'string' || !s.id || typeof s.type !== 'string' || !s.type) return true;
+    if (!s.params || typeof s.params !== 'object' || Array.isArray(s.params)) return true;
+    if (!Array.isArray(s.children)) return true;
+    if (s.children.length > 0 && stepNeedsMigration(s.children)) return true;
+  }
+  return false;
 }
 
 // Служебная копия аргументов для журнала: секретные поля и значения заменяются пометкой, форма сохраняется.
@@ -784,17 +983,18 @@ function formatTriggersSummary(rawTriggers) {
 // (в них может быть секрет), длинные значения обрезаем.
 function displayValue(field, value) {
   if (field === 'steps') {
-    const steps = Array.isArray(value) ? value : [];
-    return steps.map((s) => {
-      const tool = s && typeof s.tool === 'string' ? s.tool.trim() : '?';
+    const flat = flattenStepTreeWithDepth(Array.isArray(value) ? value : []);
+    return flat.map(({ node: s, depth }) => {
+      const tool = s && typeof (s.tool || s.type) === 'string' ? String(s.tool || s.type).trim() : '?';
       let brief = '';
       try {
-        brief = JSON.stringify(maskArgsForJournal(tool, (s && s.args) || {}));
+        brief = JSON.stringify(maskArgsForJournal(tool, (s && (s.args || s.params)) || {}));
       } catch {
         brief = '';
       }
-      if (!brief || brief === '{}') return tool;
-      return `${tool} ${brief.length > 120 ? `${brief.slice(0, 117)}…` : brief}`;
+      const indent = depth > 0 ? `${'  '.repeat(depth)}↳ ` : '';
+      if (!brief || brief === '{}') return `${indent}${tool}`;
+      return `${indent}${tool} ${brief.length > 120 ? `${brief.slice(0, 117)}…` : brief}`;
     }).join(' → ') || '—';
   }
   if (field === 'triggers') return formatTriggersSummary(value);
@@ -802,13 +1002,23 @@ function displayValue(field, value) {
     return Array.isArray(value) && value.length ? value.join(' | ') : '—';
   }
   if (field === 'collections') return Array.isArray(value) && value.length ? value.join(', ') : '—';
-  if (field === 'enabled') return value ? 'включена' : 'выключена';
+  if (field === 'enabled' || field === 'confirm') return value ? 'да' : 'нет';
   if (value === null || value === undefined || value === '') return '—';
   if (field === 'createdAt') return String(value);
   return String(value);
 }
 
-const STEP_FIELDS = ['name', 'phrases', 'optionalPhrases', 'steps', 'enabled', 'hotkey', 'triggers', 'folder', 'collections', 'origin', 'createdAt'];
+const STEP_FIELDS = ['name', 'program', 'phrases', 'optionalPhrases', 'steps', 'confirm', 'enabled', 'hotkey', 'triggers', 'folder', 'collections', 'origin', 'createdAt'];
+
+function stepContentTree(steps) {
+  if (!Array.isArray(steps)) return [];
+  return steps.map((s) => ({
+    type: String((s && (s.type || TOOL_TO_TYPE[s.tool] || s.tool)) || ''),
+    tool: String((s && (s.tool || TYPE_TO_TOOL[s.type] || s.type)) || ''),
+    args: s && (s.args || s.params) ? (s.args || s.params) : {},
+    children: stepContentTree(s && s.children),
+  }));
+}
 
 // Отпечаток содержания: по нему видно, изменится команда при импорте или нет.
 // Дата изменения (updatedAt), последний запуск (lastRunAt) и состояние расписания в содержание не входят.
@@ -816,9 +1026,11 @@ function contentKey(cmd) {
   const object = {
     schemaVersion: COMMAND_SCHEMA_VERSION,
     name: typeof cmd.name === 'string' ? cmd.name.trim() : '',
+    program: typeof cmd.program === 'string' && cmd.program.trim() ? cmd.program.trim() : null,
+    confirm: cmd.confirm === true,
     phrases: Array.isArray(cmd.phrases) ? cmd.phrases.map((p) => String(p)) : [],
     optionalPhrases: Array.isArray(cmd.optionalPhrases) ? cmd.optionalPhrases.map((p) => String(p)) : [],
-    steps: Array.isArray(cmd.steps) ? cmd.steps.map((s) => ({ tool: String(s && s.tool), args: s && s.args ? s.args : {} })) : [],
+    steps: stepContentTree(cmd.steps),
     enabled: cmd.enabled !== false,
     hotkey: cmd.hotkey || null,
     triggers: normalizeTriggersLenient(cmd),
@@ -860,8 +1072,15 @@ function findExistingIndex(items, incoming) {
 // Собирает запись команды из данных редактора/импорта. Ничего не пишет на диск.
 function buildRecord(cmd, items, existing, { nowIso = new Date().toISOString(), strictArgs = false, warnings = [] } = {}) {
   if (!cmd || typeof cmd !== 'object' || Array.isArray(cmd)) throw new Error('команда: нужен объект');
-  const schemaVersion = checkSchemaVersion(cmd.schemaVersion);
+  checkSchemaVersion(cmd.schemaVersion);
+  const schemaVersion = COMMAND_SCHEMA_VERSION;
   const name = checkName(cmd.name);
+  const program = cmd.program === undefined
+    ? (existing ? existing.program ?? null : null)
+    : checkProgramRef(cmd.program, 'программа команды');
+  const confirm = cmd.confirm === undefined
+    ? (existing ? existing.confirm === true : false)
+    : checkConfirm(cmd.confirm, false);
   const phrases = checkPhrases(cmd.phrases);
   // Старые записи без поля сохраняют пустой список: правка в редакторе его не теряет.
   const optionalPhrases = cmd.optionalPhrases === undefined
@@ -906,6 +1125,8 @@ function buildRecord(cmd, items, existing, { nowIso = new Date().toISOString(), 
     id,
     schemaVersion,
     name,
+    program,
+    confirm,
     phrases,
     optionalPhrases,
     steps,
@@ -1271,6 +1492,64 @@ class CommandStore {
     return item;
   }
 
+  _migrateItem(item) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return { item, changed: false };
+    const oldVer = Number.isInteger(item.schemaVersion) ? item.schemaVersion : 1;
+    const needsStepUpgrade = stepNeedsMigration(item.steps);
+    const needsHeaderUpgrade = oldVer < COMMAND_SCHEMA_VERSION
+      || !Object.prototype.hasOwnProperty.call(item, 'program')
+      || !Object.prototype.hasOwnProperty.call(item, 'confirm');
+    if (!needsStepUpgrade && !needsHeaderUpgrade) {
+      return { item, changed: false };
+    }
+    const usedIds = new Set();
+    let seq = 0;
+    const nextId = () => {
+      let c;
+      do { seq += 1; c = `step-${seq}`; } while (usedIds.has(c));
+      return c;
+    };
+    const upgradeSteps = (list) => {
+      if (!Array.isArray(list)) return [];
+      return list.map((s) => {
+        if (!s || typeof s !== 'object' || Array.isArray(s)) return s;
+        const tool = typeof s.tool === 'string' && s.tool.trim()
+          ? s.tool.trim()
+          : (typeof s.type === 'string' && s.type.trim()
+            ? (TYPE_TO_TOOL[s.type.trim()] || s.type.trim())
+            : '');
+        const type = typeof s.type === 'string' && s.type.trim()
+          ? s.type.trim()
+          : (TOOL_TO_TYPE[tool] || tool);
+        const args = (s.args && typeof s.args === 'object' && !Array.isArray(s.args))
+          ? s.args
+          : ((s.params && typeof s.params === 'object' && !Array.isArray(s.params)) ? s.params : {});
+        const params = (s.params && typeof s.params === 'object' && !Array.isArray(s.params))
+          ? s.params
+          : JSON.parse(JSON.stringify(args));
+        if (type === 'app_start' && params.program === undefined && typeof params.name === 'string') {
+          params.program = params.name;
+        }
+        let id = typeof s.id === 'string' && s.id.trim() ? s.id.trim() : '';
+        if (!id || usedIds.has(id)) id = nextId();
+        usedIds.add(id);
+        const children = upgradeSteps(s.children);
+        const out = { id, type, params, children, tool, args };
+        if (typeof s.continueOnError === 'boolean') out.continueOnError = s.continueOnError;
+        if (typeof s.label === 'string' && s.label.trim()) out.label = s.label.trim();
+        return out;
+      });
+    };
+    const upgraded = {
+      ...item,
+      schemaVersion: COMMAND_SCHEMA_VERSION,
+      program: typeof item.program === 'string' && item.program.trim() ? item.program.trim() : null,
+      confirm: item.confirm === true,
+      steps: upgradeSteps(item.steps),
+    };
+    return { item: upgraded, changed: true };
+  }
+
   _load() {
     this._checkPath();
     let raw;
@@ -1291,12 +1570,28 @@ class CommandStore {
       // Повреждённый файл не перезаписываем: иначе команды молча пропадут.
       throw new Error('файл команд повреждён');
     }
-    return data;
+    let migratedAny = false;
+    const items = data.items.map((item) => {
+      const res = this._migrateItem(item);
+      if (res.changed) migratedAny = true;
+      return res.item;
+    });
+    const fileVer = Number.isInteger(data.schemaVersion) ? data.schemaVersion : 1;
+    const out = { ...data, schemaVersion: COMMAND_SCHEMA_VERSION, items };
+    if (migratedAny || fileVer < COMMAND_SCHEMA_VERSION) {
+      try {
+        this._save(out);
+      } catch {
+        // Если файл открыт только для чтения — не падаем при миграции в памяти.
+      }
+    }
+    return out;
   }
 
   // Атомарная запись: во временный файл рядом, затем переименование поверх основного.
   _save(data) {
-    atomicWriteJson(this.filePath, data, 'папка команд', 'файл команд');
+    const payload = { ...data, schemaVersion: COMMAND_SCHEMA_VERSION };
+    atomicWriteJson(this.filePath, payload, 'папка команд', 'файл команд');
   }
 }
 
@@ -1415,8 +1710,11 @@ function jsonDepth(value, depth = 0, path = []) {
 // Проверка одной команды из файла: типы, лимиты, версия, вырезание секретов. Возвращает чистую команду.
 function sanitizeImportedCommand(raw, label, warnings) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('нужен объект команды');
-  const schemaVersion = checkSchemaVersion(raw.schemaVersion);
+  checkSchemaVersion(raw.schemaVersion);
+  const schemaVersion = COMMAND_SCHEMA_VERSION;
   const name = checkName(raw.name);
+  const program = checkProgramRef(raw.program, `${label}, программа команды`);
+  const confirm = checkConfirm(raw.confirm, false);
   const phrases = checkPhrases(raw.phrases);
   // Старый файл без поля читается как команда без стартовых глаголов.
   const optionalPhrases = checkOptionalPhrases(raw.optionalPhrases);
@@ -1432,7 +1730,7 @@ function sanitizeImportedCommand(raw, label, warnings) {
     ? raw.id.trim()
     : undefined;
   const createdAt = raw.createdAt === undefined || raw.createdAt === null ? undefined : checkIso(raw.createdAt, 'createdAt');
-  const command = { schemaVersion, name, phrases, optionalPhrases, steps, enabled, hotkey, triggers, folder, collections, origin };
+  const command = { schemaVersion, name, program, confirm, phrases, optionalPhrases, steps, enabled, hotkey, triggers, folder, collections, origin };
   if (id) command.id = id;
   if (createdAt) command.createdAt = createdAt;
   return command;
@@ -1496,7 +1794,7 @@ function parseCommandPack(input) {
     const nameKey = nameKeyOf(command.name);
     if (names.has(nameKey)) throw new Error(`${label}: имя «${command.name}» повторяется в файле`);
     names.set(nameKey, command.name);
-    totalSteps += command.steps.length;
+    totalSteps += countStepNodes(command.steps);
     if (totalSteps > MAX_IMPORT_STEPS) throw new Error(`в файле импорта больше ${MAX_IMPORT_STEPS} шагов`);
     for (const phrase of command.phrases) {
       const key = normalize(phrase);
@@ -1533,6 +1831,8 @@ function exportCommandPack(commands, { now = new Date() } = {}) {
     const label = `команда ${i + 1}`;
     try {
       const name = checkName(cmd && cmd.name);
+      const program = checkProgramRef(cmd && cmd.program, `${label}, программа команды`);
+      const confirm = checkConfirm(cmd && cmd.confirm, false);
       const phrases = checkPhrases(cmd && cmd.phrases);
       const optionalPhrases = checkOptionalPhrases(cmd && cmd.optionalPhrases);
       const rawSteps = Array.isArray(cmd.steps) ? cmd.steps : [];
@@ -1548,6 +1848,8 @@ function exportCommandPack(commands, { now = new Date() } = {}) {
       const packed = {
         schemaVersion: COMMAND_SCHEMA_VERSION,
         name,
+        program,
+        confirm,
         phrases,
         optionalPhrases,
         steps,
@@ -1706,6 +2008,17 @@ module.exports = {
   checkSteps,
   checkFolder,
   checkCollections,
+  checkProgramRef,
+  checkConfirm,
+  flattenStepTree,
+  flattenStepTreeWithDepth,
+  countStepNodes,
+  hasTreeSteps,
+  resolveStepTypeAndTool,
+  STEP_TYPES,
+  TYPE_TO_TOOL,
+  TOOL_TO_TYPE,
+  MAX_TREE_DEPTH,
   checkSchemaVersion,
   normalizeTriggers,
   checkScheduleTrigger,

@@ -27,7 +27,14 @@ const APP_DIR = path.resolve(__dirname, '..');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const OUT_DIR = path.resolve(arg('out-dir', path.join(REPO_ROOT, 'docs', 'design', 'nox-aether', 'screenshots-gate2')));
 const KEEP_TEMP = has('keep-temp');
+const CHAT_REDESIGN = has('chat-redesign');
 const TIMEOUT_MS = 240000;
+const CMD_EXE = path.join(process.env.SystemRoot || 'C:/Windows', 'System32', 'cmd.exe');
+const VSCODE_EXE = [
+  process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe'),
+  process.env.ProgramFiles && path.join(process.env.ProgramFiles, 'Microsoft VS Code', 'Code.exe'),
+  process.env['ProgramFiles(x86)'] && path.join(process.env['ProgramFiles(x86)'], 'Microsoft VS Code', 'Code.exe'),
+].find((file) => file && fs.existsSync(file)) || 'Visual Studio Code';
 
 function arg(name, fallback) {
   const idx = process.argv.indexOf(`--${name}`);
@@ -99,6 +106,7 @@ app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 for (const key of Object.keys(process.env)) {
   if (/^(NOX_|JARVIS_|TELEGRAM_|FISH_|DEEPSEEK_)/i.test(key)) delete process.env[key];
 }
+process.env.NOX_DATA_DIR = dataDir;
 require('../src/config/paths').projectRoot = () => tempRoot;
 
 // Глобальные клавиши не занимают хоткеи владельца
@@ -111,6 +119,7 @@ let qaErrorAttempts = 0;
 let qaClockRequests = 0;
 const openedPresentations = [];
 const openedSources = [];
+const revealedArtifacts = [];
 shell.openExternal = async (url) => { openedSources.push(url); };
 const originalFetch = globalThis.fetch;
 globalThis.fetch = (input, options) => {
@@ -135,12 +144,14 @@ globalThis.fetch = (input, options) => {
 };
 const originalOpenPath = shell.openPath.bind(shell);
 shell.openPath = (file) => {
-  if (file === path.join(workspaceDir, 'qa-astronomy.pptx')) {
+  if (file === path.join(workspaceDir, 'qa-astronomy.pptx') ||
+      (CHAT_REDESIGN && file === path.join(workspaceDir, 'Китай.pptx'))) {
     openedPresentations.push(file);
     return Promise.resolve('');
   }
   return originalOpenPath(file);
 };
+if (CHAT_REDESIGN) shell.showItemInFolder = (file) => { revealedArtifacts.push(file); };
 
 function sendCompletion(res, body, chunks, delayMs, finishReason = 'stop') {
   if (!body.stream) {
@@ -220,6 +231,53 @@ function startQaBrainServer() {
         const text = String((lastUser && lastUser.content) || '');
         if (/который час/i.test(text)) qaClockRequests += 1;
         console.error('[qa-brain]', req.method, req.url, 'stream=', Boolean(body.stream), 'lastRole=', lastRole, 'user=', text.slice(0, 60));
+
+        if (CHAT_REDESIGN) {
+          const latestTool = messages.at(-1);
+          const call = (name, args, id) => sendCompletion(res, body, [{
+            tool_calls: [{ index: 0, id, type: 'function', function: { name, arguments: JSON.stringify(args) } }],
+          }], 40, 'tool_calls');
+          if (/Открой терминал и VS Code\s*$/i.test(text)) {
+            if (lastRole !== 'tool') return call('app_open', { name: CMD_EXE }, 'chat_terminal');
+            if (latestTool.tool_call_id === 'chat_terminal') return call('app_open', { name: VSCODE_EXE }, 'chat_code');
+            const confirmed = (id) => messages.some((m) => m.tool_call_id === id && /"verified"\s*:\s*"confirmed"/.test(m.content));
+            const terminal = confirmed('chat_terminal');
+            const code = confirmed('chat_code');
+            const result = terminal && code ? 'Открыл терминал и VS Code.'
+              : [terminal ? 'Терминал открыт.' : 'Открытие терминала не подтверждено.', code ? 'VS Code открыт.' : 'Открытие VS Code не подтверждено.'].join(' ');
+            return sendCompletion(res, body, [{ content: result }], 180);
+          }
+          if (/Сделай презентацию про Китай\s*$/i.test(text)) {
+            if (lastRole !== 'tool') return call('document_write', {
+              path: 'Китай.pptx', format: 'pptx', title: 'Китай', subtitle: 'Культура, география и технологии',
+              slides: [
+                ['География', 'Побережье Тихого океана и высокогорья запада'],
+                ['Исторические города', 'Пекин, Сиань и Нанкин'],
+                ['Письменность', 'Иероглифы в повседневной жизни'],
+                ['Праздники', 'Китайский Новый год и Праздник фонарей'],
+                ['Кухня', 'Региональное разнообразие традиций'],
+                ['Промышленность', 'Производственные и транспортные связи'],
+                ['Технологии', 'Электротранспорт и солнечная энергетика'],
+                ['Вывод', 'История и современные технологии соседствуют'],
+              ].map(([title, bullet]) => ({ title, bullets: [bullet] })),
+            }, 'chat_pptx');
+            const made = /"verified"\s*:\s*"confirmed"/.test(latestTool.content);
+            return sendCompletion(res, body, [{ content: made ? 'Подготовил презентацию о Китае. В ней 9 слайдов.' : 'Не удалось создать презентацию.' }], 140);
+          }
+          if (/Создай таблицу и сохрани копию\s*$/i.test(text)) {
+            if (lastRole !== 'tool') return call('document_write', { path: 'План.xlsx', format: 'xlsx', title: 'План', rows: [
+              ['Задача', 'Статус'], ['Проверить файлы', 'Готово'], ['Сверить отчёт', 'В работе'],
+            ] }, 'chat_table');
+            if (latestTool.tool_call_id === 'chat_table') return call('document_write', { path: 'Копия.pdf', format: 'xlsx', rows: [['План']] }, 'chat_copy');
+            const toolSucceeded = /"verified"\s*:\s*"confirmed"/.test(latestTool.content);
+            return sendCompletion(res, body, [{ content: toolSucceeded
+              ? 'Создал таблицу и копию.' : 'Создал таблицу. Копию пока не удалось сохранить.' }], 180);
+          }
+          if (/Помоги с учёбой\s*$/i.test(text)) return call('clarify', {
+            question: 'Что подготовить для учёбы?',
+            options: ['Доклад', 'Презентация', 'Таблица'],
+          }, 'chat_clarify');
+        }
 
         const sourceFixture = /Проверка ссылок (0|1|5|20)\b/.exec(text);
         if (sourceFixture) {
@@ -473,6 +531,218 @@ async function waitIdle(win, timeout = 18000) {
   return ok;
 }
 
+async function runChatRedesignQa(win) {
+  const checks = [];
+  const screenshots = [];
+  const check = (name, ok, detail) => checks.push({ name, ok: Boolean(ok), detail });
+  const captureBoth = async (name) => {
+    for (const [w, h] of [[1200, 720], [864, 520]]) {
+      await setViewport(win, w, h);
+      screenshots.push(await shot(win, `${name}-${w}x${h}.png`));
+    }
+  };
+  const freshChat = () => js(win, 'window.__noxAether.store.createNewChat()');
+  const lastReply = () => js(win, `[...document.querySelectorAll('#feed .is-assistant')].at(-1)?.innerText || ''`);
+  const queryText = (selector) => js(win, `document.querySelector(${JSON.stringify(selector)})?.innerText || ''`);
+  const approveReady = () => js(win, `document.querySelector('#aeApprovalDock [data-decision="once"]:not(:disabled)')?.click()`);
+  const waitForResult = async (timeout = 18000) => {
+    const done = await waitUntil(async () => {
+      await approveReady();
+      return js(win, `(() => {
+        const { trackerBusy, sendingLock } = window.__noxAether.store.state;
+        return !trackerBusy && !sendingLock;
+      })()`);
+    }, timeout);
+    if (!done) await waitIdle(win, 1000);
+  };
+  const diagnostics = () => js(win, `window.__noxAether.store.state.feedItems.filter((m) => m.kind === 'error').map((m) => m.technical)`);
+
+  if (!await waitUntil(() => js(win, 'Boolean(window.__noxAether)'))) throw new Error('Окно чата не загрузилось');
+  await js(win, "window.__noxAether.setRoute('chat')");
+  await js(win, `window.__chatStates = [];
+    const stage = document.querySelector('#aeOrbStage');
+    const button = document.querySelector('#aeStageToggle');
+    new MutationObserver(() => {
+      window.__chatStates.push({ orb: stage.dataset.state, rail: button.dataset.state });
+    }).observe(stage, { attributes: true, attributeFilter: ['data-state'] });`);
+  await captureBoth('01-пустой-чат');
+  const railGeometry = await js(win, `(() => {
+    const rail = document.querySelector('.ae-utility-rail');
+    const controls = [...rail.querySelectorAll('button')].filter((b) => b.getClientRects().length);
+    const stage = document.querySelector('#aeOrbStage');
+    const toggle = document.querySelector('#aeStageToggle');
+    const chat = document.querySelector('#noxChat');
+    const opened = chat.getBoundingClientRect().width;
+    toggle.focus();
+    toggle.click();
+    const collapsed = stage.hidden && toggle.getAttribute('aria-expanded') === 'false'
+      && chat.getBoundingClientRect().width > opened && document.activeElement === toggle;
+    toggle.click();
+    const restored = !stage.hidden && toggle.getAttribute('aria-expanded') === 'true';
+    const panels = ['Limits', 'Account'].map((key) => {
+      const trigger = document.querySelector('#ae' + key + 'Trigger');
+      const panel = document.querySelector('#ae' + key + 'Panel');
+      trigger.click();
+      const bounds = panel.getBoundingClientRect();
+      const position = !panel.hidden && bounds.left > rail.getBoundingClientRect().right
+        && bounds.bottom <= innerHeight && bounds.right <= innerWidth;
+      panel.querySelector('button').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      return position && panel.hidden && document.activeElement === trigger;
+    });
+    return { ids: controls.map((b) => b.id), labels: controls.every((b) => b.getAttribute('aria-label')),
+      iconSizes: controls.map((b) => b.firstElementChild?.getBoundingClientRect().width),
+      railWidth: rail.getBoundingClientRect().width, collapsed, restored, panels,
+      starters: document.querySelectorAll('.ae-starter-chip').length, overflow: document.documentElement.scrollWidth > innerWidth,
+      tabs: [...document.querySelectorAll('#aeTopbar .ae-nav-label')].map((tab) => tab.innerText) };
+  })()`);
+  check('Рейка, вкладки, поповеры и сворачивание сферы на 864×520',
+    railGeometry.railWidth === 56 && railGeometry.labels && railGeometry.iconSizes.length === 6 &&
+    railGeometry.iconSizes.every((w) => w === 24) && railGeometry.collapsed && railGeometry.restored &&
+    railGeometry.panels.every(Boolean) && railGeometry.starters === 3 && !railGeometry.overflow &&
+    railGeometry.tabs.join(' · ') === 'Главная · Команды · Дополнения · Nox AI · Настройки', railGeometry);
+
+  await sendText(win, 'Открой терминал и VS Code');
+  const progress = await waitUntil(async () => {
+    await approveReady();
+    const line = await queryText('#feed .is-live .ae-step-label');
+    return /Открываю|открыть/i.test(line) && line;
+  }, 18000);
+  if (progress) screenshots.push(await shot(win, '02-ход-864x520.png'));
+  await waitForResult(43000);
+  const applicationTurn = await js(win, `(() => {
+    const item = window.__noxAether.store.state.feedItems.filter((m) => m.kind === 'assistant').at(-1);
+    return item ? { text: item.text, status: item.workStatus,
+      actions: item.actions.map(({ title, target, status, evidence }) => ({ title, target, status, evidence })) } : null;
+  })()`);
+  check('Открой терминал и VS Code', progress && applicationTurn?.actions.length >= 2 &&
+    applicationTurn.actions.filter((a) => ['confirmed', 'done'].includes(a.status)).length === 2,
+  { progress, reply: applicationTurn, errors: await diagnostics() });
+  await captureBoth('03-ответ');
+
+  await freshChat();
+  await sendText(win, 'Сделай презентацию про Китай');
+  await waitForResult();
+  const presentation = path.join(workspaceDir, 'Китай.pptx');
+  const artifact = await queryText('#feed .ae-artifact-card');
+  const artifactErrors = await diagnostics();
+  const artifactChat = await js(win, 'window.__noxAether.store.state.activeChatId');
+  await captureBoth('04-артефакт');
+  await js(win, `[...document.querySelectorAll('#feed .ae-artifact-actions button')].forEach((button) => button.click())`);
+  await waitUntil(() => openedPresentations.includes(presentation) && revealedArtifacts.includes(presentation), 3000);
+  const unauthorized = await js(win, `window.jarvis.artifactAction({path: 'plan.txt', action:'open'})`);
+  await freshChat();
+  const otherChat = await js(win, `window.jarvis.artifactAction({path: 'Китай.pptx', action:'reveal'})`);
+  await js(win, `window.__noxAether.store.selectChat(${JSON.stringify(artifactChat)})`);
+  const reopenedArtifact = await queryText('#feed .ae-artifact-card');
+  check('Сделай презентацию про Китай', /Китай\.pptx/.test(artifact) && /9 слайдов/.test(artifact) &&
+    fs.existsSync(presentation) && openedPresentations.includes(presentation) && revealedArtifacts.includes(presentation) &&
+    unauthorized.ok === false && otherChat.ok === false && reopenedArtifact === artifact,
+  { artifact, reopenedArtifact, opened: openedPresentations.includes(presentation), revealed: revealedArtifacts.includes(presentation), unauthorized, otherChat, errors: artifactErrors });
+
+  await freshChat();
+  await sendText(win, 'Создай таблицу и сохрани копию');
+  await waitForResult();
+  const partial = await queryText('#feed .ae-partial-card');
+  const spreadsheet = await queryText('#feed .ae-artifact-card');
+  check('Создай таблицу и сохрани копию', /Выполнено/i.test(partial) && /Не (вышло|удалось|выполнено)/i.test(partial) &&
+    /План\.xlsx/.test(spreadsheet) && /3 строки/.test(spreadsheet), { reply: await lastReply(), partial, spreadsheet, errors: await diagnostics() });
+  await captureBoth('05-частичный-результат');
+
+  await freshChat();
+  await sendText(win, 'Помоги с учёбой');
+  await waitIdle(win);
+  const clarification = await lastReply();
+  const choices = await js(win, `[...document.querySelectorAll('#feed .ae-clarification button')].map((button) => button.innerText)`);
+  screenshots.push(await shot(win, '06-уточнение-864x520.png'));
+  await js(win, `document.querySelector('#feed .ae-clarification button')?.click()`);
+  await waitIdle(win);
+  const usedChoice = await js(win, `[...document.querySelectorAll('#feed .is-user')].at(-1)?.innerText || document.querySelector('#chatInput').value`);
+  check('Помоги с учёбой', clarification.includes('Что подготовить для учёбы?') &&
+    choices.join(' · ') === 'Доклад · Презентация · Таблица' && usedChoice.includes('Доклад'),
+  { clarification, choices, usedChoice });
+
+  await freshChat();
+  await sendText(win, 'Вызови ошибку модели');
+  await waitIdle(win);
+  const error = await queryText('#feed .ae-error-card');
+  await captureBoth('07-ошибка');
+  await js(win, `[...document.querySelectorAll('#feed .ae-error-card button')].find((b) => /Повторить/.test(b.textContent))?.click()`);
+  await waitIdle(win);
+  const retried = await lastReply();
+  check('Ошибка модели и повтор', /Не удалось получить ответ/.test(error) && /Повторить/.test(error) &&
+    !/503|upstream/i.test(error) && /Повторный запрос прошёл/.test(retried), { error, retried });
+
+  const modelPicker = await js(win, `(() => {
+    const trigger = document.querySelector('#pickTrigger');
+    const panel = document.querySelector('#pickPanel');
+    trigger.click();
+    const { left, top, right, bottom } = panel.getBoundingClientRect();
+    const detail = { fits: !panel.hidden && left >= 0 && top >= 0 && right <= innerWidth && bottom <= innerHeight,
+      text: panel.innerText };
+    trigger.click();
+    return detail;
+  })()`);
+  check('Выбор модели помещается на 864×520', modelPicker.fits && /Быстрая/.test(modelPicker.text) && /Умная/.test(modelPicker.text)
+    && !/deepseek|minimax|openai|gemini|claude/i.test(modelPicker.text), modelPicker);
+
+  await freshChat();
+  await sendText(win, 'Проверь источники. Проверка ссылок 5');
+  await waitForResult();
+  const sourcesChat = await js(win, 'window.__noxAether.store.state.activeChatId');
+  const sources = await js(win, `(() => {
+    const trigger = document.querySelector('.ae-sources-trigger');
+    trigger?.click();
+    const panel = document.querySelector('.ae-sources-popover:popover-open');
+    const links = [...(panel?.querySelectorAll('.ae-source-link') || [])].map((a) => a.href);
+    panel?.hidePopover();
+    return { label: trigger?.innerText, links };
+  })()`);
+  await freshChat();
+  await js(win, `window.__noxAether.store.selectChat(${JSON.stringify(sourcesChat)})`);
+  const sourcesRestored = await queryText('.ae-sources-trigger');
+  check('Источники открываются и сохраняются в истории', sources.links.length === 5 &&
+    sources.links.every((link) => !link.includes('model-only')) && sourcesRestored === sources.label, { ...sources, sourcesRestored });
+
+  await freshChat();
+  await sendText(win, 'Проверка появления ответа');
+  const busyBeforeEscape = await waitUntil(() => js(win, 'window.__noxAether.store.state.trackerBusy'), 3000);
+  win.focus();
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+  await waitIdle(win);
+  const stopped = await queryText('.ae-reply-stopped');
+  check('Esc останавливает активный ход', busyBeforeEscape && /Остановлено/.test(stopped), { busyBeforeEscape, stopped });
+
+  await freshChat();
+  await sendText(win, 'Покажи длинный ответ со списком, таблицей, кодом и математикой');
+  await waitIdle(win);
+  const folding = await js(win, `(() => {
+    const details = document.querySelector('#feed .ae-long-reply details');
+    const control = details?.querySelector('summary');
+    const initiallyFolded = details && !details.open && control.innerText === 'Показать полностью';
+    control?.click();
+    const showsContent = details?.open && ['table', 'pre code', '.math'].every((selector) => details.querySelector(selector)?.getClientRects().length > 0);
+    control?.click();
+    return { initiallyFolded, showsContent, foldedAgain: details && !details.open };
+  })()`);
+  check('Длинный ответ разворачивается с таблицей, кодом и формулой', Object.values(folding).every(Boolean), folding);
+
+  await js(win, "document.querySelector('#lxMuteBtn').click()");
+  const voice = await queryText('#aeSettingsView');
+  await captureBoth('08-озвучка');
+  check('Настройки озвучки', /Выключена \(по умолчанию\)/.test(voice) && /Облачная/.test(voice) &&
+    !/Silero|SAPI|Режим задержки|Системный голос/i.test(voice), voice);
+  const states = await js(win, `window.__chatStates.filter((s, i, a) => i === 0 || a[i - 1].orb !== s.orb)`);
+  check('Состояния сферы и рейки совпадают', states.every((s) => s.orb === s.rail) &&
+    ['thinking', 'acting', 'success', 'error'].every((state) => states.some((s) => s.orb === state)), states);
+  check('Все снимки нужного размера и без ошибок окна', screenshots.every((s) => s.name.includes(`${s.width}x${s.height}`))
+    && consoleErrors.length === 0 && pageErrors.length === 0, { consoleErrors, pageErrors });
+
+  const pass = checks.filter((c) => c.ok).length;
+  const fail = checks.length - pass;
+  finish({ ok: fail === 0, pass, fail, elapsedMs: Date.now() - startedAt, checks, screenshots }, fail === 0 ? 0 : 1);
+}
+
 async function runQa(win) {
   const checks = [];
   const shots = [];
@@ -534,7 +804,8 @@ async function runQa(win) {
     tabsFit: [...document.querySelectorAll('#aeTopbar .ae-nav-btn')].length === 5
       && [...document.querySelectorAll('#aeTopbar button')].filter((b) => b.offsetParent !== null).every((b) => {
         const rect = b.getBoundingClientRect();
-        return rect.width > 0 && rect.left >= 0 && rect.right <= window.innerWidth && rect.top >= 0 && rect.bottom <= 44;
+        return rect.width > 0 && rect.left >= 0 && rect.right <= window.innerWidth && rect.top >= 0
+          && rect.bottom <= document.querySelector('#aeTopbar').getBoundingClientRect().bottom;
       }),
     isEmpty: document.querySelector('#noxChat').classList.contains('is-empty'),
     orbW: Math.round(document.querySelector('#aeOrbCanvas').getBoundingClientRect().width),
@@ -598,9 +869,9 @@ async function runQa(win) {
   const replyPreparing = await waitUntil(() => js(win, `(() => {
     const live = document.querySelector('#feed .is-live');
     if (live?.querySelector('.ae-reply-author')?.textContent === 'Nox' &&
-      live.querySelector('.ae-reply-thinking[role="status"]')?.textContent === 'Думаю...' &&
+      live.querySelector('.ae-reply-thinking[role="status"]')?.textContent === 'Думаю…' &&
       !live.querySelector('.ae-assistant-body') && live.querySelector('.ae-msg-copy:disabled') &&
-      document.querySelector('.ae-live-line').hidden) {
+      !live.querySelector('.ae-step-line')) {
       window.__qaReplyUser = live.previousElementSibling;
       window.__qaReplyAuthor = live.querySelector('.ae-reply-author');
       window.__qaReplyContent = live.querySelector('.ae-reply-content');
@@ -674,7 +945,7 @@ async function runQa(win) {
   await setReducedMotion('reduce');
   const staticThinking = await js(win, `(() => {
     const status = document.querySelector('.ae-reply-thinking');
-    return status?.textContent === 'Думаю...' &&
+    return status?.textContent === 'Думаю…' &&
       status.getAnimations({ subtree: true }).length === 0 &&
       getComputedStyle(status.firstElementChild).backgroundImage === 'none';
   })()`);
@@ -684,7 +955,7 @@ async function runQa(win) {
     const previous = root.dataset.animations;
     root.dataset.animations = 'off';
     const status = document.querySelector('.ae-reply-thinking');
-    const still = status?.textContent === 'Думаю...' && status.getAnimations({ subtree: true }).length === 0;
+    const still = status?.textContent === 'Думаю…' && status.getAnimations({ subtree: true }).length === 0;
     root.dataset.animations = previous;
     return still;
   })()`);
@@ -757,6 +1028,10 @@ async function runQa(win) {
   await settle(win, 200);
   const longStats = await js(win, `(() => {
     const feed = document.querySelector('#feed');
+    const details = feed.querySelector('.ae-long-reply details');
+    const folded = details && !details.open && details.querySelector('summary').innerText === 'Показать полностью';
+    details?.querySelector('summary').click();
+    const expanded = details?.open;
     const hasTable = Boolean(feed.querySelector('table'));
     const hasCode = Boolean(feed.querySelector('pre code'));
     const hasMath = Boolean(feed.querySelector('.math'));
@@ -768,11 +1043,12 @@ async function runQa(win) {
       btn.click();
       setTimeout(() => {
         const gapAfter = feed.scrollHeight - feed.scrollTop - feed.clientHeight;
-        r({ hasTable, hasCode, hasMath, shownOnScrollUp, gapAfter });
+        r({ folded, expanded, hasTable, hasCode, hasMath, shownOnScrollUp, gapAfter });
       }, 280);
     })));
   })()`);
-  push('long-markdown-math-and-scroll', longStats.hasTable && longStats.hasCode && longStats.hasMath && longStats.shownOnScrollUp && longStats.gapAfter < 60, longStats);
+  push('long-markdown-math-and-scroll', longStats.folded && longStats.expanded &&
+    longStats.hasTable && longStats.hasCode && longStats.hasMath && longStats.shownOnScrollUp && longStats.gapAfter < 60, longStats);
   shots.push(await shot(win, '03-long-reply-1200x720.png'));
 
   // ── 5. Работа инструментов (не >1 строки живого статуса) + свёрнутые/раскрытые Подробности ──
@@ -780,17 +1056,13 @@ async function runQa(win) {
   await sendText(win, 'Проверь файлы папки');
   const liveSeen = await waitUntil(() => js(win, `(() => {
     const live = document.querySelector('#feed .is-live');
-    const text = live?.querySelector('.ae-details-toggle')?.textContent;
-    if (!text?.startsWith('Ход работы · Выполняется · ')) return null;
-    const shimmer = live.querySelector('.ae-reply-thinking-label')?.getAnimations()
-      .find((animation) => animation.animationName === 'aeReplyShimmer');
-    const timing = shimmer?.effect.getComputedTiming();
-    if (!timing || timing.iterations !== Infinity || timing.currentIteration < 2) return null;
+    const text = live?.querySelector('.ae-step-line[data-state="running"] .ae-step-label[role="status"]')?.textContent.trim();
+    if (!text) return null;
     return {
-      count: live.querySelectorAll('.ae-details-toggle').length,
+      count: live.querySelectorAll('.ae-step-line').length,
       text,
-      dockHidden: document.querySelector('.ae-live-line').hidden,
-      completedCycles: timing.currentIteration,
+      noDuplicateStatus: !live.querySelector('.ae-reply-thinking') && document.querySelector('#aeApprovalDock').hidden,
+      stopReady: Boolean(live.querySelector('.ae-live-stop:not(:disabled)')),
     };
   })()`).catch(() => null), 8000, 50);
   if (liveSeen) shots.push(await shot(win, '04-tool-live-1200x720.png'));
@@ -804,7 +1076,7 @@ async function runQa(win) {
     const msg = lastBtn.closest('.ae-msg.is-assistant');
     const msgId = msg ? msg.dataset.id : '';
     const collapsedBefore = lastBtn.getAttribute('aria-expanded') === 'false';
-    const finalStatus = lastBtn.textContent;
+    const finalStatus = lastBtn.querySelector('.ae-step-label')?.textContent;
     const beforeReply = lastBtn.closest('.ae-details-wrap') === msg.firstElementChild;
     const finishedReply = Boolean(msg.querySelector('.ae-assistant-body')) && !msg.querySelector('.ae-reply-thinking');
     lastBtn.focus();
@@ -818,8 +1090,8 @@ async function runQa(win) {
     const drawer = afterMsg ? afterMsg.querySelector('.ae-details-panel') : null;
     return { found: true, collapsedBefore, expandedAfter, focusPreserved, finalStatus, beforeReply, finishedReply, drawerText: drawer ? drawer.innerText.trim().slice(0, 120) : '' };
   })()`);
-  push('tool-work-minimal-noise-and-details', Boolean(liveSeen && liveSeen.count === 1 && liveSeen.dockHidden &&
-    detailsCheck.finishedReply && detailsCheck.found && detailsCheck.beforeReply && /^Ход работы · Готово · /.test(detailsCheck.finalStatus) &&
+  push('tool-work-minimal-noise-and-details', Boolean(liveSeen && liveSeen.count === 1 && liveSeen.noDuplicateStatus && liveSeen.stopReady &&
+    detailsCheck.finishedReply && detailsCheck.found && detailsCheck.beforeReply && detailsCheck.finalStatus === 'Готово' &&
     detailsCheck.collapsedBefore && detailsCheck.expandedAfter && detailsCheck.focusPreserved), { liveSeen, detailsCheck });
   shots.push(await shot(win, '04b-tool-details-open-1200x720.png'));
 
@@ -837,7 +1109,7 @@ async function runQa(win) {
       rejectEnabledEarly: rej && !rej.disabled,
       countdown: cd ? cd.textContent.trim() : '',
       preview: prev ? prev.textContent.trim() : '',
-      agentWaiting: dock.previousElementSibling?.dataset.state === 'waiting',
+      agentWaiting: Boolean(document.querySelector('#feed .is-live .ae-step-line[data-state="waiting"]')),
     } : null;
   })()`).catch(() => null), 10000, 35);
   shots.push(await shot(win, '05-approval-1200x720.png'));
@@ -859,12 +1131,12 @@ async function runQa(win) {
   push('approval-r301-and-file-write', Boolean(approvalInit && approvalInit.agentWaiting && approvalInit.onceDisabledEarly && approvalInit.rejectEnabledEarly && approvalArmed && fileWritten), { approvalInit, approvalArmed, fileWritten });
 
   await sendText(win, 'Запиши заметку qa-stop');
-  const stopReady = await waitUntil(() => js(win, `Boolean(document.querySelector('.ae-live-line:not([hidden])[data-state="waiting"] .ae-live-stop:not(:disabled)') && !document.querySelector('#aeApprovalDock').hidden)`), 10000, 50);
+  const stopReady = await waitUntil(() => js(win, `Boolean(document.querySelector('.ae-step-line[data-state="waiting"] .ae-live-stop:not(:disabled)') && !document.querySelector('#aeApprovalDock').hidden)`), 10000, 50);
   if (stopReady) {
     await js(win, `document.querySelector('.ae-live-stop').click()`);
     await waitIdle(win, 10000);
   }
-  const stopPanelClosed = await js(win, `document.querySelector('.ae-live-line').hidden && document.querySelector('#aeApprovalDock').hidden`);
+  const stopPanelClosed = await js(win, `!document.querySelector('.ae-live-stop') && document.querySelector('#aeApprovalDock').hidden`);
   const stoppedFileAbsent = !fs.existsSync(path.join(workspaceDir, 'qa-stop.txt'));
   const stoppedReply = await js(win, `document.querySelector('#feed .ae-reply-stopped')?.textContent === 'Остановлено.'`);
   push('agent-panel-stop-cancels-approval', stopReady && stopPanelClosed && stoppedFileAbsent && stoppedReply,
@@ -879,8 +1151,9 @@ async function runQa(win) {
     const last = cards[cards.length - 1];
     if (!last) return { found: false };
     const retry = last.querySelector('.ae-retry-btn, button');
-    const tech = last.querySelector('details');
-    return { found: true, hasRetry: Boolean(retry), techClosed: Boolean(tech && !tech.open) };
+    const readable = last.querySelector('.ae-error-text')?.textContent.startsWith('Не удалось');
+    const hasStripe = getComputedStyle(last).borderInlineStartWidth === '3px';
+    return { found: true, hasRetry: Boolean(retry), readable, hasStripe };
   })()`);
   shots.push(await shot(win, '06-error-1200x720.png'));
   await js(win, `(() => {
@@ -891,7 +1164,7 @@ async function runQa(win) {
   await waitIdle(win, 15000);
   await settle(win, 180);
   const recovered = await js(win, `document.querySelector('#feed')?.innerText.includes('восстановила ответ')`);
-  push('error-and-retry-recovery', errCard.found && errCard.hasRetry && errCard.techClosed && recovered, { errCard, recovered });
+  push('error-and-retry-recovery', errCard.found && errCard.hasRetry && errCard.readable && errCard.hasStripe && recovered, { errCard, recovered });
 
   // ── 8. Голосовой ввод (имитация IPC событий диктовки на настоящем окне) ──
   await js(win, `window.__noxAether.store.setSetting('dictation', true)`);
@@ -1185,7 +1458,7 @@ async function runQa(win) {
   push('narrow-864-nav-history-workshop', narrowMenuOpen.open && narrowMenuOpen.fits
     && narrowMenuOpen.fields === 6 && !narrowSettingsOverflow, { narrowMenuOpen, narrowSettingsOverflow, dictCheck });
 
-  // Пример заполняет черновик. Обычная отправка запрашивает разрешение, а отказ виден в чате.
+  // Пример заполняет черновик. Проверка разрешения ниже использует Блокнот.
   await js(win, `window.__noxAether.store.createNewChat()`);
   const starterDraft = await js(win, `(() => {
     const button = document.querySelector('.ae-starter-chip');
@@ -1196,10 +1469,10 @@ async function runQa(win) {
     field.value = '';
     field.dispatchEvent(new Event('input'));
     button.click();
-    return draftProtected && field.value === 'Открой Блокнот'
+    return draftProtected && field.value === 'Сверни окна'
       && document.activeElement === field && document.querySelector('#noxChat').classList.contains('is-empty');
   })()`);
-  await js(win, `document.querySelector('#sendBtn').click()`);
+  await sendText(win, 'Открой Блокнот');
   const starterApproval = await waitUntil(() => js(win, `(() => {
     const dock = document.querySelector('#aeApprovalDock');
     const reject = dock.querySelector('[data-decision="reject"]');
@@ -1458,7 +1731,8 @@ app.on('browser-window-created', (_event, win) => {
     const url = win.webContents.getURL();
     if (!/renderer[\\/]aether[\\/]index\.html/i.test(url)) return;
     mainWin = win;
-    runQa(win).catch((err) => {
+    const run = CHAT_REDESIGN ? runChatRedesignQa : runQa;
+    run(win).catch((err) => {
       finish({ ok: false, error: err && err.stack ? err.stack : String(err), consoleErrors, pageErrors }, 1);
     });
   });
