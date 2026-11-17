@@ -1,14 +1,17 @@
 'use strict';
 
-// Каталог MCP-серверов: статические данные, строгая проверка записей, фильтр, конфиг без секретов
-// и сверка окна «Популярные» (renderer/connections.js) с каталогом: список не должен разойтись.
+// Каталог MCP-серверов: 80 записей, строгая проверка, фильтр, конфиг без секретов,
+// сверка окна «Популярные» и сгенерированных значков/снимка каталога с ядром.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const {
   CATALOG,
   CATEGORIES,
+  FEATURED,
+  MAX_ENTRIES,
   validateCatalog,
   listCatalog,
   catalogCategories,
@@ -18,6 +21,44 @@ const {
 const { normalizeServerConfig, validateName, validateCommand, validateArgs } = require('../src/mcp/client');
 
 const APP = path.join(__dirname, '..');
+const AETHER = path.join(APP, 'renderer', 'aether');
+const LOGOS_FILE = path.join(AETHER, 'mcp-logos.js');
+const VIEW_FILE = path.join(AETHER, 'components', 'mcp-view.js');
+const FETCH_FILE = path.join(APP, 'scripts', 'fetch-mcp-logos.js');
+const LOGOS_TEXT = fs.readFileSync(LOGOS_FILE, 'utf8');
+const VIEW_TEXT = fs.readFileSync(VIEW_FILE, 'utf8');
+
+// Значения секретов: длинные строки, похожие на готовые ключи. В каталоге их быть не должно.
+const SECRET_PATTERNS = [
+  /sk-[A-Za-z0-9]{16,}/,
+  /ghp_[A-Za-z0-9]{20,}/,
+  /github_pat_[A-Za-z0-9_]{20,}/,
+  /xox[baprs]-[A-Za-z0-9-]{10,}/,
+  /AKIA[0-9A-Z]{16}/,
+  /AIza[0-9A-Za-z_-]{30,}/,
+  /-----BEGIN [A-Z ]+KEY-----/,
+  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\./,
+];
+
+function assertNoSecrets(text, where) {
+  for (const pattern of SECRET_PATTERNS) {
+    assert.doesNotMatch(text, pattern, where + ': похоже на значение секрета');
+  }
+}
+
+function loadLogos() {
+  const sandbox = { window: {} };
+  vm.runInNewContext(LOGOS_TEXT, sandbox, { filename: 'mcp-logos.js', timeout: 5000 });
+  assert.ok(sandbox.window.NoxMcpLogos, 'mcp-logos.js должен выставить window.NoxMcpLogos');
+  return sandbox.window.NoxMcpLogos;
+}
+
+function iconNames() {
+  const source = fs.readFileSync(path.join(AETHER, 'icons.js'), 'utf8');
+  const block = source.match(/const ICONS = \{([\s\S]*?)\n  \};/);
+  assert.ok(block, 'в icons.js нет набора ICONS');
+  return new Set([...block[1].matchAll(/^    (\w+): \[/gm)].map((match) => match[1]));
+}
 
 // Валидная запись для проверки испорченных вариантов.
 function baseEntry() {
@@ -33,35 +74,40 @@ function baseEntry() {
   };
 }
 
-test('каталог: 30–40 реальных записей, поля на месте, секретов в данных нет', () => {
-  assert.ok(CATALOG.length >= 30, `записей ${CATALOG.length}, нужно не меньше 30`);
-  assert.ok(CATALOG.length <= 40, `записей ${CATALOG.length}, нужно не больше 40`);
+test('каталог: ровно 80 реальных записей, поля на месте, секретов в данных нет', () => {
+  assert.equal(CATALOG.length, 80, 'в каталоге должно быть ровно 80 записей');
+  assert.equal(MAX_ENTRIES, 80);
   for (const entry of CATALOG) {
     for (const field of ['id', 'title', 'description', 'category', 'transport', 'verified']) {
-      assert.ok(entry[field] !== undefined, `${entry.id || '?'}: нет поля ${field}`);
+      assert.ok(entry[field] !== undefined, (entry.id || '?') + ': нет поля ' + field);
     }
-    assert.ok(['stdio', 'http'].includes(entry.transport), `${entry.id}: транспорт ${entry.transport}`);
-    assert.ok(Array.isArray(entry.args), `${entry.id}: args — список`);
-    assert.ok(Array.isArray(entry.envKeys), `${entry.id}: envKeys — список`);
+    assert.ok(['stdio', 'http'].includes(entry.transport), entry.id + ': транспорт ' + entry.transport);
+    assert.ok(Array.isArray(entry.args), entry.id + ': args — список');
+    assert.ok(Array.isArray(entry.envKeys), entry.id + ': envKeys — список');
     // Значений секретов в каталоге нет: только имена ключей и только для stdio.
-    assert.equal(entry.env, undefined, `${entry.id}: значение env попало в каталог`);
-    assert.equal(entry.headers, undefined, `${entry.id}: заголовки попадают в каталог`);
+    assert.equal(entry.env, undefined, entry.id + ': значение env попало в каталог');
+    assert.equal(entry.headers, undefined, entry.id + ': заголовки попадают в каталог');
     if (entry.transport === 'stdio') {
-      assert.equal(validateCommand(entry.command).ok, true, `${entry.id}: команда`);
-      assert.equal(validateArgs(entry.args).ok, true, `${entry.id}: аргументы`);
+      assert.equal(validateCommand(entry.command).ok, true, entry.id + ': команда');
+      assert.equal(validateArgs(entry.args).ok, true, entry.id + ': аргументы');
+      assert.ok(['npx.cmd', 'uvx'].includes(entry.command), entry.id + ': запуск только npx.cmd или uvx');
+      if (entry.command === 'npx.cmd') assert.equal(entry.args[0], '-y', entry.id + ': у npx первым идёт -y');
     } else {
-      assert.equal(entry.command, undefined, `${entry.id}: у http-записи не должно быть команды`);
-      assert.equal(normalizeServerConfig({ url: entry.url }).ok, true, `${entry.id}: адрес`);
-      assert.equal(entry.envKeys.length, 0, `${entry.id}: у http-записи не должно быть env-ключей`);
+      assert.equal(entry.command, undefined, entry.id + ': у http-записи не должно быть команды');
+      assert.equal(normalizeServerConfig({ url: entry.url }).ok, true, entry.id + ': адрес');
+      assert.equal(entry.envKeys.length, 0, entry.id + ': у http-записи не должно быть env-ключей');
     }
-    if (entry.docs !== undefined) assert.match(entry.docs, /^https?:\/\//, `${entry.id}: ссылка на документацию`);
+    if (entry.docs !== undefined) assert.match(entry.docs, /^https:\/\//, entry.id + ': ссылка на документацию');
+    // Описание — по-русски; название может быть именем сервиса.
+    assert.match(entry.description, /[А-Яа-яЁё]/, entry.id + ': description должен быть на русском');
   }
   assert.equal(validateCatalog(CATALOG), true);
+  assertNoSecrets(JSON.stringify(CATALOG), 'каталог');
 });
 
 test('каталог: обещанные серверы есть (файлы, git, sqlite, github, playwright, fetch, memory, time, sequential-thinking)', () => {
   for (const id of ['filesystem', 'git', 'sqlite', 'github', 'playwright', 'fetch', 'memory', 'time', 'sequential-thinking']) {
-    assert.ok(getCatalogEntry(id), `нет записи «${id}»`);
+    assert.ok(getCatalogEntry(id), 'нет записи «' + id + '»');
   }
 });
 
@@ -69,26 +115,26 @@ test('каталог: id уникальны, в нижнем регистре и
   const ids = CATALOG.map((entry) => entry.id);
   assert.equal(new Set(ids).size, ids.length, 'id повторяются');
   for (const id of ids) {
-    assert.equal(validateName(id).ok, true, `имя «${id}» не пройдёт проверку клиента`);
-    assert.equal(id, id.toLowerCase(), `id «${id}» должен быть в нижнем регистре`);
+    assert.equal(validateName(id).ok, true, 'имя «' + id + '» не пройдёт проверку клиента');
+    assert.equal(id, id.toLowerCase(), 'id «' + id + '» должен быть в нижнем регистре');
   }
 });
 
-test('категории: известные, подписаны и сходятся по числу записей', () => {
+test('категории: известные, подписаны, все непустые и сходятся по числу записей', () => {
   const categories = catalogCategories();
-  assert.ok(Array.isArray(categories) || typeof categories === 'object');
   assert.equal(categories.length, CATEGORIES.length);
   const ids = new Set();
   let total = 0;
   for (const category of categories) {
-    assert.equal(ids.has(category.id), false, `категория «${category.id}» повторяется`);
+    assert.equal(ids.has(category.id), false, 'категория «' + category.id + '» повторяется');
     ids.add(category.id);
-    assert.ok(String(category.title || '').trim(), `у категории «${category.id}» нет подписи`);
-    assert.equal(category.count, listCatalog({ category: category.id }).length, `счётчик «${category.id}» расходится со списком`);
+    assert.ok(String(category.title || '').trim(), 'у категории «' + category.id + '» нет подписи');
+    assert.ok(category.count > 0, 'категория «' + category.id + '» пустая');
+    assert.equal(category.count, listCatalog({ category: category.id }).length, 'счётчик «' + category.id + '» расходится со списком');
     total += category.count;
   }
   assert.equal(total, CATALOG.length);
-  for (const entry of CATALOG) assert.ok(ids.has(entry.category), `неизвестная категория «${entry.category}»`);
+  for (const entry of CATALOG) assert.ok(ids.has(entry.category), 'неизвестная категория «' + entry.category + '»');
 });
 
 test('фильтр: по тексту, категории и вместе; регистр не важен, неизвестное — пустой список', () => {
@@ -124,25 +170,25 @@ test('toServerConfig: конфиг проходит проверку клиен�
   for (const entry of CATALOG) {
     const config = toServerConfig(entry);
     const checked = normalizeServerConfig(config);
-    assert.equal(checked.ok, true, `${entry.id}: ${checked.error}`);
-    assert.equal(config.headers, undefined, `${entry.id}: заголовки с секретами`);
+    assert.equal(checked.ok, true, entry.id + ': ' + checked.error);
+    assert.equal(config.headers, undefined, entry.id + ': заголовки с секретами');
     if (entry.transport === 'stdio') {
       assert.equal(config.command, entry.command);
       assert.deepEqual(config.args, entry.args);
       if (entry.envKeys.length) {
-        assert.deepEqual(Object.keys(config.env).sort(), entry.envKeys.slice().sort(), `${entry.id}: имена env-ключей`);
+        assert.deepEqual(Object.keys(config.env).sort(), entry.envKeys.slice().sort(), entry.id + ': имена env-ключей');
         for (const value of Object.values(config.env)) {
-          assert.equal(value, '', `${entry.id}: значение секрета подставлено`);
+          assert.equal(value, '', entry.id + ': значение секрета подставлено');
         }
       } else {
-        assert.equal(config.env, undefined, `${entry.id}: лишние env`);
+        assert.equal(config.env, undefined, entry.id + ': лишние env');
       }
     } else {
       assert.equal(config.url, entry.url);
     }
     // Никаких длинных значений, похожих на готовый ключ.
     for (const value of Object.values(config)) {
-      if (typeof value === 'string') assert.ok(value.length <= 400, `${entry.id}: подозрительно длинное значение`);
+      if (typeof value === 'string') assert.ok(value.length <= 400, entry.id + ': подозрительно длинное значение');
     }
   }
   assert.throws(() => toServerConfig('нет-такой'), /неизвестная запись/);
@@ -154,14 +200,18 @@ test('toServerConfig: конфиг проходит проверку клиен�
 });
 
 test('пометки честные: verified:false означает «не проверено», имена ключей видны в описании', () => {
+  let unverified = 0;
   for (const entry of CATALOG) {
     if (entry.verified !== true) {
-      assert.match(entry.description, /не проверено/, `${entry.id}: у непроверенной записи нет пометки`);
+      unverified += 1;
+      assert.match(entry.description, /не проверено/, entry.id + ': у непроверенной записи нет пометки');
     }
     for (const key of entry.envKeys) {
-      assert.ok(entry.description.includes(key), `${entry.id}: ключ ${key} не упомянут в описании`);
+      assert.ok(entry.description.includes(key), entry.id + ': ключ ' + key + ' не упомянут в описании');
     }
   }
+  assert.ok(unverified > 0, 'должны быть честно помеченные непроверенные записи');
+  assert.ok(unverified < CATALOG.length, 'не все записи могут быть непроверенными');
 });
 
 test('строгая проверка ловит испорченные записи', () => {
@@ -174,6 +224,8 @@ test('строгая проверка ловит испорченные запи
   assert.throws(bad({ transport: 'sse' }), /transport/);
   assert.throws(bad({ command: '' }), /команда/);
   assert.throws(bad({ command: 'node & calc' }), /символ оболочки/);
+  assert.throws(bad({ command: 'node' }), /npx.cmd или uvx/);
+  assert.throws(bad({ args: ['pkg'] }), /-y/);
   assert.throws(bad({ args: ['-y', 'a&b'] }), /символ оболочки/);
   assert.throws(bad({ category: 'нет-такой' }), /категория/);
   assert.throws(bad({ verified: 'да' }), /verified/);
@@ -190,20 +242,44 @@ test('строгая проверка ловит испорченные запи
   // Дубль id и дубль запуска ловятся отдельно.
   assert.throws(() => validateCatalog([good, { ...baseEntry(), args: ['-y', 'другой'] }]), /повторяется/);
   assert.throws(() => validateCatalog([good, { ...baseEntry(), id: 'base2' }]), /такой же запуск/);
+  // Больше 80 записей каталог не принимает.
+  const many = Array.from({ length: MAX_ENTRIES + 1 }, (_, index) => ({
+    ...baseEntry(),
+    id: 'base' + index,
+    args: ['-y', 'pkg' + index],
+  }));
+  assert.throws(() => validateCatalog(many), /не больше/);
 });
 
 test('настройки по умолчанию: каталог раскладывается в mcpServers без дублей', () => {
-  // main.js читает settings.mcpServers, по умолчанию {}. Проверяем, что весь каталог
-  // ложится в настройки уникальными именами и каждый конфиг принимается клиентом.
   const servers = {};
   for (const entry of CATALOG) {
-    assert.equal(servers[entry.id], undefined, `имя «${entry.id}» занято дважды`);
+    assert.equal(servers[entry.id], undefined, 'имя «' + entry.id + '» занято дважды');
     const checked = normalizeServerConfig(toServerConfig(entry));
-    assert.equal(checked.ok, true, `${entry.id}: ${checked.error}`);
+    assert.equal(checked.ok, true, entry.id + ': ' + checked.error);
     servers[entry.id] = checked.config;
   }
   assert.equal(Object.keys(servers).length, CATALOG.length);
   assert.equal(Object.keys(servers).every((name) => validateName(name).ok), true);
+});
+
+test('FEATURED: окно «Популярные» берёт записи каталога, порядок для витрины стабилен', () => {
+  assert.deepEqual(FEATURED.slice(0, 4).map((item) => item.id), ['github', 'gmail', 'linear', 'notion']);
+  for (const item of FEATURED) {
+    assert.ok(String(item.title || '').trim(), item.id + ': нет подписи');
+    assert.ok(String(item.description || '').trim(), item.id + ': нет описания');
+    assert.ok(Array.isArray(item.envKeys || []), item.id + ': envKeys не список');
+    if (item.id === 'gmail') {
+      assert.equal(item.integration, 'mail');
+      continue;
+    }
+    const entry = getCatalogEntry(item.id);
+    assert.ok(entry, 'витрина ссылается на запись «' + item.id + '», которой нет в каталоге');
+    assert.equal(item.transport, entry.transport, item.id + ': транспорт разошёлся с каталогом');
+    if (entry.transport === 'http') assert.equal(item.url, entry.url, item.id + ': адрес разошёлся с каталогом');
+    else assert.equal(item.command, entry.command, item.id + ': команда разошлась с каталогом');
+  }
+  assertNoSecrets(JSON.stringify(FEATURED), 'витрина');
 });
 
 test('окно «Популярные» сверено с каталогом: id, команда и аргументы не разошлись, секретов нет', () => {
@@ -217,16 +293,118 @@ test('окно «Популярные» сверено с каталогом: id
   assert.equal(new Set(items.map((item) => item.id)).size, items.length, 'в популярных повторяются id');
   for (const item of items) {
     const entry = getCatalogEntry(item.id);
-    assert.ok(entry, `в популярных есть «${item.id}», которого нет в каталоге`);
-    assert.ok(item.title.trim(), `${item.id}: пустая подпись`);
+    assert.ok(entry, 'в популярных есть «' + item.id + '», которого нет в каталоге');
+    assert.ok(item.title.trim(), item.id + ': пустая подпись');
     // Кнопка «Добавить» не должна подставлять ключи: в популярные попадают только записи без env.
-    assert.equal(entry.envKeys.length, 0, `${item.id}: сервис с ключами не место в популярных`);
-    assert.equal(entry.verified, true, `${item.id}: непроверенный сервис не место в популярных`);
+    assert.equal(entry.envKeys.length, 0, item.id + ': сервис с ключами не место в популярных');
+    assert.equal(entry.verified, true, item.id + ': непроверенный сервис не место в популярных');
     const config = toServerConfig(entry);
-    assert.equal(config.command, item.target, `${item.id}: команда в окне разошлась с каталогом`);
-    assert.equal(config.args.join(' '), item.args, `${item.id}: аргументы в окне разошлись с каталогом`);
+    assert.equal(config.command, item.target, item.id + ': команда в окне разошлась с каталогом');
+    assert.equal(config.args.join(' '), item.args, item.id + ': аргументы в окне разошлись с каталогом');
   }
-  // Добавление идёт через существующий мост mcp:add, а не новым каналом.
   assert.match(source, /api\.mcpAdd\(/, 'кнопка «Добавить» должна вызывать mcpAdd');
   assert.ok(source.includes('Популярные'), 'нет подписи раздела «Популярные»');
+});
+
+test('значки: mcp-logos.js — снимок всех 80 сервисов, лицензия CC0 и наши монограммы', () => {
+  assert.match(LOGOS_TEXT, /Simple Icons/, 'нет упоминания Simple Icons');
+  assert.match(LOGOS_TEXT, /CC0 1\.0/, 'нет лицензионной пометки CC0 1.0');
+  assert.match(LOGOS_TEXT, /товарные знаки их владельцев/, 'нет пометки про авторские права и товарные знаки');
+  assert.match(LOGOS_TEXT, /вручную не править/, 'файл должен быть помечен как сгенерированный');
+  assertNoSecrets(LOGOS_TEXT, 'mcp-logos.js');
+  assert.doesNotMatch(LOGOS_TEXT, /<script|javascript:/i, 'в данных значков не должно быть HTML или скриптов');
+  // В рантайме сеть не нужна и запрещена строгим CSP: ни fetch, ни XHR, ни require.
+  assert.doesNotMatch(LOGOS_TEXT, /\bfetch\s*\(|\bXMLHttpRequest\b|\bhttps\.get\s*\(|\brequire\s*\(/, 'mcp-logos.js не должен ходить в сеть');
+
+  const logos = loadLogos();
+  assert.equal(logos.services.length, CATALOG.length, 'в снимке должны быть все записи каталога');
+  assert.equal(logos.categories.length, CATEGORIES.length, 'категории снимка разошлись с каталогом');
+  for (const category of CATEGORIES) {
+    const copy = logos.categories.find((item) => item.id === category.id);
+    assert.ok(copy, 'в снимке нет категории «' + category.id + '»');
+    assert.equal(copy.title, category.title, 'подпись категории «' + category.id + '» разошлась');
+  }
+
+  let brands = 0;
+  let monograms = 0;
+  for (const entry of CATALOG) {
+    const service = logos.service(entry.id);
+    assert.ok(service, entry.id + ': нет записи в снимке значков');
+    assert.equal(service.title, entry.title);
+    assert.equal(service.description, entry.description);
+    assert.equal(service.category, entry.category);
+    assert.equal(service.transport, entry.transport);
+    assert.equal(service.verified, entry.verified);
+    assert.equal(JSON.stringify(service.envKeys), JSON.stringify(entry.envKeys));
+    assert.equal(service.docs || undefined, entry.docs);
+    if (entry.transport === 'stdio') {
+      assert.equal(service.command, entry.command);
+      assert.equal(JSON.stringify(service.args), JSON.stringify(entry.args));
+    } else {
+      assert.equal(service.url, entry.url);
+      assert.equal(service.command, undefined);
+    }
+    const brand = logos.brand(entry.id);
+    const mono = logos.monogram(entry.id);
+    assert.ok(brand || mono, entry.id + ': нет ни значка, ни монограммы');
+    assert.ok(!(brand && mono), entry.id + ': не должно быть значка и монограммы одновременно');
+    if (brand) {
+      brands += 1;
+      assert.match(brand.slug, /^[a-z0-9-]+$/, entry.id + ': слаг значка');
+      assert.match(brand.version, /^\d+\.\d+\.\d+$/, entry.id + ': версия Simple Icons');
+      assert.match(brand.path, /^[MmLlHhVvCcSsQqTtAaZz0-9eE+.,\-\s]+$/, entry.id + ': путь значка');
+      assert.ok(brand.path.length > 10 && brand.path.length < 12000, entry.id + ': длина пути значка');
+    } else {
+      monograms += 1;
+      assert.equal(mono.letter.length, 1, entry.id + ': буква монограммы');
+      assert.match(mono.color, /^#[0-9a-fA-F]{6}$/, entry.id + ': цвет монограммы');
+    }
+  }
+  assert.ok(brands >= 40, 'настоящих значков должно быть большинство, сейчас ' + brands);
+  assert.ok(monograms > 0, 'для редких сервисов должны быть наши монограммы');
+  assert.ok(logos.brand('gmail'), 'у карточки почты должен быть настоящий значок');
+  assert.match(logos.license, /CC0 1\.0/, 'в API должна быть лицензионная строка');
+
+  // Глифы монограмм должны существовать в общем наборе иконок, иначе рисовать нечего.
+  const names = iconNames();
+  for (const mono of Object.values(logos.monograms)) {
+    assert.ok(names.has(mono.glyph), 'глифа «' + mono.glyph + '» нет в icons.js');
+  }
+});
+
+test('окно «Дополнения»: каталог со значками, честные действия и никакой сети', () => {
+  assert.match(VIEW_TEXT, /mcp-logos\.js/, 'компонент должен подключать сгенерированные значки');
+  assert.match(VIEW_TEXT, /NoxMcpLogos/, 'компонент должен использовать данные значков');
+  assert.match(VIEW_TEXT, /data-service/, 'внешние сервисы должны быть размечены data-service');
+  assert.match(VIEW_TEXT, /dataset\.service/, 'разметка data-service должна заполняться');
+  assert.match(VIEW_TEXT, /bridge\.call\('mcpAdd', name, target/, 'добавление идёт позиционными аргументами mcpAdd');
+  assert.match(VIEW_TEXT, /mcpApprove/, 'подтверждение изменений сервиса');
+  assert.match(VIEW_TEXT, /mcpToggle/, 'включение и выключение сервиса');
+  assert.match(VIEW_TEXT, /openSource/, 'инструкция открывается существующим каналом');
+  assert.match(VIEW_TEXT, /Дополнения/, 'подпись раздела');
+  assert.match(VIEW_TEXT, /type = 'search'/, 'должно быть поле поиска');
+  assert.match(VIEW_TEXT, /CC0 1\.0/, 'должна быть пометка о лицензии значков');
+  assert.match(VIEW_TEXT, /товарные знаки/, 'должна быть пометка про товарные знаки');
+  // В окне нет сети: значки уже внутри файла, данные приходят мостом, ссылки открывает ядро.
+  const external = (VIEW_TEXT.match(/https?:\/\/[a-z0-9][^\s'"]*/gi) || []).filter((url) => !url.startsWith('http://www.w3.org/'));
+  assert.deepEqual(external, [], 'в компоненте не должно быть внешних адресов');
+  assert.doesNotMatch(VIEW_TEXT, /\bfetch\s*\(|\bXMLHttpRequest\b/, 'компонент не должен ходить в сеть');
+  assertNoSecrets(VIEW_TEXT, 'mcp-view.js');
+});
+
+test('генератор значков: CDN Simple Icons, карта service→slug, без npm-зависимостей', () => {
+  const source = fs.readFileSync(FETCH_FILE, 'utf8');
+  assert.match(source, /simple-icons/, 'генератор должен качать Simple Icons');
+  assert.match(source, /cdn\.jsdelivr\.net/, 'нужен открытый CDN');
+  assert.match(source, /CC0 1\.0/, 'должна быть лицензионная пометка');
+  assert.match(source, /BRAND_SLUGS/, 'должна быть карта service→slug');
+  assert.match(source, /mcp-logos\.js/, 'генератор должен писать mcp-logos.js');
+  assert.match(source, /MONOGRAMS|монограмм/i, 'генератор должен делать наши монограммы');
+  assert.match(source, /CATALOG/, 'снимок каталога должен браться из каталога ядра');
+  const requires = [...source.matchAll(/require\('([^']+)'\)/g)].map((match) => match[1]);
+  for (const name of requires) {
+    assert.ok(['fs', 'path', 'https', '../src/mcp/catalog'].includes(name), 'лишняя зависимость генератора: ' + name);
+  }
+  assert.doesNotMatch(source, /npm install|node_modules/, 'генератор не должен ставить пакеты');
+  assertNoSecrets(source, 'fetch-mcp-logos.js');
 });
