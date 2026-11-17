@@ -210,8 +210,55 @@ test('пометки честные: verified:false означает «не пр
       assert.ok(entry.description.includes(key), entry.id + ': ключ ' + key + ' не упомянут в описании');
     }
   }
-  assert.ok(unverified > 0, 'должны быть честно помеченные непроверенные записи');
-  assert.ok(unverified < CATALOG.length, 'не все записи могут быть непроверенными');
+  // 17.11.2026 все 80 записей сверены с реестрами npm/PyPI и HTTP-статусами (см. отчёт
+  // и scripts/check-mcp-registry.js). Если появится запись без проверки, тест напомнит пометить её.
+  assert.equal(unverified, 0, 'после сверки с реестрами непроверенных записей быть не должно');
+});
+
+test('формат запуска: npx.cmd -y <пакет>, uvx <пакет>, корректные адреса, без секретов', () => {
+  const NPM_SPEC = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*(@[A-Za-z0-9._-]+)?$/;
+  const PYPI_SPEC = /^[A-Za-z0-9][A-Za-z0-9._-]*(@[A-Za-z0-9._-]+)?$/;
+  for (const entry of CATALOG) {
+    const label = entry.id;
+    if (entry.transport === 'stdio') {
+      assert.ok(['npx.cmd', 'uvx'].includes(entry.command), label + ': команда запуска');
+      assert.ok(Array.isArray(entry.args) && entry.args.length > 0, label + ': нужен хотя бы один аргумент');
+      for (const arg of entry.args) {
+        assert.equal(typeof arg, 'string');
+        assert.ok(arg.length > 0, label + ': пустой аргумент');
+        assert.ok(arg.length <= 1000, label + ': слишком длинный аргумент');
+        assert.doesNotMatch(arg, /[\u0000-\u001f\u007f]/, label + ': управляющий символ в аргументе');
+        assert.doesNotMatch(arg, /[&|<>;`$%"'\r\n]/, label + ': недопустимый для запуска символ в аргументе');
+      }
+      if (entry.command === 'npx.cmd') {
+        assert.equal(entry.args[0], '-y', label + ': у npx первым аргументом должно быть -y');
+        assert.ok(entry.args[1], label + ': у npx должен быть пакет');
+        assert.ok(NPM_SPEC.test(entry.args[1]), label + ': имя npm-пакета «' + entry.args[1] + '»');
+        assert.ok(!entry.args[1].startsWith('-'), label + ': имя пакета не должно начинаться с «-»');
+        assert.ok(entry.args[1].length <= 214, label + ': имя npm-пакета слишком длинное');
+      } else {
+        assert.ok(PYPI_SPEC.test(entry.args[0]), label + ': имя PyPI-пакета «' + entry.args[0] + '»');
+        assert.ok(!entry.args[0].startsWith('-'), label + ': имя пакета не должно начинаться с «-»');
+        assert.ok(entry.args[0].length <= 214, label + ': имя PyPI-пакета слишком длинное');
+      }
+      for (const key of entry.envKeys) {
+        assert.match(key, /^[A-Za-z_][A-Za-z0-9_]*$/, label + ': имя переменной окружения');
+      }
+    } else {
+      assert.equal(entry.transport, 'http');
+      assert.equal(entry.command, undefined, label + ': у http-записи не должно быть команды');
+      assert.equal(entry.args.length, 0, label + ': у http-записи не должно быть аргументов');
+      assert.equal(entry.envKeys.length, 0, label + ': у http-записи не должно быть env-ключей');
+      let url = null;
+      try { url = new URL(entry.url); } catch (err) { assert.fail(label + ': адрес не разобран'); }
+      assert.equal(url.protocol, 'https:', label + ': адрес только https');
+      assert.equal(url.username, '', label + ': в адресе не должно быть логина');
+      assert.equal(url.password, '', label + ': в адресе не должно быть пароля');
+      assert.ok(url.hostname.includes('.') || url.hostname === 'localhost', label + ': в адресе нет имени хоста');
+      assert.doesNotMatch(entry.url, /[\u0000-\u001f\u007f\s]/, label + ': управляющий символ или пробел в адресе');
+    }
+    assertNoSecrets([entry.id, entry.url || '', entry.args.join(' '), entry.description].join('\n'), label);
+  }
 });
 
 test('строгая проверка ловит испорченные записи', () => {
@@ -407,4 +454,16 @@ test('генератор значков: CDN Simple Icons, карта service→
   }
   assert.doesNotMatch(source, /npm install|node_modules/, 'генератор не должен ставить пакеты');
   assertNoSecrets(source, 'fetch-mcp-logos.js');
+});
+
+test('скрипт сверки с реестрами: только GET, без установок и запусков серверов', () => {
+  const source = fs.readFileSync(path.join(APP, 'scripts', 'check-mcp-registry.js'), 'utf8');
+  assert.match(source, /registry\.npmjs\.org/, 'нужен реестр npm');
+  assert.match(source, /pypi\.org\/pypi/, 'нужен реестр PyPI');
+  assert.match(source, /https\.get\(/, 'запросы только через GET');
+  assert.match(source, /headersOnly/, 'для адресов читается только статус, без тела');
+  assert.doesNotMatch(source, /child_process|spawn\s*\(|exec\s*\(|npm install|node_modules/, 'скрипт не должен ничего устанавливать или запускать');
+  assert.doesNotMatch(source, /method:\s*'POST'/, 'никаких изменяющих запросов');
+  assert.match(source, /--json/, 'должен быть машинный вывод для отчёта');
+  assertNoSecrets(source, 'check-mcp-registry.js');
 });
