@@ -64,3 +64,17 @@ test('«активируй игровой режим» находит коман
   assert.equal(matchCommand('переключи игровой режим', SAMPLE_COMMANDS).command.name, 'Игра');
   assert.equal(matchCommand('включи игровой режим', SAMPLE_COMMANDS).command.name, 'Игра');
 });
+
+test('скрипт сворачивания реально исполняется в пробном режиме (без сворачивания окон)', { skip: process.platform !== 'win32' }, async () => {
+  process.env.NOX_MINIMIZE_DRY = '1';
+  try {
+    const res = await byName(desktopTools, 'windows_minimize_all').run({});
+    assert.equal(res.ok, true, res.summary);
+    const probe = JSON.parse(res.data.stdout);
+    assert.equal(probe.dry, true);
+    assert.equal(typeof probe.checked, 'number');
+    assert.equal(probe.open, 0);
+  } finally {
+    delete process.env.NOX_MINIMIZE_DRY;
+  }
+});
