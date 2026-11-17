@@ -351,6 +351,8 @@
       trackerNote: '',
       trackerError: '',
       toasts: [],
+      // Последнее объявление для экранного диктора (aria-live); id помогает окну не повторять.
+      announcement: null,
     };
 
     const listeners = new Set();
@@ -386,6 +388,14 @@
         state.toasts = state.toasts.filter((t) => t.id !== id);
         notify();
       }, kind === 'error' ? 4500 : 2800);
+    }
+
+    // Спокойное объявление для экранного диктора: не рисуется в диалоге, живёт в aria-live окна.
+    function announce(text) {
+      const value = String(text || '').trim();
+      if (!value) return;
+      state.announcement = { id: nextId('say'), text: scrub(value).slice(0, 400) };
+      notify(true);
     }
 
     const tracker = ui && typeof ui.StatusTracker === 'function'
@@ -1547,6 +1557,7 @@
       subscribe,
       notify,
       toast,
+      announce,
       setRoute,
       toggleHistory,
       syncHistoryViewport,

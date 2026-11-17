@@ -32,7 +32,7 @@
     const closeTopBtn = document.createElement('button');
     closeTopBtn.type = 'button';
     closeTopBtn.className = 'lx-icon-btn lx-modal-close';
-    closeTopBtn.setAttribute('aria-label', 'Закрыть');
+    closeTopBtn.setAttribute('aria-label', 'Закрыть настройки Nox AI');
     closeTopBtn.append(icon('x'));
     head.append(title, closeTopBtn);
 
@@ -245,15 +245,52 @@
       }
     }
 
+    // ── Доступность модалки: ловушка фокуса, возврат фокуса, inert для фона ──
+    let lastFocus = null;
+    let opener = null;
+    const INERT_SELECTORS = ['#aeTopbar', '.ae-utility-rail', '#aeMain'];
+    const supportsInert = typeof HTMLElement !== 'undefined' && 'inert' in HTMLElement.prototype;
+
+    function setBackgroundInert(on) {
+      for (const selector of INERT_SELECTORS) {
+        const el = document.querySelector(selector);
+        if (!el) continue;
+        if (supportsInert) el.inert = Boolean(on);
+      }
+    }
+
+    function focusableInDialog() {
+      return [...dialog.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])')]
+        .filter((el) => {
+          const rect = el.getBoundingClientRect();
+          const style = window.getComputedStyle(el);
+          return !el.disabled && rect.width > 0 && rect.height > 0
+            && style.visibility !== 'hidden' && style.display !== 'none';
+        });
+    }
+
     function open() {
+      if (!backdrop.hidden) return;
       syncFromState(store.state);
+      lastFocus = document.activeElement;
+      opener = lastFocus && lastFocus.setAttribute && lastFocus.hasAttribute('aria-haspopup') ? lastFocus : null;
+      if (opener) opener.setAttribute('aria-expanded', 'true');
       backdrop.hidden = false;
       dialog.tabIndex = -1;
+      setBackgroundInert(true);
       requestAnimationFrame(() => dialog.focus({ preventScroll: true }));
     }
 
     function close() {
+      if (backdrop.hidden) return;
       backdrop.hidden = true;
+      setBackgroundInert(false);
+      if (opener) opener.setAttribute('aria-expanded', 'false');
+      const canReturn = lastFocus && lastFocus !== document.body && lastFocus !== document.documentElement && lastFocus.isConnected;
+      const target = canReturn ? lastFocus : document.getElementById('chatInput');
+      lastFocus = null;
+      opener = null;
+      if (target && typeof target.focus === 'function') target.focus({ preventScroll: true });
     }
 
     closeTopBtn.addEventListener('click', close);
@@ -261,9 +298,37 @@
     backdrop.addEventListener('click', (e) => {
       if (e.target === backdrop) close();
     });
+
+    // Пока диалог открыт, Esc закрывает только его (и не запускает глобальный «стоп хода»),
+    // а Tab и Shift+Tab ходят по кругу внутри диалога.
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !backdrop.hidden) close();
-    });
+      if (backdrop.hidden) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const items = focusableInDialog();
+      if (!items.length) {
+        e.preventDefault();
+        dialog.focus({ preventScroll: true });
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === dialog || !dialog.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !dialog.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
+    }, true);
 
     keyInput.addEventListener('input', () => {
       keyInput.dataset.edited = '1';

@@ -130,6 +130,35 @@
     feed.id = 'feed';
     feed.setAttribute('role', 'log');
     feed.setAttribute('aria-live', 'polite');
+    feed.setAttribute('aria-relevant', 'additions text');
+    feed.setAttribute('aria-label', 'Лента сообщений');
+
+    // .ae-day-sr-only — существующий визуально-скрытый класс aether.css (CSP запрещает inline-стили).
+    const answerAnnouncer = document.createElement('div');
+    answerAnnouncer.id = 'aeAnswerAnnouncer';
+    answerAnnouncer.className = 'ae-answer-announcer ae-day-sr-only';
+    answerAnnouncer.setAttribute('role', 'status');
+    answerAnnouncer.setAttribute('aria-live', 'polite');
+    answerAnnouncer.setAttribute('aria-atomic', 'true');
+    root.append(answerAnnouncer);
+
+    let lastAnnouncementId = '';
+    function announce(text) {
+      const value = String(text || '').trim();
+      if (!value) return;
+      if (typeof store.announce === 'function') {
+        store.announce(value);
+        return;
+      }
+      answerAnnouncer.textContent = value;
+    }
+
+    function syncAnnouncement(st) {
+      const item = st.announcement;
+      if (!item || item.id === lastAnnouncementId) return;
+      lastAnnouncementId = item.id;
+      answerAnnouncer.textContent = item.text || '';
+    }
 
     const toBottomBtn = document.createElement('button');
     toBottomBtn.type = 'button';
@@ -199,6 +228,61 @@
     }
 
     let pendingFocusTurnId = null;
+    let knownAssistantIds = null;
+    let lastAnnounceChatId = null;
+
+    // Новый законченный ответ объявляем один раз; история чата при открытии не озвучивается.
+    function announceFinished(st) {
+      const items = Array.isArray(st.feedItems) ? st.feedItems : [];
+      if (!st.activeChatId || st.activeChatId !== lastAnnounceChatId) {
+        lastAnnounceChatId = st.activeChatId;
+        knownAssistantIds = new Set(items.filter((item) => item.kind === 'assistant').map((item) => item.id));
+        return;
+      }
+      if (!knownAssistantIds) knownAssistantIds = new Set();
+      let latest = null;
+      for (const item of items) {
+        if (item.kind !== 'assistant' || knownAssistantIds.has(item.id)) continue;
+        knownAssistantIds.add(item.id);
+        latest = item;
+      }
+      if (!latest) return;
+      const text = String(latest.text || '').trim();
+      if (text) announce(text.slice(0, 400));
+      else if (latest.cancelled) announce('Ответ остановлен.');
+    }
+
+    function focusInFeedSnapshot() {
+      const el = document.activeElement;
+      if (!el || !feed.contains(el)) return null;
+      const turn = el.closest ? el.closest('.ae-msg') : null;
+      return {
+        id: el.id || '',
+        turnId: turn ? turn.dataset.id || '' : '',
+        classes: typeof el.className === 'string' ? el.className : '',
+        text: (el.textContent || '').trim().slice(0, 80),
+      };
+    }
+
+    function restoreFeedFocus(snapshot) {
+      if (!snapshot) return false;
+      let target = snapshot.id ? document.getElementById(snapshot.id) : null;
+      if (target && !feed.contains(target)) target = null;
+      if (!target && snapshot.turnId) {
+        const turn = feed.querySelector(`.ae-msg[data-id="${snapshot.turnId}"]`);
+        if (turn) {
+          target = [...turn.querySelectorAll('button, summary, [tabindex]')].find((el) =>
+            (typeof el.className === 'string' ? el.className : '') === snapshot.classes
+            && (el.textContent || '').trim().slice(0, 80) === snapshot.text) || null;
+        }
+      }
+      if (target && typeof target.focus === 'function') {
+        target.focus({ preventScroll: true });
+        return true;
+      }
+      composer.focus();
+      return true;
+    }
 
     function elapsedLabel(ms) {
       return `${(Math.max(0, ms) / 1000).toFixed(1)} с`;
@@ -262,9 +346,13 @@
           stop.disabled = true;
           try {
             await store.stopRun();
+            announce('Выполнение остановлено.');
           } finally {
             stop.disabled = false;
           }
+          // Кнопка исчезнет вместе с живой строкой — фокус не должен пропасть.
+          if (!document.activeElement || document.activeElement === document.body
+            || document.activeElement === stop) composer.focus();
         });
         row.append(stop);
       }
@@ -551,6 +639,7 @@
         const msg = document.createElement('article');
         msg.className = 'ae-msg is-user';
         msg.dataset.id = item.id;
+        msg.setAttribute('aria-label', 'Ваше сообщение');
 
         const bubble = document.createElement('div');
         bubble.className = 'ae-user-bubble';
@@ -585,6 +674,9 @@
         const card = document.createElement('article');
         card.className = 'ae-msg is-error';
         card.dataset.id = item.id;
+        card.setAttribute('role', 'alert');
+        card.setAttribute('aria-live', 'assertive');
+        card.setAttribute('aria-label', 'Ошибка');
 
         const row = document.createElement('div');
         row.className = 'ae-error-card';
@@ -608,6 +700,7 @@
           retryBtn.append(icon('refresh'), 'Повторить');
           retryBtn.addEventListener('click', () => {
             const p = item.retryPayload || store.state.lastSentPayload;
+            composer.focus();
             if (p) store.sendChatMessage(p.text, p.files);
           });
           bar.append(retryBtn);
@@ -639,6 +732,8 @@
       const msg = existing || document.createElement('article');
       msg.className = isActive ? 'ae-msg is-assistant is-live' : 'ae-msg is-assistant';
       msg.dataset.id = item.id;
+      msg.setAttribute('aria-label', 'Ответ Nox');
+      msg.setAttribute('aria-busy', String(Boolean(isActive)));
 
       const hasText = Boolean(item.text?.trim());
       const cancelled = !isActive && item.cancelled;
@@ -729,7 +824,12 @@
         copyBtn.onclick = async () => {
           if (await md.copyPlain(copyText)) {
             copyBtn.replaceChildren(icon('check'));
-            setTimeout(() => copyBtn.replaceChildren(icon('copy')), 1500);
+            copyBtn.setAttribute('aria-label', 'Ответ скопирован');
+            announce('Ответ скопирован.');
+            setTimeout(() => {
+              copyBtn.replaceChildren(icon('copy'));
+              copyBtn.setAttribute('aria-label', 'Скопировать ответ');
+            }, 1500);
           }
         };
       }
@@ -795,6 +895,7 @@
         bannerWrap.hidden = false;
         const b = document.createElement('div');
         b.className = 'ae-banner is-warn';
+        b.setAttribute('role', 'status');
         b.textContent = 'Открыто в автономном режиме предпросмотра: связь с ядром отключена.';
         bannerWrap.replaceChildren(b);
         return;
@@ -803,13 +904,19 @@
         bannerWrap.hidden = false;
         const b = document.createElement('div');
         b.className = 'ae-banner is-info';
+        b.setAttribute('role', 'status');
         const sp = document.createElement('span');
         sp.textContent = 'Команды «Открой Блокнот» и «Открой Калькулятор» работают без аккаунта. Для свободного диалога подключите аккаунт или ключ.';
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'ae-link-btn';
         btn.textContent = 'Открыть настройки';
-        btn.addEventListener('click', () => store.setRoute('settings'));
+        btn.addEventListener('click', () => {
+          store.setRoute('settings');
+          // После смены раздела фокус переходит на его вкладку в шапке, а не теряется.
+          const tab = document.getElementById('aeNav_settings');
+          if (tab) tab.focus({ preventScroll: true });
+        });
         b.append(sp, btn);
         bannerWrap.replaceChildren(b);
         return;
@@ -855,6 +962,7 @@
     }
 
     function render(st) {
+      syncAnnouncement(st);
       renderBanner(st);
       approvalCard.render(st);
       composer.render(st);
@@ -890,6 +998,7 @@
       if (rebuilt) {
         lastFeedItems = st.feedItems;
         lastInteractiveKey = interactiveKey;
+        const feedFocus = focusInFeedSnapshot();
         const frag = document.createDocumentFragment();
         let prevUserPhrase = '';
         for (const item of st.feedItems) {
@@ -904,6 +1013,8 @@
         }
         feed.replaceChildren(frag);
         activeMessage = null;
+        // Пересборка ленты не должна выбрасывать фокус на body.
+        restoreFeedFocus(feedFocus);
       }
       if (rebuilt || activeSig !== lastActiveSig) {
         lastActiveSig = activeSig;
@@ -933,6 +1044,9 @@
       }
       lastLiveWorkSig = liveWorkSig;
       if (liveWork) renderElapsed();
+
+      // Экранный диктор слышит законченный ответ один раз, а не всю пересобранную ленту.
+      announceFinished(st);
     }
 
     return {

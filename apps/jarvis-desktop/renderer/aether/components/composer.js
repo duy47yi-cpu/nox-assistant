@@ -123,6 +123,7 @@
     micBtn.type = 'button';
     micBtn.id = 'dictationBtn';
     micBtn.className = 'ae-mic-btn';
+    micBtn.setAttribute('aria-label', 'Голосовой ввод');
     micBtn.append(icon('mic'));
     micBtn.addEventListener('click', () => store.toggleDictation());
 
@@ -191,6 +192,16 @@
         });
         const sp = document.createElement('span');
         sp.textContent = text;
+        // Сам radio скрыт (opacity 0, 0x0): контур рисуем на видимой части варианта.
+        input.addEventListener('focus', () => {
+          if (!input.matches(':focus-visible')) return;
+          sp.style.outline = '2px solid var(--accent, #58D9E8)';
+          sp.style.outlineOffset = '1px';
+        });
+        input.addEventListener('blur', () => {
+          sp.style.outline = '';
+          sp.style.outlineOffset = '';
+        });
         opt.append(input, sp);
         seg.append(opt);
         inputs[value] = input;
@@ -244,17 +255,29 @@
       setPanelOpen(pickPanel.hidden);
     });
 
-    pickPanel.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        setPanelOpen(false);
-        pickTrigger.focus();
-      }
+    // Esc закрывает меню модели и не доходит до глобального «стоп хода»:
+    // срабатывает, даже когда фокус остался на самой кнопке.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || pickPanel.hidden) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setPanelOpen(false);
+      pickTrigger.focus();
+    }, true);
+
+    // Поповер не модальный: уход фокуса закрывает его.
+    document.addEventListener('focusin', (e) => {
+      if (!pickPanel.hidden && !pickWrap.contains(e.target)) setPanelOpen(false);
     });
 
     document.addEventListener('click', (e) => {
-      if (!pickPanel.hidden && !pickWrap.contains(e.target)) setPanelOpen(false);
+      if (pickPanel.hidden || pickWrap.contains(e.target)) return;
+      const hadFocus = pickPanel.contains(document.activeElement);
+      setPanelOpen(false);
+      // Клик по пустому месту не переносит фокус сам — возвращаем его на кнопку.
+      if (hadFocus && !(e.target.closest && e.target.closest('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))) {
+        pickTrigger.focus();
+      }
     });
 
     pickWrap.append(pickTrigger, pickPanel);
@@ -289,12 +312,15 @@
       ta.value = '';
       syncHeight();
       await store.sendChatMessage(rawToSend, files);
+      // Кнопка отправки после хода становится неактивной — фокус не должен пропасть.
+      if (document.activeElement === sendBtn) ta.focus({ preventScroll: true });
     }
 
     function updateSendBtn(st) {
       const busy = Boolean(st.trackerBusy);
       const locked = Boolean(st.sendingLock);
       const canSend = Boolean(ta.value.trim() || st.currentDraftFiles.length > 0);
+      const hadFocus = document.activeElement === sendBtn;
       sendBtn.replaceChildren();
       if (busy) {
         sendBtn.classList.add('is-stop');
@@ -309,6 +335,8 @@
         sendBtn.setAttribute('aria-label', 'Отправить сообщение');
         sendBtn.append(icon('send'));
       }
+      // Неактивная кнопка не держит фокус — возвращаем его в поле ввода.
+      if (hadFocus && sendBtn.disabled) ta.focus({ preventScroll: true });
     }
 
     function renderFiles(files) {
@@ -331,7 +359,10 @@
         rm.className = 'ae-file-rm';
         rm.setAttribute('aria-label', `Убрать файл ${f.name}`);
         rm.append(icon('x'));
-        rm.addEventListener('click', () => store.removeDraftFile(f.path));
+        rm.addEventListener('click', () => {
+          store.removeDraftFile(f.path);
+          ta.focus({ preventScroll: true });
+        });
         chip.append(nm, rm);
         filesRow.append(chip);
       }
@@ -382,6 +413,9 @@
         dictModeBtn.textContent = dictError ? 'Микрофон не готов' : DICT_LABELS[dMode];
         dictModeBtn.dataset.dmode = dMode;
         dictModeBtn.title = dictError || 'Переключить режим микрофона (Ctrl+Alt+M)';
+        dictModeBtn.setAttribute('aria-label', dictError
+          ? `Режим микрофона: ${dictError}. Переключить`
+          : `Режим микрофона: ${DICT_LABELS[dMode]}. Переключить (Ctrl+Alt+M)`);
       }
 
       const agentActive = Boolean(st.agentMode);

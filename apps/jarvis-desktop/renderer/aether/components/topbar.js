@@ -3,11 +3,11 @@
   'use strict';
 
   const NAV_ITEMS = [
-    { id: 'personal', label: 'Личное пространство', caption: 'Главная', icon: 'home' },
-    { id: 'commands', label: 'Готовые команды', caption: 'Команды', icon: 'listChecks' },
-    { id: 'mcp', label: 'MCP-подключения', caption: 'Дополнения', icon: 'personal' },
-    { id: 'chat', label: 'Чат', caption: 'Nox AI', icon: 'sparkles' },
-    { id: 'settings', label: 'Настройки', caption: 'Настройки', icon: 'settings' },
+    { id: 'personal', label: 'Личное пространство', caption: 'Главная', icon: 'home', panel: 'aePersonalView' },
+    { id: 'commands', label: 'Готовые команды', caption: 'Команды', icon: 'listChecks', panel: 'aeCommandsView' },
+    { id: 'mcp', label: 'MCP-подключения', caption: 'Дополнения', icon: 'personal', panel: 'aeMcpView' },
+    { id: 'chat', label: 'Чат', caption: 'Nox AI', icon: 'sparkles', panel: 'noxChat' },
+    { id: 'settings', label: 'Настройки', caption: 'Настройки', icon: 'settings', panel: 'aeSettingsView' },
   ];
 
   const MODE_INFO = [
@@ -50,6 +50,9 @@
       btn.dataset.route = item.id;
       btn.setAttribute('role', 'tab');
       btn.setAttribute('aria-selected', 'false');
+      btn.setAttribute('aria-controls', item.panel);
+      // В tablist только выбранная вкладка входит в обход Tab (правило roving tabindex).
+      btn.tabIndex = -1;
       btn.setAttribute('aria-label', item.label);
       btn.title = item.label;
       btn.append(icon(item.icon, 'ae-nav-ico'));
@@ -62,7 +65,7 @@
       tabBtns.set(item.id, btn);
     }
 
-    // Стрелки клавиатуры между видимыми вкладками
+    // Стрелки клавиатуры между видимыми вкладками: фокус и выбор раздела вместе.
     nav.addEventListener('keydown', (e) => {
       const visible = [...nav.querySelectorAll('.ae-nav-btn')].filter((b) => {
         const s = window.getComputedStyle(b);
@@ -70,19 +73,16 @@
       });
       const idx = visible.indexOf(document.activeElement);
       if (idx < 0) return;
-      if (e.key === 'ArrowRight') {
+      function go(next) {
         e.preventDefault();
-        visible[(idx + 1) % visible.length].focus();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        visible[(idx - 1 + visible.length) % visible.length].focus();
-      } else if (e.key === 'Home') {
-        e.preventDefault();
-        visible[0].focus();
-      } else if (e.key === 'End') {
-        e.preventDefault();
-        visible[visible.length - 1].focus();
-      } else if (e.key === 'Enter' || e.key === ' ') {
+        next.focus();
+        next.click();
+      }
+      if (e.key === 'ArrowRight') go(visible[(idx + 1) % visible.length]);
+      else if (e.key === 'ArrowLeft') go(visible[(idx - 1 + visible.length) % visible.length]);
+      else if (e.key === 'Home') go(visible[0]);
+      else if (e.key === 'End') go(visible[visible.length - 1]);
+      else if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         visible[idx].click();
       }
@@ -94,8 +94,10 @@
 
     const attentionBtn = document.createElement('button');
     attentionBtn.type = 'button';
+    attentionBtn.id = 'aeAttentionPill';
     attentionBtn.className = 'ae-attention-pill';
     attentionBtn.hidden = true;
+    attentionBtn.setAttribute('aria-label', 'Есть запросы, ждущие решения. Открыть чат');
     attentionBtn.addEventListener('click', () => store.setRoute('chat'));
 
     const modeWrap = document.createElement('div');
@@ -107,12 +109,15 @@
     modeBtn.id = 'aeModePill';
     modeBtn.setAttribute('aria-haspopup', 'menu');
     modeBtn.setAttribute('aria-expanded', 'false');
+    modeBtn.setAttribute('aria-controls', 'aeModeMenu');
     const modeLabel = document.createElement('span');
     modeBtn.append(icon('shield', 'ae-mode-ico'), modeLabel, icon('chevronDown', 'ae-chev-sm'));
 
     const modeMenu = document.createElement('div');
+    modeMenu.id = 'aeModeMenu';
     modeMenu.className = 'ae-menu-pop ae-mode-menu';
     modeMenu.setAttribute('role', 'menu');
+    modeMenu.setAttribute('aria-labelledby', 'aeModePill');
     modeMenu.hidden = true;
 
     const modeBtns = new Map();
@@ -128,9 +133,11 @@
       descRow.className = 'ae-menu-desc';
       descRow.textContent = m.desc;
       opt.append(titleRow, descRow);
+      opt.tabIndex = -1;
       opt.addEventListener('click', () => {
         closeMenus();
         store.setMode(m.id);
+        modeBtn.focus();
       });
       modeMenu.append(opt);
       modeBtns.set(m.id, opt);
@@ -149,10 +156,33 @@
     });
 
     modeMenu.addEventListener('keydown', (e) => {
+      const items = [...modeMenu.querySelectorAll('[role="menuitemradio"]')];
+      const idx = items.indexOf(document.activeElement);
       if (e.key === 'Escape') {
+        e.preventDefault();
         e.stopPropagation();
         closeMenus();
         modeBtn.focus();
+        return;
+      }
+      if (e.key === 'Tab') {
+        // Меню — не модальное: Tab закрывает его и уводит фокус дальше.
+        closeMenus();
+        return;
+      }
+      if (idx < 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        items[(idx + 1) % items.length].focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        items[(idx - 1 + items.length) % items.length].focus();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        items[0].focus();
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        items[items.length - 1].focus();
       }
     });
 
@@ -162,6 +192,7 @@
     quickWrap.className = 'ae-mode-wrap';
     const quickBtn = document.createElement('button');
     quickBtn.type = 'button';
+    quickBtn.id = 'aeQuickBtn';
     quickBtn.className = 'ae-icon-btn';
     quickBtn.title = 'Быстрые настройки';
     quickBtn.setAttribute('aria-label', quickBtn.title);
@@ -222,7 +253,13 @@
       quiet.focus();
     });
     quick.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        // Не модальный поповер: уход фокуса закрывает его, фокус остаётся там, куда ушёл.
+        closeMenus();
+        return;
+      }
       if (e.key !== 'Escape') return;
+      e.preventDefault();
       e.stopPropagation();
       closeMenus();
       quickBtn.focus();
@@ -232,9 +269,9 @@
     const winControls = document.createElement('div');
     winControls.className = 'ae-win-controls';
     const winSpecs = [
-      { act: 'minimize', ic: 'minus', title: 'Свернуть' },
-      { act: 'maximize', ic: 'square', title: 'Развернуть' },
-      { act: 'close', ic: 'x', title: 'Закрыть', danger: true },
+      { act: 'minimize', ic: 'minus', title: 'Свернуть окно' },
+      { act: 'maximize', ic: 'square', title: 'Развернуть окно' },
+      { act: 'close', ic: 'x', title: 'Закрыть окно', danger: true },
     ];
     for (const ws of winSpecs) {
       const b = document.createElement('button');
@@ -257,9 +294,42 @@
       modeBtn.setAttribute('aria-expanded', 'false');
     }
 
+    function focusableTarget(target) {
+      return Boolean(target && target.closest
+        && target.closest('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'));
+    }
+
+    // Клик мимо поповера закрывает его. Если фокус был внутри, а кликнули в пустое место,
+    // возвращаем фокус на кнопку, иначе он потерялся бы на body.
     document.addEventListener('click', (e) => {
-      if (!quickWrap.contains(e.target) && !modeWrap.contains(e.target)) closeMenus();
+      if (quickWrap.contains(e.target) || modeWrap.contains(e.target)) return;
+      const quickHadFocus = quick.contains(document.activeElement);
+      const modeHadFocus = modeMenu.contains(document.activeElement);
+      const quickWasOpen = !quick.hidden;
+      const modeWasOpen = !modeMenu.hidden;
+      if (!quickWasOpen && !modeWasOpen) return;
+      closeMenus();
+      if (focusableTarget(e.target)) return;
+      if (modeHadFocus && modeWasOpen) modeBtn.focus();
+      else if (quickHadFocus && quickWasOpen) quickBtn.focus();
     });
+
+    // Уход фокуса из поповера закрывает его — поповеры не модальные.
+    document.addEventListener('focusin', (e) => {
+      if (!quick.hidden && !quickWrap.contains(e.target)) closeMenus();
+      else if (!modeMenu.hidden && !modeWrap.contains(e.target)) closeMenus();
+    });
+
+    // Esc в поповере шапки закрывает его и не доходит до глобального «стоп хода».
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (quick.hidden && modeMenu.hidden) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const quickWasOpen = !quick.hidden;
+      closeMenus();
+      (quickWasOpen ? quickBtn : modeBtn).focus();
+    }, true);
 
     function render(st) {
       for (const item of NAV_ITEMS) {
@@ -267,7 +337,8 @@
         const active = st.route === item.id;
         btn.setAttribute('aria-selected', String(active));
         btn.classList.toggle('is-active', active);
-        btn.tabIndex = 0;
+        // Roving tabindex: в обходе Tab остаётся только выбранная вкладка.
+        btn.tabIndex = active ? 0 : -1;
       }
 
       quiet.checked = Boolean(st.settings.quiet);
@@ -292,6 +363,7 @@
       if (urgentCount > 0 && st.route !== 'chat') {
         attentionBtn.hidden = false;
         attentionBtn.textContent = `Ждёт решения: ${urgentCount}`;
+        attentionBtn.setAttribute('aria-label', `Ждут решения запросы: ${urgentCount}. Открыть чат`);
       } else {
         attentionBtn.hidden = true;
       }
