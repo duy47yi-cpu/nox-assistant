@@ -214,8 +214,9 @@
     open.addEventListener('click', () => selectChat(chat.id, row));
     const more = el('button', 'nox-hist-more', '…');
     more.type = 'button';
-    more.title = 'Закрыть чат';
-    more.setAttribute('aria-label', `Закрыть чат «${chat.title || 'Новый чат'}»`);
+    const closeLabel = `Закрыть чат «${chat.title || 'Новый чат'}»`;
+    more.title = closeLabel;
+    more.setAttribute('aria-label', closeLabel);
     more.addEventListener('click', (e) => {
       e.stopPropagation();
       closeChat(chat);
@@ -375,6 +376,9 @@
     const more = el('button', 'nox-work-button', 'Подробнее');
     more.type = 'button';
     more.setAttribute('aria-haspopup', 'dialog');
+    more.setAttribute('aria-controls', 'noxWorkDialog');
+    more.setAttribute('aria-label', 'Подробнее о ходе работы');
+    more.title = 'Подробнее о ходе работы';
     head.append(title, count, more);
     const status = el('div', 'nox-work-status');
     status.setAttribute('role', 'status');
@@ -383,12 +387,15 @@
     const note = el('p', 'nox-work-note');
     const proof = el('p', 'nox-work-proof');
     const dialog = el('dialog', 'nox-work-dialog');
+    dialog.id = 'noxWorkDialog';
     const dialogTitle = el('h2', '', 'Ход работы');
     dialogTitle.id = 'noxWorkDialogTitle';
     dialog.setAttribute('aria-labelledby', dialogTitle.id);
     const details = el('div', 'nox-work-details');
     const close = el('button', 'nox-work-button', 'Закрыть');
     close.type = 'button';
+    close.setAttribute('aria-label', 'Закрыть ход работы');
+    close.title = 'Закрыть ход работы';
     close.addEventListener('click', () => dialog.close());
     more.addEventListener('click', () => { renderWorkDetails(); dialog.showModal(); });
     dialog.append(dialogTitle, details, close);
@@ -455,7 +462,11 @@
     const work = S.work;
     row.hidden = !work;
     if (!work) {
-      if (dialog.open) dialog.close();
+      if (dialog.open) {
+        dialog.close();
+        const input = document.getElementById('chatInput');
+        if (input && !input.disabled) input.focus();
+      }
       return;
     }
     const { phase, text, action } = workStatus(work);

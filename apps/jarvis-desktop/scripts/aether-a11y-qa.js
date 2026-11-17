@@ -44,6 +44,8 @@ function sleep(ms) {
 const OUT_DIR = path.resolve(arg('out-dir', path.join(os.tmpdir(), 'nox-a11y-qa')));
 const KEEP_TEMP = has('keep-temp');
 const REAL_MODEL = has('real-model');
+// --legacy: классический экран Nox (renderer/index.html, NOX_UI=legacy), не Aether.
+const LEGACY = has('legacy');
 const LABEL = String(arg('label', '')).trim();
 
 // ── Временный профиль и данные (настоящие %APPDATA% и data/ не трогаем) ──
@@ -68,13 +70,31 @@ const dataDir = path.join(tempRoot, 'data');
 const workspaceDir = path.join(tempRoot, 'workspace');
 for (const dir of [profileDir, dataDir, workspaceDir]) fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(path.join(dataDir, 'settings.json'), JSON.stringify({
-  uiShell: 'aether', mode: 'ask', voice: false, backgroundModelRuns: false, alwaysListen: false,
+  uiShell: LEGACY ? 'legacy' : 'aether', mode: 'ask', voice: false, backgroundModelRuns: false, alwaysListen: false,
   dictation: false, desktopOverlay: false, alwaysOnTop: false, motion: true, seededBrief: true,
 }, null, 2), 'utf8');
+const nowMs = Date.now();
 fs.writeFileSync(path.join(dataDir, 'conversation.json'), JSON.stringify({
   activeId: 'a11y-chat',
-  chats: [{ id: 'a11y-chat', title: 'Новый чат', updatedAt: Date.now(), history: [] }],
+  chats: [
+    { id: 'a11y-chat', title: 'Новый чат', updatedAt: nowMs, history: [] },
+    {
+      id: 'a11y-plans', title: 'Планы на неделю', updatedAt: nowMs - 2 * 24 * 60 * 60 * 1000,
+      history: [
+        { role: 'user', content: 'Покажи план на неделю' },
+        { role: 'assistant', content: 'Собрал ключевые задачи на эту неделю.' },
+      ],
+    },
+    {
+      id: 'a11y-notes', title: 'Заметки о встрече', updatedAt: nowMs - 3 * 24 * 60 * 60 * 1000,
+      history: [
+        { role: 'user', content: 'Запиши заметки о встрече' },
+        { role: 'assistant', content: 'Записал три пункта по встрече.' },
+      ],
+    },
+  ],
 }, null, 2), 'utf8');
+if (LEGACY) process.env.NOX_UI = 'legacy';
 
 app.setPath('userData', profileDir);
 app.commandLine.appendSwitch('force-device-scale-factor', '1');
@@ -148,7 +168,14 @@ process.on('unhandledRejection', (err) => finish('unhandled: ' + (err && err.mes
 
 // ── Утилиты окна ─────────────────────────────────────────────────────
 async function js(win, code) {
-  return win.webContents.executeJavaScript(code, true);
+  try {
+    return await win.webContents.executeJavaScript(code, true);
+  } catch (err) {
+    // В отчёт попадает начало упавшего кода — иначе не понять, какой фрагмент сломан.
+    console.error('A11Y_JS_FAIL ' + String(code).slice(0, 260));
+    err.message = String(err.message || err) + ' | code: ' + String(code).slice(0, 220);
+    throw err;
+  }
 }
 async function settle(win, ms = 140) {
   if (ms) await sleep(ms);
@@ -190,13 +217,14 @@ const FOCUS_INFO_JS = [
   'const el = document.activeElement || document.body;',
   'const rect = el.getBoundingClientRect();',
   'const style = getComputedStyle(el);',
-  'const topbar = document.querySelector("#aeTopbar");',
-  'const rail = document.querySelector(".ae-utility-rail");',
+  'const topbar = document.querySelector("#aeTopbar, #noxTopbar");',
+  'const rail = document.querySelector(".ae-utility-rail, .rail");',
   'const chat = document.querySelector("#noxChat");',
+  'const viewEl = el.closest(".view");',
   'const dialog = el.closest("[role=dialog]");',
   'const outlineWidth = parseFloat(style.outlineWidth) || 0;',
   'const outlineVisible = style.outlineStyle !== "none" && outlineWidth >= 1;',
-  'const composer = el.closest(".ae-composer");',
+  'const composer = el.closest(".ae-composer, #composer");',
   'const label = el.getAttribute("aria-label") || el.getAttribute("title") || (el.innerText || "").trim().slice(0, 80);',
   'return {',
   'tag: String(el.tagName || "").toLowerCase(),',
@@ -213,6 +241,11 @@ const FOCUS_INFO_JS = [
   'composerBorder: composer ? getComputedStyle(composer).borderColor : "",',
   'rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },',
   'zone: topbar && topbar.contains(el) ? "topbar" : rail && rail.contains(el) ? "rail" : chat && chat.contains(el) ? "chat" : "other",',
+  'nav: el.dataset ? (el.dataset.nav || "") : "",',
+  'act: el.dataset ? (el.dataset.act || "") : "",',
+  'view: viewEl ? (viewEl.dataset.view || "") : "",',
+  'sectionOpen: viewEl ? !viewEl.hidden : false,',
+  'inHiddenView: viewEl ? viewEl.hidden : false,',
   'inDialog: Boolean(dialog),',
   'dialogId: dialog ? (dialog.id || "") : "",',
   'selected: el.getAttribute("aria-selected"),',
@@ -269,6 +302,15 @@ async function press(win, keyCode, modifiers = []) {
   }
   await settle(win, 45);
 }
+async function clickAt(win, x, y) {
+  if (!await ensureDebugger(win)) return false;
+  const base = { x: Math.round(x), y: Math.round(y), button: 'left', clickCount: 1 };
+  await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', ...base }).catch(() => {});
+  await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', ...base }).catch(() => {});
+  await settle(win, 160);
+  return true;
+}
+
 async function resetFocus(win) {
   // blur() сохраняет точку начала обхода; body с tabindex -1 возвращает Tab в начало документа.
   await js(win, '(() => { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); const body = document.body; body.setAttribute("tabindex", "-1"); body.focus(); body.removeAttribute("tabindex"); return true; })()');
@@ -766,6 +808,217 @@ async function checkLiveRegions(win) {
   await shot(win, 'live-regions-1200x720.png');
 }
 
+// ── Классический экран Nox (NOX_UI=legacy) ───────────────────────────
+const KEEP_BANNER = has('keep-banner');
+const LEGACY_SECTIONS = [
+  { nav: 'nox', view: 'nox', name: 'Чат', target: 'chatInput' },
+  { nav: 'commands', view: 'commands', name: 'Команды', target: 'cmdSearch' },
+  { nav: 'journal', view: 'journal', name: 'Журнал', target: 'histSearch' },
+  { nav: 'mcp', view: 'mcp', name: 'Подключения', target: 'mcpSearch' },
+  { nav: 'settings', view: 'settings', name: 'Настройки', target: 'setSearch' },
+];
+
+async function legacyOpenSection(win, nav) {
+  await js(win, '(() => { const b = document.querySelector("[data-nav=' + nav + ']"); if (b) b.click(); return true; })()');
+  await settle(win, 260);
+  return js(win, 'document.body.dataset.view');
+}
+
+async function legacyVisibleWindowButtons(win) {
+  return js(win, [
+    '(() => [...document.querySelectorAll("#noxTopbar [data-act], .win-controls [data-act]")]',
+    '.filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0; })',
+    '.map((b) => ({ act: b.dataset.act, label: b.getAttribute("aria-label") || "", title: b.title || "" })))()',
+  ].join(' '));
+}
+
+async function legacyRailInfo(win) {
+  return js(win, [
+    '(() => [...document.querySelectorAll(".rail-item")].map((b) => { const r = b.getBoundingClientRect(); const s = getComputedStyle(b);',
+    'return { nav: b.dataset.nav, label: b.getAttribute("aria-label") || "", current: b.getAttribute("aria-current"),',
+    'rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },',
+    'display: s.display, visibility: s.visibility, opacity: s.opacity, parentHidden: b.closest("li") ? b.closest("li").hidden : null }; }))()',
+  ].join(' '));
+}
+
+async function checkLegacyTabOrder(win, size) {
+  const tag = size[0] + 'x' + size[1];
+  for (const section of LEGACY_SECTIONS) {
+    const view = await legacyOpenSection(win, section.nav);
+    const sequence = await tabSequence(win, 90);
+    tabSequences['legacy-' + section.nav + '-' + tag] = sequence;
+    const short = sequence.map((s) => ({ zone: s.zone, id: s.id, nav: s.nav, act: s.act, label: s.label.slice(0, 40), view: s.view, visible: s.visible, outline: s.outlineVisible }));
+    check('классический ' + section.name + ' ' + tag + ': Tab начинается с шапки (настройки)', Boolean(sequence[0] && sequence[0].nav === 'settings'), short.slice(0, 4));
+    check('классический ' + section.name + ' ' + tag + ': Tab заходит в рейку разделов', sequence.some((s) => s.zone === 'rail'), short.filter((s) => s.zone === 'rail').slice(0, 8));
+    const inSection = sequence.filter((s) => s.sectionOpen && s.view === section.view);
+    check('классический ' + section.name + ' ' + tag + ': Tab заходит в раздел', view === section.view && inSection.length > 0, { view: view, sample: inSection.slice(0, 6) });
+    check('классический ' + section.name + ' ' + tag + ': Tab не попадает в скрытые разделы', !sequence.some((s) => s.inHiddenView), sequence.filter((s) => s.inHiddenView).slice(0, 5));
+    check('классический ' + section.name + ' ' + tag + ': Tab доходит до главного поля раздела',
+      sequence.some((s) => s.id === section.target), { target: section.target, tail: sequence.slice(-8).map((s) => s.id || s.classes) });
+    check('классический ' + section.name + ' ' + tag + ': фокус не улетает на body', !sequence.some((s) => s.tag === 'body' || s.tag === 'html'), sequence.filter((s) => s.tag === 'body' || s.tag === 'html'));
+    check('классический ' + section.name + ' ' + tag + ': все остановки Tab видимы', sequence.every((s) => s.visible), sequence.filter((s) => !s.visible).slice(0, 5));
+    const noIndicator = sequence.filter((s) => ['topbar', 'rail', 'chat'].includes(s.zone) && !hasVisibleIndicator(s));
+    check('классический ' + section.name + ' ' + tag + ': виден фокус в шапке, рейке и чате', noIndicator.length === 0, noIndicator.slice(0, 6));
+
+    const rail = (await legacyRailInfo(win)).filter((item) => item.rect.w > 0 && item.rect.h > 0);
+    const activeNav = await js(win, [
+      '(() => [...document.querySelectorAll("[data-nav]")]',
+      '.filter((b) => b.getAttribute("aria-current") === "page")',
+      '.filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0; })',
+      '.map((b) => ({ nav: b.dataset.nav, label: b.getAttribute("aria-label") || "" })))()',
+    ].join(' '));
+    check('классический ' + section.name + ' ' + tag + ': рейка разделов названа',
+      rail.length >= 4 && rail.every((item) => item.label.length > 0), rail);
+    check('классический ' + section.name + ' ' + tag + ': выбранный раздел отмечен aria-current ровно один',
+      activeNav.length === 1 && activeNav[0].nav === section.nav, { activeNav: activeNav, expected: section.nav });
+    const winNames = await legacyVisibleWindowButtons(win);
+    check('классический ' + section.name + ' ' + tag + ': у кнопок окна понятные имена',
+      winNames.length === 3 && winNames.every((b) => /окно/i.test(b.label) && /окно/i.test(b.title)),
+      winNames);
+
+    // Снимок фокуса: шапка, рейка и первый элемент раздела.
+    await js(win, 'document.querySelector("#noxTopbar [data-nav=settings]").focus()');
+    await shot(win, 'legacy-focus-topbar-' + section.nav + '-' + tag + '.png');
+    if (section.nav === 'settings') {
+      await js(win, 'document.querySelector("#noxTopbar [data-nav=settings]").focus()');
+    } else {
+      await js(win, 'document.querySelector(".rail-item[data-nav=' + section.nav + ']").focus()');
+    }
+    await shot(win, 'legacy-focus-rail-' + section.nav + '-' + tag + '.png');
+    await js(win, '(() => { const view = document.querySelector(".view:not([hidden])"); const first = view && [...view.querySelectorAll("button, input, select, textarea, summary, [tabindex]")].find((el) => el.getAttribute("tabindex") !== "-1"); if (first) first.focus(); return true; })()');
+    await shot(win, 'legacy-focus-content-' + section.nav + '-' + tag + '.png');
+  }
+}
+
+async function checkLegacyActivation(win, size) {
+  const tag = size[0] + 'x' + size[1];
+  await legacyOpenSection(win, 'nox');
+  // Enter по видимой вкладке рейки «Команды».
+  await js(win, 'document.querySelector(".rail-item[data-nav=commands]").focus()');
+  await press(win, 'Return');
+  await settle(win, 260);
+  const enter = await js(win, '(() => ({ view: document.body.dataset.view, nav: document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.nav : "", label: document.activeElement ? document.activeElement.getAttribute("aria-label") : "" }))()');
+  check('классический ' + tag + ': Enter на вкладке рейки открывает раздел и не теряет фокус',
+    enter.view === 'commands' && enter.nav === 'commands', enter);
+
+  // Space по видимой кнопке «Настройки» в шапке (в рейке этот пункт скрыт по устройству оболочки).
+  await js(win, 'document.querySelector("#noxTopbar [data-nav=settings]").focus()');
+  await press(win, 'Space');
+  await settle(win, 300);
+  const space = await js(win, '(() => ({ view: document.body.dataset.view, nav: document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.nav : "" }))()');
+  check('классический ' + tag + ': Space на кнопке «Настройки» в шапке открывает раздел и не теряет фокус',
+    space.view === 'settings' && space.nav === 'settings', space);
+
+  // Enter по «Новый чат»: кнопка с обычным текстом, фокус остаётся в шапке истории или уходит в поле ввода.
+  await legacyOpenSection(win, 'nox');
+  await js(win, 'document.querySelector("#noxNewChat").focus()');
+  await press(win, 'Return');
+  await settle(win, 300);
+  const newChat = await js(win, '(() => ({ view: document.body.dataset.view, active: document.activeElement ? (document.activeElement.id || document.activeElement.className) : "" }))()');
+  check('классический ' + tag + ': Enter на «Новый чат» срабатывает и не выбрасывает фокус', newChat.view === 'nox' && newChat.active !== 'body' && newChat.active !== '', newChat);
+}
+
+async function checkLegacyHistory(win, size) {
+  const tag = size[0] + 'x' + size[1];
+  const narrow = size[0] < 1000;
+  await legacyOpenSection(win, 'nox');
+  if (narrow) {
+    // Узкое окно: история выезжает, Esc закрывает и возвращает фокус.
+    const before = await js(win, '(() => ({ hidden: document.querySelector("#noxHistOpen").hidden, label: document.querySelector("#noxHistOpen").getAttribute("aria-label") }))()');
+    await js(win, 'document.querySelector("#noxHistOpen").focus()');
+    await press(win, 'Return');
+    await settle(win, 260);
+    const opened = await js(win, '(() => ({ drawer: document.querySelector("#noxGrid").classList.contains("hist-drawer"), expanded: document.querySelector("#noxHistOpen").getAttribute("aria-expanded"), focusInside: Boolean(document.activeElement && document.activeElement.closest("#noxHistory")), focusLabel: document.activeElement ? document.activeElement.getAttribute("aria-label") : "" }))()');
+    await shot(win, 'legacy-history-drawer-' + tag + '.png');
+    await press(win, 'Escape');
+    await settle(win, 280);
+    const closed = await js(win, '(() => ({ drawer: document.querySelector("#noxGrid").classList.contains("hist-drawer"), expanded: document.querySelector("#noxHistOpen").getAttribute("aria-expanded"), focusLabel: document.activeElement ? document.activeElement.getAttribute("aria-label") : "", view: document.body.dataset.view }))()');
+    check('классический ' + tag + ': Enter открывает выезжающую историю, Esc закрывает её и возвращает фокус',
+      before.hidden === false && opened.drawer && opened.expanded === 'true' && opened.focusInside
+        && !closed.drawer && closed.expanded === 'false' && /Показать историю/.test(closed.focusLabel || '') && closed.view === 'nox',
+      { before: before, opened: opened, closed: closed });
+
+    // Клик мимо выезжающей истории тоже закрывает её и не теряет фокус на body.
+    await js(win, 'document.querySelector("#noxHistOpen").focus()');
+    await press(win, 'Return');
+    await settle(win, 260);
+    await js(win, '(() => { const first = document.querySelector("#noxHistSections .nox-hist-open"); if (first) first.focus(); return true; })()');
+    const focusInDrawer = await js(win, 'Boolean(document.activeElement && document.activeElement.closest("#noxHistory"))');
+    await clickAt(win, size[0] - 40, 300);
+    await settle(win, 240);
+    const afterClick = await js(win, '(() => ({ drawer: document.querySelector("#noxGrid").classList.contains("hist-drawer"), focusLabel: document.activeElement ? document.activeElement.getAttribute("aria-label") : "", focusId: document.activeElement ? document.activeElement.id : "" }))()');
+    check('классический ' + tag + ': клик мимо истории закрывает её и возвращает фокус на кнопку',
+      focusInDrawer && !afterClick.drawer && afterClick.focusId === 'noxHistOpen', { focusInDrawer: focusInDrawer, afterClick: afterClick });
+  } else {
+    // Широкое окно: Enter на кнопке сворачивает историю, имя кнопки и фокус остаются осмысленными.
+    const initial = await js(win, '(() => ({ openHidden: document.querySelector("#noxHistOpen").hidden, toggleLabel: document.querySelector("#noxHistToggle").getAttribute("aria-label") }))()');
+    await js(win, 'document.querySelector("#noxHistToggle").focus()');
+    await press(win, 'Return');
+    await settle(win, 280);
+    const collapsed = await js(win, '(() => ({ off: document.querySelector("#noxGrid").classList.contains("hist-off"), openHidden: document.querySelector("#noxHistOpen").hidden, openLabel: document.querySelector("#noxHistOpen").getAttribute("aria-label"), toggleLabel: document.querySelector("#noxHistToggle").getAttribute("aria-label"), focusLabel: document.activeElement ? document.activeElement.getAttribute("aria-label") : "" }))()');
+    check('классический ' + tag + ': Enter сворачивает историю, кнопки называют действие',
+      initial.openHidden === true && collapsed.off && collapsed.openHidden === false
+        && /Показать историю/.test(collapsed.openLabel || '') && /Показать историю|Свернуть историю/.test(collapsed.focusLabel || ''),
+      { initial: initial, collapsed: collapsed });
+    // Возвращаем историю и проверяем, что она открывается той же кнопкой.
+    await js(win, 'document.querySelector("#noxHistOpen").focus()');
+    await press(win, 'Return');
+    await settle(win, 260);
+    const restored = await js(win, '(() => ({ off: document.querySelector("#noxGrid").classList.contains("hist-off"), openHidden: document.querySelector("#noxHistOpen").hidden }))()');
+    check('классический ' + tag + ': история открывается обратно с клавиатуры', !restored.off && restored.openHidden === true, restored);
+  }
+}
+
+async function checkLegacyNames(win, size) {
+  const tag = size[0] + 'x' + size[1];
+  const anonymous = await js(win, [
+    '(() => {',
+    'const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none"; };',
+    'const label = (el) => (el.getAttribute("aria-label") || el.getAttribute("title") || (el.innerText || "").trim());',
+    'return [...document.querySelectorAll("button")].filter(visible).filter((el) => !label(el))',
+    '.map((el) => ({ id: el.id || "", classes: String(el.className || "").slice(0, 80) }));',
+    '})()',
+  ].join(' '));
+  check('классический ' + tag + ': у всех видимых кнопок есть доступное имя', anonymous.length === 0, anonymous.slice(0, 8));
+}
+
+async function runLegacy(win) {
+  await waitUntil(() => js(win, 'Boolean(document.body && document.body.dataset.view === "nox" && document.querySelector("#noxGrid") && document.querySelector("#noxTopbar"))'), 20000);
+  await js(win, 'window.__a11yFocusLog = []; window.__a11yKeyLog = []; true');
+  await js(win, [
+    '(() => {',
+    'document.addEventListener("focusin", (e) => { const a = e.target; window.__a11yFocusLog.push(String(a && (a.id || a.className || a.tagName) || "").slice(0, 60)); if (window.__a11yFocusLog.length > 160) window.__a11yFocusLog.shift(); }, true);',
+    'document.addEventListener("keydown", (e) => { window.__a11yKeyLog.push(String(e.key) + "@" + String(document.activeElement && (document.activeElement.id || document.activeElement.className) || "").slice(0, 50)); if (window.__a11yKeyLog.length > 200) window.__a11yKeyLog.shift(); }, true);',
+    'return true;',
+    '})()',
+  ].join(' '));
+  if (!KEEP_BANNER) {
+    await js(win, '(() => { const banner = document.querySelector("#bannerWrap"); if (banner) banner.hidden = true; return true; })()');
+  }
+  win.show();
+  win.focus();
+  await settle(win, 400);
+
+  for (const size of [[1200, 720], [864, 520]]) {
+    await setViewport(win, size[0], size[1]);
+    win.focus();
+    await settle(win, 200);
+    // Широкое окно: история должна быть развёрнута для стабильного Tab-порядка.
+    if (size[0] >= 1000) {
+      await js(win, '(() => { const grid = document.querySelector("#noxGrid"); if (grid && grid.classList.contains("hist-off")) document.querySelector("#noxHistOpen").click(); return true; })()');
+      await settle(win, 200);
+    }
+    await checkLegacyTabOrder(win, size);
+    await checkLegacyActivation(win, size);
+    await checkLegacyHistory(win, size);
+    await legacyOpenSection(win, 'nox');
+    await checkLegacyNames(win, size);
+    await js(win, 'document.querySelector("#noxTopbar [data-nav=settings]").focus()');
+    await shot(win, 'legacy-final-' + size[0] + 'x' + size[1] + '.png');
+  }
+  finish(null);
+}
+
 async function run(win) {
   await waitUntil(() => js(win, 'Boolean(window.__noxAether && window.__noxAether.store)'), 15000);
   await js(win, [
@@ -812,19 +1065,24 @@ async function run(win) {
 
 app.on('browser-window-created', (_event, win) => {
   try { win.webContents.setBackgroundThrottling(false); } catch { /* ignore */ }
-  win.webContents.on('console-message', (_ev, level, message) => {
+  win.webContents.on('console-message', (_ev, level, message, lineNumber, sourceId) => {
     const noisy = typeof level === 'object' && level ? level : null;
     const severity = noisy ? noisy.level : level;
     const text = noisy ? noisy.message : message;
-    if ((severity === 'error' || severity === 3) && consoleErrors.length < 20) consoleErrors.push(String(text || '').slice(0, 300));
+    const where = (sourceId ? String(sourceId).split('/').pop() + ':' + (lineNumber || 0) : '');
+    if ((severity === 'error' || severity === 3) && consoleErrors.length < 20) {
+      consoleErrors.push(String(text || '').slice(0, 300) + (where ? ' @ ' + where : ''));
+    }
   });
   win.webContents.on('render-process-gone', (_ev, details) => pageErrors.push('render-process-gone: ' + JSON.stringify(details)));
   win.webContents.once('did-finish-load', () => {
     if (mainWin) return;
     const url = win.webContents.getURL();
-    if (!url.includes('/renderer/aether/index.html')) return;
+    const isAether = url.includes('/renderer/aether/index.html');
+    const isClassic = url.endsWith('/renderer/index.html');
+    if (LEGACY ? !isClassic : !isAether) return;
     mainWin = win;
-    run(win).catch((err) => finish('run: ' + (err && err.stack ? err.stack : err)));
+    (LEGACY ? runLegacy : run)(win).catch((err) => finish('run: ' + (err && err.stack ? err.stack : err)));
   });
 });
 

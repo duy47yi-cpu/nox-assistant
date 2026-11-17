@@ -49,7 +49,10 @@
     grid.classList.toggle('hist-drawer', narrow && H.drawer);
     open.hidden = !off;
     open.setAttribute('aria-expanded', String(!off));
-    const label = narrow ? 'Закрыть историю' : 'Свернуть историю';
+    // Подпись говорит, что произойдёт по нажатию: «Свернуть» только пока история открыта.
+    const label = narrow
+      ? (H.drawer ? 'Закрыть историю' : 'Показать историю')
+      : (H.collapsed ? 'Показать историю' : 'Свернуть историю');
     toggle.title = label;
     toggle.setAttribute('aria-label', label);
   }
@@ -73,7 +76,11 @@
   function initHistory() {
     H.collapsed = readPref();
     $('#noxHistOpen')?.addEventListener('click', openHistory);
-    $('#noxHistToggle')?.addEventListener('click', () => closeHistory());
+    $('#noxHistToggle')?.addEventListener('click', () => {
+      if (NARROW.matches) { if (H.drawer) closeHistory(); else openHistory(); }
+      else if (H.collapsed) openHistory();
+      else closeHistory();
+    });
     // Выбор чата в выезжающей истории закрывает её.
     $('#noxHistSections')?.addEventListener('click', (e) => {
       if (H.drawer && e.target.closest('.nox-hist-open')) closeHistory({ focus: false });
@@ -82,8 +89,19 @@
     document.addEventListener('pointerdown', (e) => {
       if (!H.drawer) return;
       if (e.target.closest('#noxHistory, #noxHistOpen')) return;
+      const history = $('#noxHistory');
+      const hadFocus = Boolean(history && document.activeElement && history.contains(document.activeElement));
       H.drawer = false;
       applyHistory();
+      if (hadFocus) {
+        // Возврат фокуса после клика: у браузера ещё есть действие «снять фокус на body»,
+        // поэтому возвращаем на следующем кадре и только если фокус никуда осмысленно не ушёл.
+        requestAnimationFrame(() => {
+          const open = $('#noxHistOpen');
+          const active = document.activeElement;
+          if (open && !open.hidden && (!active || active === document.body)) open.focus();
+        });
+      }
     });
     // Esc закрывает выезжающую историю и не доходит до «стопа» хода.
     window.addEventListener('keydown', (e) => {

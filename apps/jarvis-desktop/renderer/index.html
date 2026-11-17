@@ -62,14 +62,14 @@
 
     <!-- ── Общая шапка Nox: одна на все разделы (классический экран её не показывает) ── -->
     <header class="nox-topbar" id="noxTopbar">
-      <span class="nox-top-brand" aria-label="Nox"><i class="nox-top-mark" aria-hidden="true"></i><span class="nox-top-word" aria-hidden="true">NOX</span></span>
-      <div class="nox-top-actions">
+      <span class="nox-top-brand" role="img" aria-label="Nox"><i class="nox-top-mark" aria-hidden="true"></i><span class="nox-top-word" aria-hidden="true">NOX</span></span>
+      <div class="nox-top-actions" role="group" aria-label="Разделы и кнопки окна">
         <button class="nox-top-btn" type="button" data-nav="settings" title="Настройки (Ctrl+5)" aria-label="Настройки"><span data-icon="sliders" aria-hidden="true"></span><span class="nox-top-dot" id="noxTopDot" hidden></span></button>
         <button class="nox-top-btn nox-top-account" type="button" data-nav="account" title="Аккаунт" aria-label="Аккаунт"><span data-icon="user" aria-hidden="true"></span></button>
         <span class="nox-top-div" aria-hidden="true"></span>
-        <button class="nox-top-btn" type="button" data-act="minimize" title="Свернуть" aria-label="Свернуть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg></button>
-        <button class="nox-top-btn" type="button" data-act="maximize" title="Развернуть" aria-label="Развернуть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
-        <button class="nox-top-btn nox-top-close" type="button" data-act="close" title="Закрыть" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+        <button class="nox-top-btn" type="button" data-act="minimize" title="Свернуть окно" aria-label="Свернуть окно"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+        <button class="nox-top-btn" type="button" data-act="maximize" title="Развернуть окно" aria-label="Развернуть окно"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
+        <button class="nox-top-btn nox-top-close" type="button" data-act="close" title="Закрыть окно" aria-label="Закрыть окно"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
       </div>
     </header>
 
@@ -133,10 +133,10 @@
           </div>
           <button class="btn btn-stop btn-sm" type="button" id="headerStop" data-action="stop" title="Остановить (Esc)" aria-label="Остановить (Esc)" hidden><span data-icon="stop" aria-hidden="true"></span><span class="btn-label">Стоп</span></button>
           <!-- Окно без системной рамки: те же кнопки для прежних разделов (на экране Nox они в панели сферы) -->
-          <div class="win-controls" aria-label="Окно">
-            <button type="button" data-act="minimize" title="Свернуть" aria-label="Свернуть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg></button>
-            <button type="button" data-act="maximize" title="Развернуть" aria-label="Развернуть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
-            <button type="button" data-act="close" title="Закрыть" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+          <div class="win-controls" role="group" aria-label="Кнопки окна">
+            <button type="button" data-act="minimize" title="Свернуть окно" aria-label="Свернуть окно"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+            <button type="button" data-act="maximize" title="Развернуть окно" aria-label="Развернуть окно"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
+            <button type="button" data-act="close" title="Закрыть окно" aria-label="Закрыть окно"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
           </div>
         </div>
       </header>
