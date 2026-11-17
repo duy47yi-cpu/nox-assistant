@@ -28,6 +28,28 @@ const PRICES = Object.freeze({
     source: 'https://deepinfra.com/deepseek-ai/DeepSeek-V4.1-Flash-1017 — списочная цена, акционная скидка не учтена',
     checkedAt: '2026-10-30',
   }),
+
+  // Собственный шлюз проекта (решение владельца 17.11.2026: «это наш сервис»). Владелец не платит
+  // за вызовы этих моделей, поэтому учёт ведётся, но стоимость нулевая — иначе страж бюджета
+  // не пропускал бы ни одного хода. Для внешней сборки с платным шлюзом ставки нужно заменить
+  // ценами провайдера: учёт и дневной лимит заработают сразу, код менять не придётся.
+  ...Object.fromEntries([
+    'clef-flash',
+    'deepseek-4.1-flash',
+    'deepseek-4.1-flash-background',
+    'djev',
+    'glm-5.3-flash',
+    'glm-5.3-flash-background',
+    'muse-spark-open',
+    'muse-spark-open-background',
+  ].map((modelId) => [modelId, Object.freeze({
+    modelId,
+    inputPerM: 0,
+    cachedPerM: 0,
+    outputPerM: 0,
+    source: 'собственный шлюз проекта: плата не взимается (решение владельца 17.11.2026)',
+    checkedAt: '2026-11-17',
+  })])),
 });
 
 function isRate(v) {
