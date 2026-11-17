@@ -7,12 +7,24 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { localGigaam } = require('../src/voice/stt');
 const { voicePhrase } = require('../src/voice/input');
+const { normalizeSpeech } = require('../src/voice/normalize');
 
-function normalized(text) {
+// Прежняя формула замера: ровно как было, чтобы воспроизводить REPORT.md (23/30).
+function measured(text) {
   return (voicePhrase(text)?.command || '').toLowerCase().replaceAll('ё', 'е')
     .replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\b30\b/g, 'тридцать')
     .replace(/youtube/g, 'ютуб').replace(/dota 2/g, 'дота два')
     .replace(/(?:^| )пожалуйста(?= |$)/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// «До»: без нового слоя пост-коррекции.
+function normalized(text) {
+  return measured(text);
+}
+
+// «После»: новый слой применяется симметрично обеим сторонам, как в продукте.
+function normalizedAfter(text) {
+  return measured(normalizeSpeech(voicePhrase(text)?.command || ''));
 }
 
 async function main() {
@@ -46,7 +58,9 @@ async function main() {
       const pcm = file.subarray(data + 8, data + 8 + file.readUInt32LE(data + 4));
       const begin = performance.now();
       const decoded = await worker.transcribe(pcm);
-      result.push({ ...item, ...decoded, correct: normalized(item.spoken) === normalized(decoded.text),
+      result.push({ ...item, ...decoded,
+        correct: normalized(item.spoken) === normalized(decoded.text),
+        correctAfter: normalizedAfter(item.spoken) === normalizedAfter(decoded.text),
         ms: Math.round(performance.now() - begin), seconds: Number((pcm.length / 32000).toFixed(2)),
         peakMiB: decoded.peakMiB });
     }

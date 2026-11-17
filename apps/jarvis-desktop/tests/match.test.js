@@ -35,11 +35,11 @@ function tmpStore(t, name = 'commands.json') {
 // ── Нормализация ────────────────────────────────────────────────
 
 test('normalizePhrase: регистр, ё→е, пунктуация, «пожалуйста», обращение «джарвис»', () => {
-  assert.equal(normalizePhrase('Джарвис, открой ЮТУБ!'), 'открой ютуб');
-  assert.equal(normalizePhrase('— «Джарвис», запусти ютуб.'), 'запусти ютуб');
+  assert.equal(normalizePhrase('Джарвис, открой ЮТУБ!'), 'открой youtube');
+  assert.equal(normalizePhrase('— «Джарвис», запусти ютуб.'), 'запусти youtube');
   assert.equal(normalizePhrase('  Открой...   YouTube?  '), 'открой youtube');
   assert.equal(normalizePhrase('включи ёлку, пожалуйста'), 'включи елку');
-  assert.equal(normalizePhrase('открой, пожалуйста, ютуб'), 'открой ютуб');
+  assert.equal(normalizePhrase('открой, пожалуйста, ютуб'), 'открой youtube');
 });
 
 test('normalizePhrase: пустое и не-строки не падают; «и» внутри слова не трогаем', () => {
@@ -70,9 +70,9 @@ test('stripFillers: «пожалуйста» убирается в любом м
 // ── Деление по словам-связкам ───────────────────────────────────
 
 test('splitLinkWords: «и, затем, потом» только целыми словами', () => {
-  assert.deepEqual(splitLinkWords('ютуб и громкость 30'), ['ютуб', 'громкость 30']);
-  assert.deepEqual(splitLinkWords('ютуб, затем громкость 30'), ['ютуб', 'громкость 30']);
-  assert.deepEqual(splitLinkWords('ютуб потом громкость 30'), ['ютуб', 'громкость 30']);
+  assert.deepEqual(splitLinkWords('ютуб и громкость 30'), ['youtube', 'громкость 30']);
+  assert.deepEqual(splitLinkWords('ютуб, затем громкость 30'), ['youtube', 'громкость 30']);
+  assert.deepEqual(splitLinkWords('ютуб потом громкость 30'), ['youtube', 'громкость 30']);
   // «и» внутри слов не делит.
   assert.deepEqual(splitLinkWords('игры и музыка'), ['игры', 'музыка']);
   assert.deepEqual(splitLinkWords('играть в игры'), ['играть в игры']);
@@ -82,8 +82,10 @@ test('splitLinkWords: «и, затем, потом» только целыми �
 });
 
 test('splitLinkWords: свои слова-связки, в том числе из двух слов', () => {
-  assert.deepEqual(splitLinkWords('ютуб а затем музыка', ['а затем']), ['ютуб', 'музыка']);
-  assert.deepEqual(splitLinkWords('ютуб затем музыка', ['потом']), ['ютуб затем музыка']);
+  // Двухсловная связка проверяется на «и затем»: вводное «а» в начале связки снимает нормализация §2.2,
+  // поэтому связка «а затем» после normalizePhrase остаётся одним словом «затем».
+  assert.deepEqual(splitLinkWords('ютуб и затем музыка', ['и затем']), ['youtube', 'музыка']);
+  assert.deepEqual(splitLinkWords('ютуб затем музыка', ['потом']), ['youtube затем музыка']);
   assert.deepEqual(DEFAULT_LINK_WORDS, ['и', 'затем', 'потом']);
 });
 
@@ -162,7 +164,7 @@ test('matchCommand: мусор и пустота не падают', () => {
 test('matchSequence: «ютуб и громкость 30» даёт две команды в порядке текста', () => {
   const parts = matchSequence('ютуб и громкость 30', BASIC);
   assert.deepEqual(parts.map((part) => part.command.name), ['Ютуб', 'Громкость']);
-  assert.deepEqual(parts.map((part) => part.matched), ['ютуб', 'громкость 30']);
+  assert.deepEqual(parts.map((part) => part.matched), ['youtube', 'громкость 30']);
 });
 
 test('matchSequence: «затем» и «потом», глаголы в частях', () => {
@@ -199,7 +201,7 @@ test('matchSequence: DP, а не деление по всем «и» — час�
   const parts = matchSequence('открой ютуб и включи и игру', commands);
   assert.deepEqual(parts.map((part) => part.command.name), ['Ютуб', 'Игра']);
   // Простое деление по всем «и» дало бы ['открой ютуб', 'включи', 'игру'] и не нашло команду «включи».
-  assert.deepEqual(splitLinkWords('открой ютуб и включи и игру'), ['открой ютуб', 'включи', 'игру']);
+  assert.deepEqual(splitLinkWords('открой ютуб и включи и игру'), ['открой youtube', 'включи', 'игру']);
 });
 
 test('matchSequence: половину склейки не запускаем — каждая часть должна найти команду', () => {
@@ -358,19 +360,21 @@ test('normalizePhrase и matchCommand: числительные словами �
   const seq = matchSequence('открой ютуб и громкость тридцать', BASIC);
   assert.deepEqual(seq.map((p) => p.command.name), ['Ютуб', 'Громкость']);
 
-  // Однозначная опечатка ASR (1 правка в слове >= 5 букв) находится, неоднозначная — возвращает null
+  // Однозначная опечатка ASR (1 правка в слове >= 5 букв) находится, неоднозначная — возвращает null.
+  // Слово берём вне словаря имён: «телеграм» теперь канонизируется в «telegram», и кириллическая
+  // опечатка «телегран» уже не в одной правке от канона — это ожидаемое следствие симметрии §2.6.
   const cmds = [
-    command('Телеграм', ['телеграм']),
+    command('Календарь', ['календарь']),
     command('Громкость', ['громкость 30']),
   ];
-  const fuzzyHit = matchCommand('телегран', cmds);
+  const fuzzyHit = matchCommand('календар', cmds);
   assert.ok(fuzzyHit, 'опечатка в 1 букву для длинного слова должна находить единственную команду');
-  assert.equal(fuzzyHit.command.name, 'Телеграм');
+  assert.equal(fuzzyHit.command.name, 'Календарь');
   assert.equal(fuzzyHit.via, 'fuzzy');
 
-  const fuzzyVerbHit = matchCommand('открой телегран', cmds);
+  const fuzzyVerbHit = matchCommand('открой календар', cmds);
   assert.ok(fuzzyVerbHit);
-  assert.equal(fuzzyVerbHit.command.name, 'Телеграм');
+  assert.equal(fuzzyVerbHit.command.name, 'Календарь');
 
   // Две похожие команды на расстоянии 1 правки — неоднозначность → null
   const ambiguous = [command('А', ['папка1']), command('Б', ['папка2'])];

@@ -12,6 +12,7 @@
 // Главное правило: лучше не найти команду, чем угадать не ту. Неоднозначность (две команды подходят
 // одинаково) — это null, а фраза целиком уходит обычным путём к модели.
 const { normalize } = require('./store');
+const { normalizeSpeech } = require('../voice/normalize');
 const { parseWakeWords } = require('../voice/wake');
 
 // Слова-связки: только целыми словами. Внутри слова («игры», «музыку») они не делят.
@@ -33,40 +34,6 @@ const DEFAULT_START_VERBS = Object.freeze([
 
 // Слова-наполнители: их можно сказать, но в фразе команды их нет.
 const FILLER_WORDS = Object.freeze(['джарвис', 'сэр', 'пожалуйста', 'пожалуста', 'пожалуйсто', 'пжлста', 'плиз']);
-
-// Числительные прописью из распознавания речи (whisper.cpp): «двадцать пять» → «25», «сто» → «100».
-const SPOKEN_NUMBERS = Object.freeze({
-  ноль: 0, нуль: 0,
-  один: 1, одна: 1, одну: 1,
-  два: 2, две: 2,
-  три: 3, четыре: 4, пять: 5, шесть: 6, семь: 7, восемь: 8, девять: 9, десять: 10,
-  одиннадцать: 11, двенадцать: 12, тринадцать: 13, четырнадцать: 14, пятнадцать: 15,
-  шестнадцать: 16, семнадцать: 17, восемнадцать: 18, девятнадцать: 19,
-  двадцать: 20, тридцать: 30, сорок: 40, пятьдесят: 50,
-  шестьдесят: 60, семьдесят: 70, восемьдесят: 80, девяносто: 90,
-  сто: 100,
-});
-
-function replaceSpokenNumbers(text) {
-  if (!text) return '';
-  const tokens = text.split(' ');
-  const out = [];
-  for (let i = 0; i < tokens.length; i += 1) {
-    const cur = SPOKEN_NUMBERS[tokens[i]];
-    if (cur !== undefined) {
-      const next = i + 1 < tokens.length ? SPOKEN_NUMBERS[tokens[i + 1]] : undefined;
-      if (cur >= 20 && cur <= 90 && cur % 10 === 0 && next !== undefined && next >= 1 && next <= 9) {
-        out.push(String(cur + next));
-        i += 1;
-        continue;
-      }
-      out.push(String(cur));
-      continue;
-    }
-    out.push(tokens[i]);
-  }
-  return out.join(' ');
-}
 
 // Проверка расстояния Дамерау-Левенштейна <= 1 (одна замена, вставка, удаление или перестановка соседних букв).
 // Применяется только к фразам длиной >= 5 символов без расхождения в цифрах (PowerToys CmdPal fuzzy-подход).
@@ -186,16 +153,18 @@ function stripFillers(text, { words = FILLER_WORDS } = {}) {
 }
 
 // Нормализация фразы для сопоставления: нижний регистр, ё→е, без обращения и «пожалуйста»,
-// пунктуация как разделитель, одиночные пробелы. Сравниваем так обе стороны — и текст, и фразу команды,
-// поэтому старые сохранённые фразы с запятыми и точками тоже находятся.
+// пунктуация как разделитель, одиночные пробелы, затем пост-коррекция распознанной речи
+// (словарь имён, склеек и чисел из src/voice/normalize.js). Сравниваем так обе стороны — и текст,
+// и фразу команды, поэтому старые сохранённые русские фразы находят канонические латинские имена.
 function normalizePhrase(text, opts = {}) {
   if (typeof text !== 'string') return '';
   let value = text.toLowerCase().replace(/ё/g, 'е');
   value = stripWake(value, opts);
-  value = value.replace(/[^\p{L}\p{N}\s-]+/gu, ' ');
+  // Дефис — тоже разделитель: иначе «телеграм-бота» не находит правило «телеграм».
+  value = value.replace(/[^\p{L}\p{N}]+/gu, ' ');
   value = value.replace(/\s+/g, ' ').trim();
   value = stripFillers(value);
-  value = replaceSpokenNumbers(value.replace(/\s+/g, ' ').trim());
+  value = normalizeSpeech(value);
   return value.replace(/\s+/g, ' ').trim();
 }
 

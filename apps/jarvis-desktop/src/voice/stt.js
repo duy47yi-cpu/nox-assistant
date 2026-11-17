@@ -8,6 +8,7 @@ const { spawn } = require('node:child_process');
 const { createInterface } = require('node:readline');
 const { Readable, Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
+const { clipPrompt } = require('./normalize');
 
 const RELEASE = 'https://huggingface.co/istupakov/gigaam-v3-onnx/resolve/322c3b29492673eb7d0b434bfa9dfb8653e34d02';
 const MODEL_FILES = {
@@ -144,8 +145,14 @@ function localGigaam({ folder, script, python = 'python' }) {
   return { name: 'локальный', isAvailable: () => modelAvailable(folder()), warmup, transcribe, stop };
 }
 
-function cloudProvider({ url, key, model, request = fetch }) {
+// prompt — необязательная подсказка распознавателю (OpenAI-совместимое поле формы prompt):
+// строка или функция, чтобы список имён и команд собирался на каждый запрос и не устаревал.
+function cloudProvider({ url, key, model, prompt = '', request = fetch }) {
   const isAvailable = () => Boolean(url && model);
+  const promptText = () => {
+    const value = typeof prompt === 'function' ? prompt() : prompt;
+    return clipPrompt(value);
+  };
   return {
     name: 'облачный',
     isAvailable,
@@ -157,6 +164,9 @@ function cloudProvider({ url, key, model, request = fetch }) {
       form.append('file', new Blob([wavFromPcm(samples)], { type: 'audio/wav' }), 'speech.wav');
       form.append('model', model);
       if (language && language !== 'auto') form.append('language', language);
+      // Поле добавляем только при непустом значении: без подсказки запрос ровно как раньше.
+      const hot = promptText();
+      if (hot) form.append('prompt', hot);
       const timeout = AbortSignal.timeout(4500);
       const headers = key ? { Authorization: 'Bearer ' + key } : {};
       const response = await request(url, { method: 'POST', headers, body: form, redirect: 'error',
