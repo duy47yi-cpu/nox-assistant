@@ -301,6 +301,9 @@
       const saved = readRawStore();
       const rawCfg = saved && saved.byId && saved.byId[spec.id];
       state.byId[spec.id] = normalizeSettings(spec, rawCfg || spec.defaults);
+      // Поздняя регистрация (файл авторских сфер грузится рядом с библиотекой) тоже
+      // возвращает выбранную сферу после перезапуска.
+      if (saved && saved.activeId === spec.id) state.activeId = spec.id;
       emitChange();
       return cloneSpec(spec);
     }
@@ -320,9 +323,21 @@
       const stageEl = opts.stageEl || (canvas && canvas.closest ? canvas.closest('#stage') : null);
       if (stageEl && stageEl.dataset) stageEl.dataset.orb = spec.variant;
 
+      // Движок состояний: у авторских сфер Aether сопоставление как у Nox (STATE_TO_NOX),
+      // у остальных — как раньше, по системе движка.
+      const stateEngine = spec.stateMap === 'nox' ? 'nox' : spec.engine;
+      const initialState = spec.engine === 'custom' && !spec.stateMap
+        ? (opts.state || 'idle')
+        : mapState(stateEngine, opts.state || 'idle');
       let instance = null;
       if (spec.engine === 'custom' && typeof spec.create === 'function') {
-        instance = spec.create(canvas, { ...cfg, state: opts.state || 'idle', animated: globalAnim && cfg.animated !== false });
+        instance = spec.create(canvas, {
+          ...cfg,
+          variant: spec.variant,
+          state: initialState,
+          animated: globalAnim && cfg.animated !== false,
+          userAnimated: cfg.animated !== false,
+        });
       } else if (spec.engine === 'nox' && typeof w.NoxOrb === 'function') {
         if (w.NoxOrb) w.NoxOrb.ignoreSystemMotion = true;
         instance = new w.NoxOrb(canvas, {
@@ -362,7 +377,7 @@
         raw: instance,
         setState(appState) {
           if (!instance || typeof instance.setState !== 'function') return;
-          instance.setState(mapState(spec.engine, appState));
+          instance.setState(mapState(spec.stateMap === 'nox' ? 'nox' : spec.engine, appState));
         },
         setVoice(level) {
           if (!instance || typeof instance.setVoice !== 'function') return;
@@ -444,10 +459,31 @@
     };
   }
 
-  const exported = { BUILTIN_ORBS, STORAGE_KEY, DEFAULT_ORB_ID, createOrbLibrary };
+  // Авторские сферы Aether живут отдельным файлом orbs-extra.js: он сам регистрирует
+  // шесть сфер через registerOrb(). Здесь мы только подключаем его рядом с собой,
+  // чтобы не менять разметку экрана и не дублировать движки в библиотеке.
+  function loadCompanionOrbs(doc) {
+    if (!doc || typeof doc.createElement !== 'function') return false;
+    const self = doc.currentScript;
+    if (!self || !self.src) return false;
+    if (root.NoxOrbsExtra) return false;
+    try {
+      const script = doc.createElement('script');
+      script.src = new URL('orbs-extra.js', self.src).href;
+      script.async = false;
+      script.dataset.orbCompanion = 'aether';
+      (doc.head || doc.documentElement).appendChild(script);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const exported = { BUILTIN_ORBS, STORAGE_KEY, DEFAULT_ORB_ID, STATE_TO_NOX, STATE_TO_JARVIS, createOrbLibrary, loadCompanionOrbs };
   if (typeof module !== 'undefined' && module.exports) module.exports = exported;
   if (root && typeof window !== 'undefined') {
     root.NoxOrbLibraryFactory = exported;
     root.NoxOrbLibrary = createOrbLibrary();
+    try { loadCompanionOrbs(root.document); } catch { /* без авторских сфер экран работает как раньше */ }
   }
 })(typeof window !== 'undefined' ? window : globalThis);
