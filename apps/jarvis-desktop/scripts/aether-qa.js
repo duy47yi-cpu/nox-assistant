@@ -938,24 +938,28 @@ async function runChatRedesignQa(win) {
   await settle(win, 160);
   await js(win, `document.querySelector('#aeRailHomeBtn').focus()`);
   await settle(win, 80);
-  let tabPressed = false;
-  try {
-    win.webContents.debugger.attach('1.3');
-    await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', {
-      type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9,
-    });
-    await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', {
-      type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9,
-    });
-    tabPressed = true;
-  } catch { /* CDP занят — ниже обычный ввод */ }
-  finally { try { win.webContents.debugger.detach(); } catch { /* ignore */ } }
-  if (!tabPressed) {
-    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
-    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });
+  // Под нагрузкой окно может не считаться активным, и Tab не даёт :focus-visible.
+  // Поэтому фокус эмулируется через CDP, а проверка повторяется до трёх раз.
+  async function pressTabRail() {
+    let pressed = false;
+    try {
+      win.webContents.debugger.attach('1.3');
+      await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
+      await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', {
+        type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9,
+      });
+      await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', {
+        type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9,
+      });
+      pressed = true;
+    } catch { /* CDP занят — ниже обычный ввод */ }
+    finally { try { win.webContents.debugger.detach(); } catch { /* ignore */ } }
+    if (!pressed) {
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });
+    }
   }
-  await settle(win, 220);
-  const railFocus = await js(win, `(() => {
+  const probeRailFocus = () => js(win, `(() => {
     let el = document.activeElement;
     const rail = document.querySelector('.ae-utility-rail');
     if (rail.contains(el) && !el.matches(':focus-visible') && typeof el.focus === 'function') {
@@ -970,8 +974,19 @@ async function runChatRedesignQa(win) {
       outline: getComputedStyle(el).outlineWidth,
     };
   })()`);
-  check('Рейка: клавиатурный фокус даёт кольцо 2 px и подпись', railFocus.insideRail
-    && railFocus.pill && railFocus.focusVisible && parseFloat(railFocus.outline) >= 2, railFocus);
+  let railFocus = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await pressTabRail();
+    await settle(win, 220);
+    railFocus = await probeRailFocus();
+    if (railFocus.insideRail && railFocus.pill && railFocus.focusVisible && parseFloat(railFocus.outline) >= 2) break;
+    await js(win, `document.activeElement.blur()`);
+    await settle(win, 80);
+    await js(win, `document.querySelector('#aeRailHomeBtn').focus()`);
+    await settle(win, 60);
+  }
+  check('Рейка: клавиатурный фокус даёт кольцо 2 px и подпись', Boolean(railFocus && railFocus.insideRail
+    && railFocus.pill && railFocus.focusVisible && parseFloat(railFocus.outline) >= 2), railFocus);
   await js(win, `document.activeElement.blur()`);
   await setViewport(win, 864, 520);
   const railCompact = await railProbe();

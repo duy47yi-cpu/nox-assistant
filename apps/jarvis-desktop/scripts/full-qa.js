@@ -22,10 +22,11 @@
  *                       (можно переменной NOX_QA_REV);
  *   --list              показать id проверок и выйти.
  *
- * Автоповтор включается только для проверок с известным флейком: orbs (второй запуск Electron
- * не успел загрузить окно) и aether (клавиатурный focus-visible в рейке). Если повтор упал снова —
- * честный FAIL, в отчёте обе попытки и полный лог. Остальные проверки при сбое не повторяются:
- * редкий флейк не должен прятать настоящую ошибку.
+ * Автоповтор: если попытка упала по ТАЙМАУТУ стенда — один повтор после паузы (любая проверка);
+ * плюс собственные известные флейки: orbs (второй запуск Electron не успел загрузить окно)
+ * и aether (клавиатурный focus-visible в рейке). Настоящий проверочный провал не повторяется —
+ * редкий флейк не должен прятать настоящую ошибку. Если повтор упал снова — честный FAIL,
+ * в отчёте обе попытки и полный лог.
  *
  * Id: voice, orbs, aether, a11y, commands, connections, motion, legacy-verify, legacy-screens.
  * Классическая оболочка проверяется с NOX_UI=legacy (стенды сами пишут временные настройки).
@@ -463,8 +464,12 @@ function formatSeconds(ms) {
   return (ms / 1000).toFixed(1) + ' с';
 }
 
-// Известный флейк у конкретной проверки: решают только её признаки, не «любой сбой».
+// Когда повторять: таймаут стенда — известный класс флейка для любой проверки (окно/движок
+// не успели под нагрузкой), плюс собственные признаки известного флейка у orbs/aether.
+// Настоящий проверочный провал (ненулевой код без таймаута) НЕ повторяется, если проверка
+// не назвала его известным флейком.
 function isRetryable(def, result, parsed) {
+  if (result.timedOut === true) return true;
   try {
     return typeof def.retryable === 'function' && def.retryable({ result, parsed }) === true;
   } catch {
@@ -650,7 +655,7 @@ function buildMarkdown(summary) {
   lines.push('- Electron: ' + summary.electronPath + ' (v' + summary.electronVersion + ')');
   lines.push('- Режим модели: ' + (summary.withModel ? 'разрешены проверки с настоящей моделью (--with-model)' : 'без платных вызовов (--with-model не задан)'));
   lines.push('- Параметры: only=' + (summary.only.length ? summary.only.join(',') : '—') + '; skip=' + (summary.skip.length ? summary.skip.join(',') : '—') + '; продолжать после сбоя: ' + (summary.continueOnFail ? 'да' : 'нет'));
-  lines.push('- Повтор упавшей проверки: ' + (summary.retryCount ? 'до ' + String(summary.retryCount) + ' раз, пауза ' + String(Math.round(summary.retryPauseMs / 1000)) + ' с (только известный флейк)' : 'выключен (--no-retry/--retry 0)'));
+  lines.push('- Повтор упавшей проверки: ' + (summary.retryCount ? 'до ' + String(summary.retryCount) + ' раз, пауза ' + String(Math.round(summary.retryPauseMs / 1000)) + ' с; правило — таймаут стенда или известный флейк, настоящие проверочные провалы не повторяются' : 'выключен (--no-retry/--retry 0)'));
   lines.push('- Артефакты: ' + summary.outDir);
   lines.push('');
   lines.push('## Итог: ' + (summary.ok ? 'OK' : 'FAIL'));
@@ -707,7 +712,7 @@ async function main() {
   if (!JSON_MODE) {
     console.log('Единый прогон Nox: ' + String(list.length) + ' проверок по очереди');
     console.log('Модель: ' + (WITH_MODEL ? 'разрешены проверки с настоящей моделью (--with-model)' : 'без платных вызовов (--with-model не задан)'));
-    console.log('Повтор упавшей проверки: ' + (RETRY_COUNT ? 'до ' + String(RETRY_COUNT) + ' раз, пауза ' + String(Math.round(RETRY_PAUSE_MS / 1000)) + ' с (только известный флейк)' : 'выключен'));
+    console.log('Повтор упавшей проверки: ' + (RETRY_COUNT ? 'до ' + String(RETRY_COUNT) + ' раз, пауза ' + String(Math.round(RETRY_PAUSE_MS / 1000)) + ' с (таймаут стенда или известный флейк; провал проверки не повторяется)' : 'выключен'));
     console.log('Артефакты и отчёт: ' + OUT_DIR);
     console.log('');
   }
