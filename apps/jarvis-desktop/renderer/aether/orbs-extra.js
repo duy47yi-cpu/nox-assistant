@@ -73,6 +73,13 @@
   const mixRgb = (a, b, t) => [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)];
   const lighten = (c, t) => mixRgb(c, [255, 255, 255], t);
   const darken = (c, t) => mixRgb(c, [8, 10, 12], t);
+  const luminanceOf = (rgb) => {
+    const channel = (value) => {
+      const c = clamp(value, 0, 255) / 255;
+      return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2]);
+  };
 
   function parseColor(text, fallback) {
     const value = String(text || '').trim();
@@ -350,15 +357,22 @@
         css = null;
       }
       const read = (name, fb) => parseColor(css ? css.getPropertyValue(name) : '', fb);
+      const readText = (name) => (css ? String(css.getPropertyValue(name) || '').trim() : '');
       const accent = read('--hue', fallback.accent);
       const warn = read('--warn', fallback.warn);
       const err = read('--err', fallback.err);
       const ok = read('--ok', fallback.ok);
+      // Светлая тема: фон панели светлый. На нём сферу рисуем плотнее и тёмным ядром,
+      // иначе акцент, осветлённый для тёмной темы, становится бледным.
+      const bgColor = parseColor(readText('--bg') || readText('--surface') || readText('--g1'), [12, 14, 18]);
+      this._light = luminanceOf(bgColor) > 0.55;
       this._pal = {
         idle: accent,
-        listening: lighten(accent, 0.2),
-        thinking: mixRgb(lighten(accent, 0.28), [170, 214, 255], 0.25),
-        speaking: lighten(accent, 0.14),
+        listening: this._light ? darken(accent, 0.08) : lighten(accent, 0.2),
+        thinking: this._light
+          ? mixRgb(accent, [8, 14, 28], 0.18)
+          : mixRgb(lighten(accent, 0.28), [170, 214, 255], 0.25),
+        speaking: this._light ? darken(accent, 0.05) : lighten(accent, 0.14),
         waiting_approval: warn,
         success: ok,
         error: err,
@@ -1090,6 +1104,17 @@
       return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + clamp(alpha).toFixed(3) + ')';
     }
 
+    _rgbaOf(rgb, alpha) {
+      const c = rgb || this.col;
+      return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + clamp(alpha).toFixed(3) + ')';
+    }
+
+    // На тёмной теме свет добавляем (lighter), на светлой — рисуем цветом темы поверх
+    // (source-over): иначе белое свечение уходит в светлый фон и сфера бледнеет.
+    _glowOp() {
+      return this._light ? 'source-over' : 'lighter';
+    }
+
     _draw() {
       const ctx = this.ctx;
       if (!ctx || !this.w || !this.h) return;
@@ -1116,11 +1141,11 @@
     }
 
     _drawHalo(ctx, cx, cy, R, bright) {
-      const halo = this.mix.halo * bright;
+      const halo = this.mix.halo * bright * (this._light ? 1.35 : 1);
       if (halo <= 0) return;
       const grad = ctx.createRadialGradient(cx, cy, R * 0.05, cx, cy, R * 1.55);
-      grad.addColorStop(0, this._rgba(0.075 * halo));
-      grad.addColorStop(0.55, this._rgba(0.03 * halo));
+      grad.addColorStop(0, this._rgba((this._light ? 0.11 : 0.075) * halo));
+      grad.addColorStop(0.55, this._rgba((this._light ? 0.045 : 0.03) * halo));
       grad.addColorStop(1, this._rgba(0));
       ctx.fillStyle = grad;
       ctx.fillRect(cx - R * 1.6, cy - R * 1.6, R * 3.2, R * 3.2);
@@ -1158,20 +1183,37 @@
         }
         if (!painted) continue;
         const t = b / (NB - 1);
+        // На светлой теме линии плотнее: тот же цвет темы, но чуть шире и непрозрачнее.
+        const gain = this._light ? 1.14 : 1;
+        const widthAdd = this._light ? 0.14 : 0;
         // Мягкое свечение перед чёткими линиями: у ярких корзин рисуем широкий полупрозрачный штрих.
         if (t > 0.68) {
-          ctx.strokeStyle = this._rgba((0.05 + t * 0.12) * bright);
+          ctx.strokeStyle = this._rgba((0.05 + t * 0.12) * bright * (this._light ? 0.9 : 1));
           ctx.lineWidth = 2.4 + t * 3.4;
           ctx.stroke();
         }
-        ctx.strokeStyle = this._rgba((0.095 + t * 0.86) * bright);
-        ctx.lineWidth = 0.6 + t * 0.85;
+        ctx.strokeStyle = this._rgba((0.095 + t * 0.86) * bright * gain);
+        ctx.lineWidth = 0.6 + t * 0.85 + widthAdd;
         ctx.stroke();
       }
     }
 
     _drawCore(ctx, cx, cy, R, bright, size, alpha) {
       const coreR = Math.max(2, R * size * (1 + this._voiceOut() * 0.12 + this.flash * 0.16));
+      if (this._light) {
+        // Светлая тема: ядро — плотное тёмное пятно цвета темы с мягким ореолом.
+        const deep = darken(this.col, 0.34);
+        ctx.globalCompositeOperation = 'source-over';
+        const lightGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 3.4);
+        lightGrad.addColorStop(0, this._rgbaOf(deep, 0.98 * alpha));
+        lightGrad.addColorStop(0.2, this._rgbaOf(this.col, 0.85 * alpha));
+        lightGrad.addColorStop(0.5, this._rgbaOf(this.col, 0.2 * alpha));
+        lightGrad.addColorStop(1, this._rgbaOf(this.col, 0));
+        ctx.fillStyle = lightGrad;
+        ctx.fillRect(cx - coreR * 3.4, cy - coreR * 3.4, coreR * 6.8, coreR * 6.8);
+        ctx.globalCompositeOperation = 'source-over';
+        return;
+      }
       ctx.globalCompositeOperation = 'lighter';
       const grad = ctx.createRadialGradient(cx - coreR * 0.3, cy - coreR * 0.35, 0, cx, cy, coreR * 4.2);
       grad.addColorStop(0, 'rgba(255,255,255,' + (0.96 * alpha).toFixed(3) + ')');
@@ -1190,8 +1232,8 @@
       const cy = this._cy;
       const k = 1 - this.impulse;
       const radius = R * (0.55 + k * 0.85);
-      const alpha = this.impulse * 0.5 * this.cfg.light;
-      ctx.globalCompositeOperation = 'lighter';
+      const alpha = this.impulse * 0.5 * this.cfg.light * (this._light ? 1.3 : 1);
+      ctx.globalCompositeOperation = this._glowOp();
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, TAU);
       ctx.strokeStyle = this._rgba(alpha);
@@ -1211,7 +1253,7 @@
       const ox = this._ox;
       const oy = this._oy;
       const oz = this._oz;
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = this._glowOp();
       const phase = this._phaseNow();
       for (let li = 0; li < geo.lines.length; li++) {
         const start = geo.lineStart[li];
@@ -1220,8 +1262,8 @@
         const at = start + Math.min(count - 1, (u * (count - 1)) | 0);
         const depth = oz[at];
         ctx.beginPath();
-        ctx.arc(ox[at], oy[at], 0.8 + depth * 1.6, 0, TAU);
-        ctx.fillStyle = this._rgba(0.35 + depth * 0.45);
+        ctx.arc(ox[at], oy[at], (0.8 + depth * 1.6) * (this._light ? 1.25 : 1), 0, TAU);
+        ctx.fillStyle = this._rgba((0.35 + depth * 0.45) * (this._light ? 1.35 : 1));
         ctx.fill();
       }
       ctx.globalCompositeOperation = 'source-over';
@@ -1234,17 +1276,17 @@
       const R = this._R;
       this._drawSphereBody(ctx, cx, cy, R, 0.13 * bright);
       this._drawBlocks(ctx, bright);
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = this._glowOp();
       // Кромка мембраны: дышит и отзывается на голос.
       const rim = R * (1 + this._voiceOut() * 0.035 + (this._still() ? 0 : this.breath) * 0.008);
       ctx.beginPath();
       ctx.arc(cx, cy, rim, 0, TAU);
-      ctx.strokeStyle = this._rgba(0.34 * bright);
-      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = this._rgba((this._light ? 0.52 : 0.34) * bright);
+      ctx.lineWidth = this._light ? 1.1 : 0.8;
       ctx.stroke();
       ctx.beginPath();
       ctx.arc(cx, cy, rim * 0.985, 0, TAU);
-      ctx.strokeStyle = this._rgba(0.13 * bright);
+      ctx.strokeStyle = this._rgba((this._light ? 0.2 : 0.13) * bright);
       ctx.lineWidth = 1.9;
       ctx.stroke();
       ctx.globalCompositeOperation = 'source-over';
@@ -1257,7 +1299,7 @@
       const R = this._R;
       this._drawSphereBody(ctx, cx, cy, R, 0.13 * bright);
       this._drawBlocks(ctx, bright);
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = this._glowOp();
       // Расходящиеся кольца резонанса.
       const voice = this._voiceOut();
       const phase = this._phaseNow();
@@ -1266,8 +1308,8 @@
         const radius = R * (0.34 + k * 0.22 + wave * 0.05 + voice * 0.03);
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, TAU);
-        ctx.strokeStyle = this._rgba((0.07 + wave * 0.19) * bright);
-        ctx.lineWidth = 0.7 + wave * 0.6;
+        ctx.strokeStyle = this._rgba((0.07 + wave * 0.19) * bright * (this._light ? 1.5 : 1));
+        ctx.lineWidth = 0.7 + wave * 0.6 + (this._light ? 0.15 : 0);
         ctx.stroke();
       }
       // Две наклонные орбиты.
@@ -1275,8 +1317,8 @@
         const rot = this._angleNow() * 0.6 + k * 1.2;
         ctx.beginPath();
         ctx.ellipse(cx, cy, R * (1.08 + k * 0.1), R * (0.3 + k * 0.06), rot, 0, TAU);
-        ctx.strokeStyle = this._rgba((0.09 + k * 0.03) * bright);
-        ctx.lineWidth = 0.8;
+        ctx.strokeStyle = this._rgba((0.09 + k * 0.03) * bright * (this._light ? 1.6 : 1));
+        ctx.lineWidth = 0.8 + (this._light ? 0.1 : 0);
         ctx.stroke();
       }
       ctx.globalCompositeOperation = 'source-over';
@@ -1311,7 +1353,7 @@
         }
         if (!painted) continue;
         const t = b / (NB - 1);
-        ctx.fillStyle = this._rgba((0.055 + t * 0.17) * bright);
+        ctx.fillStyle = this._rgba((0.055 + t * 0.17) * bright * (this._light ? 1.55 : 1));
         ctx.fill();
       }
       // Рёбра: от дальних к ближним.
@@ -1330,19 +1372,19 @@
         }
         if (!painted) continue;
         const t = b / (SEG_BUCKETS - 1);
-        ctx.strokeStyle = this._rgba((0.13 + t * 0.92) * bright);
-        ctx.lineWidth = 0.65 + t * 0.9;
+        ctx.strokeStyle = this._rgba((0.13 + t * 0.92) * bright * (this._light ? 1.12 : 1));
+        ctx.lineWidth = 0.65 + t * 0.9 + (this._light ? 0.14 : 0);
         ctx.stroke();
       }
       // Искры на вершинах и внутреннее ядро.
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = this._glowOp();
       for (let i = 0; i < geo.n; i++) {
         const depth = this._oz[i];
         if (depth < 0.42 && this.flash <= 0.05) continue;
-        const s = 0.7 + depth * 1.9 + this.flash * 1.8;
+        const s = (0.7 + depth * 1.9 + this.flash * 1.8) * (this._light ? 1.15 : 1);
         ctx.beginPath();
         ctx.arc(ox[i], oy[i], s, 0, TAU);
-        ctx.fillStyle = this._rgba((0.16 + depth * 0.62) * bright);
+        ctx.fillStyle = this._rgba((0.16 + depth * 0.62) * bright * (this._light ? 1.5 : 1));
         ctx.fill();
       }
       ctx.globalCompositeOperation = 'source-over';
@@ -1362,7 +1404,7 @@
         const ca = this._ca;
         const sa = this._sa;
         const phase = this._phaseNow();
-        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalCompositeOperation = this._glowOp();
         for (let i = 0; i < geo.particleCount; i++) {
           const theta = base[i * 4] + Math.sin(phase * 1.3 + i) * 0.16 * this.mix.amp;
           const phi = base[i * 4 + 1] + phase * 0.32 * (0.6 + base[i * 4 + 3]);
@@ -1379,8 +1421,8 @@
           const sy = cy + ry * R * persp;
           const d = clamp((depth + 1) * 0.5, 0, 1);
           ctx.beginPath();
-          ctx.arc(sx, sy, 0.6 + d * 1.4, 0, TAU);
-          ctx.fillStyle = this._rgba((0.18 + d * 0.72) * bright);
+          ctx.arc(sx, sy, (0.6 + d * 1.4) * (this._light ? 1.15 : 1), 0, TAU);
+          ctx.fillStyle = this._rgba((0.18 + d * 0.72) * bright * (this._light ? 1.45 : 1));
           ctx.fill();
         }
         ctx.globalCompositeOperation = 'source-over';
@@ -1418,14 +1460,14 @@
         }
         if (!painted) continue;
         const t = b / (NB - 1);
-        ctx.fillStyle = this._rgba((0.045 + t * 0.13) * bright);
+        ctx.fillStyle = this._rgba((0.045 + t * 0.13) * bright * (this._light ? 1.6 : 1));
         ctx.fill();
-        ctx.strokeStyle = this._rgba((0.1 + t * 0.62) * bright);
-        ctx.lineWidth = 0.55 + t * 0.55;
+        ctx.strokeStyle = this._rgba((0.1 + t * 0.62) * bright * (this._light ? 1.2 : 1));
+        ctx.lineWidth = 0.55 + t * 0.55 + (this._light ? 0.12 : 0);
         ctx.stroke();
       }
       // Волна отклика: ячейки, которые «загораются» по сфере.
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = this._glowOp();
       ctx.beginPath();
       let hot = false;
       for (let c = 0; c < geo.cellCount; c++) {
@@ -1440,10 +1482,10 @@
         ctx.closePath();
       }
       if (hot) {
-        ctx.fillStyle = this._rgba((0.12 + voice * 0.1 + this.flash * 0.12) * bright);
+        ctx.fillStyle = this._rgba((0.12 + voice * 0.1 + this.flash * 0.12) * bright * (this._light ? 1.5 : 1));
         ctx.fill();
-        ctx.strokeStyle = this._rgba((0.16 + voice * 0.1) * bright);
-        ctx.lineWidth = 0.6;
+        ctx.strokeStyle = this._rgba((0.16 + voice * 0.1) * bright * (this._light ? 1.25 : 1));
+        ctx.lineWidth = 0.6 + (this._light ? 0.1 : 0);
         ctx.stroke();
       }
       ctx.globalCompositeOperation = 'source-over';

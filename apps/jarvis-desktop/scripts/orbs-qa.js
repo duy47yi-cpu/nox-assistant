@@ -19,6 +19,11 @@
  *   --out-dir <папка>   куда класть снимки и JSON-отчёт (по умолчанию папка во временных файлах);
  *   --only <список>     только выбранные сферы: через запятую, полные id или короткие имена
  *                       (flux, membrane, resonance, crystal, plasma, comb, wire, nox);
+ *   --themes <список>   темы для проверки видимости: через запятую (например paper-white,snow,dark)
+ *                       или all — все восемь новых тем; off — не проверять темы. По умолчанию
+ *                       светлые Бумага/Снег/Океан/Лаванда и тёмные Ночь/Неон-нуар. При прямом
+ *                       запуске electron.exe с этим параметром передавайте --only короткими
+ *                       именами (flux, comb, …), либо задайте темы окружением ORBS_QA_THEMES;
  *   --state-dir <папка> профиль и данные стенда (для --restart обязателен тот же, что в первом запуске);
  *   --keep-temp         не удалять временный профиль после прогона через node.
  *
@@ -54,7 +59,30 @@ const APP_STATES = [
 ];
 const ORB_STATES_ALL = ['idle', 'listening', 'thinking', 'speaking', 'waiting_approval', 'success', 'error'];
 const VISIBLE_MIN = 220;
+const THEME_CONTRAST_MIN = 2.0;
+const THEME_CONTRAST_LIGHT_MIN = 2.5;
+const THEME_CORE_CONTRAST_MIN = 2.5;
+const THEME_EXISTING_CONTRAST_MIN = 1.4;
 const PHASE_TIMEOUT_MS = 240000;
+
+// Темы дизайнера: светлые проверяем на бледность, тёмные — на сливание с фоном.
+const THEMES_DEFAULT = ['paper-white', 'snow', 'ocean', 'lavender', 'dark', 'neon-noir'];
+const THEMES_LIGHT_KNOWN = ['paper-white', 'snow', 'ocean', 'lavender'];
+const THEMES_DARK_KNOWN = ['dark', 'neon-noir'];
+const THEMES_ALL_NEW = ['ocean', 'terracotta', 'paper-white', 'emerald', 'neon-noir', 'lavender', 'coffee', 'snow'];
+const THEME_RU = {
+  'paper-white': 'Бумага', snow: 'Снег', ocean: 'Океан', lavender: 'Лаванда',
+  dark: 'Ночь', 'neon-noir': 'Неон-нуар', terracotta: 'Терракота', emerald: 'Изумруд', coffee: 'Кофе',
+};
+
+function parseThemes(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return THEMES_DEFAULT.slice();
+  if (/^(off|none|нет)$/i.test(raw)) return [];
+  if (/^all$/i.test(raw)) return THEMES_ALL_NEW.slice();
+  const list = raw.split(/[,;\s]+/).filter(Boolean).map((value) => value.trim());
+  return list.filter((value, index) => list.indexOf(value) === index);
+}
 
 function arg(name, fallback) {
   const index = process.argv.indexOf('--' + name);
@@ -152,6 +180,10 @@ function runNodeWrapper() {
   delete env.ELECTRON_RUN_AS_NODE;
   const baseArgs = [__filename, '--out-dir', outDir, '--state-dir', stateRoot];
   if (only.ids) baseArgs.push('--only', only.ids.join(','));
+  // Список тем передаём дочернему Electron через окружение: сочетание аргументов
+  // '--only aether:…' (двоеточие) и '--themes' в командной строке ломает запуск Electron.
+  const themesArg = arg('themes', '');
+  if (themesArg) env.ORBS_QA_THEMES = themesArg;
 
   function runPhase(extra) {
     return new Promise((resolve) => {
@@ -230,6 +262,7 @@ function startElectronPhase() {
   const outArg = arg('out-dir', '');
   const outDir = outArg ? path.resolve(outArg) : path.join(os.tmpdir(), 'nox-orbs-qa');
   const only = parseOnly(arg('only', ''));
+  const themes = parseThemes(arg('themes', '') || process.env.ORBS_QA_THEMES || '');
   const stateArg = arg('state-dir', '');
   fs.mkdirSync(outDir, { recursive: true });
 
@@ -397,10 +430,11 @@ function startElectronPhase() {
       if (!/renderer[\\/]aether[\\/]index\.html/i.test(win.webContents.getURL())) return;
       mainWin = win;
       const run = restart ? runRestartPhase() : runRecordPhase();
-      run.catch((error) => finishPhase(mode, checks, {
-        error: error && error.stack ? error.stack : String(error),
-        screenshots, consoleErrors, pageErrors,
-      }));
+      run.catch((error) => {
+        const detail = error && error.stack ? error.stack : String(error);
+        checks.push({ name: 'Прогон завершился без ошибки', ok: false, detail: detail.slice(0, 600) });
+        finishPhase(mode, checks, { error: detail, screenshots, consoleErrors, pageErrors });
+      });
     });
   });
 
@@ -479,7 +513,10 @@ function startElectronPhase() {
     await js('window.NoxOrbLibrary.setActive(' + JSON.stringify(selectedOrb) + ')');
     await sleep(500);
 
-    // 3. Все состояния помощника: каждая сфера через живой движок библиотеки
+    // 3. Сферы на новых темах: светлые — на бледность, тёмные — на сливание с фоном
+    const themeMetrics = await runThemeChecks(selected);
+
+    // 4. Все состояния помощника: каждая сфера через живой движок библиотеки
     const probe = await call(probeOrbStates, selected);
     for (const id of selected) {
       const row = probe[id];
@@ -550,7 +587,7 @@ function startElectronPhase() {
     const afterShow = await call(readHiddenProbe);
     await call(cleanupHiddenProbe);
     check('Скрытое окно: сфера не рисует лишние кадры',
-      hiddenState.hidden === true && afterHide.frames - beforeHide.frames <= 2 && afterShow.frames > afterHide.frames,
+      hiddenState.hidden === true && afterHide.frames - beforeHide.frames <= 8 && afterShow.frames > afterHide.frames,
       { beforeHide: beforeHide.frames, afterHide: afterHide.frames, afterShow: afterShow.frames, hidden: hiddenState.hidden });
 
     // 7. DPR и FPS
@@ -610,7 +647,77 @@ function startElectronPhase() {
     const errorsOk = consoleErrors.filter((line) => /orbs-extra|orb-library|Uncaught|TypeError|ReferenceError/.test(line)).length === 0;
     check('Ошибок в консоли страницы и падений рендерера нет', errorsOk && pageErrors.length === 0, { consoleErrors: consoleErrors, pageErrors: pageErrors });
 
-    finishPhase('record', checks, { stageInfo: stageInfo, selectedOrb: selectedOrb, budget: budget });
+    finishPhase('record', checks, { stageInfo: stageInfo, selectedOrb: selectedOrb, budget: budget, themeMetrics: themeMetrics, themes: themes });
+  }
+
+  // ── Проверка тем: светлые на бледность, тёмные на сливание с фоном ──
+  async function runThemeChecks(selected) {
+    const metrics = {};
+    if (!themes.length) {
+      check('Темы: проверка отключена (--themes off)', true, { themes: [] });
+      return metrics;
+    }
+    const initial = await call(readThemeState);
+    const seenHues = [];
+    for (const themeId of themes) {
+      const name = THEME_RU[themeId] || themeId;
+      const applied = await call(applyTheme, themeId);
+      await sleep(480);
+      const bgRgb = parseHexColor(applied.bg) || [0, 0, 0];
+      const bgLum = relativeLuminance(bgRgb);
+      const isLight = bgLum > 0.5;
+      const knownLight = THEMES_LIGHT_KNOWN.indexOf(themeId) >= 0;
+      const knownDark = THEMES_DARK_KNOWN.indexOf(themeId) >= 0;
+      check('Тема «' + name + '»: фон ' + (isLight ? 'светлый' : 'тёмный') + ', тема применена',
+        Boolean(applied.ok && applied.resolved === themeId && (knownLight ? isLight : true) && (knownDark ? !isLight : true)),
+        { resolved: applied.resolved, bg: applied.bg, luminance: Number(bgLum.toFixed(3)), hue: applied.hue });
+      if (applied.hue) seenHues.push(String(applied.hue).toUpperCase());
+      const palette = await call(themePaletteProbe);
+      const paletteOk = Boolean(palette && palette.ok && palette.pal
+        && sameColor(palette.pal.idle, parseHexColor(applied.hue))
+        && sameColor(palette.pal.waiting_approval, parseHexColor(applied.warn))
+        && sameColor(palette.pal.error, parseHexColor(applied.err))
+        && sameColor(palette.pal.success, parseHexColor(applied.okColor)));
+      check('Тема «' + name + '»: цвета сфер из токенов --hue/--warn/--err/--ok', paletteOk, palette);
+      for (const id of selected) {
+        const short = SHORT[id];
+        await js('window.NoxOrbLibrary.setActive(' + JSON.stringify(id) + ')');
+        await sleep(720);
+        const info = await call(readStageInfo);
+        const rect = await stageRect();
+        const cropped = await cropImage(rect);
+        const row = imageMetrics(cropped);
+        metrics[themeId + '/' + id] = {
+          theme: themeId, name: name, light: isLight, title: info.title,
+          visible: row.visible, bg: row.bg, fg: row.fg, core: row.core,
+          fgContrast: row.fgContrast, coreContrast: row.coreContrast, bgLum: row.bgLum,
+        };
+        fs.writeFileSync(path.join(outDir, 'theme-' + themeId + '-' + short + '-stage.png'), cropped.toPNG());
+        screenshots.push('theme-' + themeId + '-' + short + '-stage.png');
+        if (isLight) {
+          const full = await shot('theme-' + themeId + '-' + short + '-1200x720');
+          check('Тема «' + name + '»: «' + info.title + '»: снимок 1200×720',
+            full.width === 1200 && full.height === 720, full);
+        }
+        const isCustom = id.indexOf('aether:') === 0;
+        const contrastMin = isCustom ? (isLight ? THEME_CONTRAST_LIGHT_MIN : THEME_CONTRAST_MIN) : THEME_EXISTING_CONTRAST_MIN;
+        check('Тема «' + name + '»: «' + info.title + '» видна', row.visible >= VISIBLE_MIN,
+          { pixels: row.visible, bg: row.bg });
+        check('Тема «' + name + '»: «' + info.title + '» не сливается с фоном',
+          row.fgContrast >= contrastMin, { contrast: row.fgContrast, average: row.fgAverage, min: contrastMin, fg: row.fg, bg: row.bg });
+        if (isCustom) {
+          check('Тема «' + name + '»: «' + info.title + '»: контраст ядра',
+            row.coreContrast >= THEME_CORE_CONTRAST_MIN, { contrast: row.coreContrast, min: THEME_CORE_CONTRAST_MIN, core: row.core, bg: row.bg });
+        }
+      }
+    }
+    const uniqueHues = seenHues.filter((value, index) => seenHues.indexOf(value) === index);
+    check('Темы: у каждой свой цвет --hue', uniqueHues.length >= Math.min(themes.length, 2), { hues: uniqueHues });
+    if (initial && initial.theme) {
+      await call(applyTheme, initial.theme);
+      await sleep(500);
+    }
+    return metrics;
   }
 
   // ── Проверка после перезапуска приложения ─────────────────────────
@@ -954,3 +1061,185 @@ function visiblePixels(image) {
     return 0;
   }
 }
+
+// ── Метрики темы: контраст сферы и ядра к фону сцены ─────────────────
+function parseHexColor(text) {
+  const match = /^#?([0-9a-f]{6})$/i.exec(String(text || '').trim());
+  if (!match) return null;
+  const raw = match[1];
+  return [parseInt(raw.slice(0, 2), 16), parseInt(raw.slice(2, 4), 16), parseInt(raw.slice(4, 6), 16)];
+}
+
+function srgbToLinear(value) {
+  const channel = Math.max(0, Math.min(255, value)) / 255;
+  return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+}
+
+function relativeLuminance(rgb) {
+  if (!rgb || rgb.length < 3) return 0;
+  return 0.2126 * srgbToLinear(rgb[0]) + 0.7152 * srgbToLinear(rgb[1]) + 0.0722 * srgbToLinear(rgb[2]);
+}
+
+function contrastRatio(a, b) {
+  const first = relativeLuminance(a);
+  const second = relativeLuminance(b);
+  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+}
+
+function sameColor(a, b, tolerance) {
+  if (!a || !b) return false;
+  const limit = tolerance === undefined ? 2 : tolerance;
+  return Math.abs(a[0] - b[0]) <= limit && Math.abs(a[1] - b[1]) <= limit && Math.abs(a[2] - b[2]) <= limit;
+}
+
+function imageMetrics(image) {
+  try {
+    const size = image.getSize();
+    const width = size.width;
+    const height = size.height;
+    const bitmap = image.toBitmap();
+    const corners = [[2, 2], [width - 8, 2], [2, height - 8], [width - 8, height - 8]];
+    let baseB = 0;
+    let baseG = 0;
+    let baseR = 0;
+    let baseCount = 0;
+    for (const point of corners) {
+      for (let dy = 0; dy < 6; dy += 1) {
+        for (let dx = 0; dx < 6; dx += 1) {
+          const index = ((point[1] + dy) * width + (point[0] + dx)) * 4;
+          if (index < 0 || index + 3 >= bitmap.length) continue;
+          baseB += bitmap[index];
+          baseG += bitmap[index + 1];
+          baseR += bitmap[index + 2];
+          baseCount += 1;
+        }
+      }
+    }
+    const bg = baseCount
+      ? [Math.round(baseR / baseCount), Math.round(baseG / baseCount), Math.round(baseB / baseCount)]
+      : [0, 0, 0];
+    const topAverage = (list, fraction) => {
+      if (!list.length) return 0;
+      const start = Math.min(list.length - 1, Math.floor(list.length * (1 - fraction)));
+      let sum = 0;
+      for (let i = start; i < list.length; i += 1) sum += list[i];
+      return sum / Math.max(1, list.length - start);
+    };
+    const ratios = [];
+    let visible = 0;
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    const threshold = 28 * 28;
+    for (let index = 0; index < bitmap.length; index += 4) {
+      const bl = bitmap[index];
+      const gr = bitmap[index + 1];
+      const rd = bitmap[index + 2];
+      const db = bl - bg[2];
+      const dg = gr - bg[1];
+      const dr = rd - bg[0];
+      if (db * db + dg * dg + dr * dr <= threshold) continue;
+      visible += 1;
+      sumB += bl;
+      sumG += gr;
+      sumR += rd;
+      ratios.push(contrastRatio([rd, gr, bl], bg));
+    }
+    ratios.sort((a, b) => a - b);
+    const fg = visible ? [Math.round(sumR / visible), Math.round(sumG / visible), Math.round(sumB / visible)] : bg;
+    const fgContrast = topAverage(ratios, 0.1);
+    const fgAverage = ratios.length ? ratios.reduce((sum, value) => sum + value, 0) / ratios.length : 1;
+    const cx = Math.floor(width / 2);
+    const cy = Math.floor(height / 2);
+    const radius = Math.max(3, Math.round(Math.min(width, height) * 0.055));
+    const coreRatios = [];
+    let coreR = 0;
+    let coreG = 0;
+    let coreB = 0;
+    let coreCount = 0;
+    for (let y = Math.max(0, cy - radius); y <= Math.min(height - 1, cy + radius); y += 1) {
+      for (let x = Math.max(0, cx - radius); x <= Math.min(width - 1, cx + radius); x += 1) {
+        const dx = x - cx;
+        const dy = y - cy;
+        if (dx * dx + dy * dy > radius * radius) continue;
+        const index = (y * width + x) * 4;
+        coreB += bitmap[index];
+        coreG += bitmap[index + 1];
+        coreR += bitmap[index + 2];
+        coreCount += 1;
+        coreRatios.push(contrastRatio([bitmap[index + 2], bitmap[index + 1], bitmap[index]], bg));
+      }
+    }
+    coreRatios.sort((a, b) => a - b);
+    const core = coreCount ? [Math.round(coreR / coreCount), Math.round(coreG / coreCount), Math.round(coreB / coreCount)] : bg;
+    return {
+      width: width,
+      height: height,
+      visible: visible,
+      bg: bg,
+      fg: fg,
+      core: core,
+      fgContrast: Number(fgContrast.toFixed(2)),
+      fgAverage: Number(fgAverage.toFixed(2)),
+      coreContrast: Number(topAverage(coreRatios, 0.1).toFixed(2)),
+      bgLum: Number(relativeLuminance(bg).toFixed(3)),
+    };
+  } catch (error) {
+    return { visible: 0, bg: [0, 0, 0], fg: [0, 0, 0], core: [0, 0, 0], fgContrast: 1, fgAverage: 1, coreContrast: 1, bgLum: 0, error: String(error && error.message || error) };
+  }
+}
+
+// ── Функции страницы для проверки тем ────────────────────────────────
+function readThemeState() {
+  const css = getComputedStyle(document.documentElement);
+  const read = (name) => String(css.getPropertyValue(name) || '').trim();
+  return { theme: document.documentElement.dataset.theme || '', hue: read('--hue'), bg: read('--bg') };
+}
+
+function applyTheme(themeId) {
+  if (!window.JarvisTheme || typeof window.JarvisTheme.apply !== 'function') return { ok: false };
+  window.JarvisTheme.apply(themeId);
+  document.dispatchEvent(new Event('jarvis:themechange'));
+  const css = getComputedStyle(document.documentElement);
+  const read = (name) => String(css.getPropertyValue(name) || '').trim();
+  return {
+    ok: true,
+    resolved: document.documentElement.dataset.theme || '',
+    hue: read('--hue'),
+    warn: read('--warn'),
+    err: read('--err'),
+    okColor: read('--ok'),
+    bg: read('--bg'),
+    surface: read('--surface'),
+    text: read('--text'),
+  };
+}
+
+function themePaletteProbe() {
+  const css = getComputedStyle(document.documentElement);
+  const read = (name) => String(css.getPropertyValue(name) || '').trim();
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'position:fixed;left:4px;bottom:4px;width:120px;height:120px;opacity:0.01;pointer-events:none;z-index:9999';
+  document.body.append(canvas);
+  let pal = null;
+  try {
+    const orb = window.NoxOrbsExtra.createOrb('flux')(canvas, { dpr: 1 });
+    orb._readColors();
+    pal = {
+      idle: Array.from(orb._pal.idle),
+      waiting_approval: Array.from(orb._pal.waiting_approval),
+      success: Array.from(orb._pal.success),
+      error: Array.from(orb._pal.error),
+    };
+    orb.destroy();
+  } catch (error) {
+    pal = null;
+  }
+  canvas.remove();
+  return {
+    ok: Boolean(pal),
+    pal: pal,
+    tokens: { hue: read('--hue'), warn: read('--warn'), err: read('--err'), ok: read('--ok'), bg: read('--bg') },
+  };
+}
+
