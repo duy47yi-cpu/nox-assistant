@@ -394,13 +394,22 @@ class McpClient {
 
   async connect() {
     if (this.transport === 'stdio') this._start();
-    const init = await this.request('initialize', { protocolVersion: PROTOCOL, capabilities: {}, clientInfo: { name: 'nox-assistant', version: '1.0.0' } });
-    this.protocol = init.protocolVersion || PROTOCOL;
-    this.serverInfo = init.serverInfo && typeof init.serverInfo === 'object' ? init.serverInfo : null;
-    this.capabilities = init.capabilities && typeof init.capabilities === 'object' ? init.capabilities : null;
-    this.instructions = typeof init.instructions === 'string' ? init.instructions.slice(0, 4000) : '';
-    await this.notify('notifications/initialized');
-    return init;
+    try {
+      const init = await this.request('initialize', { protocolVersion: PROTOCOL, capabilities: {}, clientInfo: { name: 'nox-assistant', version: '1.0.0' } });
+      this.protocol = init.protocolVersion || PROTOCOL;
+      this.serverInfo = init.serverInfo && typeof init.serverInfo === 'object' ? init.serverInfo : null;
+      this.capabilities = init.capabilities && typeof init.capabilities === 'object' ? init.capabilities : null;
+      this.instructions = typeof init.instructions === 'string' ? init.instructions.slice(0, 4000) : '';
+      await this.notify('notifications/initialized');
+      return init;
+    } catch (err) {
+      // Неудачное подключение не должно оставлять дочерний процесс и его таймеры: иначе
+      // после тайм-аута initialize висел бы живой сервер, которого никто уже не ждёт.
+      if (this.transport === 'stdio' && !this._closed) {
+        try { this.close('подключение не удалось'); } catch { /* процесс уже завершился */ }
+      }
+      throw err;
+    }
   }
 
   async listTools() {

@@ -12,14 +12,28 @@
 //   crash  — завершает процесс (проверка изоляции сбоя: остальные серверы и окно живы);
 //   secret — возвращает ошибку с секретом из env (проверка маскировки).
 //
+// Режимы для интеграционных проверок (по умолчанию — прежние 5 инструментов):
+//   --minimal или MCP_FIXTURE_MINIMAL=1 — tools/list отдаёт ровно 2 инструмента (echo, add);
+//   MCP_FIXTURE_NOISE=1 — пишет посторонние строки в stdout и stderr: клиент не должен принять их за текст;
+//   MCP_FIXTURE_HANG_INIT=1 — молчит на initialize: проверка честного тайм-аута и отсутствия утечки процесса.
 // Режим сбоя при запуске: env MCP_FIXTURE_FAIL=stderr-secret → пишет секрет в stderr и выходит с кодом 3.
 const readline = require('readline');
 
 const PROTOCOL = '2025-06-18';
+const ARGS = process.argv.slice(2);
+const MINIMAL = process.env.MCP_FIXTURE_MINIMAL === '1' || ARGS.includes('--minimal');
+const NOISE = process.env.MCP_FIXTURE_NOISE === '1';
+const HANG_INIT = process.env.MCP_FIXTURE_HANG_INIT === '1' || ARGS.includes('--hang-init');
 
 if (process.env.MCP_FIXTURE_FAIL === 'stderr-secret') {
   process.stderr.write(`тестовый сервер не поднялся: ${process.env.MCP_TEST_SECRET || 'секрет'}\n`);
   process.exit(3);
+}
+
+if (NOISE) {
+  // Посторонний вывод в оба потока: успешный ответ клиента не должен содержать этот текст.
+  process.stdout.write('MCP_FIXTURE_NOISE stdout: посторонняя строка, не JSON-RPC\n');
+  process.stderr.write('MCP_FIXTURE_NOISE stderr: посторонняя строка, не JSON-RPC\n');
 }
 
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -97,8 +111,15 @@ function handle(message) {
   if (!message || typeof message !== 'object') return;
   const { id, method, params } = message;
   // Уведомления (без id) не требуют ответа.
-  if (method === 'notifications/initialized') return;
+  if (method === 'notifications/initialized' || method === 'notifications/cancelled') return;
   if (id === undefined || id === null) return;
+  if (HANG_INIT && method === 'initialize') return; // нарочно молчим: проверка тайм-аута
+  if (method === 'shutdown') {
+    // Расширение поверх MCP для проверки корректного закрытия: ответить и выйти.
+    result(id, {});
+    setImmediate(() => process.exit(0));
+    return undefined;
+  }
   if (method === 'initialize') {
     return result(id, {
       protocolVersion: (params && params.protocolVersion) || PROTOCOL,
@@ -109,6 +130,7 @@ function handle(message) {
   }
   if (method === 'ping') return result(id, {});
   if (method === 'tools/list') {
+    if (MINIMAL) return result(id, { tools: [ECHO, ADD] });
     const cursor = params && params.cursor;
     if (!cursor) return result(id, { tools: FIRST_PAGE, nextCursor: 'page-2' });
     if (cursor === 'page-2') return result(id, { tools: SECOND_PAGE });
