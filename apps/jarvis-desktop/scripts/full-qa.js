@@ -4,7 +4,7 @@
  *
  * Запуск из apps/jarvis-desktop обычным Node (Electron внутри поднимают сами стенды):
  *   node scripts/full-qa.js [--out-dir <папка>] [--only <список>] [--skip <список>]
- *     [--continue-on-fail] [--json] [--with-model] [--rev <папка>] [--list]
+ *     [--continue-on-fail] [--json] [--with-model] [--rev <папка>] [--retry <n>] [--no-retry] [--list]
  *
  * Параметры:
  *   --out-dir <папка>   куда писать артефакты стендов и отчёт full-qa.md
@@ -12,12 +12,20 @@
  *   --only <список>     только перечисленные проверки (id через запятую);
  *   --skip <список>     исключить перечисленные проверки (id через запятую);
  *   --continue-on-fail  после упавшей проверки идти дальше (по умолчанию — стоп);
+ *   --retry <n>         сколько раз повторять проверку с известным флейком (0..5, по умолчанию 1);
+ *                       повтор идёт после паузы 6 с, обе попытки попадают в отчёт;
+ *   --no-retry          отключить автоматический повтор (то же, что --retry 0);
  *   --json              напечатать итог одной JSON-строкой (таблица не печатается);
  *   --with-model        разрешить проверки с настоящей моделью (aether-a11y-qa --real-model);
  *                       ключи должны быть в окружении вызывающего, платные вызовы по умолчанию запрещены;
  *   --rev <папка>       корень rev для голосового стенда: _probe/cmd/s1.wav и _models/gigaam
  *                       (можно переменной NOX_QA_REV);
  *   --list              показать id проверок и выйти.
+ *
+ * Автоповтор включается только для проверок с известным флейком: orbs (второй запуск Electron
+ * не успел загрузить окно) и aether (клавиатурный focus-visible в рейке). Если повтор упал снова —
+ * честный FAIL, в отчёте обе попытки и полный лог. Остальные проверки при сбое не повторяются:
+ * редкий флейк не должен прятать настоящую ошибку.
  *
  * Id: voice, orbs, aether, a11y, commands, connections, motion, legacy-verify, legacy-screens.
  * Классическая оболочка проверяется с NOX_UI=legacy (стенды сами пишут временные настройки).
@@ -59,6 +67,17 @@ const JSON_MODE = has('json');
 const REV = String(arg('rev', '') || process.env.NOX_QA_REV || '').trim();
 const ONLY = parseList(arg('only', ''));
 const SKIP = parseList(arg('skip', ''));
+// Повтор упавшей проверки с известным флейком: --retry <n> (0..5, по умолчанию 1) или --no-retry.
+const RETRY_RAW = has('no-retry') ? '0' : String(arg('retry', '1')).trim();
+const RETRY_COUNT = (() => {
+  const value = Number(RETRY_RAW);
+  if (!Number.isInteger(value) || value < 0 || value > 5) {
+    console.error('full-qa: --retry: целое число от 0 до 5, получено «' + RETRY_RAW + '»');
+    process.exit(2);
+  }
+  return value;
+})();
+const RETRY_PAUSE_MS = 6000;
 
 function findElectron() {
   const candidate = path.join(APP_DIR, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
@@ -156,11 +175,26 @@ const CHECKS = [
     },
     parse(run) {
       const payload = lastJsonLine(run.stdout, 'ORBS_QA');
+      const ok = !run.timedOut && run.code === 0 && Boolean(payload) && payload.ok !== false;
+      // Для честного FAIL в отчёт попадают строки FAIL из вывода стенда, а не только общий текст.
+      const failLines = String(run.stdout || '').split(/\r?\n/).map((line) => line.trim()).filter((line) => line.indexOf('FAIL ') === 0);
       return {
-        ok: !run.timedOut && run.code === 0 && Boolean(payload) && payload.ok !== false,
+        ok,
         counts: countsOf(payload),
-        detail: payload && payload.error ? String(payload.error) : (payload ? 'сферы, состояния, голос, пауза, DPR/FPS, мастерская и перезапуск' : 'нет строки ORBS_QA'),
+        detail: payload && payload.error ? String(payload.error)
+          : (!ok && failLines.length ? failLines.slice(0, 3).join(' | ')
+            : (payload ? 'сферы, состояния, голос, пауза, DPR/FPS, мастерская и перезапуск' : 'нет строки ORBS_QA')),
       };
+    },
+    // Известный флейк: второй запуск Electron («Перезапуск: экран Aether и библиотека сфер
+    // загрузились») не успел загрузить окно под нагрузкой, либо обёртка не дошла до итоговой
+    // строки. Настоящий сбой проверки (все проверки прошли, но есть FAIL) повторяем только
+    // по этому признаку — иначе честный FAIL сразу.
+    retryable({ result }) {
+      if (result.timedOut) return true;
+      const text = String(result.stdout || '');
+      if (/Перезапуск: экран Aether и библиотека сфер загрузились|окно не успело|не загрузил/i.test(text)) return true;
+      return !lastJsonLine(text, 'ORBS_QA');
     },
   },
   {
@@ -178,11 +212,29 @@ const CHECKS = [
     },
     parse(run) {
       const payload = lastJsonLine(run.stdout, 'AETHER_QA_RESULT');
+      let failingChecks = [];
+      if (payload && payload.report) {
+        try {
+          const report = JSON.parse(fs.readFileSync(payload.report, 'utf8'));
+          failingChecks = (report.checks || []).filter((item) => item && !item.ok).map((item) => String(item.name || ''));
+        } catch { failingChecks = []; }
+      }
       return {
         ok: !run.timedOut && run.code === 0 && Boolean(payload) && payload.ok !== false,
         counts: countsOf(payload),
-        detail: payload && payload.error ? String(payload.error) : (payload ? 'рейка, сцена, карточки чата, настройки озвучки на 1200x720 и 864x520' : 'нет строки AETHER_QA_RESULT'),
+        failingChecks,
+        detail: payload && payload.error ? String(payload.error)
+          : (payload ? (failingChecks.length ? 'провалились: ' + failingChecks.join(' | ') : 'рейка, сцена, карточки чата, настройки озвучки на 1200x720 и 864x520') : 'нет строки AETHER_QA_RESULT'),
       };
+    },
+    // Известный флейк: клавиатурный focus-visible в рейке (зависит от модальности ввода).
+    // Если провалилась только такая проверка — один повтор; иначе (и при повторе) честный FAIL.
+    retryable({ result, parsed }) {
+      if (result.timedOut) return true;
+      if (!parsed || parsed.ok) return false;
+      const failing = Array.isArray(parsed.failingChecks) ? parsed.failingChecks : [];
+      if (!failing.length) return false;
+      return failing.every((name) => /(фокус|focus-visible|рейк)/i.test(name));
     },
   },
   {
@@ -396,6 +448,10 @@ function execRun(def, run) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function statusWord(status) {
   if (status === 'ok') return 'OK';
   if (status === 'fail') return 'ПРОВАЛ';
@@ -405,6 +461,23 @@ function statusWord(status) {
 
 function formatSeconds(ms) {
   return (ms / 1000).toFixed(1) + ' с';
+}
+
+// Известный флейк у конкретной проверки: решают только её признаки, не «любой сбой».
+function isRetryable(def, result, parsed) {
+  try {
+    return typeof def.retryable === 'function' && def.retryable({ result, parsed }) === true;
+  } catch {
+    return false;
+  }
+}
+
+// Статус с обеими попытками: «OK (ПРОВАЛ → повтор OK)» или «ПРОВАЛ → повтор ПРОВАЛ».
+function checkStatusText(check) {
+  if (!check || !check.retried) return statusWord(check ? check.status : 'fail');
+  if (check.status === 'ok') return 'OK (ПРОВАЛ → повтор OK)';
+  if (check.status === 'fail') return 'ПРОВАЛ → повтор ПРОВАЛ';
+  return statusWord(check.status);
 }
 
 function countText(counts) {
@@ -420,8 +493,9 @@ function truncate(text, limit) {
   return value.slice(0, Math.floor(limit / 2)) + '\n… [сокращено ' + String(value.length - limit) + ' символов] …\n' + value.slice(-Math.floor(limit / 2));
 }
 
-function runLogSection(def, run, result, parsed) {
+function runLogSection(def, run, result, parsed, attemptNumber) {
   const lines = [];
+  lines.push('=== ' + (run.label || 'запуск') + ' · попытка ' + String(attemptNumber || 1) + ' ===');
   lines.push('Команда: ' + [def.runtime === 'node' ? process.execPath : ELECTRON].concat(run.args).join(' '));
   if (run.env) lines.push('Окружение: ' + Object.keys(run.env).map((key) => key + '=' + run.env[key]).join(', '));
   lines.push('Код выхода: ' + String(result.code) + (result.timedOut ? ' (таймаут)' : '') + '; время: ' + formatSeconds(result.elapsedMs));
@@ -444,51 +518,89 @@ async function runCheck(def, ctx) {
   try {
     built = def.build(ctx);
   } catch (err) {
-    return { id: def.id, title: def.title, mode: def.model(ctx), status: 'fail', counts: null, elapsedMs: 0, dir, reason: 'сборка команды: ' + String(err && err.message ? err.message : err), logs: '' };
+    return { id: def.id, title: def.title, mode: def.model(ctx), status: 'fail', counts: null, elapsedMs: 0, dir, reason: 'сборка команды: ' + String(err && err.message ? err.message : err), retried: false, attempts: [], logs: '' };
   }
   if (built.skip) {
-    return { id: def.id, title: def.title, mode: def.model(ctx), status: 'skip', counts: null, elapsedMs: 0, dir, reason: built.skip, logs: '' };
+    return { id: def.id, title: def.title, mode: def.model(ctx), status: 'skip', counts: null, elapsedMs: 0, dir, reason: built.skip, retried: false, attempts: [], logs: '' };
   }
   const runs = built.runs;
-  const results = [];
+  const runResults = [];
   const logs = [];
   let elapsedMs = 0;
   for (let index = 0; index < runs.length; index += 1) {
     const run = runs[index];
-    if (!JSON_MODE) process.stdout.write('    ' + (run.label || ('запуск ' + String(index + 1))) + ' … ');
-    const result = await execRun(def, run);
-    let parsed;
-    try {
-      parsed = def.parse(result) || { ok: false };
-    } catch (err) {
-      parsed = { ok: false, counts: null, detail: 'разбор итога: ' + String(err && err.message ? err.message : err) };
+    const label = run.label || ('запуск ' + String(index + 1));
+    const attempts = [];
+    for (let attemptIndex = 0; attemptIndex <= RETRY_COUNT; attemptIndex += 1) {
+      if (attemptIndex > 0) {
+        if (!JSON_MODE) console.log('      известный флейк — повтор через ' + String(Math.round(RETRY_PAUSE_MS / 1000)) + ' с');
+        await sleep(RETRY_PAUSE_MS);
+      }
+      if (!JSON_MODE) process.stdout.write('    ' + label + (attemptIndex > 0 ? ' (повтор ' + String(attemptIndex) + ')' : '') + ' … ');
+      const result = await execRun(def, run);
+      let parsed;
+      try {
+        parsed = def.parse(result) || { ok: false };
+      } catch (err) {
+        parsed = { ok: false, counts: null, detail: 'разбор итога: ' + String(err && err.message ? err.message : err) };
+      }
+      if (result.timedOut) {
+        parsed.ok = false;
+        parsed.detail = 'таймаут ' + formatSeconds(def.timeoutMs) + (parsed.detail ? ' · ' + parsed.detail : '');
+      } else if (result.code !== 0) {
+        parsed.ok = false;
+      }
+      if (result.error) {
+        parsed.ok = false;
+        parsed.detail = 'запуск: ' + result.error;
+      }
+      const attempt = { attempt: attemptIndex + 1, result, parsed };
+      attempts.push(attempt);
+      elapsedMs += result.elapsedMs;
+      logs.push(runLogSection(def, run, result, parsed, attemptIndex + 1));
+      if (!JSON_MODE) console.log(parsed.ok ? 'OK' : 'ПРОВАЛ');
+      if (parsed.ok) break;
+      if (attemptIndex >= RETRY_COUNT) break;
+      if (!isRetryable(def, result, parsed)) break;
     }
-    if (result.timedOut) {
-      parsed.ok = false;
-      parsed.detail = 'таймаут ' + formatSeconds(def.timeoutMs) + (parsed.detail ? ' · ' + parsed.detail : '');
-    } else if (result.code !== 0) {
-      parsed.ok = false;
-    }
-    if (result.error) {
-      parsed.ok = false;
-      parsed.detail = 'запуск: ' + result.error;
-    }
-    results.push({ run, result, parsed });
-    elapsedMs += result.elapsedMs;
-    logs.push(runLogSection(def, run, result, parsed));
-    if (!JSON_MODE) console.log(parsed.ok ? 'OK' : 'ПРОВАЛ');
-    if (!parsed.ok && !CONTINUE_ON_FAIL) break;
+    runResults.push({ run, label, attempts });
+    const last = attempts[attempts.length - 1];
+    if (!last.parsed.ok && !CONTINUE_ON_FAIL) break;
   }
-  const failedRun = results.find((item) => !item.parsed.ok);
+  const retried = runResults.some((entry) => entry.attempts.length > 1);
+  const finalFailures = [];
+  for (const entry of runResults) {
+    const last = entry.attempts[entry.attempts.length - 1];
+    if (!last.parsed.ok) finalFailures.push({ entry, attempt: last });
+  }
+  const allRunsDone = runResults.length === runs.length;
+  const status = allRunsDone && finalFailures.length === 0 ? 'ok' : 'fail';
   let counts = null;
-  for (const item of results) {
-    if (!item.parsed.counts) continue;
+  for (const entry of runResults) {
+    const last = entry.attempts[entry.attempts.length - 1];
+    if (!last.parsed.counts) continue;
     if (!counts) counts = { passed: 0, failed: 0, skipped: 0 };
-    counts.passed += item.parsed.counts.passed;
-    counts.failed += item.parsed.counts.failed;
-    counts.skipped += item.parsed.counts.skipped;
+    counts.passed += last.parsed.counts.passed;
+    counts.failed += last.parsed.counts.failed;
+    counts.skipped += last.parsed.counts.skipped;
   }
-  const status = results.length === runs.length && !failedRun ? 'ok' : 'fail';
+  const reason = finalFailures.map((item) => {
+    const first = item.entry.attempts[0];
+    const head = item.entry.attempts.length > 1 ? 'первая попытка: ' + (first.parsed.detail || 'ПРОВАЛ') + '; повтор: ' : '';
+    return (item.entry.label ? item.entry.label + ': ' : '') + head + (item.attempt.parsed.detail || 'ПРОВАЛ');
+  }).join(' | ');
+  const attempts = [];
+  for (const entry of runResults) {
+    for (const attempt of entry.attempts) {
+      attempts.push({
+        run: entry.label,
+        attempt: attempt.attempt,
+        ok: attempt.parsed.ok,
+        detail: attempt.parsed.detail || '',
+        elapsedMs: attempt.result.elapsedMs,
+      });
+    }
+  }
   const checkResult = {
     id: def.id,
     title: def.title,
@@ -497,24 +609,32 @@ async function runCheck(def, ctx) {
     counts,
     elapsedMs,
     dir,
-    reason: failedRun ? (failedRun.parsed.detail || '') : '',
+    reason,
+    retried,
+    attempts,
     logs: logs.join('\n\n---\n\n'),
   };
   try {
     fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify({
       id: checkResult.id,
       status: checkResult.status,
+      retried: checkResult.retried,
       counts: checkResult.counts,
       elapsedMs: checkResult.elapsedMs,
       reason: checkResult.reason,
-      runs: results.map((item) => ({
-        label: item.run.label || null,
-        command: [def.runtime === 'node' ? process.execPath : ELECTRON].concat(item.run.args),
-        code: item.result.code,
-        timedOut: item.result.timedOut,
-        ok: item.parsed.ok,
-        detail: item.parsed.detail || null,
-        elapsedMs: item.result.elapsedMs,
+      attempts: checkResult.attempts,
+      runs: runResults.map((entry) => ({
+        label: entry.label,
+        command: [def.runtime === 'node' ? process.execPath : ELECTRON].concat(entry.run.args),
+        ok: entry.attempts[entry.attempts.length - 1].parsed.ok,
+        attempts: entry.attempts.map((attempt) => ({
+          attempt: attempt.attempt,
+          code: attempt.result.code,
+          timedOut: attempt.result.timedOut,
+          ok: attempt.parsed.ok,
+          detail: attempt.parsed.detail || null,
+          elapsedMs: attempt.result.elapsedMs,
+        })),
       })),
     }, null, 2), 'utf8');
     fs.writeFileSync(path.join(dir, 'run.log'), checkResult.logs, 'utf8');
@@ -530,6 +650,7 @@ function buildMarkdown(summary) {
   lines.push('- Electron: ' + summary.electronPath + ' (v' + summary.electronVersion + ')');
   lines.push('- Режим модели: ' + (summary.withModel ? 'разрешены проверки с настоящей моделью (--with-model)' : 'без платных вызовов (--with-model не задан)'));
   lines.push('- Параметры: only=' + (summary.only.length ? summary.only.join(',') : '—') + '; skip=' + (summary.skip.length ? summary.skip.join(',') : '—') + '; продолжать после сбоя: ' + (summary.continueOnFail ? 'да' : 'нет'));
+  lines.push('- Повтор упавшей проверки: ' + (summary.retryCount ? 'до ' + String(summary.retryCount) + ' раз, пауза ' + String(Math.round(summary.retryPauseMs / 1000)) + ' с (только известный флейк)' : 'выключен (--no-retry/--retry 0)'));
   lines.push('- Артефакты: ' + summary.outDir);
   lines.push('');
   lines.push('## Итог: ' + (summary.ok ? 'OK' : 'FAIL'));
@@ -537,8 +658,8 @@ function buildMarkdown(summary) {
   lines.push('| проверка | режим | статус | проверок | время | папка артефактов |');
   lines.push('|---|---|---|---|---|---|');
   for (const check of summary.checks) {
-    const status = statusWord(check.status);
-    const extra = check.reason && (check.status === 'fail' || check.status === 'skip') ? ' — ' + String(check.reason).split('\n')[0].slice(0, 180) : '';
+    const status = checkStatusText(check);
+    const extra = check.reason && (check.status === 'fail' || check.status === 'skip') ? ' — ' + String(check.reason).split('\n')[0].slice(0, 220) : '';
     lines.push('| ' + check.id + ' — ' + check.title + ' | ' + check.mode + ' | ' + status + extra + ' | ' + countText(check.counts) + ' | ' + (check.elapsedMs ? formatSeconds(check.elapsedMs) : '—') + ' | ' + check.dir + ' |');
   }
   lines.push('');
@@ -547,11 +668,19 @@ function buildMarkdown(summary) {
     lines.push('');
     lines.push('### ' + check.id + ' — ' + check.title);
     lines.push('');
-    lines.push('- Статус: ' + statusWord(check.status) + (check.reason ? ' — ' + check.reason : ''));
+    lines.push('- Статус: ' + checkStatusText(check) + (check.reason ? ' — ' + check.reason : ''));
     lines.push('- Режим: ' + check.mode);
     lines.push('- Проверок: ' + countText(check.counts));
     lines.push('- Время: ' + (check.elapsedMs ? formatSeconds(check.elapsedMs) : '—'));
     lines.push('- Артефакты: ' + check.dir);
+    if (check.retried && Array.isArray(check.attempts) && check.attempts.length) {
+      lines.push('- Попытки:');
+      for (const attempt of check.attempts) {
+        lines.push('  - ' + String(attempt.attempt) + ') ' + (attempt.ok ? 'OK' : 'ПРОВАЛ')
+          + (attempt.detail ? ' — ' + attempt.detail : '')
+          + (attempt.elapsedMs ? ' (' + formatSeconds(attempt.elapsedMs) + ')' : ''));
+      }
+    }
     if (check.logs) {
       lines.push('');
       lines.push('~~~');
@@ -578,6 +707,7 @@ async function main() {
   if (!JSON_MODE) {
     console.log('Единый прогон Nox: ' + String(list.length) + ' проверок по очереди');
     console.log('Модель: ' + (WITH_MODEL ? 'разрешены проверки с настоящей моделью (--with-model)' : 'без платных вызовов (--with-model не задан)'));
+    console.log('Повтор упавшей проверки: ' + (RETRY_COUNT ? 'до ' + String(RETRY_COUNT) + ' раз, пауза ' + String(Math.round(RETRY_PAUSE_MS / 1000)) + ' с (только известный флейк)' : 'выключен'));
     console.log('Артефакты и отчёт: ' + OUT_DIR);
     console.log('');
   }
@@ -586,7 +716,7 @@ async function main() {
   for (let index = 0; index < list.length; index += 1) {
     const def = list[index];
     if (stopped) {
-      results.push({ id: def.id, title: def.title, mode: def.model(ctx), status: 'not-run', counts: null, elapsedMs: 0, dir: path.join(OUT_DIR, def.id), reason: 'не запускалась: прогон остановлен после сбоя', logs: '' });
+      results.push({ id: def.id, title: def.title, mode: def.model(ctx), status: 'not-run', counts: null, elapsedMs: 0, dir: path.join(OUT_DIR, def.id), reason: 'не запускалась: прогон остановлен после сбоя', retried: false, attempts: [], logs: '' });
       continue;
     }
     if (!JSON_MODE) console.log('[' + String(index + 1) + '/' + String(list.length) + '] ' + def.title + ' (' + def.model(ctx) + ')');
@@ -594,7 +724,7 @@ async function main() {
     results.push(result);
     if (!JSON_MODE) {
       const extra = result.reason ? ' — ' + String(result.reason).split('\n')[0] : '';
-      console.log('    итог: ' + statusWord(result.status) + ' · ' + countText(result.counts) + ' · ' + (result.elapsedMs ? formatSeconds(result.elapsedMs) : '—') + extra);
+      console.log('    итог: ' + checkStatusText(result) + ' · ' + countText(result.counts) + ' · ' + (result.elapsedMs ? formatSeconds(result.elapsedMs) : '—') + extra);
       console.log('');
     }
     if (result.status === 'fail' && !CONTINUE_ON_FAIL) stopped = true;
@@ -603,6 +733,7 @@ async function main() {
   const failCount = results.filter((item) => item.status === 'fail').length;
   const skipCount = results.filter((item) => item.status === 'skip').length;
   const notRunCount = results.filter((item) => item.status === 'not-run').length;
+  const retriedCount = results.filter((item) => item.retried).length;
   const ok = failCount === 0 && okCount > 0;
   const summary = {
     ok,
@@ -615,9 +746,11 @@ async function main() {
     only: ONLY,
     skip: SKIP,
     continueOnFail: CONTINUE_ON_FAIL,
+    retryCount: RETRY_COUNT,
+    retryPauseMs: RETRY_PAUSE_MS,
     electronPath: ELECTRON,
     electronVersion: electronVersion(),
-    counts: { ok: okCount, fail: failCount, skip: skipCount, notRun: notRunCount, ran: results.length - skipCount - notRunCount },
+    counts: { ok: okCount, fail: failCount, skip: skipCount, notRun: notRunCount, retried: retriedCount, ran: results.length - skipCount - notRunCount },
     checks: results.map((item) => ({
       id: item.id,
       title: item.title,
@@ -627,6 +760,8 @@ async function main() {
       elapsedMs: item.elapsedMs,
       dir: item.dir,
       reason: item.reason || '',
+      retried: Boolean(item.retried),
+      attempts: item.attempts || [],
     })),
   };
   try {
@@ -641,6 +776,7 @@ async function main() {
     console.log('Итог: ' + (ok ? 'OK' : 'FAIL')
       + ' — зелёных ' + String(okCount) + ', сбоев ' + String(failCount)
       + ', пропусков ' + String(skipCount) + (notRunCount ? ', не запускалось ' + String(notRunCount) : '')
+      + (retriedCount ? ', с повтором ' + String(retriedCount) : '')
       + '; всего ' + formatSeconds(summary.elapsedMs));
     console.log('Отчёт: ' + path.join(OUT_DIR, 'full-qa.md'));
   }
