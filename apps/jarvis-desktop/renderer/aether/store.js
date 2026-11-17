@@ -549,13 +549,13 @@
       const names = [...new Set((actions || []).map((a) => a && a.tool).filter(Boolean))].sort((a, b) => b.length - a.length);
       for (const name of names) {
         const escaped = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        out = out.replace(new RegExp('\\s*\\(?' + escaped + '\\)?', 'gi'), '');
+        out = out.replace(new RegExp('[ \\t]*\\(?' + escaped + '\\)?[ \\t]*', 'gi'), ' ');
       }
-      out = out.replace(/\s*[-—–:]?\s*Шаг\s+\d+\s*\([^)]*\)\s*[:—–-]?\s*/gi, ' ');
-      out = out.replace(/\s*[-—–:]?\s*Шаг\s+\d+\s*[:—–-]?\s*/gi, ' ');
-      out = out.replace(/\s*\\(\s*\\)/g, '');
-      out = out.replace(/\s{2,}/g, ' ');
-      out = out.replace(/\s+([.,;:!?])/g, '$1').trim();
+      out = out.replace(/[ \t]*[-—–:]?[ \t]*Шаг[ \t]+\d+[ \t]*\([^)]*\)[ \t]*[:—–-]?[ \t]*/gi, ' ');
+      out = out.replace(/[ \t]*[-—–:]?[ \t]*Шаг[ \t]+\d+[ \t]*[:—–-]?[ \t]*/gi, ' ');
+      out = out.replace(/[ \t]*\([ \t]*\)/g, '');
+      out = out.replace(/[ \t]{2,}/g, ' ');
+      out = out.replace(/[ \t]+([.,;:!?])/g, '$1').trim();
       return out;
     }
 

@@ -1137,8 +1137,17 @@ async function runChatRedesignQa(win) {
     const initiallyFolded = details && !details.open && control.innerText === 'Показать полностью';
     control?.click();
     const showsContent = details?.open && ['table', 'pre code', '.math'].every((selector) => details.querySelector(selector)?.getClientRects().length > 0);
+    const diag = {
+      open: Boolean(details && details.open),
+      summary: control ? control.innerText : null,
+      table: Boolean(details && details.querySelector('table')),
+      preCode: Boolean(details && details.querySelector('pre code')),
+      math: Boolean(details && details.querySelector('.math')),
+      htmlLen: details ? details.innerHTML.length : 0,
+      foldHtml: details ? details.innerHTML.slice(0, 500) : '',
+    };
     control?.click();
-    return { initiallyFolded, showsContent, foldedAgain: details && !details.open };
+    return { initiallyFolded, showsContent, foldedAgain: details && !details.open, diag };
   })()`);
   check('Длинный ответ разворачивается с таблицей, кодом и формулой', Object.values(folding).every(Boolean), folding);
 

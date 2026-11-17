@@ -145,16 +145,16 @@ function stripServiceTokens(text, toolNames = []) {
     .sort((a, b) => b.length - a.length);
   for (const name of names) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    out = out.replace(new RegExp('\\s*\\(?' + escaped + '\\)?', 'gi'), '');
+    out = out.replace(new RegExp('[ \\t]*\\(?' + escaped + '\\)?[ \\t]*', 'gi'), ' ');
   }
   // «Шаг 1 (remind_in):» или «Шаг 3 —» — служебный формат, в ответе владельцу ему не место.
-  out = out.replace(/\s*[-—–:]?\s*Шаг\s+\d+\s*\([^)]*\)\s*[:—–-]?\s*/gi, ' ');
-  out = out.replace(/\s*[-—–:]?\s*Шаг\s+\d+\s*[:—–-]?\s*/gi, ' ');
-  out = out.replace(/\bverified\s*:\s*[a-z_]+/gi, '');
-  out = out.replace(/\s*\(\s*\)/g, '');
-  out = out.replace(/\s{2,}/g, ' ');
-  out = out.replace(/\s+([.,;:!?])/g, '$1');
-  out = out.replace(/^[\s.,;:—-]+|([.,;:!?])\s*([.,;:!?])/g, (m, a, b) => (a && b ? b : ''));
+  out = out.replace(/[ \t]*[-—–:]?[ \t]*Шаг[ \t]+\d+[ \t]*\([^)]*\)[ \t]*[:—–-]?[ \t]*/gi, ' ');
+  out = out.replace(/[ \t]*[-—–:]?[ \t]*Шаг[ \t]+\d+[ \t]*[:—–-]?[ \t]*/gi, ' ');
+  out = out.replace(/\bverified[ \t]*:[ \t]*[a-z_]+/gi, '');
+  out = out.replace(/[ \t]*\([ \t]*\)/g, '');
+  out = out.replace(/[ \t]{2,}/g, ' ');
+  out = out.replace(/[ \t]+([.,;:!?])/g, '$1');
+  out = out.replace(/^[ \t.,;:—-]+|([.,;:!?])[ \t]*([.,;:!?])/g, (m, a, b) => (a && b ? b : ''));
   return out.trim();
 }
 
