@@ -626,6 +626,10 @@
         const card = document.createElement('div');
         card.className = 'ae-grid-card';
         card.dataset.addon = service.id;
+        card.tabIndex = 0;
+        card.setAttribute('role', 'button');
+        card.setAttribute('aria-expanded', 'false');
+        card.style.cursor = 'pointer';
 
         const head = document.createElement('div');
         head.className = 'ae-grid-card-head';
@@ -712,6 +716,65 @@
           }
         }
         card.append(footer);
+
+        // Карточка раскрывается: видно подключение, имена переменных (не значения)
+        // и честное объяснение, что без ключа сервис не добавляется молча.
+        const details = document.createElement('div');
+        details.hidden = true;
+        details.style.marginTop = '8px';
+        details.style.paddingTop = '8px';
+        details.style.borderTop = '1px solid rgba(255, 255, 255, 0.10)';
+        details.style.display = 'none';
+        details.style.flexDirection = 'column';
+        details.style.gap = '5px';
+        details.style.fontSize = '12px';
+        details.style.lineHeight = '1.4';
+        details.style.color = 'var(--lx-text-2, var(--text-2))';
+
+        const transportLine = document.createElement('span');
+        transportLine.textContent = service.transport === 'http'
+          ? 'Подключение: через интернет · ' + service.url
+          : 'Подключение: на компьютере · ' + service.command;
+        details.append(transportLine);
+
+        const keysLine = document.createElement('span');
+        if (service.envKeys && service.envKeys.length) {
+          keysLine.textContent = 'Нужны ключи (только имена): ' + service.envKeys.join(', ')
+            + '. Значения в каталоге не хранятся — их задаёт владелец в настройках сборки.';
+          keysLine.style.color = 'var(--lx-warn, var(--warn, inherit))';
+        } else {
+          keysLine.textContent = 'Отдельные ключи не нужны.';
+        }
+        details.append(keysLine);
+
+        const verifiedLine = document.createElement('span');
+        verifiedLine.textContent = service.verified
+          ? 'Запись проверена в реестрах npm/PyPI и по HTTP-статусу.'
+          : 'Запись ещё не проверена — доверять ей как проверенной нельзя.';
+        details.append(verifiedLine);
+
+        card.append(details);
+
+        const toggleDetails = () => {
+          const open = details.hidden;
+          details.hidden = !open;
+          details.style.display = open ? 'flex' : 'none';
+          card.setAttribute('aria-expanded', String(open));
+          card.style.boxShadow = open ? 'inset 0 0 0 1px rgba(80, 112, 221, 0.55)' : '';
+        };
+        card.addEventListener('click', (event) => {
+          if (event.target.closest('button')) return;
+          if (details.contains(event.target)) return;
+          toggleDetails();
+        });
+        card.addEventListener('keydown', (event) => {
+          if (event.target !== card) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleDetails();
+          }
+        });
+
         return card;
       }
 
