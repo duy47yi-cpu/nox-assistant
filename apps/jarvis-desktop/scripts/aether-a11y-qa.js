@@ -1213,6 +1213,16 @@ async function checkMcpCardKeyboard(win) {
   check('MCP-карточка: контур фокуса виден', Boolean(ring) && ring.outlineStyle !== 'none' && ring.outlineWidth >= 1,
     ring);
 
+  // Проверяем именно CSS-правило .ae-grid-card:focus-visible (без JS-обводки):
+  // на светлой теме снимаем внутренние outline-стили и меряем контраст кольца по кадру.
+  await setStandTheme(win, 'porcelain');
+  await focusCard();
+  await js(win, '(() => { const card = [...document.querySelectorAll(".ae-grid-card[data-addon]")].find((c) => c.dataset.addon === ' + JSON.stringify(cardInfo.addon) + '); if (card) { card.style.outline = ""; card.style.outlineOffset = ""; } return true; })()');
+  await settle(win, 160);
+  const cssRing = await ringContrast(win, '.ae-grid-card[data-addon="' + cardInfo.addon + '"]');
+  check('MCP-карточка: кольцо из CSS контрастно ≥3:1 на светлой теме', Boolean(cssRing && cssRing.ok), cssRing);
+  await setStandTheme(win, 'dark');
+
   check('MCP-карточка: Enter раскрывает подробности и оставляет фокус на карточке',
     Boolean(expanded) && expanded.expanded === 'true' && expanded.detailsVisible && expanded.focusOnCard,
     expanded);

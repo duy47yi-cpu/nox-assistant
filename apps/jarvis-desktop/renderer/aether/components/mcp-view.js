@@ -684,18 +684,7 @@
         card.setAttribute('aria-label', 'Открыть карточку: ' + service.title);
         card.setAttribute('aria-controls', 'mcpAddonDetails-' + service.id);
         card.style.cursor = 'pointer';
-        // У .ae-grid-card нет своего focus-visible в CSS: контур повторяем из токена темы
-        // (правильное место — правило в aether.css, оно описано в отчёте).
-        const syncCardRing = () => {
-          if (card.matches(':focus-visible')) {
-            card.style.outline = '2px solid var(--focus, var(--accent, #5070DD))';
-            card.style.outlineOffset = '2px';
-          } else {
-            card.style.outline = '';
-          }
-        };
-        card.addEventListener('focus', syncCardRing);
-        card.addEventListener('blur', () => { card.style.outline = ''; });
+        // Кольцо фокуса карточки задаёт CSS: .ae-grid-card:focus-visible { outline: 2px solid var(--focus); }
 
         const head = document.createElement('div');
         head.className = 'ae-grid-card-head';

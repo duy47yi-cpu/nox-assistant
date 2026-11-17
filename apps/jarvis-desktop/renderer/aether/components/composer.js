@@ -52,21 +52,6 @@
     ta.placeholder = 'Напишите поручение или задайте вопрос…';
     ta.setAttribute('aria-label', 'Сообщение для Nox');
 
-    // Композер наследует полупрозрачное кольцо из общего правила вёрстки; на светлых
-    // темах его контраст падает ниже 3:1. Держим кольцо непрозрачным акцентом темы
-    // (CSSOM, не style-атрибут: CSP окна запрещает inline-стили).
-    function keepFocusRingOpaque(button) {
-      button.addEventListener('focus', () => {
-        if (button.matches(':focus-visible')) {
-          button.style.outlineColor = 'var(--accent, var(--focus, #58D9E8))';
-        }
-      });
-      button.addEventListener('blur', () => {
-        button.style.outlineColor = '';
-      });
-      return button;
-    }
-
     function syncHeight() {
       ta.style.height = 'auto';
       const maxH = window.innerHeight < 580 ? 110 : 168;
@@ -100,7 +85,6 @@
     attachBtn.className = 'ae-tool-btn';
     attachBtn.title = 'Прикрепить файл';
     attachBtn.setAttribute('aria-label', 'Прикрепить файл');
-    keepFocusRingOpaque(attachBtn);
     attachBtn.append(icon('paperclip'));
     attachBtn.addEventListener('click', async () => {
       if (!bridge.has('pickFiles')) return;
@@ -118,7 +102,6 @@
     regionBtn.className = 'ae-tool-btn';
     regionBtn.title = 'Обвести область экрана';
     regionBtn.setAttribute('aria-label', 'Обвести область экрана');
-    keepFocusRingOpaque(regionBtn);
     regionBtn.append(icon('target'));
     regionBtn.hidden = true;
     regionBtn.addEventListener('click', async () => {
@@ -141,7 +124,6 @@
     micBtn.id = 'dictationBtn';
     micBtn.className = 'ae-mic-btn';
     micBtn.setAttribute('aria-label', 'Голосовой ввод');
-    keepFocusRingOpaque(micBtn);
     micBtn.append(icon('mic'));
     micBtn.addEventListener('click', () => store.toggleDictation());
 
@@ -151,7 +133,6 @@
     dictModeBtn.className = 'ae-dict-chip';
     dictModeBtn.hidden = true;
     dictModeBtn.setAttribute('aria-label', 'Переключить режим микрофона');
-    keepFocusRingOpaque(dictModeBtn);
     dictModeBtn.addEventListener('click', () => store.cycleDictationMode());
 
     const agentBtn = document.createElement('button');
@@ -161,7 +142,6 @@
     agentBtn.setAttribute('aria-pressed', 'false');
     agentBtn.setAttribute('aria-label', 'Режим агента');
     agentBtn.title = 'Режим агента: пошаговые действия на экране и в системе';
-    keepFocusRingOpaque(agentBtn);
     const agentLabel = document.createElement('span');
     agentLabel.textContent = 'Агент';
     agentBtn.append(icon('sparkles'), agentLabel);
@@ -180,7 +160,6 @@
     pickTrigger.setAttribute('aria-haspopup', 'dialog');
     pickTrigger.setAttribute('aria-expanded', 'false');
     pickTrigger.setAttribute('aria-controls', 'pickPanel');
-    keepFocusRingOpaque(pickTrigger);
     const trigText = document.createElement('span');
     trigText.className = 'pick-trigger-text';
     pickTrigger.append(trigText, icon('chevronDown', 'ae-chev-sm'));
@@ -311,7 +290,6 @@
     sendBtn.type = 'button';
     sendBtn.id = 'sendBtn';
     sendBtn.className = 'ae-send-btn';
-    keepFocusRingOpaque(sendBtn);
     sendBtn.addEventListener('click', () => {
       const st = store.state;
       if (st.trackerBusy) {
