@@ -17,7 +17,7 @@ const { windowsTools } = require('../src/tools/windows');
 const { uiTools, parseKeys } = require('../src/tools/ui');
 const { ToolRegistry } = require('../src/tools/registry');
 const { Journal } = require('../src/journal/journal');
-const { runCommand } = require('../src/commands/runner');
+const { runCommand, formatPartialCommandReport } = require('../src/commands/runner');
 const { decide } = require('../src/policy/modes');
 
 const DANGEROUS = new Set(['pc_shutdown', 'shell_run', 'app_close']);
@@ -49,7 +49,7 @@ test('фразы находят команды: «игровой режим» �
 test('старые сценарии идут в заданном порядке', () => {
   assert.deepEqual(sample('Работа').steps.map((s) => s.tool), ['windows_minimize_all', 'url_open', 'volume_set', 'speak']);
   assert.deepEqual(sample('Работа').steps[2].args, { percent: 30 });
-  assert.deepEqual(sample('Игра').steps.map((s) => s.tool), ['windows_minimize_all', 'wait', 'volume_set']);
+  assert.deepEqual(sample('Игра').steps.map((s) => s.tool), ['windows_minimize_all', 'wait', 'volume_set', 'app_open']);
   assert.deepEqual(sample('Игра').steps[2].args, { percent: 70 });
   assert.deepEqual(sample('Отбой').steps.map((s) => s.tool), ['speak', 'volume_set', 'monitor_off']);
   assert.deepEqual(sample('Отбой').steps[1].args, { percent: 0 });
@@ -243,4 +243,32 @@ test('«Свернуть все окна» использует windows_minimize
   const out = await runCommand(cmd, runDeps(dir, fakeTools(dir, ran)));
   assert.equal(out.ok, true);
   assert.deepEqual(ran, [['windows_minimize_all', {}]]);
+});
+
+test('«Игра»: если Steam не установлен, шаг честно сообщает об этом и нет ложного «Готово»', async (t) => {
+  const reg = new ToolRegistry();
+  const called = [];
+  const okTool = (name) => ({
+    name,
+    risk: 'T0',
+    async run() { called.push(name); return { ok: true, summary: `${name} выполнен` }; },
+    async verify() { return { status: 'confirmed', evidence: 'проверено' }; },
+  });
+  for (const name of ['windows_minimize_all', 'wait', 'volume_set']) reg.register(okTool(name));
+  reg.register({
+    name: 'app_open',
+    risk: 'T1',
+    async run() { called.push('app_open'); return { ok: false, summary: 'Steam не найден: программа не установлена', data: {} }; },
+  });
+  const out = await runCommand(sample('Игра'), { tools: reg, policy: { decide: () => 'allow' }, mode: 'full', ownerCommand: true });
+  assert.equal(out.ok, false, 'без Steam команда не считается выполненной');
+  assert.equal(called.includes('app_open'), true, 'шаг запуска Steam действительно вызывался');
+  assert.equal(out.results.length, 4);
+  assert.equal(out.results[3].ok, false);
+  assert.match(String(out.results[3].summary), /Steam/);
+  const report = formatPartialCommandReport(sample('Игра'), out);
+  assert.equal(typeof report, 'string');
+  assert.doesNotMatch(report, /Готово/, 'нет ложного «Готово»');
+  assert.match(report, /Steam/, 'причина названа');
+  assert.match(report, /частично|Не удалось/, 'честная формулировка');
 });

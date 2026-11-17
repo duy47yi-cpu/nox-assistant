@@ -26,6 +26,8 @@ const BASE_COMMANDS = [
       { tool: 'windows_minimize_all', args: {} },
       { tool: 'wait', args: { ms: 800 } },
       { tool: 'volume_set', args: { percent: 70 } },
+      // Steam может быть не установлен: шаг честно сообщит об этом, а не выдаст «готово».
+      { tool: 'app_open', args: { name: 'steam' } },
     ],
   },
   // Рабочий режим: задержки между шагами — это шаги wait (до 10 с), а не отдельное поле команды.
