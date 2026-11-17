@@ -63,6 +63,9 @@ const THEME_CONTRAST_MIN = 2.0;
 const THEME_CONTRAST_LIGHT_MIN = 2.5;
 const THEME_CORE_CONTRAST_MIN = 2.5;
 const THEME_EXISTING_CONTRAST_MIN = 1.4;
+const THEME_NOX_CONTRAST_MIN = 3.0;
+const THEME_NOX_CORE_LIGHT_MIN = 4.5;
+const THEME_NOX_CORE_DARK_MIN = 2.0;
 const PHASE_TIMEOUT_MS = 240000;
 
 // Темы дизайнера: светлые проверяем на бледность, тёмные — на сливание с фоном.
@@ -551,8 +554,10 @@ function startElectronPhase() {
       await sleep(400);
     }
 
-    // 5. Уменьшение движения: сфера стоит, но видна; без reduce — движется
-    const motionOrb = newOrb || selected[0];
+    // 5. Уменьшение движения: сфера стоит, но видна; без reduce — движется.
+    // Проверяем на авторской сфере: вариант nox в Aether намеренно не гасится системной
+    // настройкой (это поведение существующего движка, не менялось), а нам нужен статичный кадр.
+    const motionOrb = newOrb || 'aether:flux';
     await js('window.NoxOrbLibrary.setActive(' + JSON.stringify(motionOrb) + ')');
     await sleep(700);
     const reduceOk = await setMotionEmulation('reduce');
@@ -653,6 +658,8 @@ function startElectronPhase() {
   // ── Проверка тем: светлые на бледность, тёмные на сливание с фоном ──
   async function runThemeChecks(selected) {
     const metrics = {};
+    // «Сфера Nox» проверяется на темах всегда: это обязательный пункт приёмки светлых тем.
+    const themeOrbs = selected.indexOf('nox:nox') >= 0 ? selected : selected.concat(['nox:nox']);
     if (!themes.length) {
       check('Темы: проверка отключена (--themes off)', true, { themes: [] });
       return metrics;
@@ -679,7 +686,7 @@ function startElectronPhase() {
         && sameColor(palette.pal.error, parseHexColor(applied.err))
         && sameColor(palette.pal.success, parseHexColor(applied.okColor)));
       check('Тема «' + name + '»: цвета сфер из токенов --hue/--warn/--err/--ok', paletteOk, palette);
-      for (const id of selected) {
+      for (const id of themeOrbs) {
         const short = SHORT[id];
         await js('window.NoxOrbLibrary.setActive(' + JSON.stringify(id) + ')');
         await sleep(720);
@@ -700,7 +707,10 @@ function startElectronPhase() {
             full.width === 1200 && full.height === 720, full);
         }
         const isCustom = id.indexOf('aether:') === 0;
-        const contrastMin = isCustom ? (isLight ? THEME_CONTRAST_LIGHT_MIN : THEME_CONTRAST_MIN) : THEME_EXISTING_CONTRAST_MIN;
+        const isNoxSphere = id === 'nox:nox';
+        const contrastMin = isCustom
+          ? (isLight ? THEME_CONTRAST_LIGHT_MIN : THEME_CONTRAST_MIN)
+          : (isNoxSphere ? THEME_NOX_CONTRAST_MIN : THEME_EXISTING_CONTRAST_MIN);
         check('Тема «' + name + '»: «' + info.title + '» видна', row.visible >= VISIBLE_MIN,
           { pixels: row.visible, bg: row.bg });
         check('Тема «' + name + '»: «' + info.title + '» не сливается с фоном',
@@ -708,6 +718,10 @@ function startElectronPhase() {
         if (isCustom) {
           check('Тема «' + name + '»: «' + info.title + '»: контраст ядра',
             row.coreContrast >= THEME_CORE_CONTRAST_MIN, { contrast: row.coreContrast, min: THEME_CORE_CONTRAST_MIN, core: row.core, bg: row.bg });
+        } else if (isNoxSphere) {
+          const coreMin = isLight ? THEME_NOX_CORE_LIGHT_MIN : THEME_NOX_CORE_DARK_MIN;
+          check('Тема «' + name + '»: «' + info.title + '»: контраст ядра',
+            row.coreContrast >= coreMin, { contrast: row.coreContrast, min: coreMin, core: row.core, bg: row.bg });
         }
       }
     }

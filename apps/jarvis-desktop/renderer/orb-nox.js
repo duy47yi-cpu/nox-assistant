@@ -134,6 +134,39 @@
   ];
   const rgba = (c, a) => 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + clamp01(a).toFixed(3) + ')';
 
+  // Светлая тема: тот же признак, что у авторских сфер в orbs-extra.js — токен --bg.
+  // Тёмный вид и поведение не меняются: светлая палитра включается только для варианта 'nox'.
+  const parseCssColor = (text, fallback) => {
+    const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(text || '').trim());
+    if (!match) return fallback.slice();
+    const raw = match[1];
+    if (raw.length === 3) {
+      return [parseInt(raw[0] + raw[0], 16), parseInt(raw[1] + raw[1], 16), parseInt(raw[2] + raw[2], 16)];
+    }
+    return [parseInt(raw.slice(0, 2), 16), parseInt(raw.slice(2, 4), 16), parseInt(raw.slice(4, 6), 16)];
+  };
+  const luminanceOf = (rgb) => {
+    const channel = (value) => {
+      const c = clamp01(value / 255);
+      return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2]);
+  };
+  const inkMix = (c, t) => mixRgb(c, [8, 10, 14], t);
+  const paperMix = (c, t) => mixRgb(c, [255, 255, 255], t);
+  // Светлая палитра состояния: тёмные точки на светлом фоне, тёмное ядро.
+  function lightPalFor(color) {
+    return {
+      line: color.slice(),
+      lo: paperMix(color, 0.52),
+      hi: inkMix(color, 0.30),
+      pLo: paperMix(color, 0.66),
+      coreHi: inkMix(color, 0.72),
+      coreMid: inkMix(color, 0.28),
+      coreLo: paperMix(color, 0.10),
+    };
+  }
+
   // Детерминированный ГПСЧ: картинка не «кипит» между запусками и кадрами.
   function mulberry32(seed) {
     let a = seed >>> 0;
@@ -183,6 +216,12 @@
       this.shakePhase = 0;
       this.flash = 0;       // вспышка успеха, затухает за ~220 мс
       this.waves = [];      // расходящиеся кольца от pulse() у nox
+
+      // Светлая тема читается до первой палитры: на ней вариант 'nox' рисуется тёмными
+      // точками с тёмным ядром (см. _readColors), wire и тёмные темы — как раньше.
+      this._light = false;
+      this._lightPal = null;
+      this._readColors();
 
       this.mix = { ...MOTION[this.state] };
       this.col = {};
@@ -273,6 +312,7 @@
       cancelAnimationFrame(this._raf);
       this._raf = 0;
       document.removeEventListener('visibilitychange', this._onVis);
+      document.removeEventListener('jarvis:themechange', this._onTheme);
       window.removeEventListener('resize', this._onWinResize);
       if (reduceQuery && reduceQuery.removeEventListener) reduceQuery.removeEventListener('change', this._onReduce);
       if (this._ro) this._ro.disconnect();
@@ -296,8 +336,10 @@
       this._onWinResize = () => this._resize();
       this._onReduce = () => this._sync();
       this._onMotionAttr = () => this._sync();
+      this._onTheme = () => this._readColors();
       this._onFrame = (now) => this._frame(now);
       document.addEventListener('visibilitychange', this._onVis);
+      document.addEventListener('jarvis:themechange', this._onTheme);
       window.addEventListener('resize', this._onWinResize);
       if (reduceQuery && reduceQuery.addEventListener) reduceQuery.addEventListener('change', this._onReduce);
       this._ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this._resize()) : null;
@@ -430,7 +472,55 @@
       this.waves = alive;
     }
 
+    // Перечитывает тему: на светлой собирает палитру из токенов --hue/--warn/--err/--ok
+    // и переключает вариант 'nox' на тёмные точки/ядро. Вызывается конструктором,
+    // событием jarvis:themechange и refreshColors() из библиотеки сфер.
+    _readColors() {
+      let css = null;
+      try {
+        const doc = typeof document !== 'undefined' ? document : null;
+        if (doc) {
+          const host = this.canvas && this.canvas.closest ? this.canvas.closest('[data-theme]') : null;
+          css = getComputedStyle(host || doc.documentElement);
+        }
+      } catch {
+        css = null;
+      }
+      const read = (name, fallback) => parseCssColor(css ? css.getPropertyValue(name) : '', fallback);
+      const accent = read('--hue', [77, 188, 232]);
+      const warn = read('--warn', [245, 165, 36]);
+      const err = read('--err', [255, 92, 92]);
+      const ok = read('--ok', [140, 242, 190]);
+      const bg = read('--bg', [20, 18, 14]);
+      this._light = luminanceOf(bg) > 0.55;
+      if (this._light) {
+        const tone = (base, k) => mixRgb(base, [8, 12, 20], k);
+        this._lightPal = {
+          idle: lightPalFor(accent),
+          attentive: lightPalFor(tone(accent, 0.06)),
+          listening: lightPalFor(tone(accent, 0.10)),
+          thinking: lightPalFor(tone(accent, 0.18)),
+          speaking: lightPalFor(tone(accent, 0.04)),
+          waiting_approval: lightPalFor(warn),
+          error: lightPalFor(err),
+          success: lightPalFor(ok),
+        };
+      } else {
+        this._lightPal = null;
+      }
+      this._spr = null;
+      // Смена темы на лету: цвета переключаем сразу, без растянутого перехода.
+      if (this.col) {
+        const target = this._palette();
+        for (const key of PAL_KEYS) this.col[key] = target[key].slice();
+      }
+      return this._light;
+    }
+
     _palette() {
+      if (this.variant === 'nox' && this._light && this._lightPal) {
+        return this._lightPal[this.state] || this._lightPal.idle;
+      }
       return (this.variant === 'wire' && this.colorway === 'green' && WIRE_GREEN[this.state]) || PALETTE[this.state];
     }
 
@@ -649,7 +739,7 @@
       const peak = Math.min(R * 0.98, outer * 0.88);
       if (outer - inner < 2) return;
       const mid = clamp01((peak - inner) / (outer - inner));
-      const a = strength * (this.variant === 'wire' ? 0.90 : 0.72);
+      const a = strength * (this.variant === 'wire' ? 0.90 : (this._light && this.variant === 'nox' ? 0.95 : 0.72));
       const c = this.col.line;
       const g = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
       g.addColorStop(0, rgba(c, 0));
@@ -883,20 +973,23 @@
       const kick = this.kick;
       const bright = mix.bright * (1 + this.flash * 0.6);
 
+      // Светлая тема: вариант 'nox' рисуем плотными тёмными точками и тёмным ядром
+      // поверх фона, а не аддитивным свечением — иначе сфера бледнеет на светлой панели.
+      const light = this._light && this.variant === 'nox';
       // Ядро: объёмное свечение #E0F4FF → #3AAAD6 → #1A5A7B, дышит и откликается на голос.
       const corePulse = 1 + 0.03 * Math.sin(this.breath) + 0.05 * v + 0.06 * kick;
       const Rc = R * CORE_RATIO * corePulse;
       const cg = mix.coreGlow;
       // Центр ядра — светлый cyan, а не чистый белый: объём, а не пересвет.
-      const coreHot = mixRgb(col.coreHi, col.coreMid, 0.30);
-      const coreWarm = mixRgb(col.coreHi, col.coreMid, 0.55);
+      const coreHot = mixRgb(col.coreHi, col.coreMid, light ? 0.18 : 0.30);
+      const coreWarm = mixRgb(col.coreHi, col.coreMid, light ? 0.42 : 0.55);
       const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Rc * 1.62);
-      g.addColorStop(0, rgba(coreHot, Math.min(1, 0.60 * cg)));
-      g.addColorStop(0.32, rgba(coreWarm, Math.min(1, 0.44 * cg)));
-      g.addColorStop(0.58, rgba(col.coreMid, Math.min(1, 0.30 * cg)));
-      g.addColorStop(0.83, rgba(col.coreLo, 0.13 * cg));
+      g.addColorStop(0, rgba(coreHot, Math.min(1, (light ? 0.94 : 0.60) * cg)));
+      g.addColorStop(0.32, rgba(coreWarm, Math.min(1, (light ? 0.78 : 0.44) * cg)));
+      g.addColorStop(0.58, rgba(col.coreMid, Math.min(1, (light ? 0.52 : 0.30) * cg)));
+      g.addColorStop(0.83, rgba(col.coreLo, (light ? 0.24 : 0.13) * cg));
       g.addColorStop(1, rgba(col.coreLo, 0));
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = light ? 'source-over' : 'lighter';
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(cx, cy, Rc * 1.62, 0, TAU);
