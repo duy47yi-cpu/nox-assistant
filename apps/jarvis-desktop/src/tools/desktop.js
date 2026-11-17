@@ -29,21 +29,46 @@ const MINIMIZE_SCRIPT = '(New-Object -ComObject Shell.Application).MinimizeAll()
 const RESTORE_SCRIPT = '(New-Object -ComObject Shell.Application).UndoMinimizeALL()';
 const MINIMIZE_WITH_CHECK = [
   "$ErrorActionPreference = 'Stop'",
-  `$sig = '[DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); [DllImport("user32.dll", EntryPoint="GetWindowLongW")] public static extern int GetWindowLong(IntPtr h, int index); [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int val, int size);'`,
+  `$sig = '[DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd); [DllImport("user32.dll", EntryPoint="GetWindowLongW")] public static extern int GetWindowLong(IntPtr h, int index); [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int val, int size);'`,
   'Add-Type -MemberDefinition $sig -Name MinimizeWindows -Namespace Nox',
-  '$targets = @(Get-Process | ForEach-Object { $_.MainWindowHandle } | Where-Object {',
-  '  $h = $_; $cloaked = 0',
+  // Своё окно Nox не сворачиваем: исключаем процесс приложения и его дочерние окна по цепочке родителей.
+  '$self = 0; [void][int]::TryParse([string]$env:NOX_SELF_PID, [ref]$self)',
+  '$parent = @{}',
+  'Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object { $parent[[int]$_.ProcessId] = [int]$_.ParentProcessId }',
+  'function Test-OwnProcess($procId) { $cur = [int]$procId; for ($i = 0; $i -lt 30 -and $cur -gt 0; $i++) { if ($self -gt 0 -and $cur -eq $self) { return $true }; $cur = [int]$parent[$cur] }; return $false }',
+  '$all = @(Get-Process | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | ForEach-Object { [pscustomobject]@{ handle = $_.MainWindowHandle; own = (Test-OwnProcess $_.Id) } })',
+  '$targets = @($all | Where-Object { $_.own -eq $false } | ForEach-Object {',
+  '  $h = $_.handle; $cloaked = 0',
   '  if ($h -eq [IntPtr]::Zero -or ![Nox.MinimizeWindows]::IsWindowVisible($h) -or [Nox.MinimizeWindows]::IsIconic($h)) { return $false }',
   '  [void][Nox.MinimizeWindows]::DwmGetWindowAttribute($h, 14, [ref]$cloaked, 4)',
   '  $cloaked -eq 0 -and ([Nox.MinimizeWindows]::GetWindowLong($h, -16) -band 0x20000) -ne 0',
   '} | Select-Object -Unique)',
   MINIMIZE_SCRIPT,
+  // Оболочка свернула и наше окно — сразу возвращаем его, чтобы Nox остался на экране.
+  '$ownHandles = @($all | Where-Object { $_.own } | ForEach-Object { $_.handle } | Where-Object { $_ -ne [IntPtr]::Zero -and [Nox.MinimizeWindows]::IsWindow($_) })',
+  'foreach ($h in $ownHandles) { if ([Nox.MinimizeWindows]::IsIconic($h)) { [void][Nox.MinimizeWindows]::ShowWindow($h, 9) } }',
   '$open = @($targets)',
   'for ($i = 0; $i -lt 20 -and $open.Count -gt 0; $i++) {',
   '  Start-Sleep -Milliseconds 50',
   '  $open = @($open | Where-Object { [Nox.MinimizeWindows]::IsWindow($_) -and ![Nox.MinimizeWindows]::IsIconic($_) })',
   '}',
-  'ConvertTo-Json -Compress -InputObject @{ checked = $targets.Count; open = $open.Count }',
+  '$ownOpen = @($ownHandles | Where-Object { [Nox.MinimizeWindows]::IsWindow($_) -and [Nox.MinimizeWindows]::IsIconic($_) }).Count',
+  'ConvertTo-Json -Compress -InputObject @{ checked = $targets.Count; open = $open.Count; own = $ownHandles.Count; ownOpen = $ownOpen }',
+].join('\n');
+
+// Возврат окон с проверкой: считаем свёрнутые до и после команды, чтобы подтвердить эффект честно.
+const RESTORE_WITH_CHECK = [
+  "$ErrorActionPreference = 'Stop'",
+  `$sig = '[DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h); [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);'`,
+  'Add-Type -MemberDefinition $sig -Name RestoreWindows -Namespace Nox',
+  '$targets = @(Get-Process | ForEach-Object { $_.MainWindowHandle } | Where-Object { $h = $_; $h -ne [IntPtr]::Zero -and [Nox.RestoreWindows]::IsWindow($h) -and [Nox.RestoreWindows]::IsWindowVisible($h) -and [Nox.RestoreWindows]::IsIconic($h) } | Select-Object -Unique)',
+  RESTORE_SCRIPT,
+  '$left = @($targets)',
+  'for ($i = 0; $i -lt 20 -and $left.Count -gt 0; $i++) {',
+  '  Start-Sleep -Milliseconds 50',
+  '  $left = @($left | Where-Object { [Nox.RestoreWindows]::IsWindow($_) -and [Nox.RestoreWindows]::IsIconic($_) })',
+  '}',
+  'ConvertTo-Json -Compress -InputObject @{ before = $targets.Count; after = $left.Count }',
 ].join('\n');
 
 // Пауза между шагами сценария: например, чтобы программа успела открыться.
@@ -96,13 +121,15 @@ function desktopToolsFactory({ runner = runPowerShell, speak: customSpeaker = nu
     risk: 'T1',
     parameters: { type: 'object', properties: {} },
     async run(args, ctx = {}) {
-      const res = await runner(MINIMIZE_WITH_CHECK, {}, { signal: ctx.signal, timeoutMs: 15000 });
+      const res = await runner(MINIMIZE_WITH_CHECK, { NOX_SELF_PID: String(process.pid) }, { signal: ctx.signal, timeoutMs: 15000 });
       return { ...res, summary: res.ok ? 'окна свёрнуты' : res.summary };
     },
     async verify(_args, result) {
       const probe = JSON.parse(result.data.stdout);
       if (probe.open > 0) return { status: 'failed', evidence: `остались развёрнутые окна: ${probe.open}` };
-      return { status: 'confirmed', evidence: probe.checked ? `проверены окна: ${probe.checked}` : 'подходящих открытых окон не было' };
+      if (probe.ownOpen > 0) return { status: 'failed', evidence: 'своё окно Nox осталось свёрнутым' };
+      if (!probe.checked) return { status: 'confirmed', evidence: 'подходящих открытых окон не было' };
+      return { status: 'confirmed', evidence: `свёрнуты окна: ${probe.checked}${probe.own ? `, своё окно не тронуто: ${probe.own}` : ''}` };
     },
   };
 
@@ -113,10 +140,18 @@ function desktopToolsFactory({ runner = runPowerShell, speak: customSpeaker = nu
     risk: 'T1',
     parameters: { type: 'object', properties: {} },
     async run(args, ctx = {}) {
-      const res = await runner(RESTORE_SCRIPT, {}, { signal: ctx.signal, timeoutMs: 15000 });
+      const res = await runner(RESTORE_WITH_CHECK, {}, { signal: ctx.signal, timeoutMs: 15000 });
       return { ...res, summary: res.ok ? 'окна возвращены' : res.summary };
     },
-    verify: cannotVerify('состояние окон после команды не считывается'),
+    async verify(_args, result) {
+      let probe = null;
+      try { probe = JSON.parse(result.data.stdout); } catch { return { status: 'unknown', evidence: 'список окон после возврата не прочитан' }; }
+      if (!probe || !Number.isFinite(probe.before) || !Number.isFinite(probe.after)) return { status: 'unknown', evidence: 'счётчики окон не получены' };
+      if (probe.before === 0) return { status: 'confirmed', evidence: 'свёрнутых окон не было' };
+      if (probe.after === 0) return { status: 'confirmed', evidence: `возвращено окон: ${probe.before}` };
+      if (probe.after < probe.before) return { status: 'confirmed', evidence: `возвращено ${probe.before - probe.after} из ${probe.before}, остальные не поднялись` };
+      return { status: 'failed', evidence: `окна не вернулись: свёрнутых ${probe.after} из ${probe.before}` };
+    },
   };
 
   // Выключение монитора: WM_SYSCOMMAND с SC_MONITORPOWER, значение 2 — выключить. Монитор включается движением мыши.

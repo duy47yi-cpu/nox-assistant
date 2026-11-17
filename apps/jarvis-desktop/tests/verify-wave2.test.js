@@ -117,7 +117,7 @@ test('command_set_hotkey: занятая клавиша — не успех и �
 
 test('то, что проверить нельзя, честно даёт «не проверено»', async () => {
   const all = [...desktopTools, ...systemTools];
-  for (const name of ['speak', 'monitor_off', 'pc_shutdown', 'volume_set', 'shell_run', 'windows_minimize_all', 'windows_restore_all']) {
+  for (const name of ['speak', 'monitor_off', 'pc_shutdown', 'volume_set', 'shell_run', 'windows_minimize_all']) {
     const out = await checkEffect(find(all, name), {}, { ok: true, summary: 'готово', data: {} }, {});
     assert.equal(out.verified, 'unknown', name);
     assert.equal(out.ok, true, name);
