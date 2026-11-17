@@ -189,8 +189,12 @@ function isPayment({ name, args } = {}) {
   // Название элемента окна: кнопка «Оплатить» или элемент сцены по координатам/id.
   if (matchesUiElement(n, args, PAY_ELEMENT)) return true;
   if (HARD_BROWSER.has(n) && PAY_BROWSER_HOST.test(String(browserHost()))) return true;
+  // Открытие платёжной страницы — тоже шаг к оплате: смотрим адрес из аргументов, а не только текущую вкладку.
+  if (n === 'browser_open' && PAY_BROWSER_HOST.test(hostOf(args && args.url))) return true;
+  if (n === 'url_open' && PAY_BROWSER_HOST.test(hostOf(args && args.url))) return true;
   return false;
 }
+
 
 // Удаление и перезапись в чужом окне: кнопка по имени или окно подтверждения замены файла.
 // Кнопка «Да» в окне без такого заголовка так не распознаётся — это честный предел проверки по тексту.
@@ -517,4 +521,4 @@ const POLICY_PATTERNS = Object.freeze({
   HARD_BROWSER_HOST,
 });
 
-module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, setSceneSource, resolveSceneTarget, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe, POLICY_PATTERNS, BROWSER_TAINT_WRITES };
+module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, setSceneSource, resolveSceneTarget, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe, POLICY_PATTERNS, BROWSER_TAINT_WRITES, CREDENTIAL_WINDOW_RE };

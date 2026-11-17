@@ -4,7 +4,7 @@
 // Собираются из уже существующих ui_windows/ui_elements/ui_click/ui_type, поэтому не трогают их PowerShell,
 // политику и проверки. Снимок экрана сюда не входит: screen_look остаётся отдельным и спрашивает разрешение по режиму.
 const { buildScene, diffScene, sceneText, sceneSignature, expectMet } = require('../perception/scene');
-const { isPayment, isDeletion, isInstall, isPowerOff, describe, hardDeny, setSceneSource } = require('../policy/modes');
+const { isPayment, isDeletion, isInstall, isPowerOff, describe, hardDeny, setSceneSource, CREDENTIAL_WINDOW_RE } = require('../policy/modes');
 
 const MAX_WINDOW = 120;
 const MAX_FILTER = 120;
@@ -113,6 +113,15 @@ function observeTools(ui = [], { mouse = [] } = {}) {
         };
       }
       return { error: `окно «${want}» не найдено`, windows: list.map((x) => x.title).slice(0, 20) };
+    }
+    // Пароли не читаем никогда, даже чтобы «просто посмотреть»: в окне менеджера они на виду.
+    // Окно банка читать можно (нужно для «покажи баланс»), но действовать в нём запрещает политика (hardDeny).
+    if (CREDENTIAL_WINDOW_RE.test(String(chosen.title || ''))) {
+      return {
+        error: `окно «${chosen.title}» не читаю: это менеджер паролей, там пароли и ключи`,
+        sensitive: true,
+        windows: list.map((x) => x.title).slice(0, 20),
+      };
     }
     const elements = await elementsTool.run({ window: chosen.title, filter: filter || undefined, limit }, ctx);
     if (!elements || !elements.ok) return { error: (elements && elements.summary) || 'элементы не прочитаны' };
