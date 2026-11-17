@@ -347,6 +347,164 @@ async function iconButtonsWithoutName(win) {
   ].join(' '));
 }
 
+// ── Светлые темы, кольцо фокуса и подписи рейки ─────────────────────
+const LIGHT_THEMES = ['paper', 'porcelain', 'light', 'snow'];
+
+async function setStandTheme(win, theme) {
+  await js(win, '(() => { const theme = ' + JSON.stringify(theme) + '; const T = window.JarvisTheme; if (T && typeof T.apply === "function") T.apply(theme); else document.documentElement.dataset.theme = theme; return document.documentElement.dataset.theme; })()');
+  await settle(win, 260);
+}
+
+function parseCssColor(text) {
+  const value = String(text || '').trim();
+  const srgb = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)$/i.exec(value);
+  if (srgb) {
+    const parts = [srgb[1], srgb[2], srgb[3], srgb[4]].map((part) => (part === undefined ? undefined : Number(part)));
+    if (parts.slice(0, 3).some((n) => !Number.isFinite(n))) return null;
+    return { r: parts[0] * 255, g: parts[1] * 255, b: parts[2] * 255, a: Number.isFinite(parts[3]) ? parts[3] : 1 };
+  }
+  const match = /rgba?\(([^)]+)\)/.exec(value);
+  if (!match) {
+    const hex = /^#([0-9a-f]{6})$/i.exec(value);
+    if (!hex) return null;
+    const n = parseInt(hex[1], 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, a: 1 };
+  }
+  const parts = match[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+  if (parts.length < 3 || parts.some((n) => !Number.isFinite(n))) return null;
+  return { r: parts[0], g: parts[1], b: parts[2], a: Number.isFinite(parts[3]) ? parts[3] : 1 };
+}
+
+function compositeOver(foreground, background) {
+  const alpha = Number.isFinite(foreground.a) ? Math.max(0, Math.min(1, foreground.a)) : 1;
+  return {
+    r: foreground.r * alpha + background.r * (1 - alpha),
+    g: foreground.g * alpha + background.g * (1 - alpha),
+    b: foreground.b * alpha + background.b * (1 - alpha),
+    a: 1,
+  };
+}
+
+function relativeLuminance(color) {
+  const channel = (value) => {
+    const c = value / 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+}
+
+function contrastRatio(first, second) {
+  const a = relativeLuminance(first);
+  const b = relativeLuminance(second);
+  const light = Math.max(a, b);
+  const dark = Math.min(a, b);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+async function focusRingInfo(win, selector) {
+  return js(win, [
+    '(() => {',
+    'const el = document.querySelector(' + JSON.stringify(selector) + ');',
+    'if (!el) return null;',
+    'el.focus({ preventScroll: true });',
+    'const s = getComputedStyle(el);',
+    'const r = el.getBoundingClientRect();',
+    'return { outline: s.outlineColor, width: parseFloat(s.outlineWidth) || 0, offset: parseFloat(s.outlineOffset) || 0,',
+    'style: s.outlineStyle, label: el.getAttribute("aria-label") || (el.textContent || "").trim().slice(0, 40),',
+    'rect: { x: r.x, y: r.y, w: r.width, h: r.height } };',
+    '})()',
+  ].join(' '));
+}
+
+// Контраст кольца фокуса к фону измеряем по настоящему пикселю окна (как видит владелец):
+// снимок кадра + точка в 3 px снаружи кольца. Кольцо берём из вычисленного outlineColor.
+async function ringContrast(win, selector) {
+  const info = await focusRingInfo(win, selector);
+  if (!info) return { ok: false, reason: 'элемент не найден', selector: selector };
+  if (!(info.width > 0) || info.style === 'none') return { ok: false, reason: 'нет видимого кольца', selector: selector, info: info };
+  await settle(win, 220);
+  const image = await win.webContents.capturePage();
+  const size = image.getSize();
+  const bitmap = image.toBitmap();
+  const ringColor = parseCssColor(info.outline);
+  if (!ringColor) return { ok: false, reason: 'цвет кольца не разобран: ' + info.outline, selector: selector };
+  const pixel = (x, y) => {
+    const px = Math.round(x);
+    const py = Math.round(y);
+    if (px < 0 || py < 0 || px >= size.width || py >= size.height) return null;
+    const index = (py * size.width + px) * 4;
+    return { b: bitmap[index], g: bitmap[index + 1], r: bitmap[index + 2], a: bitmap[index + 3] };
+  };
+  const band = info.width;
+  const offset = info.offset;
+  const sides = [
+    { side: 'top', x: info.rect.x + info.rect.w / 2, y: info.rect.y - offset - band - 3 },
+    { side: 'bottom', x: info.rect.x + info.rect.w / 2, y: info.rect.y + info.rect.h + offset + band + 3 },
+    { side: 'left', x: info.rect.x - offset - band - 3, y: info.rect.y + info.rect.h / 2 },
+    { side: 'right', x: info.rect.x + info.rect.w + offset + band + 3, y: info.rect.y + info.rect.h / 2 },
+  ];
+  const samples = [];
+  for (const side of sides) {
+    const background = pixel(side.x, side.y);
+    if (!background) continue;
+    const visibleRing = ringColor.a >= 1 ? ringColor : compositeOver(ringColor, background);
+    samples.push({ side: side.side, contrast: Math.round(contrastRatio(visibleRing, background) * 100) / 100 });
+  }
+  const minimum = samples.length ? Math.min(...samples.map((sample) => sample.contrast)) : 0;
+  return { ok: samples.length >= 2 && minimum >= 3, minimum: minimum, samples: samples, label: info.label, outline: info.outline, selector: selector };
+}
+
+async function checkLightFocusContrast(win, selectors, modeName) {
+  for (const theme of LIGHT_THEMES) {
+    const applied = await setStandTheme(win, theme);
+    const details = [];
+    let worst = Infinity;
+    let okCount = 0;
+    for (const selector of selectors) {
+      const result = await ringContrast(win, selector);
+      details.push(result);
+      if (result.ok) okCount += 1;
+      if (typeof result.minimum === 'number') worst = Math.min(worst, result.minimum);
+    }
+    check('светлая тема ' + theme + ' (' + modeName + '): кольцо фокуса контрастно ≥3:1',
+      okCount === selectors.length && worst >= 3,
+      { theme: applied, worst: Number.isFinite(worst) ? worst : null, details: details });
+  }
+  await setStandTheme(win, 'dark');
+}
+
+// Подпись-пилюля рейки при клавиатурном фокусе не должна налезать на кольцо.
+async function checkRailPills(win) {
+  const labels = await js(win, '(() => [...document.querySelectorAll(".ae-utility-rail button[data-label]")].filter((b) => b.getBoundingClientRect().width > 0).map((b) => b.dataset.label))()');
+  const details = [];
+  let ok = labels.length >= 5;
+  for (const theme of ['dark', 'porcelain']) {
+    await setStandTheme(win, theme);
+    for (const label of labels) {
+      await js(win, '(() => { const btn = [...document.querySelectorAll(".ae-utility-rail button[data-label]")].find((b) => b.dataset.label === ' + JSON.stringify(label) + '); if (btn) btn.focus(); return true; })()');
+      await settle(win, 240);
+      const row = await js(win, [
+        '(() => {',
+        'const btn = [...document.querySelectorAll(".ae-utility-rail button[data-label]")].find((b) => b.dataset.label === ' + JSON.stringify(label) + ');',
+        'if (!btn) return null;',
+        'const r = btn.getBoundingClientRect(); const s = getComputedStyle(btn); const pill = getComputedStyle(btn, "::before");',
+        'const ringRight = r.right + (parseFloat(s.outlineOffset) || 0) + (parseFloat(s.outlineWidth) || 0);',
+        'const pillLeft = parseFloat(pill.left);',
+        'const pillAbsoluteLeft = Number.isFinite(pillLeft) ? r.left + pillLeft : null;',
+        'return { theme: document.documentElement.dataset.theme, label: ' + JSON.stringify(label) + ', focused: document.activeElement === btn,',
+        'ringRight: ringRight, pillLeft: pillAbsoluteLeft, pillVisible: pill.visibility === "visible" && parseFloat(pill.opacity) > 0.5,',
+        'gap: pillAbsoluteLeft === null ? null : Math.round((pillAbsoluteLeft - ringRight) * 10) / 10 };',
+        '})()',
+      ].join(' '));
+      if (!row) { ok = false; details.push({ label: label, missing: true }); continue; }
+      if (!row.focused || !row.pillVisible || row.gap === null || row.gap < 0) ok = false;
+      details.push(row);
+    }
+  }
+  await setStandTheme(win, 'dark');
+  check('подписи-пилюли рейки не перекрывают кольцо фокуса', ok, details);
+}
+
 // ── Проверки ─────────────────────────────────────────────────────────
 async function checkTabOrder(win, size) {
   const routes = [
@@ -982,6 +1140,127 @@ async function checkLegacyNames(win, size) {
   check('классический ' + tag + ': у всех видимых кнопок есть доступное имя', anonymous.length === 0, anonymous.slice(0, 8));
 }
 
+
+// MCP-карточка: Tab/Enter/Esc и кнопка «Инструкция» с клавиатуры.
+async function checkMcpCardKeyboard(win) {
+  await js(win, "window.__noxAether.setRoute('mcp')");
+  await settle(win, 500);
+  const ready = await waitUntil(() => js(win, 'document.querySelectorAll(".ae-grid-card[data-addon]").length > 4'), 8000, 120);
+  if (!ready) {
+    check('MCP-карточка: каталог загрузился', false, { cards: 0 });
+    return;
+  }
+  const cardInfo = await js(win, [
+    '(() => {',
+    'const cards = [...document.querySelectorAll(".ae-grid-card[data-addon]")];',
+    'const found = cards.map((card) => ({ card: card, guide: [...card.querySelectorAll("button")].find((b) => /Инструкция/.test(b.textContent || "")) })).find((row) => row.guide);',
+    'if (!found) return null;',
+    'const card = found.card;',
+    'return { addon: card.dataset.addon, guideText: found.guide.textContent.trim(),',
+    'role: card.getAttribute("role"), tabIndex: card.tabIndex, ariaExpanded: card.getAttribute("aria-expanded"),',
+    'ariaControls: card.getAttribute("aria-controls") || "", name: card.getAttribute("aria-label") || "" };',
+    '})()',
+  ].join(' '));
+  check('MCP-карточка: каталог и кнопка «Инструкция» существуют', Boolean(cardInfo && cardInfo.guideText), cardInfo);
+
+  // Подменяем только открытие ссылки: проверяем клавиатурный путь, не уходя в браузер.
+  await js(win, [
+    '(() => {',
+    'const bridge = window.NoxAetherBridge;',
+    'if (!bridge.__a11yMcpOrig) bridge.__a11yMcpOrig = bridge.call;',
+    'window.__a11yOpenedSource = "";',
+    'bridge.call = (name, ...args) => { if (name === "openSource") { window.__a11yOpenedSource = String(args[0] || ""); return Promise.resolve({ ok: true }); } return bridge.__a11yMcpOrig(name, ...args); };',
+    'return true;',
+    '})()',
+  ].join(' '));
+
+  const focusCard = async () => js(win, '(() => { const card = [...document.querySelectorAll(".ae-grid-card[data-addon]")].find((c) => c.dataset.addon === ' + JSON.stringify(cardInfo.addon) + '); if (!card) return false; card.focus(); return document.activeElement === card; })()');
+  const focused = await focusCard();
+  await settle(win, 120);
+  const before = await js(win, [
+    '(() => {',
+    'const card = [...document.querySelectorAll(".ae-grid-card[data-addon]")].find((c) => c.dataset.addon === ' + JSON.stringify(cardInfo.addon) + ');',
+    'if (!card) return null;',
+    'return { name: card.getAttribute("aria-label") || "", role: card.getAttribute("role"), tabIndex: card.tabIndex, expanded: card.getAttribute("aria-expanded"), focusOnCard: document.activeElement === card };',
+    '})()',
+  ].join(' '));
+  check('MCP-карточка: доступна с клавиатуры, у неё есть имя и состояние',
+    Boolean(focused) && before && before.focusOnCard && before.role === 'button' && before.tabIndex === 0
+      && before.expanded === 'false' && before.name.length > 0,
+    before);
+
+  // Enter раскрывает карточку.
+  await press(win, 'Return');
+  await settle(win, 260);
+  const expanded = await js(win, [
+    '(() => {',
+    'const card = [...document.querySelectorAll(".ae-grid-card[data-addon]")].find((c) => c.dataset.addon === ' + JSON.stringify(cardInfo.addon) + ');',
+    'if (!card) return null;',
+    'const details = card.querySelector(".ae-grid-card-details") || card.lastElementChild;',
+    'const rect = details.getBoundingClientRect();',
+    'return { expanded: card.getAttribute("aria-expanded"), detailsVisible: !details.hidden && rect.height > 0,',
+    'ariaControls: card.getAttribute("aria-controls") || "", focusOnCard: document.activeElement === card };',
+    '})()',
+  ].join(' '));
+  const ring = await js(win, [
+    '(() => {',
+    'const card = [...document.querySelectorAll(".ae-grid-card[data-addon]")].find((c) => c.dataset.addon === ' + JSON.stringify(cardInfo.addon) + ');',
+    'if (!card) return null;',
+    'const s = getComputedStyle(card);',
+    'return { outlineStyle: s.outlineStyle, outlineWidth: parseFloat(s.outlineWidth) || 0, outlineColor: s.outlineColor, focusVisible: (() => { try { return card.matches(":focus-visible"); } catch (e) { return false; } })() };',
+    '})()',
+  ].join(' '));
+  check('MCP-карточка: контур фокуса виден', Boolean(ring) && ring.outlineStyle !== 'none' && ring.outlineWidth >= 1,
+    ring);
+
+  check('MCP-карточка: Enter раскрывает подробности и оставляет фокус на карточке',
+    Boolean(expanded) && expanded.expanded === 'true' && expanded.detailsVisible && expanded.focusOnCard,
+    expanded);
+
+  // Tab доходит до кнопки «Инструкция» внутри раскрытой карточки.
+  let guideReached = false;
+  const tabPath = [];
+  for (let i = 0; i < 6 && !guideReached; i += 1) {
+    await press(win, 'Tab');
+    const step = await focusInfo(win);
+    tabPath.push({ label: step.label.slice(0, 60), tag: step.tag });
+    if (/Инструкция/.test(step.label) || /Инструкция/.test(step.text)) guideReached = true;
+  }
+  check('MCP-карточка: Tab доходит до кнопки «Инструкция»', guideReached, tabPath);
+  await shot(win, 'mcp-card-expanded-1200x720.png');
+
+  // Enter на «Инструкции» открывает адрес через мост.
+  if (guideReached) {
+    await press(win, 'Return');
+    const opened = await waitUntil(() => js(win, 'Boolean(window.__a11yOpenedSource)'), 3000, 80);
+    const url = await js(win, 'window.__a11yOpenedSource || ""');
+    check('MCP-карточка: Enter на «Инструкции» открывает https-адрес', Boolean(opened) && /^https:/.test(String(url)), { opened: Boolean(opened), url: String(url) });
+  } else {
+    check('MCP-карточка: Enter на «Инструкции» открывает https-адрес', false, { skipped: true, reason: 'кнопка не достигнута Tab' });
+  }
+
+  // Esc сворачивает раскрытую карточку и оставляет фокус на ней.
+  await focusCard();
+  await settle(win, 120);
+  await press(win, 'Escape');
+  await settle(win, 240);
+  const afterEsc = await js(win, [
+    '(() => {',
+    'const card = [...document.querySelectorAll(".ae-grid-card[data-addon]")].find((c) => c.dataset.addon === ' + JSON.stringify(cardInfo.addon) + ');',
+    'if (!card) return null;',
+    'const details = card.querySelector(".ae-grid-card-details") || card.lastElementChild;',
+    'return { expanded: card.getAttribute("aria-expanded"), detailsHidden: details.hidden, focusOnCard: document.activeElement === card };',
+    '})()',
+  ].join(' '));
+  check('MCP-карточка: Esc сворачивает раскрытую карточку и не теряет фокус',
+    Boolean(afterEsc) && afterEsc.expanded === 'false' && afterEsc.detailsHidden && afterEsc.focusOnCard,
+    afterEsc);
+
+  await js(win, '(() => { const bridge = window.NoxAetherBridge; if (bridge.__a11yMcpOrig) bridge.call = bridge.__a11yMcpOrig; return true; })()');
+  await js(win, "window.__noxAether.setRoute('chat')");
+  await settle(win, 220);
+}
+
 async function runLegacy(win) {
   await waitUntil(() => js(win, 'Boolean(document.body && document.body.dataset.view === "nox" && document.querySelector("#noxGrid") && document.querySelector("#noxTopbar"))'), 20000);
   await js(win, 'window.__a11yFocusLog = []; window.__a11yKeyLog = []; true');
@@ -1016,6 +1295,15 @@ async function runLegacy(win) {
     await js(win, 'document.querySelector("#noxTopbar [data-nav=settings]").focus()');
     await shot(win, 'legacy-final-' + size[0] + 'x' + size[1] + '.png');
   }
+  await setViewport(win, 1200, 720);
+  await checkLightFocusContrast(win, ['#noxTopbar [data-nav=settings]', '.rail-item[data-nav=nox]', '#noxTopbar [data-act=close]'], 'классический экран');
+  await setStandTheme(win, 'porcelain');
+  await js(win, 'document.querySelector(".rail-item[data-nav=nox]").focus()');
+  await shot(win, 'legacy-light-theme-focus-1200x720.png');
+  await setViewport(win, 864, 520);
+  await js(win, 'document.querySelector(".rail-item[data-nav=nox]").focus()');
+  await shot(win, 'legacy-light-theme-focus-864x520.png');
+  await setStandTheme(win, 'dark');
   finish(null);
 }
 
@@ -1059,6 +1347,17 @@ async function run(win) {
   }
   await setViewport(win, 1200, 720);
   await checkLiveRegions(win);
+  await checkLightFocusContrast(win, ['#aeNav_chat', '#lxAiModalBtn', '#aeModePill', '#aeQuickBtn', '#pickTrigger', '#attachBtn', '#agentModeBtn', '#dictationBtn'], 'Aether');
+  await setStandTheme(win, 'porcelain');
+  await js(win, 'document.querySelector("#lxAiModalBtn").focus()');
+  await shot(win, 'aether-light-theme-focus-1200x720.png');
+  await setViewport(win, 864, 520);
+  await js(win, 'document.querySelector("#lxAiModalBtn").focus()');
+  await shot(win, 'aether-light-theme-focus-864x520.png');
+  await setViewport(win, 1200, 720);
+  await setStandTheme(win, 'dark');
+  await checkRailPills(win);
+  await checkMcpCardKeyboard(win);
   if (REAL_MODEL) await checkRealModel(win);
   finish(null);
 }

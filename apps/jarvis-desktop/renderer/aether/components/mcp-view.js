@@ -86,6 +86,30 @@
     loadLogos();
   }
 
+  // В снимке mcp-logos.js адреса хранятся без схемы: в рантайме файл не ходит в сеть,
+  // а https:// добавляется только при явном действии владельца (добавить / инструкция).
+  function withHttps(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return 'https://' + raw.replace(/^\/+/, '');
+  }
+
+  // Только имена переменных окружения, без значений: значения в каталоге не живут.
+  function envKeyNames(envKeys) {
+    return (Array.isArray(envKeys) ? envKeys : [])
+      .filter((key) => typeof key === 'string' && key.trim() !== '')
+      .join(', ');
+  }
+
+  function needsKey(service) {
+    return Boolean(service && Array.isArray(service.envKeys) && service.envKeys.length > 0);
+  }
+
+  function verificationMark(verified) {
+    return verified === true ? '' : 'не проверено';
+  }
+
   function hexToRgba(hex, alpha) {
     const value = String(hex || '').replace('#', '');
     if (!/^[0-9a-fA-F]{6}$/.test(value)) return 'rgba(37, 89, 232, ' + alpha + ')';
@@ -128,6 +152,7 @@
     const tabsWrap = document.createElement('div');
     tabsWrap.className = 'lx-pill-tabs';
     tabsWrap.setAttribute('role', 'tablist');
+    tabsWrap.setAttribute('aria-label', 'Разделы дополнений');
 
     const tabBtns = {};
     for (const [id, text] of [
@@ -317,6 +342,31 @@
       }
     }
 
+    // Кнопка «Инструкция»: видимая стрелка скрыта от диктора, имя говорит, куда ведёт.
+    function buildGuideButton(service, visibleLabel = 'Инструкция ↗', fallbackText = 'Инструкция для этого сервиса недоступна') {
+      const guide = document.createElement('button');
+      guide.type = 'button';
+      guide.className = 'ae-btn ae-btn-ghost ae-btn-sm';
+      const hasDocs = Boolean(service && service.docs);
+      const title = service && service.title ? service.title : 'сервиса';
+      guide.setAttribute('aria-label', hasDocs
+        ? 'Инструкция по подключению: ' + title
+        : fallbackText + ': ' + title);
+      const [wordText, ...arrowParts] = String(visibleLabel || 'Инструкция').split(' ');
+      const word = document.createElement('span');
+      word.textContent = wordText || 'Инструкция';
+      const arrow = document.createElement('span');
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.textContent = arrowParts.length ? ' ' + arrowParts.join(' ') : '';
+      guide.append(word, arrow);
+      guide.title = hasDocs ? 'Открыть инструкцию' : fallbackText;
+      guide.addEventListener('click', () => {
+        if (hasDocs) openDocs(service);
+        else store.toast(fallbackText, 'error');
+      });
+      return guide;
+    }
+
     function openDocs(entry) {
       if (!entry || !entry.docs) {
         store.toast('Инструкция для этого сервиса недоступна', 'error');
@@ -326,7 +376,7 @@
         store.toast('Открытие ссылок недоступно в этой сборке', 'error');
         return;
       }
-      Promise.resolve(bridge.call('openSource', entry.docs))
+      Promise.resolve(bridge.call('openSource', withHttps(entry.docs)))
         .then((result) => { if (!result || result.ok === false) throw new Error('Не удалось открыть инструкцию'); })
         .catch((err) => store.toast(bridge.errText(err), 'error'));
     }
@@ -561,6 +611,7 @@
       groupHead.type = 'button';
       groupHead.className = pluginCollapsed ? 'lx-group-head is-collapsed' : 'lx-group-head';
       groupHead.setAttribute('aria-expanded', String(!pluginCollapsed));
+      groupHead.setAttribute('aria-controls', 'mcpAddonCards');
       const groupTitle = document.createElement('span');
       const groupChevron = document.createElement('span');
       groupChevron.className = 'lx-group-chevron';
@@ -574,6 +625,7 @@
       });
 
       const cardsHost = document.createElement('div');
+      cardsHost.id = 'mcpAddonCards';
       cardsHost.className = 'ae-cards-grid';
       cardsHost.hidden = pluginCollapsed;
       mainCol.append(groupHead, cardsHost);
@@ -629,7 +681,21 @@
         card.tabIndex = 0;
         card.setAttribute('role', 'button');
         card.setAttribute('aria-expanded', 'false');
+        card.setAttribute('aria-label', 'Открыть карточку: ' + service.title);
+        card.setAttribute('aria-controls', 'mcpAddonDetails-' + service.id);
         card.style.cursor = 'pointer';
+        // У .ae-grid-card нет своего focus-visible в CSS: контур повторяем из токена темы
+        // (правильное место — правило в aether.css, оно описано в отчёте).
+        const syncCardRing = () => {
+          if (card.matches(':focus-visible')) {
+            card.style.outline = '2px solid var(--focus, var(--accent, #5070DD))';
+            card.style.outlineOffset = '2px';
+          } else {
+            card.style.outline = '';
+          }
+        };
+        card.addEventListener('focus', syncCardRing);
+        card.addEventListener('blur', () => { card.style.outline = ''; });
 
         const head = document.createElement('div');
         head.className = 'ae-grid-card-head';
@@ -654,7 +720,8 @@
         titleWrap.append(title, sub);
         headLeft.append(titleWrap);
         head.append(headLeft);
-        if (!service.verified) head.append(badge('не проверено', 'warn'));
+        const verifiedMark = verificationMark(service.verified);
+        if (verifiedMark) head.append(badge(verifiedMark, 'warn'));
         card.append(head);
 
         const desc = document.createElement('p');
@@ -677,42 +744,31 @@
           done.className = 'ae-badge is-ok';
           done.textContent = 'Добавлен';
           footer.append(done);
-        } else if (service.envKeys && service.envKeys.length) {
+        } else if (needsKey(service)) {
           const keyNote = document.createElement('span');
           keyNote.className = 'ae-badge';
           keyNote.textContent = 'нужен ключ';
-          keyNote.title = 'Переменные окружения: ' + service.envKeys.join(', ');
+          keyNote.title = 'Переменные окружения: ' + envKeyNames(service.envKeys);
           footer.append(keyNote);
-          if (service.docs) {
-            const guide = document.createElement('button');
-            guide.type = 'button';
-            guide.className = 'ae-btn ae-btn-ghost ae-btn-sm';
-            guide.textContent = 'Инструкция ↗';
-            guide.addEventListener('click', () => openDocs(service));
-            footer.append(guide);
-          }
+          // У сервиса с ключами «Инструкция» есть всегда: без ссылки честно говорим, что её нет.
+          footer.append(buildGuideButton(service, 'Инструкция ↗', 'Инструкция для этого сервиса недоступна'));
         } else {
           const addBtn = document.createElement('button');
           addBtn.type = 'button';
           addBtn.className = 'ae-btn ae-btn-secondary ae-btn-sm';
           addBtn.textContent = service.transport === 'http' ? 'Подключить' : 'Добавить';
           addBtn.title = service.transport === 'http'
-            ? 'Добавить облачный сервер: ' + service.url
+            ? 'Добавить облачный сервер: ' + withHttps(service.url)
             : 'Добавить локальный сервер: ' + service.command;
           addBtn.addEventListener('click', () => {
             addBtn.disabled = true;
-            const target = service.transport === 'http' ? service.url : service.command;
+            const target = service.transport === 'http' ? withHttps(service.url) : service.command;
             const argsText = service.transport === 'http' ? '' : (service.args || []).join(' ');
             connectService(service.id, target, argsText);
           });
           footer.append(addBtn);
           if (service.docs) {
-            const guide = document.createElement('button');
-            guide.type = 'button';
-            guide.className = 'ae-btn ae-btn-ghost ae-btn-sm';
-            guide.textContent = 'Инструкция ↗';
-            guide.addEventListener('click', () => openDocs(service));
-            footer.append(guide);
+            footer.append(buildGuideButton(service, 'Инструкция ↗'));
           }
         }
         card.append(footer);
@@ -720,6 +776,8 @@
         // Карточка раскрывается: видно подключение, имена переменных (не значения)
         // и честное объяснение, что без ключа сервис не добавляется молча.
         const details = document.createElement('div');
+        details.id = 'mcpAddonDetails-' + service.id;
+        details.className = 'ae-grid-card-details';
         details.hidden = true;
         details.style.marginTop = '8px';
         details.style.paddingTop = '8px';
@@ -733,13 +791,13 @@
 
         const transportLine = document.createElement('span');
         transportLine.textContent = service.transport === 'http'
-          ? 'Подключение: через интернет · ' + service.url
+          ? 'Подключение: через интернет · ' + withHttps(service.url)
           : 'Подключение: на компьютере · ' + service.command;
         details.append(transportLine);
 
         const keysLine = document.createElement('span');
-        if (service.envKeys && service.envKeys.length) {
-          keysLine.textContent = 'Нужны ключи (только имена): ' + service.envKeys.join(', ')
+        if (needsKey(service)) {
+          keysLine.textContent = 'Нужны ключи (только имена): ' + envKeyNames(service.envKeys)
             + '. Значения в каталоге не хранятся — их задаёт владелец в настройках сборки.';
           keysLine.style.color = 'var(--lx-warn, var(--warn, inherit))';
         } else {
@@ -760,6 +818,7 @@
           details.hidden = !open;
           details.style.display = open ? 'flex' : 'none';
           card.setAttribute('aria-expanded', String(open));
+          card.setAttribute('aria-label', (open ? 'Свернуть карточку: ' : 'Открыть карточку: ') + service.title);
           card.style.boxShadow = open ? 'inset 0 0 0 1px rgba(80, 112, 221, 0.55)' : '';
         };
         card.addEventListener('click', (event) => {
@@ -768,6 +827,14 @@
           toggleDetails();
         });
         card.addEventListener('keydown', (event) => {
+          // Esc закрывает раскрытые подробности из любого элемента карточки.
+          if (event.key === 'Escape' && !details.hidden) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleDetails();
+            card.focus({ preventScroll: true });
+            return;
+          }
           if (event.target !== card) return;
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
@@ -1224,5 +1291,5 @@
     };
   }
 
-  window.NoxAetherMcpView = { createMcpView };
+  window.NoxAetherMcpView = { createMcpView, withHttps, envKeyNames, needsKey, verificationMark };
 })();
