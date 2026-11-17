@@ -16,6 +16,7 @@ const modes = require('../src/policy/modes');
 function fakeTools(verdict = 'confirmed') {
   const runs = [];
   const verifies = [];
+  const windowCalls = [];
   const reg = new ToolRegistry();
   const action = (name) => ({
     name, risk: 'T1', description: name, parameters: { type: 'object', properties: {} },
@@ -24,8 +25,16 @@ function fakeTools(verdict = 'confirmed') {
   });
   for (const n of ['ui_click', 'ui_type', 'ui_keys', 'ui_focus', 'app_open', 'shell_run']) reg.register(action(n));
   reg.register({ name: 'ui_elements', risk: 'T0', description: '', async run() { runs.push({ name: 'ui_elements' }); return { ok: true, summary: 'элементы' }; } });
+  // F-3: перед автоснимком агент экрана проверяет переднее окно через ui_windows; без него срабатывает privacy-default (запрет снимка).
+  reg.register({
+    name: 'ui_windows', risk: 'T0', description: '',
+    async run() {
+      windowCalls.push('ui_windows');
+      return { ok: true, summary: 'окна', data: { windows: [{ title: 'Блокнот', process: 'notepad', handle: 1, active: true }] } };
+    },
+  });
   const look = { name: 'screen_look', risk: 'T1', description: '', async run() { runs.push({ name: 'screen_look' }); return { ok: true, summary: 'снимок', image: 'data:image/jpeg;base64,AA==' }; } };
-  return { reg, look, runs, verifies };
+  return { reg, look, runs, verifies, windowCalls };
 }
 
 function setup(t, { brain, verdict, mode = 'full', stop = null, maxSteps } = {}) {
@@ -68,7 +77,7 @@ test('фраза «сделай на экране» даёт задачу', () =
 test('видны только инструменты экрана', (t) => {
   const { agent } = setup(t, { brain: brainOf(() => ({})) });
   const names = agent.tools.list().map((x) => x.name).sort();
-  assert.deepEqual(names, ['app_open', 'screen_look', 'ui_click', 'ui_elements', 'ui_focus', 'ui_keys', 'ui_type']);
+  assert.deepEqual(names, ['app_open', 'screen_look', 'ui_click', 'ui_elements', 'ui_focus', 'ui_keys', 'ui_type', 'ui_windows']);
 });
 
 test('SCREEN_TOOL_NAMES включает ui_windows, а SCREEN_PROMPT не раскрывает внутренности и не трогает окно Nox', () => {
@@ -109,8 +118,14 @@ test('лимит 40 шагов', async (t) => {
   const res = await agent.run('жми клавиши');
   assert.equal(res.outcome, 'limit');
   assert.equal(MAX_SCREEN_STEPS, 40);
-  // Действий и снимков после них: всего вызовов модели-инструментов не больше 40.
-  assert.equal(journal().length, 40);
+  // F-3: каждый автоснимок после действия теперь честно пишется в журнал (args.auto = true),
+  // поэтому на 40 шагов модели (1 screen_look + 39 ui_keys) приходится 39 записей автоснимков = 79.
+  const entries = journal();
+  const modelEntries = entries.filter((r) => !(r.tool === 'screen_look' && r.args && r.args.auto));
+  const autoShots = entries.filter((r) => r.tool === 'screen_look' && r.args && r.args.auto);
+  assert.equal(modelEntries.length, 40);
+  assert.equal(autoShots.length, 39);
+  assert.equal(entries.length, 79);
   assert.ok(runs.filter((r) => r.name === 'ui_keys').length <= 39);
 });
 
@@ -119,7 +134,13 @@ test('предел шагов задаётся в конструкторе (те
   const { agent, runs, journal } = setup(t, { brain, maxSteps: 5 });
   const res = await agent.run('жми клавиши');
   assert.equal(res.outcome, 'limit');
-  assert.equal(journal().length, 5);
+  // F-3: 5 шагов модели (1 screen_look + 4 ui_keys) + 4 записи автоснимка в журнале = 9.
+  const entries = journal();
+  const modelEntries = entries.filter((r) => !(r.tool === 'screen_look' && r.args && r.args.auto));
+  const autoShots = entries.filter((r) => r.tool === 'screen_look' && r.args && r.args.auto);
+  assert.equal(modelEntries.length, 5);
+  assert.equal(autoShots.length, 4);
+  assert.equal(entries.length, 9);
   assert.equal(runs.filter((r) => r.name === 'ui_keys').length, 4);
 });
 
@@ -217,7 +238,12 @@ test('один шаг за ответ модели и снимок после д
   const res = await agent.run('нажми Файл');
   assert.equal(res.outcome, 'answer');
   assert.deepEqual(runs.map((r) => r.name), ['screen_look', 'ui_click', 'screen_look']);
-  assert.deepEqual(journal().map((r) => r.tool), ['screen_look', 'ui_click']);
+  // F-3: автоснимок после действия больше не идёт мимо журнала — запись ложится перед завершением шага в _runCall.
+  const entries = journal();
+  assert.deepEqual(entries.map((r) => r.tool), ['screen_look', 'screen_look', 'ui_click']);
+  const autoShot = entries.find((r) => r.tool === 'screen_look' && r.args && r.args.auto);
+  assert.ok(autoShot, 'в журнале есть запись автоснимка');
+  assert.equal(autoShot.decision, 'allow');
   assert.ok(agent.history.some((m) => m.image && m.fromTool));
 });
 
@@ -439,4 +465,48 @@ test('стоп во время шага: следующий шаг не начи
   assert.equal(res.outcome, 'stopped');
   assert.deepEqual(runs.map((r) => r.name), ['screen_look', 'ui_keys']);
   assert.equal(brain.calls, 2);
+});
+
+test('интеграция _loop: прогресс «Шаг N из M» в status-событиях', async (t) => {
+  const { Agent } = require('../src/agent/loop');
+  assert.notEqual(ScreenAgent.prototype._loop, Agent.prototype._loop, 'ScreenAgent переопределяет _loop');
+  const brain = brainOf((n) => (n === 1 ? { toolCalls: [call('screen_look')] }
+    : n === 2 ? { toolCalls: [call('app_open', { name: 'notepad' })] }
+      : { content: 'Готово.' }));
+  const { agent, events } = setup(t, { brain, maxSteps: 10 });
+  const res = await agent.run('открой блокнот');
+  assert.equal(res.outcome, 'answer');
+  const labels = events.filter((e) => e.type === 'status' && typeof e.label === 'string').map((e) => e.label);
+  assert.ok(labels.some((l) => /^Шаг 1 из 10\b/.test(l)), `ожидали «Шаг 1 из 10», получили: ${JSON.stringify(labels)}`);
+  assert.ok(labels.some((l) => /^Шаг 2 из 10\b/.test(l)), `ожидали «Шаг 2 из 10», получили: ${JSON.stringify(labels)}`);
+});
+
+test('интеграция _loop: Esc/стоп посреди зависшего шага — поздний результат помечается late и afterStop', async (t) => {
+  const stop = new StopSwitch();
+  let release = null;
+  const brain = brainOf((n) => (n === 1 ? { toolCalls: [call('screen_look')] }
+    : { toolCalls: [call('ui_click', { window: 'Блокнот', name: 'Файл' }, 'slow-1')] }));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-screen-late-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const { reg, look } = fakeTools('confirmed');
+  reg.get('ui_click').run = async () => {
+    await new Promise((resolve) => { release = resolve; });
+    return { ok: true, summary: 'поздно нажал' };
+  };
+  const events = [];
+  const journalPath = path.join(dir, 'journal.jsonl');
+  const agent = new ScreenAgent({
+    brain, tools: reg, look, policy: modes, approvals: new ApprovalBroker(),
+    journal: new Journal(journalPath), emit: (e) => events.push(e),
+    mode: 'full', workspace: dir, stop, stopGraceMs: 15,
+  });
+  const turn = agent.run('нажми Файл');
+  assert.ok(await waitFor(() => typeof release === 'function'));
+  stop.trigger('Esc');
+  const res = await turn;
+  assert.equal(res.outcome, 'stopped');
+  release();
+  assert.ok(await waitFor(() => events.some((e) => e.type === 'tool_result' && e.late === true && e.afterStop === true)));
+  const entries = fs.readFileSync(journalPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.ok(entries.some((r) => r.tool === 'ui_click' && r.late === true && r.afterStop === true));
 });

@@ -53,12 +53,12 @@ function scriptedBrain(replies) {
 const win = (over = {}) => ({ alive: true, fg: 1, readable: true, title: 'Окно', count: 10, tops: 1, ...over });
 const target = (over = {}) => ({ found: 'ok', name: 'Кнопка', enabled: true, toggle: null, selected: null, expand: null, ...over });
 
-test('ui_click: подтверждается только изменением, без изменений — не проверено, а не провал', () => {
+test('ui_click: смена окна, закрытие и число элементов — признак доставки, а не эффекта', () => {
   const base = { before: win(), target: target(), noisy: false };
   assert.equal(clickVerdict({ ...base, after: win(), targetAfter: target() }, { method: 'invoke' }).status, 'unknown');
-  assert.equal(clickVerdict({ ...base, after: win({ title: 'Новый' }), targetAfter: target() }, { method: 'invoke' }).status, 'confirmed');
-  assert.equal(clickVerdict({ ...base, after: win({ alive: false, readable: false }), targetAfter: { found: 'error' } }, { method: 'invoke' }).status, 'confirmed');
-  assert.equal(clickVerdict({ ...base, after: win({ count: 12 }), targetAfter: target() }, { method: 'invoke' }).status, 'confirmed');
+  assert.equal(clickVerdict({ ...base, after: win({ title: 'Новый' }), targetAfter: target() }, { method: 'invoke' }).status, 'unknown');
+  assert.equal(clickVerdict({ ...base, after: win({ alive: false, readable: false }), targetAfter: { found: 'error' } }, { method: 'invoke' }).status, 'unknown');
+  assert.equal(clickVerdict({ ...base, after: win({ count: 12 }), targetAfter: target() }, { method: 'invoke' }).status, 'unknown');
   assert.equal(clickVerdict(null).status, 'unknown');
 });
 

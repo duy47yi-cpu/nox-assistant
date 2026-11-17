@@ -70,6 +70,7 @@ const PS_UIA = [
   '$AE = [System.Windows.Automation.AutomationElement]',
   '$TS = [System.Windows.Automation.TreeScope]',
   '$selfPid = 0',
+  '$script:JAmbiguousWindow = 0',
   '[void][int]::TryParse([string]$env:JARVIS_UI_SELF_PID, [ref]$selfPid)',
   // Сжать пробелы и обрезать строку до n символов.
   'function Cut([object]$s, [int]$n) {',
@@ -102,17 +103,21 @@ const PS_UIA = [
   '  }',
   '  return ,$list',
   '}',
-  // Окно по части заголовка: точное совпадение важнее, иначе первое по Z-порядку.
+  // Окно по заголовку: точное совпадение важнее частичного. Два подходящих окна — отказ:
+  // «первое по Z» приводило к действию в чужом экземпляре (A-3).
   'function Find-JWindow([string]$needle) {',
   '  $needle = Cut $needle 1000',
   '  if ($needle -eq \'\') { return $null }',
-  '  $part = $null',
+  '  $exact = New-Object System.Collections.ArrayList',
+  '  $part = New-Object System.Collections.ArrayList',
   '  foreach ($w in (Get-JTopWindows)) {',
   '    $n = Cut $w.Current.Name 1000',
-  '    if ($n -ieq $needle) { return $w }',
-  '    if ($null -eq $part -and (Has $n $needle)) { $part = $w }',
+  '    if ($n -ieq $needle) { [void]$exact.Add($w) } elseif (Has $n $needle) { [void]$part.Add($w) }',
   '  }',
-  '  return $part',
+  '  $hits = if ($exact.Count -gt 0) { $exact } else { $part }',
+  '  if ($hits.Count -gt 1) { $script:JAmbiguousWindow = $hits.Count; return $null }',
+  '  if ($hits.Count -eq 1) { return $hits[0] }',
+  '  return $null',
   '}',
   // Если внешнее окно не найдено, проверяем, не принадлежит ли заголовок окну самого Nox ($selfPid).
   'function Test-JSelfWindow([string]$needle) {',
@@ -127,6 +132,7 @@ const PS_UIA = [
   '}',
   'function No-JWindow([string]$needle) {',
   "  if (Test-JSelfWindow $needle) { return @{ status = 'self_window' } }",
+  "  if ($script:JAmbiguousWindow -gt 0) { return @{ status = 'ambiguous_window'; count = $script:JAmbiguousWindow } }",
   "  return @{ status = 'no_window' }",
   '}',
   // Все элементы окна одним запросом, с кешем нужных свойств (так быстрее, чем по одному).
@@ -962,6 +968,8 @@ function statusFailure(r, { window, name, occurrence }) {
   switch (r.status) {
     case 'self_window':
       return fail(`окно «${window}» принадлежит самому Nox (Джарвису): управлять собственным окном и читать его элементы нельзя`);
+    case 'ambiguous_window':
+      return fail(`под заголовок, содержащий «${window}», подходят ${r.count} окна: уточни заголовок целиком или закрой лишнее`, { window });
     case 'no_window':
       return fail(`окно с заголовком, содержащим «${window}», не найдено; список окон даёт ui_windows`);
     case 'not_found':
@@ -1056,6 +1064,11 @@ function clickVerdict(check, { method, name } = {}) {
   if (!seen && !noisy && a.readable && b.readable && a.count !== b.count) seen = `элементов в окне: было ${b.count}, стало ${a.count}`;
   if (!seen) return { status: 'unknown', evidence: a.readable ? 'нажатие прошло, видимых изменений нет' : 'состояние окна не прочитано' };
   if (FINAL_ACTION.test(String(name || ''))) return notProven(seen);
+  // Слабое (L1/L2): активация окна, его закрытие, число элементов, исчезновение, имя, доступность.
+  // Шаг этим не закрывается (B-1). Эффект — только собственное состояние элемента (L3).
+  const ownState = same && (tb.toggle !== ta.toggle || tb.selected !== ta.selected
+    || tb.expand !== ta.expand || tb.enabled !== ta.enabled);
+  if (!ownState) return { status: 'unknown', evidence: seen + '; это признак доставки, а не эффекта' };
   return { status: 'confirmed', evidence: seen };
 }
 
@@ -1219,11 +1232,14 @@ function uiTools({ runner = runPowerShell, selfPid = process.pid } = {}) {
     const res = await runner(SCRIPTS[tool], fullEnv, options);
     if (!res || !res.ok) {
       let summary = (res && res.summary) || 'PowerShell не ответил';
+      const aborted = Boolean(ctx && ctx.signal && ctx.signal.aborted) || /остановлено/i.test(summary);
       if (extra.actionTimeoutNote && /таймаут/i.test(summary)) {
         summary += '; действие, возможно, уже выполнено (например, открылось модальное окно) — проверь через ui_elements';
       }
       const stderr = String((res && res.data && res.data.stderr) || '').trim().slice(0, 300);
       const out = fail(summary, stderr ? { stderr } : {});
+      // Остановка посреди действия — не «не выполнено»: UIA/SendKeys могли уже сработать (E-2).
+      if (aborted) return { result: { ...out, verified: 'unknown', evidence: 'остановлено во время действия: успело ли оно — неизвестно' } };
       // Таймаут не доказывает, что действия не было: исход неизвестен, повторять вслепую нельзя.
       if (extra.actionTimeoutNote && /таймаут/i.test(summary)) return { result: { ...out, verified: 'unknown', evidence: 'истёк срок, исход действия неизвестен' } };
       return { result: out };

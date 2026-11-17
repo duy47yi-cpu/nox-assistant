@@ -262,7 +262,7 @@ test('отказ в подтверждении: действие не выпол
   assert.equal(readJsonl(path.join(dir, 'journal.jsonl'))[0].decision, 'reject');
 });
 
-test('тайм-аут подтверждения: действие не выполняется и помечено отказом', async (t) => {
+test('тайм-аут подтверждения: действие не выполняется, исход — нет ответа (timeout)', async (t) => {
   const dir = setup(t);
   const events = [];
   let runs = 0;
@@ -271,7 +271,7 @@ test('тайм-аут подтверждения: действие не выпо
       { toolCalls: [{ id: 'w1', name: 'write', args: {} }] },
       { content: 'понял' },
     ]),
-    // Автоотказа по умолчанию нет; тайм-аут задан явно — решение всё равно reject, а не «разрешить».
+    // Тайм-аут задан явно: никто не ответил — это не отказ владельца и не «разрешить» (D-2).
     tools: registry(tool('write', 'T2', async () => { runs += 1; return { ok: true, summary: 'записано' }; })),
     approvals: new ApprovalBroker({ timeoutMs: 40 }),
     journal: new Journal(path.join(dir, 'journal.jsonl')),
@@ -282,7 +282,7 @@ test('тайм-аут подтверждения: действие не выпо
   await agent.run('запиши');
 
   assert.equal(runs, 0);
-  assert.equal(readJsonl(path.join(dir, 'journal.jsonl'))[0].decision, 'reject');
+  assert.equal(readJsonl(path.join(dir, 'journal.jsonl'))[0].decision, 'timeout');
   assert.equal(events.find((e) => e.type === 'tool_result').status, 'failed');
 });
 

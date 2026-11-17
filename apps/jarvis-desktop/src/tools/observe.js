@@ -10,9 +10,11 @@ const MAX_WINDOW = 120;
 const MAX_FILTER = 120;
 const MAX_LIMIT = 60;
 const MAX_TEXT = 2000;
-const ID_RE = /^e[0-9a-f]{6}$/;
+const ID_RE = /^e[0-9a-f]{12}$/;
 // Пауза после действия: интерфейс успевает перерисоваться, дельта становится осмысленной.
 const SETTLE_MS = 80;
+// «В текущий фокус» без id: снимок сцены должен быть свежим, иначе фокус мог уйти (A-6, E-4).
+const INPUT_SCENE_TTL_MS = 2000;
 // Пауза между повторными чтениями окна после нажатия, если изменений ещё нет.
 const PATIENCE_MS = 250;
 // Сколько действий подряд без изменений на экране считаем застоем: дальше вслепую не действуем.
@@ -20,16 +22,23 @@ const STALL_LIMIT = 3;
 // Типы, среди которых ui_type ищет поле: его номер вхождения считается только по ним.
 const FIELD_KINDS = new Set(['Edit', 'Document', 'ComboBox']);
 
-// Номер вхождения, который ждут ui_click/ui_type. Там совпадения считаются по имени
-// (у ui_type — только среди полей), без учёта роли, а в сцене номер считается по роли и имени.
-// Пересчёт нужен, когда одна подпись есть у элементов разных ролей: пункт меню и его надпись.
-function occurrenceOf(elements, element, kinds = null) {
-  const name = String((element && element.name) || '').toLocaleLowerCase();
-  if (!name) return element && element.occurrence;
-  const same = (Array.isArray(elements) ? elements : []).filter((e) => String(e.name || '').toLocaleLowerCase() === name
-    && (!kinds || kinds.has(e.role)));
-  const index = same.findIndex((e) => e.id === element.id);
-  return index >= 0 ? index + 1 : element.occurrence;
+// Селектор для ui_*. AutomationId точно ищет и сам PowerShell-скрипт (ui.js, Find-JTarget),
+// поэтому он главный. Имя + номер по сцене и имя + номер в ui_* считаются по-разному —
+// без AutomationId действуем, только если подпись в окне единственная (A-2).
+function selectorOf(scene, element, kinds = null) {
+  const list = scene && Array.isArray(scene.elements) ? scene.elements : [];
+  const aid = String((element && element.automationId) || '');
+  const roleOk = (e) => !kinds || kinds.has(e.role);
+  if (aid) {
+    return list.filter((e) => String(e.automationId || '') === aid && roleOk(e)).length === 1
+      ? { name: aid, occurrence: 0 }
+      : null;
+  }
+  const name = String((element && element.name) || '');
+  if (!name) return null;
+  const lower = name.toLocaleLowerCase();
+  const same = list.filter((e) => String(e.name || '').toLocaleLowerCase() === lower && roleOk(e));
+  return same.length === 1 ? { name, occurrence: 0 } : null;
 }
 
 function strArg(value, { label, max, min = 0 } = {}) {
@@ -40,12 +49,19 @@ function strArg(value, { label, max, min = 0 } = {}) {
   return { value: text };
 }
 
+// Все подходящие окна: точные совпадения важнее частичных. Одно окно — ответ, два — отказ (A-3).
+function findWindows(windows, want) {
+  const list = (Array.isArray(windows) ? windows : []).filter((w) => w && w.title);
+  const needle = String(want || '').trim().toLocaleLowerCase();
+  if (!needle) return list.slice(0, 1);
+  const exact = list.filter((w) => String(w.title).trim().toLocaleLowerCase() === needle);
+  if (exact.length) return exact;
+  return list.filter((w) => String(w.title).toLocaleLowerCase().includes(needle));
+}
+
 function findWindow(windows, want) {
-  const needle = want.trim().toLocaleLowerCase();
-  if (!needle) return windows[0] || null;
-  const exact = windows.find((w) => String((w && w.title) || '').trim().toLocaleLowerCase() === needle);
-  if (exact) return exact;
-  return windows.find((w) => String((w && w.title) || '').toLocaleLowerCase().includes(needle)) || null;
+  const hits = findWindows(windows, want);
+  return hits.length === 1 ? hits[0] : null;
 }
 
 function delay(ms) {
@@ -70,6 +86,10 @@ function observeTools(ui = [], { mouse = [] } = {}) {
   let lastSignature = null;
   // Заголовок окна, выскочившего поверх после действия: пока его не прочитали, по старым id не действуем.
   let surprise = '';
+  // filter и limit последнего наблюдения: перечитывание перед действием должно видеть тот же набор
+  // элементов, иначе id из сцены не найдётся в перечитанном окне (A-2).
+  let lastFilter = '';
+  let lastLimit = MAX_LIMIT;
 
   // Читает окно и элементы, собирает сцену. Ничего не запоминает: это делают вызывающие.
   async function capture({ window: want = '', filter = '', limit = MAX_LIMIT } = {}, ctx = {}) {
@@ -77,8 +97,15 @@ function observeTools(ui = [], { mouse = [] } = {}) {
     if (!windows || !windows.ok) return { error: (windows && windows.summary) || 'окна не прочитаны' };
     const list = (windows.data && windows.data.windows) || [];
     if (!list.length) return { error: 'окон с заголовком нет' };
-    const chosen = findWindow(list, want);
+    const hits = findWindows(list, want);
+    const chosen = hits.length === 1 ? hits[0] : null;
     if (!chosen) {
+      if (hits.length > 1) {
+        return {
+          error: 'под заголовок «' + want + '» подходят ' + hits.length + ' окна: ' + hits.map((x) => '«' + x.title + '»').join(', ') + '. Уточни заголовок целиком или закрой лишнее окно',
+          ambiguous: true,
+        };
+      }
       if (/^(?:nox(?:\s+assistant)?|джарвис|nox\s*[—–-]\s*джарвис)$/i.test(String(want || '').trim())) {
         return {
           error: `окно «${want}» принадлежит самому Nox (Джарвису): управлять собственным окном и читать его элементы нельзя`,
@@ -104,8 +131,12 @@ function observeTools(ui = [], { mouse = [] } = {}) {
   async function resolve(id, ctx) {
     if (!last) return { error: 'сначала сделай desktop_observe: действие по id требует текущего снимка' };
     if (surprise) return { error: `поверх появилось окно «${surprise}»: сначала прочитай его — desktop_observe с window «${surprise}»` };
-    const current = await capture({ window: last.window.title, limit: MAX_LIMIT }, ctx);
+    const current = await capture({ window: last.window.title, filter: lastFilter, limit: lastLimit }, ctx);
     if (current.error) return { error: current.error };
+    // Заголовок один и тот же у разных экземпляров: без сверки handle действие уходит в чужое окно (A-3).
+    if (String(current.window.handle || '') !== String(last.window.handle || '')) {
+      return { error: 'то же название, но другое окно (другой handle): сделай новый desktop_observe и проверь, что это нужный экземпляр' };
+    }
     if (current.scene.window.title !== last.window.title) return { error: 'окно сменилось; сделай новый desktop_observe' };
     const element = current.scene.elements.find((e) => e.id === id);
     if (!element) return { error: `элемент ${id} исчез или изменился; сделай новый desktop_observe` };
@@ -115,10 +146,10 @@ function observeTools(ui = [], { mouse = [] } = {}) {
   // Снимок после действия: что изменилось. Ошибка чтения не отменяет уже выполненное действие.
   // patience — сколько раз перечитать окно, если изменений пока не видно (медленный отклик программы).
   async function after(scene, ctx, patience = 0) {
-    let current = await capture({ window: scene.window.title, limit: MAX_LIMIT }, ctx);
+    let current = await capture({ window: scene.window.title, filter: lastFilter, limit: lastLimit }, ctx);
     for (let i = 0; i < patience && !current.error && sceneSignature(current.scene) === sceneSignature(scene); i += 1) {
       await delay(PATIENCE_MS);
-      current = await capture({ window: scene.window.title, limit: MAX_LIMIT }, ctx);
+      current = await capture({ window: scene.window.title, filter: lastFilter, limit: lastLimit }, ctx);
     }
     if (current.error) {
       return { scene: null, diff: null, note: `состояние после действия не прочитано: ${current.error}`, stalled: false, stalls };
@@ -174,6 +205,8 @@ function observeTools(ui = [], { mouse = [] } = {}) {
       if (!scene) return { ok: false, summary: current.error, data: current.windows ? { windows: current.windows } : {} };
       const diff = diffScene(last, scene);
       last = scene;
+      lastFilter = f.value;
+      lastLimit = rawLimit;
       surprise = '';
       // Новый снимок — осознанная проверка экрана: счётчик застоя начинается заново.
       stalls = 0;
@@ -202,12 +235,12 @@ function observeTools(ui = [], { mouse = [] } = {}) {
       risk: 'T1',
       parameters: {
         type: 'object',
-        properties: { id: { type: 'string', pattern: '^e[0-9a-f]{6}$' }, expect: { type: 'string', maxLength: 120 } },
+        properties: { id: { type: 'string', pattern: '^e[0-9a-f]{12}$' }, expect: { type: 'string', maxLength: 120 } },
         required: ['id'],
       },
       async run(args = {}, ctx = {}) {
         const id = String(args.id || '').trim();
-        if (!ID_RE.test(id)) return { ok: false, summary: 'id: возьми из desktop_observe, например e12ab34', data: {} };
+        if (!ID_RE.test(id)) return { ok: false, summary: 'id: возьми из desktop_observe, например e12ab34cdef01', data: {} };
         const found = await resolve(id, ctx);
         if (found.error) return { ok: false, summary: found.error, data: {} };
         const { scene, element } = found;
@@ -236,11 +269,17 @@ function observeTools(ui = [], { mouse = [] } = {}) {
           : null;
         let action = null;
         let fallback = false;
-        // Первое действие начинается, только если у элемента есть имя и есть чем нажимать по имени.
+        const selector = selectorOf(scene, element);
+        // Подпись есть, но она не одна и AutomationId нет: нажимать «по номеру» нельзя — номер в сцене
+        // и в ui_* считается по-разному (A-2). Честный отказ вместо нажатия не той кнопки.
+        if (!selector && element.name) {
+          return { ok: false, summary: 'подпись «' + element.name + '» в окне не одна, а устойчивого AutomationId нет: нажми через ui_click с occurrence или сузь filter в desktop_observe', data: {} };
+        }
+        // Первое действие начинается, только если есть устойчивый селектор и есть чем нажимать по имени.
         // Если оно началось и не дало успеха, повторять мышью по координатам нельзя: действие могло сработать.
-        const started = Boolean(element.name && clickTool);
+        const started = Boolean(selector && clickTool);
         if (started) {
-          action = await clickTool.run({ window: scene.window.title, name: element.name, occurrence: occurrenceOf(scene.elements, element) }, { ...ctx, quickCheck: true });
+          action = await clickTool.run({ window: scene.window.title, name: selector.name, occurrence: selector.occurrence }, { ...ctx, quickCheck: true });
           if (!action || action.ok !== true) {
             // Пустой ответ вложенного инструмента — тоже неизвестный исход: мышью не повторяем.
             return action || { ok: false, summary: 'ui_click не вернул ответ: исход нажатия неизвестен, мышью не повторяю', data: {} };
@@ -277,8 +316,8 @@ function observeTools(ui = [], { mouse = [] } = {}) {
         if (data.stalled) return { status: 'unknown', evidence: `экран не меняется: ${data.stalls} действия подряд без изменений — нужно решение владельца` };
         if (!data.fallback && data.action && clickTool && typeof clickTool.verify === 'function' && data.element) {
           const verdict = await clickTool.verify({ name: data.element.name }, data.action);
-          // Ответ вложенной проверки окончательный: неопределённость не превращаем
-          // в успех по смене окна, а отказ проверки — в подтверждение.
+          // Жёсткий приоритет: failed не смягчается до unknown и не заменяется ожиданием (B-3).
+          if (verdict && verdict.status === 'failed') return verdict;
           if (verdict && verdict.status === 'confirmed') return verdict;
           // Названное заранее ожидание сбылось — это подтверждение. Просто «что-то изменилось» им не считается.
           // Кнопки с внешним эффектом (отправить, опубликовать, купить) так не подтверждаются: надпись на экране не доказывает доставку.
@@ -287,10 +326,14 @@ function observeTools(ui = [], { mouse = [] } = {}) {
           if (met) return { status: 'confirmed', evidence: `ожидание сбылось: ${met}` };
           if (verdict) return { status: 'unknown', evidence: verdict.evidence || 'результат нажатия не подтверждён' };
         }
-        if (data.diff && !data.diff.first && data.diff.summary !== 'без изменений') {
-          return { status: 'confirmed', evidence: `после нажатия: ${data.diff.summary}` };
-        }
-        return { status: 'unknown', evidence: 'нажатие прошло, но изменение экрана не подтверждено' };
+        // Мышь по координатам не подтверждается ничем: доставку не проверить (B-2).
+        // Эффект доказывается отдельным шагом чтения с названным ожиданием.
+        return {
+          status: 'unknown',
+          evidence: data.fallback
+            ? 'нажатие мышью по координатам: доставка не проверяется, нужен отдельный шаг чтения'
+            : 'нажатие прошло, но изменение экрана не подтверждено',
+        };
       },
     });
   }
@@ -303,7 +346,7 @@ function observeTools(ui = [], { mouse = [] } = {}) {
       parameters: {
         type: 'object',
         properties: {
-          id: { type: 'string', pattern: '^e[0-9a-f]{6}$' },
+          id: { type: 'string', pattern: '^e[0-9a-f]{12}$' },
           text: { type: 'string', minLength: 1, maxLength: MAX_TEXT },
         },
         required: ['text'],
@@ -316,7 +359,7 @@ function observeTools(ui = [], { mouse = [] } = {}) {
         let sceneBefore = last;
         if (args.id !== undefined) {
           const id = String(args.id).trim();
-          if (!ID_RE.test(id)) return { ok: false, summary: 'id: возьми из desktop_observe, например e12ab34', data: {} };
+          if (!ID_RE.test(id)) return { ok: false, summary: 'id: возьми из desktop_observe, например e12ab34cdef01', data: {} };
           const found = await resolve(id, ctx);
           if (found.error) return { ok: false, summary: found.error, data: {} };
           windowTitle = found.scene.window.title;
@@ -324,16 +367,25 @@ function observeTools(ui = [], { mouse = [] } = {}) {
           sceneBefore = found.scene;
         } else {
           if (!last) return { ok: false, summary: 'сначала сделай desktop_observe', data: {} };
+          // «В текущий фокус» без id: сцена должна быть свежей, иначе фокус мог уйти (A-6, E-4).
+          const age = Date.now() - Date.parse(last.at || 0);
+          if (!(age >= 0) || age > INPUT_SCENE_TTL_MS) {
+            return { ok: false, summary: 'ввод без id: снимок сцены устарел — сделай новый desktop_observe и укажи id поля', data: {} };
+          }
           windowTitle = last.window.title;
         }
         // Жёсткий запрет окон (почта, мессенджеры, банки) действует и на составной ввод:
         // политика проверяет его по имени ui_type и окну, а desktop_type иначе обошёл бы запрет.
         const deniedType = hardDeny({ name: 'ui_type', args: { window: windowTitle } });
         if (deniedType) return { ok: false, summary: deniedType, data: {} };
+        const selector = element ? selectorOf(sceneBefore, element, FIELD_KINDS) : null;
+        if (element && !selector) {
+          return { ok: false, summary: 'поле «' + element.name + '» в окне не одно, а устойчивого AutomationId нет: уточни поле через ui_type с occurrence', data: {} };
+        }
         const action = await typeTool.run({
           window: windowTitle,
-          name: element ? element.name : undefined,
-          occurrence: element ? occurrenceOf(sceneBefore.elements, element, FIELD_KINDS) : undefined,
+          name: selector ? selector.name : undefined,
+          occurrence: selector ? selector.occurrence : undefined,
           text: args.text,
         }, ctx);
         if (!action || !action.ok) return action || { ok: false, summary: 'ввод не выполнен', data: {} };
@@ -355,8 +407,8 @@ function observeTools(ui = [], { mouse = [] } = {}) {
         if (data.stalled) return { status: 'unknown', evidence: `экран не меняется: ${data.stalls} действия подряд без изменений — нужно решение владельца` };
         if (data.action && typeof typeTool.verify === 'function') {
           const verdict = await typeTool.verify({ text: args.text }, data.action);
-          // Ответ вложенной проверки окончательный: неопределённость не превращаем
-          // в успех по смене экрана, а отказ проверки — в подтверждение.
+          // Жёсткий приоритет: другой текст в поле — failed, а не unknown (B-3).
+          if (verdict && verdict.status === 'failed') return verdict;
           if (verdict && verdict.status === 'confirmed') return verdict;
           if (verdict) return { status: 'unknown', evidence: verdict.evidence || 'результат ввода не подтверждён' };
         }
@@ -372,5 +424,5 @@ function observeTools(ui = [], { mouse = [] } = {}) {
   return tools;
 }
 
-module.exports = { observeTools, findWindow, ID_RE };
+module.exports = { observeTools, findWindow, findWindows, ID_RE };
 

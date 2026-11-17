@@ -517,4 +517,4 @@ const POLICY_PATTERNS = Object.freeze({
   HARD_BROWSER_HOST,
 });
 
-module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, setSceneSource, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe, POLICY_PATTERNS, BROWSER_TAINT_WRITES };
+module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, setSceneSource, resolveSceneTarget, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe, POLICY_PATTERNS, BROWSER_TAINT_WRITES };

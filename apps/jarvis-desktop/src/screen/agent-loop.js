@@ -8,8 +8,8 @@ const STATUSES = new Set(['done', 'partial', 'failed', 'stopped', 'limit', 'time
 const STEP_STATUSES = new Set(['done', 'failed', 'skipped', 'pending']);
 const VERIFY_STATUSES = new Set(['confirmed', 'failed', 'unknown']);
 
-const DANGER_ELEMENT = /отправ|пересл|\bsend\b|\bsubmit\b|удал|\bdelete\b|\bremove\b|установ|\binstall\b|оплат|\bpay\b|\bbuy\b|куп|покупк|оформить\s+(?:заказ|покупк)/i;
-const DANGER_ACTION = /^(?:send|submit|delete|remove|install|pay|buy)$/i;
+const DANGER_ELEMENT = /отправ|пересл|ответ|\bsend\b|\bsubmit\b|\breply\b|подтверд|\bconfirm\b|удал|\bdelete\b|\bremove\b|установ|\binstall\b|оплат|\bpay\b|\bbuy\b|куп|покупк|оформить\s+(?:заказ|покупк)/i;
+const DANGER_ACTION = /^(?:send|submit|delete|remove|install|pay|buy|ui_close_window|windows_close_all)$/i;
 const DANGER_KEYS = new Set(['enter', 'return']);
 const TYPE_ACTION = /(?:^|_)(?:type|input|paste)$|ввод/i;
 const KEYS_ACTION = /(?:^|_)(?:keys|key|hotkey|press)$/i;
@@ -49,8 +49,15 @@ function keyTokens(keys) {
     .filter(Boolean);
 }
 
+// Последняя клавиша сочетания — Enter: ctrl+enter, shift+enter, alt+enter в мессенджерах отправляют.
+function isSendKey(token) {
+  const parts = String(token || '').toLowerCase().split('+').filter(Boolean);
+  return parts.length > 0 && DANGER_KEYS.has(parts[parts.length - 1]);
+}
+
 // Опасный ли шаг: явный флаг, кнопка отправки/удаления/установки/оплаты или Enter после ввода текста.
-function isDangerousStep(step, { typed = false } = {}) {
+// resolveTarget(step) — подпись элемента по id из сцены: desktop_click по одному id имени не имеет.
+function isDangerousStep(step, { typed = false, resolveTarget = null } = {}) {
   if (!step || typeof step !== 'object') return false;
   if (step.dangerous === true || step.requiresApproval === true) return true;
   if (step.risk === 'T2' || step.risk === 'T3') return true;
@@ -61,7 +68,7 @@ function isDangerousStep(step, { typed = false } = {}) {
   const target = step.target ?? step.args;
   if (KEYS_ACTION.test(action)) {
     const rawKeys = typeof target === 'string' ? target : (target && (target.keys ?? target.key));
-    return Boolean(typed) && keyTokens(rawKeys).some((t) => DANGER_KEYS.has(t));
+    return Boolean(typed) && keyTokens(rawKeys).some(isSendKey);
   }
 
   if (TYPE_ACTION.test(action)) {
@@ -69,11 +76,13 @@ function isDangerousStep(step, { typed = false } = {}) {
     return typeof label === 'string' && DANGER_ELEMENT.test(label);
   }
 
+  const resolved = typeof resolveTarget === 'function' ? resolveTarget(step) : null;
   const candidates = [
     step.label,
     typeof target === 'string' ? target : null,
     target && typeof target === 'object' ? target.name : null,
     target && typeof target === 'object' ? target.label : null,
+    resolved && resolved.name,
   ];
   return candidates.some((c) => typeof c === 'string' && DANGER_ELEMENT.test(c));
 }
@@ -306,7 +315,7 @@ async function waitApproval(approve, stepPayload, ctx) {
  * Создаёт изолированный цикл агентного режима (observe -> plan -> act -> verify).
  * @param {object} deps
  */
-function createAgentLoop({ observe, plan: defaultPlan, act, verify, approve, now, log } = {}) {
+function createAgentLoop({ observe, plan: defaultPlan, act, verify, approve, now, log, resolveTarget = null } = {}) {
   if (typeof observe !== 'function') throw new TypeError('agent-loop: observe должен быть функцией');
   if (typeof act !== 'function') throw new TypeError('agent-loop: act должен быть функцией');
   if (verify !== undefined && typeof verify !== 'function') throw new TypeError('agent-loop: verify должен быть функцией');
@@ -523,7 +532,7 @@ function createAgentLoop({ observe, plan: defaultPlan, act, verify, approve, now
 
       // 3. Проверка опасности и запрос подтверждения.
       const stepStartMs = readNow();
-      const dangerous = isDangerousStep(step, { typed }) || step.dangerous;
+      const dangerous = isDangerousStep(step, { typed, resolveTarget }) || step.dangerous;
       if (dangerous) {
         step.dangerous = true;
         const approval = await waitApproval(approveFn, {
@@ -573,6 +582,13 @@ function createAgentLoop({ observe, plan: defaultPlan, act, verify, approve, now
 
       if (actErrMsg || !actResult || actResult.ok === false) {
         const failMsg = actErrMsg || redactText((actResult && (actResult.error || actResult.summary)) || 'действие не выполнено', 200);
+        if (!actErrMsg && actResult && actResult.recoverable === true) {
+          recordStep(step, { status: 'skipped', verified: null, fact: failMsg, startMs: stepStartMs, recordEvidence: false, markExecuted: false });
+          if (isAborted()) return finalize('stopped');
+          if (isTimedOut()) return finalize('timeout');
+          if (actResult.uncounted) executedCount = Math.max(0, executedCount - 1);
+          continue;
+        }
         recordStep(step, { status: 'failed', verified: 'failed', fact: failMsg, startMs: stepStartMs });
         if (isAborted()) return finalize('stopped');
         if (isTimedOut()) return finalize('timeout');

@@ -66,16 +66,22 @@ function automationIdOf(element) {
   return clip(element && (element.automationId || element.automation_id), 80);
 }
 
-// Ключ элемента. AutomationId важнее имени: у поля ввода имя может быть текущим текстом,
-// а id остаётся прежним. Одинаковые ключи различаются номером вхождения.
-function elementKey(windowTitle, element, occurrence = 1) {
+// Ключ не содержит заголовка окна: id переживает смену заголовка («*», счётчик, вкладка).
+// В ключе — handle и процесс окна, роль/automationId/имя и координаты, затем номер вхождения.
+function elementKey(window, element, occurrence = 1) {
   const aid = automationIdOf(element);
-  const base = aid ? `aid:${aid}` : `${roleOf(element)}|${nameOf(element).toLocaleLowerCase()}`;
-  return `${clip(windowTitle, 200)}|${base}|${occurrence}`;
+  const win = window && typeof window === 'object' ? window : { title: window };
+  const handle = win.handle !== undefined && win.handle !== null ? String(win.handle) : '';
+  const process = clip(win.process, 80);
+  const b = boundsOf(element) || { x: '', y: '', w: '', h: '' };
+  const box = [b.x, b.y, b.w, b.h].join(',');
+  const base = aid ? 'aid:' + aid : roleOf(element) + '|' + nameOf(element).toLocaleLowerCase() + '|' + box;
+  return [handle, process, base, occurrence].join('|');
 }
 
+// 12 hex (48 бит) вместо 6: коллизия перестаёт быть вероятной, а дубли ниже всё равно ловятся.
 function elementId(key) {
-  return `e${crypto.createHash('sha1').update(String(key)).digest('hex').slice(0, 6)}`;
+  return 'e' + crypto.createHash('sha1').update(String(key)).digest('hex').slice(0, 12);
 }
 
 // Приводит элемент из ui_elements (или другого источника) к полям снимка.
@@ -85,6 +91,7 @@ function normalizeElement(raw) {
     id: '',
     role: roleOf(element),
     name: nameOf(element),
+    automationId: automationIdOf(element), // нужен действию как устойчивый селектор (A-2)
     value: valueOf(element),
     enabled: element.enabled === undefined ? true : Boolean(element.enabled),
     bounds: boundsOf(element),
@@ -126,10 +133,16 @@ function buildScene({
     const base = aid ? `aid:${aid}` : `${element.role}|${element.name.toLocaleLowerCase()}`;
     const occurrence = (seen.get(base) || 0) + 1;
     seen.set(base, occurrence);
-    element.id = elementId(String(elementKey(windowTitle, raw, occurrence)));
+    element.id = elementId(elementKey(window, raw, occurrence));
     // Номер вхождения нужен действиям по id: ui_click/ui_type ищут элемент по подписи и occurrence.
     element.occurrence = occurrence;
     list.push(element);
+  }
+  // Дубли id — ошибка сцены, а не «первый победил» (A-1): иначе действие уйдёт не в тот элемент.
+  const ids = new Set();
+  for (const element of list) {
+    if (ids.has(element.id)) throw new Error('сцена: повтор id ' + element.id);
+    ids.add(element.id);
   }
   const max = Math.max(1, Math.min(MAX_ELEMENTS, Number(limit) || MAX_ELEMENTS));
   const shown = list.slice(0, max);

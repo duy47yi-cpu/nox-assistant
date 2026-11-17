@@ -100,6 +100,34 @@ function partialReport(actions) {
   return actions.some((action) => action.status === 'done') && actions.some((action) => action.status !== 'done') ? actions : null;
 }
 
+// Наблюдение — это не действие: у снимка экрана, списка окон и чтения файла проверки эффекта
+// нет, поэтому их «не проверено» не понижает итог хода. Иначе подтверждённый клик рядом с
+// обязательным снимком экрана превращался в «Не подтверждено» — ровно то, что видел владелец.
+// Автоснимки (args.auto) исключены так же: это служебное наблюдение, а не шаг руками.
+const READ_ONLY_STATUS_ACTIONS = new Set([
+  'screen_look', 'screen_region_look', 'desktop_observe', 'ui_windows', 'ui_elements',
+  'windows_list', 'ui_wait', 'wait_for', 'browser_read', 'browser_tab_read', 'browser_tabs',
+  'browser_snapshot', 'image_look', 'image_read_text', 'clipboard_get',
+  'workspace_read', 'workspace_list', 'workspace_search', 'document_read', 'document_batch',
+  'code_read', 'web_search', 'web_wiki', 'web_fetch', 'web_research', 'web_check_claims',
+]);
+
+// Чтение или автоснимок: такой шаг не может понизить итог хода до «не подтверждено».
+function isReadOnlyStatusTool(name, args) {
+  if (args && typeof args === 'object' && args.auto === true) return true;
+  const tool = String(name || '');
+  return READ_ONLY_STATUS_ACTIONS.has(tool) || /^read_/.test(tool);
+}
+
+// Есть ли среди шагов действие (не чтение и не автоснимок), оставшееся без подтверждения.
+function hasUnverifiedAction(entries) {
+  return (Array.isArray(entries) ? entries : []).some((entry) => {
+    if (!entry || typeof entry !== 'object') return false;
+    if (entry.status !== 'unverified') return false;
+    return !isReadOnlyStatusTool(entry.tool, entry.args);
+  });
+}
+
 function verifiedReceipt(text, actions) {
   const bareReceipt = /^\s*(?:\*\*)?(?:(?:всё|все) (?:готово|сделано|выполнено)|готово|сделано|выполнено)[.!]?(?:\*\*)?[.!]?\s*$/iu;
   if (!bareReceipt.test(text) || !actions.some((action) => action.status !== 'done')) return null;
@@ -108,4 +136,7 @@ function verifiedReceipt(text, actions) {
     ? 'Не удалось выполнить поручение.' : 'Результат действий подтвердить не удалось.';
 }
 
-module.exports = { CLARIFY_SPEC, clarificationFrom, artifactFile, artifactFrom, actionReport, partialReport, verifiedReceipt };
+module.exports = {
+  CLARIFY_SPEC, clarificationFrom, artifactFile, artifactFrom, actionReport, partialReport, verifiedReceipt,
+  READ_ONLY_STATUS_ACTIONS, isReadOnlyStatusTool, hasUnverifiedAction,
+};

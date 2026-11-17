@@ -23,7 +23,7 @@ describe('снимок сцены', () => {
   test('id элемента устойчив между снимками, пока не меняется имя или automationId', () => {
     const a = sceneOf([element('Сохранить', 'Button')]);
     const b = sceneOf([element('Сохранить', 'Button')]);
-    assert.match(a.elements[0].id, /^e[0-9a-f]{6}$/);
+    assert.match(a.elements[0].id, /^e[0-9a-f]{12}$/);
     assert.equal(a.elements[0].id, b.elements[0].id);
   });
 
@@ -87,7 +87,7 @@ describe('снимок сцены', () => {
     const key = elementKey('Окно', element('ОК', 'Button'));
     assert.equal(key, elementKey('Окно', element('ОК', 'Button')));
     assert.equal(elementId(key), elementId(key));
-    assert.match(elementId(key), /^e[0-9a-f]{6}$/);
+    assert.match(elementId(key), /^e[0-9a-f]{12}$/);
   });
 
   test('redact не трогает обычный текст', () => {
@@ -278,10 +278,10 @@ describe('desktop_observe', () => {
     assert.equal(result.ok, true);
     assert.equal(click.calls.length, 1);
     assert.equal(click.calls[0].name, 'Сохранить');
-    assert.equal(click.calls[0].occurrence, 1);
+    assert.equal(click.calls[0].occurrence, 0);
     assert.equal(result.data.diff.added.length, 1);
     assert.match(result.summary, /нажал «Сохранить»/);
-    assert.equal((await byId.verify({ id }, result)).status, 'confirmed');
+    assert.equal((await byId.verify({ id }, result)).status, 'unknown');
   });
 
   test('нажатие по id не выполняет платёж через вложенный ui_click', async () => {
@@ -421,7 +421,7 @@ describe('desktop_observe', () => {
     assert.equal(type.calls.length, 0, 'в запрещённом окне ui_type не вызывался');
   });
 
-  test('номер вхождения пересчитывается по имени: у пункта меню и его надписи одна подпись', async () => {
+  test('две одинаковые подписи без AutomationId: desktop_click отказывает, а не жмёт по номеру', async () => {
     const frames = [
       [element('Папку', 'Text'), element('Папку', 'MenuItem')],
       [element('Папку', 'Text'), element('Папку', 'MenuItem')],
@@ -431,11 +431,11 @@ describe('desktop_observe', () => {
     const tools = observeTools(ui);
     const seen = await tools.find((t) => t.name === 'desktop_observe').run({ window: 'Блок' });
     const menu = seen.data.scene.elements.find((e) => e.role === 'MenuItem');
-    assert.equal(seen.data.scene.elements.find((e) => e.role === 'Text').occurrence, 1, 'у сцены свой номер по роли');
     const result = await tools.find((t) => t.name === 'desktop_click').run({ id: menu.id });
-    assert.equal(result.ok, true, result.summary);
-    // ui_click считает совпадения по имени без учёта роли: надпись идёт первой, пункт меню — вторым.
-    assert.equal(click.calls[0].occurrence, 2);
+    assert.equal(result.ok, false);
+    assert.match(result.summary, /не одна/);
+    assert.match(result.summary, /ui_click/, 'предлагает путь с occurrence');
+    assert.equal(click.calls.length, 0, 'номер в сцене и в ui_click разный — по номеру не нажимаем');
   });
 
   test('нажатие по id отказывает, если элемент исчез', async () => {
@@ -457,7 +457,7 @@ describe('desktop_observe', () => {
     const click = fakeAction('ui_click');
     const { ui } = fakeUi([[]], [click.tool]);
     const byId = observeTools(ui).find((t) => t.name === 'desktop_click');
-    const result = await byId.run({ id: 'e12ab34' }, {});
+    const result = await byId.run({ id: 'e12ab34cdef01' }, {});
     assert.equal(result.ok, false);
     assert.match(result.summary, /сначала/);
     assert.equal(click.calls.length, 0);
@@ -490,7 +490,7 @@ describe('desktop_observe', () => {
     assert.deepEqual(mouseCalls[0], { window: 'Блокнот — привет.txt', x: 25, y: 40, button: 'left', units: 'physical' });
     assert.equal(result.data.fallback, true);
     assert.match(result.summary, /по координатам 25, 40/);
-    assert.equal((await byId.verify({ id }, result)).status, 'confirmed');
+    assert.equal((await byId.verify({ id }, result)).status, 'unknown');
   });
 
   test('безымянная кнопка без mouse_click: понятный отказ, а не молчание', async () => {
@@ -548,7 +548,7 @@ describe('desktop_observe', () => {
     assert.equal(verdict.evidence, 'поле перечитано, но текст не сверен');
   });
 
-  test('отказ проверки ui_type тоже остаётся «неизвестно», а не успехом по диффу', async () => {
+  test('отказ проверки ui_type остаётся failed, а не смягчается до «неизвестно»', async () => {
     const frames = [
       [element('Поиск', 'Edit', { value: '' })],
       [element('Поиск', 'Edit', { value: '' })],
@@ -565,7 +565,7 @@ describe('desktop_observe', () => {
     assert.equal(result.ok, true);
     assert.equal(result.data.diff.changed.length, 1, 'по снимку поле видно изменившимся');
     const verdict = await byId.verify({ id, text: 'привет' }, result);
-    assert.equal(verdict.status, 'unknown');
+    assert.equal(verdict.status, 'failed');
     assert.equal(verdict.evidence, 'поле не приняло текст');
   });
 

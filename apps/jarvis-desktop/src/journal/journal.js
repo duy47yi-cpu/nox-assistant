@@ -3,8 +3,11 @@
 const fs = require('fs');
 const path = require('path');
 
-// Инструменты, у которых аргумент text — набранный текст (в том числе пароли). В журнал пишем только длину.
-const TYPED_TEXT_TOOLS = new Set(['ui_type', 'clipboard_set', 'browser_type']);
+// Всё, что печатает или вводит текст: в журнал пишем только длину. Список один на весь проект;
+// новые инструменты ввода обязаны попадать сюда вместе с тестом (F-1).
+const TYPED_TEXT_TOOLS = new Set(['ui_type', 'desktop_type', 'clipboard_set', 'browser_type']);
+const TYPED_TEXT_NAME = /(?:^|_)(?:type|input|paste|insert|write_text|click_and_type)$/i;
+const isTypedTextTool = (tool) => TYPED_TEXT_TOOLS.has(String(tool || '')) || TYPED_TEXT_NAME.test(String(tool || ''));
 
 // Ротация журнала (идея Hermes): живой файл не больше 10 МБ, прошлые — .1, .2, .3.
 // Чтение и поиск идут по всей цепочке, поэтому история не теряется.
@@ -17,9 +20,15 @@ function maskArgs(tool, args) {
   if (tool === 'command_create' && args && Array.isArray(args.steps)) {
     return { ...args, steps: args.steps.map((s) => (s && s.args ? { ...s, args: maskArgs(s.tool, s.args) } : s)) };
   }
-  if (!TYPED_TEXT_TOOLS.has(tool) || !args || typeof args !== 'object' || !('text' in args)) return args;
-  const text = args.text == null ? '' : String(args.text);
-  return { ...args, text: `[скрыто, ${text.length} симв.]` };
+  if (!args || typeof args !== 'object' || !isTypedTextTool(tool)) return args;
+  // Маска по смыслу аргумента: text/message/body/value — ввод, независимо от имени инструмента.
+  let out = null;
+  for (const key of ['text', 'message', 'body', 'value']) {
+    if (typeof args[key] !== 'string') continue;
+    if (!out) out = { ...args };
+    out[key] = '[скрыто, ' + Array.from(args[key]).length + ' симв.]';
+  }
+  return out || args;
 }
 
 function redactTabToolContent(rawContent) {
@@ -223,7 +232,11 @@ function maskEventForWindow(event) {
   for (const field of WINDOW_EVENT_FIELDS) {
     if (field in event) {
       if (!copy) copy = { ...event };
-      copy[field] = maskSecrets(event[field]);
+      // Аргументы инструмента ввода маскируются тем же правилом, что и журнал (F-1),
+      // затем общие секреты (ZM-008): иначе набранный текст уходит вторым экземпляром в окно.
+      copy[field] = field === 'args'
+        ? maskSecrets(maskArgs(event.name || event.tool || '', event.args))
+        : maskSecrets(event[field]);
     }
   }
   return copy || event;
@@ -446,6 +459,24 @@ function searchJournal(file, { query = '', status = null, tool = null, source = 
   };
 }
 
+// Последние незакрытые исходы внешних действий: новый ход не повторяет их вслепую (C-2).
+// Записи идут новые сверху; после первого чтения состояния (не «failed») неизвестность снята.
+// excludeRunId — текущий ход: его собственные записи не блокируют его же. Защита адресована
+// новому ходу («в прошлом ходу»), а не каждому следующему клику внутри одного хода.
+function unclosedExternalActions(file, { tools = [], limit = 100, excludeRunId = null } = {}) {
+  const set = new Set(tools);
+  const res = searchJournal(file, { limit });
+  const out = [];
+  for (const item of res.items || []) {
+    if (!item || !item.tool) continue;
+    const isHand = set.has(item.tool);
+    const sameRun = excludeRunId != null && item.runId === excludeRunId;
+    if (isHand && item.verifiedStatus === 'unverified' && !sameRun) out.push(item);
+    if (item.status !== 'failed' && !isHand) break; // после неизвестности было чтение
+  }
+  return out;
+}
+
 module.exports = {
   Journal,
   maskArgs,
@@ -456,6 +487,7 @@ module.exports = {
   historyStatus,
   readJournal,
   searchJournal,
+  unclosedExternalActions,
   HISTORY_STATUSES,
   DEFAULT_HISTORY_LIMIT,
   MAX_HISTORY_LIMIT,

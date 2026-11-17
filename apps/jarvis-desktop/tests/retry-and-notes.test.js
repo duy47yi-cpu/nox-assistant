@@ -50,10 +50,10 @@ test('исход desktop_click неизвестен: снимок сцены с�
   tools.register({ name: 'desktop_click', risk: 'T1', description: 'x', parameters: obj, run: async () => { runs += 1; return { ok: true, summary: 'нажал', verified: 'unknown' }; } });
   tools.register({ name: 'desktop_observe', risk: 'T0', description: 'x', parameters: obj, run: async () => ({ ok: true, summary: 'сцена' }) });
   const brain = scripted([
-    call('1', 'desktop_click', { id: 'e12ab34' }),
-    call('2', 'desktop_click', { id: 'e12ab34' }),
+    call('1', 'desktop_click', { id: 'e12ab34cdef01' }),
+    call('2', 'desktop_click', { id: 'e12ab34cdef01' }),
     call('3', 'desktop_observe', { window: 'Тестовое окно' }),
-    call('4', 'desktop_click', { id: 'e12ab34' }),
+    call('4', 'desktop_click', { id: 'e12ab34cdef01' }),
   ]);
   await agentWith(tools, brain).run('нажми');
   assert.equal(runs, 2, 'вслепую не повторяем, после снимка — можно');

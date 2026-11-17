@@ -271,6 +271,7 @@ function loadRendererEnv(doc) {
 
   const scripts = [
     'renderer/aether/icons.js',
+    'renderer/aether/time.js',
     'renderer/aether/store.js',
     'renderer/aether/components/approval-card.js',
     'renderer/aether/components/composer.js',
