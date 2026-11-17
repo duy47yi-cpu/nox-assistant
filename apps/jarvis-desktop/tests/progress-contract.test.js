@@ -447,6 +447,6 @@ test('safeTarget: белый список полей, обрезка длинн�
 
 test('контракт статусов: в множестве ровно ожидаемые значения', () => {
   assert.deepEqual([...PROGRESS_STATUSES].sort(), [
-    'awaiting_approval', 'cancelled', 'failed', 'planning', 'running', 'succeeded', 'unverified', 'verifying',
+    'answered', 'awaiting_approval', 'cancelled', 'failed', 'planning', 'running', 'succeeded', 'unverified', 'verifying',
   ]);
 });

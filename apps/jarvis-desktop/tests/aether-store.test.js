@@ -210,6 +210,58 @@ test('Store: запоздавший итог действия после сто�
   assert.doesNotMatch(JSON.stringify(store.state.feedItems) + store.getLiveWorkText(), /Думаю/);
 });
 
+test('Store: карточка берёт verifiedStatus и не пишет «выполнено» неподтверждённому действию', async () => {
+  const { bridge } = makeFakeBridge();
+  const store = createStore({ bridge, storage: makeMemStorage(), ui: { scrub: (s) => s, toolTitle: (t) => t } });
+  await store.loadInitial();
+
+  store.onAgentEvent({ type: 'quick_user', text: 'Открой терминал и VS Code' });
+  store.onAgentEvent({ type: 'tool_start', id: 'g1', name: 'organize_workspace', step: 1, status: 'running' });
+  // Ядро прислало ok:true, но verified пуст, а verifiedStatus — unverified (у инструмента нет проверки эффекта).
+  store.onAgentEvent({
+    type: 'tool_result', id: 'g1', name: 'organize_workspace', ok: true,
+    summary: 'запущено: 2', status: 'unverified', verifiedStatus: 'unverified',
+  });
+  store.onAgentEvent({ type: 'done', status: 'unverified', replyText: 'Открыл терминал и VS Code.' });
+
+  const last = store.state.feedItems.filter((i) => i.kind === 'assistant').at(-1);
+  assert.equal(last.workStatus, 'unverified');
+  assert.equal(last.actions.length, 1);
+  assert.equal(last.actions[0].status, 'unverified', 'карточка не должна говорить «выполнено» без подтверждения');
+  assert.equal(last.actions[0].verified, 'unknown');
+});
+
+test('Store: после отмены незавершённая карточка закрывается как «остановлено»', async () => {
+  const { bridge } = makeFakeBridge();
+  const store = createStore({ bridge, storage: makeMemStorage(), ui: { scrub: (s) => s, toolTitle: (t) => t } });
+  await store.loadInitial();
+
+  store.onAgentEvent({ type: 'quick_user', text: 'Найди факты о Риме' });
+  store.onAgentEvent({ type: 'tool_start', id: 'r1', name: 'web_research', step: 1, status: 'running' });
+  store.onAgentEvent({ type: 'done', status: 'cancelled', cancelled: true, replyText: '' });
+
+  const last = store.state.feedItems.filter((i) => i.kind === 'assistant').at(-1);
+  assert.equal(last.cancelled, true);
+  assert.equal(last.actions.length, 1);
+  assert.equal(last.actions[0].status, 'cancelled', 'карточка не должна висеть «выполняется» после отмены');
+});
+
+test('Store: текст ответа очищается от служебных id и «Шаг N»', async () => {
+  const { bridge } = makeFakeBridge();
+  const store = createStore({ bridge, storage: makeMemStorage(), ui: { scrub: (s) => s, toolTitle: (t) => t } });
+  await store.loadInitial();
+
+  store.onAgentEvent({ type: 'quick_user', text: 'Напомни через 20 минут выпить воды' });
+  store.onAgentEvent({ type: 'tool_start', id: 'r1', name: 'remind_in', step: 1, status: 'running' });
+  store.onAgentEvent({ type: 'tool_result', id: 'r1', name: 'remind_in', ok: true, summary: 'напомню', verified: 'confirmed', verifiedStatus: 'confirmed' });
+  store.onAgentEvent({ type: 'text', delta: 'Готово: напоминание. - Шаг 1 (remind_in): подтверждено — напомню через 20 мин' });
+  store.onAgentEvent({ type: 'done', status: 'succeeded' });
+
+  const last = store.state.feedItems.filter((i) => i.kind === 'assistant').at(-1);
+  assert.doesNotMatch(last.text, /remind_in|Шаг\s*1/, 'служебный протокол не должен попадать в текст');
+  assert.match(last.text, /напоминание/i);
+});
+
 test('Store: обычный итог действия без активного хода по-прежнему создаёт ход', async () => {
   const { bridge } = makeFakeBridge();
   const store = createStore({ bridge, storage: makeMemStorage(), ui: { scrub: (s) => s, toolTitle: (t) => t } });

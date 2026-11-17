@@ -24,6 +24,7 @@ test('окно различает подтверждено, не провере�
   assert.equal(U.statusOfResult(true, 'x', false, 'unknown'), 'unverified');
   assert.equal(U.statusOfResult(false, 'x', false, 'failed'), 'failed');
   assert.equal(U.statusOfResult(true, 'x', false), 'done');
+  assert.equal(U.statusOfResult(true, 'x', false, 'unverified'), 'unverified', 'ядерный verifiedStatus=unverified не выглядит выполненным');
   assert.equal(U.statusOfResult(false, 'x', false), 'error');
   assert.equal(U.statusOfResult(false, 'отклонено', false), 'refused');
   assert.equal(U.statusOfRecord({ ok: true, verified: 'unknown' }), 'unverified');

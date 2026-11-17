@@ -101,6 +101,30 @@ test('только чтения без действий руками → ито�
   assert.equal(doneOf(events).status, 'succeeded');
 });
 
+test('модель видит «не проверено» в ответе инструмента без своей проверки', async (t) => {
+  const toolList = [tool('act', 'T1', async () => ({ ok: true, summary: 'сделал' }))];
+  const seen = [];
+  let round = 0;
+  const brain = {
+    async chat({ messages }) {
+      if (messages) seen.push(messages.map((m) => ({ role: m.role, content: m.content })));
+      round += 1;
+      return round === 1
+        ? { content: '', toolCalls: [{ id: 'a1', name: 'act', args: {} }] }
+        : { content: 'Сделал, но не проверил.', toolCalls: [] };
+    },
+  };
+  const { agent } = setup(t, { toolList, steps: [] });
+  agent.brain = brain;
+  await agent.run('сделай действие');
+  const last = seen.at(-1) || [];
+  const toolMessage = last.filter((m) => m.role === 'tool').at(-1);
+  assert.ok(toolMessage, 'ответ инструмента должен быть в контексте модели');
+  const parsed = JSON.parse(toolMessage.content);
+  assert.equal(parsed.verified, 'unknown', 'модель получает verified:unknown, если проверки не было');
+  assert.match(String(parsed.summary), /не проверено/i, 'summary объясняет, почему эффект не подтверждён');
+});
+
 test('сам клик вернул unverified (проверки нет) → итог «Не подтверждено» (unverified)', async (t) => {
   const { agent, events } = setup(t, {
     toolList: [screenLook, unverifiedClick],
@@ -112,6 +136,24 @@ test('сам клик вернул unverified (проверки нет) → ит
   });
   await agent.run('Сделай на экране: отметь флажок');
   assert.equal(doneOf(events).status, 'unverified', 'неподтверждённое действие руками остаётся «Не подтверждено»');
+});
+
+test('подтверждающее чтение снимает «Не подтверждено» у непроверенного действия', async (t) => {
+  const { agent, events } = setup(t, {
+    toolList: [
+      tool('windows_snap', 'T1', async () => ({ ok: true, summary: 'окно слева' })),
+      tool('windows_list', 'T0', async () => ({ ok: true, summary: 'окон: 1' })),
+    ],
+    steps: [
+      { toolCalls: [{ id: 's1', name: 'windows_snap', args: { title: 'Тестовое окно' } }] },
+      { toolCalls: [{ id: 'w1', name: 'windows_list', args: {} }] },
+      { content: 'Окно «Тестовое окно» стоит слева.' },
+    ],
+  });
+  await agent.run('Поставь окно слева');
+  const done = doneOf(events);
+  assert.equal(done.status, 'succeeded', 'после подтверждающего чтения итог не держит «Не подтверждено»');
+  assert.equal(done.verification.unverified, 1, 'журнал по-прежнему помнит, что проверки у snap не было');
 });
 
 test('клик с проверкой «не удалось» (unknown) → итог «Не подтверждено» (unverified)', async (t) => {
@@ -127,6 +169,57 @@ test('клик с проверкой «не удалось» (unknown) → ит�
   });
   await agent.run('Сделай на экране: отметь флажок');
   assert.equal(doneOf(events).status, 'unverified');
+});
+
+test('служебные id инструментов и «Шаг N» вычищаются из текста ответа', async (t) => {
+  const { agent, events } = setup(t, {
+    toolList: [tool('remind_in', 'T0', async () => ({ ok: true, summary: 'напоминание' }))],
+    steps: [{ content: 'Готово: напоминание. - Шаг 1 (remind_in): подтверждено — напомню через 20 мин' }],
+  });
+  await agent.run('Напомни через 20 минут');
+  const done = doneOf(events);
+  assert.doesNotMatch(String(done.replyText), /remind_in|Шаг\s*1/, 'в ответе не должно быть служебных id и формата шагов');
+  assert.match(String(done.replyText), /напоминание/i);
+  assert.doesNotMatch(String(agent.history.at(-1).content), /remind_in|Шаг\s*1/);
+});
+
+test('текст без модели (remember) тоже очищается от служебных id', async (t) => {
+  const { agent } = setup(t, {
+    toolList: [tool('remind_in', 'T0', async () => ({ ok: true, summary: 'напоминание' }))],
+    steps: [],
+  });
+  agent.remember('Напомни через 20 минут', 'Готово: напоминание. - Шаг 1 (remind_in): подтверждено');
+  assert.doesNotMatch(String(agent.history.at(-1).content), /remind_in|Шаг\s*1/);
+  assert.match(String(agent.history.at(-1).content), /напоминание/i);
+});
+
+test('«Нет данных» и отказ — нейтральный итог «Ответ», а не «Готово»', async (t) => {
+  for (const content of ['Нет данных: баланса карты не вижу.', 'Оплату не оформляю — это запрещено.']) {
+    const { agent, events } = setup(t, { toolList: [], steps: [{ content }] });
+    await agent.run('Вопрос');
+    const done = doneOf(events);
+    assert.equal(done.status, 'answered', content);
+    assert.equal(done.verification.confirmed + done.verification.unverified + done.verification.failed, 0);
+  }
+});
+
+test('обычный ответ без действий остаётся «Готово», ложного «Ответ» нет', async (t) => {
+  const { agent, events } = setup(t, { toolList: [], steps: [{ content: 'Сегодня ясно, около +12.' }] });
+  await agent.run('Какая погода?');
+  assert.equal(doneOf(events).status, 'succeeded');
+});
+
+test('чтение + «Нет данных» остаётся нейтральным (действий с эффектом не было)', async (t) => {
+  const readTool = tool('workspace_list', 'T0', async () => ({ ok: true, summary: 'файлов: 0' }));
+  const { agent, events } = setup(t, {
+    toolList: [readTool],
+    steps: [
+      { toolCalls: [{ id: 'w1', name: 'workspace_list', args: {} }] },
+      { content: 'Нет данных: в рабочей папке пусто.' },
+    ],
+  });
+  await agent.run('Что в папке?');
+  assert.equal(doneOf(events).status, 'answered');
 });
 
 test('наблюдения не понижают итог, действия — понижают', () => {

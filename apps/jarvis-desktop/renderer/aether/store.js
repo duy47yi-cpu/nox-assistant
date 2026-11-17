@@ -271,7 +271,14 @@
     const toolTitle = (name) => (ui && typeof ui.toolTitle === 'function' ? ui.toolTitle(name) : (name || 'Действие'));
     const cleanSummary = (s) => (ui && typeof ui.cleanSummary === 'function' ? ui.cleanSummary(s) : String(s || ''));
     const argsBrief = (a, max) => (ui && typeof ui.argsBrief === 'function' ? ui.argsBrief(a, max) : '');
-    const statusOfResult = (ok, sum, rej, ver) => (ui && typeof ui.statusOfResult === 'function' ? ui.statusOfResult(ok, sum, rej, ver) : (ok ? 'done' : 'error'));
+    // Запасной путь без window.JarvisUI (тесты, ранняя загрузка): та же честность, что в shared.js.
+    const statusOfResult = (ok, sum, rej, ver) => (ui && typeof ui.statusOfResult === 'function'
+      ? ui.statusOfResult(ok, sum, rej, ver)
+      : (ver === 'failed'
+        ? 'failed'
+        : ok
+          ? (ver === 'confirmed' ? 'confirmed' : (ver === 'unknown' || ver === 'unverified' ? 'unverified' : 'done'))
+          : (rej ? 'refused' : 'error')));
 
     let seq = 0;
     const nextId = (prefix = 'n') => `${prefix}-${++seq}`;
@@ -534,6 +541,24 @@
       return state.activeTurn;
     }
 
+    // В некоторых путях (локальный сценарий без модели) текст приходит из ядра с шагами инструментов.
+    // Владельцу нужен человеческий текст: убираем имена инструментов и «Шаг N».
+    function sanitizeServiceText(text, actions) {
+      let out = String(text == null ? '' : text);
+      if (!out) return out;
+      const names = [...new Set((actions || []).map((a) => a && a.tool).filter(Boolean))].sort((a, b) => b.length - a.length);
+      for (const name of names) {
+        const escaped = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        out = out.replace(new RegExp('\\s*\\(?' + escaped + '\\)?', 'gi'), '');
+      }
+      out = out.replace(/\s*[-—–:]?\s*Шаг\s+\d+\s*\([^)]*\)\s*[:—–-]?\s*/gi, ' ');
+      out = out.replace(/\s*[-—–:]?\s*Шаг\s+\d+\s*[:—–-]?\s*/gi, ' ');
+      out = out.replace(/\s*\\(\s*\\)/g, '');
+      out = out.replace(/\s{2,}/g, ' ');
+      out = out.replace(/\s+([.,;:!?])/g, '$1').trim();
+      return out;
+    }
+
     function finalizeActiveTurn(options = {}) {
       if (!state.activeTurn) return;
       const t = state.activeTurn;
@@ -545,13 +570,20 @@
         return;
       }
       const doneAt = Date.now();
+      // Отменённый ход не оставляет карточки «выполняется»: незавершённые шаги закрываются
+      // как остановленные, чтобы после «Остановлено» не висел живой шаг.
+      const finalizedActions = t.actions.map((a) => (
+        options.cancelled && (a.status === 'running' || a.status === 'pending')
+          ? { ...a, status: 'cancelled' }
+          : { ...a }
+      ));
       state.feedItems = [...state.feedItems, {
         id: t.id,
         kind: 'assistant',
         at: doneAt,
         userPhrase: String(t.userPhrase || lastFeedUserPhrase() || '').trim(),
-        text: t.text,
-        actions: t.actions.map((a) => ({ ...a })),
+        text: sanitizeServiceText(t.text, finalizedActions),
+        actions: finalizedActions,
         sources: t.sources.slice(),
         searchSources: options.searchSources || [],
         artifacts,
@@ -652,9 +684,12 @@
           turn.actions.push(entry);
         }
         if (ev.name) { entry.tool = ev.name; entry.title = toolTitle(ev.name); }
-        entry.status = statusOfResult(ev.ok, ev.summary, state.rejectedCalls.has(ev.id), ev.verified);
+        // verifiedStatus приходит из ядра даже для инструментов без собственной проверки:
+        // ok:true + unverified не должен рисоваться как «выполнено» (честность карточки).
+        const resultVerified = ev.verified || (ev.verifiedStatus === 'unverified' ? 'unknown' : ev.verifiedStatus) || null;
+        entry.status = statusOfResult(ev.ok, ev.summary, state.rejectedCalls.has(ev.id), resultVerified);
         entry.summary = cleanSummary(ev.summary);
-        entry.verified = ev.verified || null;
+        entry.verified = resultVerified;
         entry.evidence = ev.evidence ? scrub(ev.evidence) : '';
         if (Array.isArray(ev.sources)) {
           for (const s of ev.sources) {

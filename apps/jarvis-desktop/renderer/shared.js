@@ -371,7 +371,7 @@
 
   const STATUS_TEXT = {
     done: 'выполнено', confirmed: 'подтверждено', unverified: 'не проверено', failed: 'провалено',
-    error: 'не получилось', refused: 'отклонено', pending: 'ждёт решения', running: 'выполняется',
+    error: 'не получилось', refused: 'отклонено', pending: 'ждёт решения', running: 'выполняется', answered: 'ответ',
   };
   // Статус различается формой значка, а не только цветом (бриф, раздел 5).
   const GLYPH_ICONS = { '▲': 'stwait', '■': 'stfail', '○': 'stopen', '●': 'stok', '◐': 'sthalf', '⊘': 'stno', '–': 'stdash' };
@@ -387,7 +387,7 @@
   // Успех без проверки — просто «выполнено»: у инструмента нет способа её сделать.
   function okStatus(verified) {
     if (verified === 'confirmed') return 'confirmed';
-    return verified === 'unknown' ? 'unverified' : 'done';
+    return verified === 'unknown' || verified === 'unverified' ? 'unverified' : 'done';
   }
 
   // Итог записи журнала: отказ (reject/deny) отдельно от ошибки выполнения.

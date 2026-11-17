@@ -13,7 +13,7 @@
   };
   const WORK_LABELS = {
     failed: 'Не выполнено', unverified: 'Не подтверждено', succeeded: 'Готово',
-    partial: 'Выполнено частично', cancelled: 'Остановлено',
+    answered: 'Ответ', partial: 'Выполнено частично', cancelled: 'Остановлено',
   };
   const ARTIFACT_ICONS = {
     pptx: 'layers', ppt: 'layers', odp: 'layers',
@@ -28,6 +28,7 @@
     confirmed: 'Результат проверен', unverified: 'Результат не подтверждён',
     failed: 'Проверка не прошла', error: 'Не удалось выполнить', refused: 'Действие отклонено',
     done: 'Выполнено', running: 'Выполняется', pending: 'Ждёт решения',
+    cancelled: 'Остановлено',
   };
   const SAVE_DENY_TOOLS = new Set([
     'mail_send', 'pc_shutdown', 'shell_run', 'app_close', 'ui_close_window',

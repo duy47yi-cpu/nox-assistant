@@ -10,7 +10,7 @@ const { checkEffect } = require('./effects');
 const { makeToolContext } = require('./tool-context');
 const { uniqueSearchMatch } = require('../tools/install');
 const { collectSearchSources } = require('./sources');
-const { CLARIFY_SPEC, clarificationFrom, artifactFrom, actionReport, partialReport, verifiedReceipt, isReadOnlyStatusTool } = require('./chat-reply');
+const { CLARIFY_SPEC, clarificationFrom, artifactFrom, actionReport, partialReport, verifiedReceipt, isReadOnlyStatusTool, stripServiceTokens } = require('./chat-reply');
 
 // Лимит вызовов инструментов за один ход: защита от зацикливания модели.
 const MAX_TOOL_STEPS = 12;
@@ -45,7 +45,7 @@ const STATE_READERS = new Set(['desktop_observe', 'screen_look', 'ui_elements', 
 // awaiting_approval/verifying/succeeded/unverified/failed/cancelled), label (без текста модели и
 // без секретов), target (только безопасные поля аргументов), verification (итог проверки инструмента).
 // Итог всего запуска приходит в done: {runId, outcome, status, verification, history}.
-const PROGRESS_STATUSES = new Set(['planning', 'running', 'awaiting_approval', 'verifying', 'succeeded', 'unverified', 'failed', 'cancelled']);
+const PROGRESS_STATUSES = new Set(['planning', 'running', 'awaiting_approval', 'verifying', 'succeeded', 'answered', 'unverified', 'failed', 'cancelled']);
 // Только эти аргументы попадают в событие как цель: текст, команды, содержимое и прочее не уходят.
 const SAFE_TARGET_KEYS = ['path', 'url', 'file', 'name', 'window', 'app', 'query', 'id', 'to', 'minutes'];
 const SAFE_TARGET_CHARS = 120;
@@ -346,6 +346,7 @@ class Agent {
     if (stop && typeof stop.onTrigger === 'function') stop.onTrigger(() => this.sessionAllow.clear());
     this._turnCalls = new Map();
     this._unknownCalls = new Map(); // ключ вызова → имя: действия с неизвестным исходом в этом ходу, вслепую не повторяем
+    this._unverifiedActionKeys = new Map(); // ключ вызова → действие без подтверждения: снимается подтверждающим чтением
     this._pendingCallIds = new Set();
     this._turn = null; // замеры текущего хода
     this._emitFn = typeof emit === 'function' ? emit : () => {};
@@ -384,10 +385,18 @@ class Agent {
 
   // Ответы, которые дали без модели (музыка), тоже попадают в историю: иначе на следующей реплике модель их не видит.
   remember(userText, assistantText, { artifacts, partial } = {}) {
+    // Текст без модели тоже мог пересказать протокол: чистим имена инструментов и «Шаг N».
+    const cleaned = stripServiceTokens(String(assistantText), this._toolNames());
     this.history.push({ role: 'user', content: String(userText) }, {
-      role: 'assistant', content: String(assistantText),
+      role: 'assistant', content: cleaned,
       ...(artifacts?.length ? { artifacts } : {}), ...(partial?.length ? { partial } : {}),
     });
+  }
+
+  // Имена подключённых инструментов: по ним чистим служебные id из текста ответа.
+  _toolNames() {
+    return typeof this.tools.list === 'function'
+      ? this.tools.list().map((item) => item && item.name).filter(Boolean) : [];
   }
 
   // Переключились на другой разговор: «продолжай» не должен поднимать план из прежнего.
@@ -420,6 +429,7 @@ class Agent {
     this._foreign = this._hasForeignHistory(); // а это — именно чужой текст (страница, файл, буфер, MCP), после которого руки идут с вопросом
     this._turnCalls = new Map(); // повторы вызовов считаем в пределах одного хода
     this._unknownCalls = new Map();
+    this._unverifiedActionKeys = new Map();
     this._pendingCallIds = new Set();
     // Новый запуск: снимаем признак «итог отправлен» и обнуляем прогресс предыдущего запуска.
     this._runClosed = false;
@@ -929,7 +939,13 @@ class Agent {
     else this._verification.reads += 1;
     // Итог хода понижают только настоящие действия: наблюдение (снимок экрана, список окон,
     // чтение файла) и автоснимки (args.auto) остаются «не проверенными» в журнале, но не в итоге.
-    if (callStatus === 'unverified' && !isReadOnlyStatusTool(call.name, call.args)) this._unverifiedActions += 1;
+    if (callStatus === 'unverified' && !isReadOnlyStatusTool(call.name, call.args)) {
+      this._unverifiedActions += 1;
+      this._unverifiedActionKeys.set(key, { name: call.name, args: call.args });
+      // Модель должна видеть то же, что окно: у действия без собственной проверки результата
+      // verified и пометка «не проверено» кладутся в ответ role 'tool' (см. _pushToolResult).
+      if (result.verified !== 'unknown') Object.defineProperty(result, 'unverifiedForModel', { value: true, enumerable: false });
+    }
     // Серия действий без подтверждения (идея Browser Use): после двух подскажем не повторять вслепую.
     if (callStatus === 'confirmed' || result.verified === 'confirmed') this._unverifiedStreak = 0;
     else if (callStatus === 'unverified' || callStatus === 'failed') this._unverifiedStreak = (this._unverifiedStreak || 0) + 1;
@@ -1280,10 +1296,25 @@ class Agent {
       this._unknownCalls.delete(key);
       this._turnCalls.set(key, 1);
     }
+    // Подтверждающее чтение снимает и «не проверено» у действия, которое оно наблюдает:
+    // иначе итог хода вечно «Не подтверждено», хотя состояние уже прочитано.
+    for (const [key, call] of this._unverifiedActionKeys) {
+      if (isOneShot(call.name) || !relevantObservation(name, args, call.name, call.args, this.workspace)) continue;
+      this._unverifiedActionKeys.delete(key);
+      this._unverifiedActions = Math.max(0, (this._unverifiedActions || 0) - 1);
+      this._turnCalls.set(key, 1);
+    }
   }
 
   _pushToolResult(id, result) {
     const { image, imageLabel, ...rest } = result;
+    // Действие без проверки: модель получает verified:'unknown' и пометку в summary, чтобы
+    // правило промпта «скажи, что не проверил» опиралось на факт, а не на догадку.
+    if (result.unverifiedForModel === true && !rest.verified) {
+      rest.verified = 'unknown';
+      const summary = String(rest.summary || '').trim();
+      rest.summary = summary ? `${summary} (не проверено: эффект не подтверждён)` : 'не проверено: эффект не подтверждён';
+    }
     const entry = { role: 'tool', tool_call_id: id, content: safeJson(rest) };
     if (this._tainted === true || this._foreign === true || this._hasBrowserContext()) {
       entry.provenance = { untrusted: true };
@@ -1457,9 +1488,17 @@ class Agent {
   _endTurn({ idle = true } = {}) {
     if (this._runClosed) return;
     this._runClosed = true;
-    const status = this._runStatus();
-    const plan = this._planSummary();
     const last = this.history.at(-1);
+    let status = this._runStatus();
+    // Отказ и «Нет данных» — не выполненное дело, а ответ: отдельный нейтральный итог,
+    // чтобы рядом с «Нельзя…» не горело зелёное «Готово».
+    if (status === 'succeeded') {
+      const v = this._verification || {};
+      const effectful = (v.confirmed || 0) + (v.unverified || 0) + (v.failed || 0);
+      const content = last?.role === 'assistant' && typeof last.content === 'string' ? last.content.trim() : '';
+      if (!effectful && content && /^(нет данных|нельзя|не могу|оплату не|не оформля|отказ)/i.test(content)) status = 'answered';
+    }
+    const plan = this._planSummary();
     const searchSources = status !== 'cancelled' && last?.role === 'assistant' &&
       !last.tool_calls?.length && typeof last.content === 'string' && last.content.trim() && this._turn?.searchSources.size
       ? [...this._turn.searchSources.values()] : null;
@@ -1477,7 +1516,16 @@ class Agent {
         replyText = last.content;
       } else if (last?.role === 'assistant' && !last.tool_calls?.length && typeof last.content === 'string') {
         const receipt = verifiedReceipt(last.content, actions);
-        if (receipt) last.content = replyText = receipt;
+        if (receipt) {
+          last.content = replyText = receipt;
+        } else {
+          // Не надеемся на модель: убираем из текста служебные id инструментов и «Шаг N».
+          const cleaned = stripServiceTokens(last.content, this._toolNames());
+          if (cleaned && cleaned !== last.content) {
+            last.content = cleaned;
+            replyText = cleaned;
+          }
+        }
       }
       if (Object.keys(metadata).length) {
         if (last?.role === 'assistant' && !last.tool_calls?.length) Object.assign(last, metadata);
