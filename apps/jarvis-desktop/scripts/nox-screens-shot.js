@@ -40,6 +40,8 @@ for (const dir of [profileDir, dataDir, path.join(tempRoot, 'workspace')]) fs.mk
 fs.writeFileSync(path.join(dataDir, 'settings.json'), JSON.stringify({
   voice: false, backgroundModelRuns: false, alwaysListen: false, dictation: false,
   desktopOverlay: false, alwaysOnTop: false, motion: true, seededBrief: true,
+  // Снимки классических экранов Nox: оболочка legacy, а не Aether.
+  uiShell: 'legacy',
 }), 'utf8');
 const now = Date.now();
 const day = 86400000;
@@ -72,6 +74,8 @@ app.commandLine.appendSwitch('force-color-profile', 'srgb');
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 for (const key of Object.keys(process.env)) {
+  // NOX_UI оставляем: им задаётся оболочка (для этого стенда — legacy).
+  if (key === 'NOX_UI') continue;
   if (/^(NOX_|JARVIS_|TELEGRAM_|FISH_|DEEPSEEK_)/i.test(key)) delete process.env[key];
 }
 require('../src/config/paths').projectRoot = () => tempRoot;

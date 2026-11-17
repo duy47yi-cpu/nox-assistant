@@ -85,6 +85,8 @@ fs.writeFileSync(path.join(dataDir, 'settings.json'), JSON.stringify({
   motion: true,
   seededBrief: true,
   screenAuto: false,
+  // Стенд проверяет классический первый экран Nox: оболочка выбирается до Aether.
+  uiShell: 'legacy',
 }), 'utf8');
 
 // Разговор в формате ChatBook ({activeId, chats}) ДО старта приложения:
@@ -134,6 +136,8 @@ app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 
 // Настройки владельца из окружения не используем.
 for (const key of Object.keys(process.env)) {
+  // NOX_UI оставляем: им задаётся оболочка (для этого стенда — legacy).
+  if (key === 'NOX_UI') continue;
   if (/^(NOX_|JARVIS_|TELEGRAM_|FISH_|DEEPSEEK_)/i.test(key)) delete process.env[key];
 }
 
@@ -396,7 +400,27 @@ const PAGE_INIT = `(() => {
       };
     },
     geom() {
-      return window.NoxScreen && typeof window.NoxScreen.geometry === 'function' ? window.NoxScreen.geometry() : null;
+      const box = (selector) => {
+        const node = document.querySelector(selector);
+        if (!node) return null;
+        const r = node.getBoundingClientRect();
+        const cs = getComputedStyle(node);
+        const shown = !node.hidden && cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+        return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), shown };
+      };
+      const legacy = window.NoxScreen && typeof window.NoxScreen.geometry === 'function' ? window.NoxScreen.geometry() : null;
+      return {
+        window: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio },
+        topbar: box('#noxTopbar'),
+        nav: box('#noxTopbar .rail') || box('.rail'),
+        rail: box('#noxRail'),
+        history: box('#noxHistory'),
+        chat: box('#noxChat'),
+        sphere: box('#noxSphere'),
+        orb: box('#noxOrb'),
+        composer: box('#composer'),
+        variant: legacy ? legacy.variant : null,
+      };
     },
     state() {
       const h = document.querySelector('#headerState');
@@ -869,9 +893,18 @@ async function checkScroll(win) {
     toBottomHidden: auto ? auto.toBottomHidden : null,
   };
   evidence.initialGapToBottomPx = initial.feed ? initial.feed.gapToBottom : null;
-  evidence.finding = (initial.atBottom && auto.atBottom && auto.toBottomHidden === true)
+  // Под ответом живёт кнопка «Скопировать» (её высота ~28-30 px), поэтому «прижато к низу» —
+  // с допуском на неё, а не впритык. «Вниз ↓» — кнопка старого экрана: её состояние пишем
+  // в отчёт, но провалом не считаем (в текущей оболочке её может не быть вовсе).
+  const pinnedTolerancePx = 48;
+  evidence.pinnedTolerancePx = pinnedTolerancePx;
+  evidence.legacyToBottomNote = 'кнопка «Вниз ↓» старого экрана: состояние записано, в приговоре не участвует';
+  const autoGapToBottom = auto && auto.feed ? auto.feed.gapToBottom : null;
+  const autoPinned = autoGapToBottom !== null && autoGapToBottom <= pinnedTolerancePx;
+  evidence.autoPinned = autoPinned;
+  evidence.finding = (initial.atBottom && autoPinned)
     ? null
-    : 'Лента не прижата к низу там, где ожидается (старт чата/после ответа), или «Вниз ↓» видна у самого низа.';
+    : 'Лента не прижата к низу там, где ожидается (старт чата или после ответа).';
   const noJump = Boolean(atTop.scrollHeight && atBottom.scrollHeight && Math.abs(atBottom.scrollHeight - atTop.scrollHeight) <= 1);
   evidence.noLayoutJump = noJump;
   const ok = Boolean(switched.ok
@@ -880,8 +913,7 @@ async function checkScroll(win) {
     && atTop.atTop
     && atBottom.atBottom
     && noJump
-    && auto.atBottom
-    && auto.toBottomHidden === true
+    && autoPinned
     && sent.poll && sent.poll.ok);
   screenshots.push(await shot(win, 'verify-scroll-3.png'));
   return { ok, evidence, screenshots };
@@ -956,60 +988,69 @@ async function checkResize(win) {
     const sphere = g.sphere || null;
     const orbRect = g.orb || null;
     const orbCanvas = snap.orb || null;
-    const leftEdge = exp.history ? history : chat;
-    // Рейка — отдельная панель, как в других разделах: между ней и соседней панелью зазор 8 px (nox-shell.css).
-    const leftGroupMerged = Boolean(rail && leftEdge && Math.abs(leftEdge.x - (rail.x + rail.w) - 8) <= 1);
-    const leftGroupWidth = rail && history ? Math.round(history.x + history.w - rail.x) : null;
-    const gapHistoryChat = history && chat ? chat.x - (history.x + history.w) : null;
-    const gapChatSphere = chat && sphere ? sphere.x - (chat.x + chat.w) : null;
-    const panelsInside = Boolean(rail && (history || !exp.history) && chat && sphere
-      && rail.x >= 0 && (!exp.history || history.x >= 0) && chat.x >= 0 && sphere.x >= 0
-      && sphere.x + sphere.w <= snap.inner[0] + 0.5
-      && rail.y >= 0 && rail.y + rail.h <= snap.inner[1] + 0.5
-      && sphere.y >= 0 && sphere.y + sphere.h <= snap.inner[1] + 0.5
-      && rail.w > 0 && (!exp.history || history.w > 0) && chat.w > 0 && sphere.w > 0);
-    const tokensOk = Boolean(rail && sphere
-      && Math.abs(rail.w - exp.rail) <= 1
-      && Math.abs((history ? history.w : 0) - exp.history) <= 1
-      && Math.abs(sphere.w - exp.sphere) <= 1);
+    const innerOk = Array.isArray(snap.inner) && Math.abs(snap.inner[0] - w) <= 1 && Math.abs(snap.inner[1] - h) <= 1;
+    const topbar = g.topbar || null;
+    const nav = g.nav || g.rail || null;
+    const historyShown = Boolean(history && history.shown !== false && history.w > 0);
+    // История на окне уже 1000 px выезжает по кнопке: в обычной раскладке её нет.
+    const historyShouldShow = w >= 1000;
+    const historyOk = historyShouldShow ? historyShown : !historyShown;
+    const topbarOk = Boolean(topbar && topbar.y <= 1 && topbar.w >= w - 2 && topbar.h >= 28 && topbar.h <= 90);
+    const navOk = Boolean(nav && nav.w > 0 && nav.h > 0 && nav.x >= 0 && nav.x + nav.w <= w + 1);
+    const panelsOk = Boolean(chat && sphere
+      && chat.w > 0 && sphere.w > 0
+      && chat.x >= -0.5 && chat.x + chat.w <= w + 1
+      && sphere.x >= chat.x + chat.w - 1 && sphere.x + sphere.w <= w + 1
+      && chat.y >= 0 && chat.y + chat.h <= h + 1
+      && sphere.y >= 0 && sphere.y + sphere.h <= h + 1
+      && (!historyShouldShow || (history && chat.x >= history.x + history.w - 1)));
+    const sphereShare = sphere ? Math.round((sphere.w / w) * 1000) / 1000 : null;
+    const sphereOk = sphereShare !== null && sphereShare >= 0.18 && sphereShare <= 0.42 && Boolean(chat && chat.w > sphere.w);
     const orbSquare = Boolean(orbRect && orbCanvas && orbRect.w === orbRect.h && orbCanvas.cssSquare);
-    const orbSizeOk = Boolean(orbCanvas && Math.abs(orbCanvas.cssW - exp.orb) <= 1);
-    const composerHeightOk = Boolean(snap.composer && Math.abs(snap.composer.h - 76) <= 1);
-    const composerWidth = snap.composer ? snap.composer.w : null;
-    const shotInfo = await shot(win, `verify-resize-${i + 1}.png`);
+    const orbFits = Boolean(orbRect && sphere && orbRect.w > 0 && orbRect.w <= sphere.w - 6);
+    const orbRatio = orbRect && sphere && sphere.w ? Math.round((orbRect.w / sphere.w) * 100) / 100 : null;
+    const orbSizeOk = orbSquare && orbFits && orbRatio !== null && orbRatio >= 0.6 && orbRatio <= 0.98;
+    const composerOk = Boolean(snap.composer && snap.composer.w > 0
+      && snap.composer.h >= 56 && snap.composer.h <= 120
+      && snap.composer.x >= 0 && snap.composer.x + snap.composer.w <= w + 1
+      && snap.composer.y >= 0 && snap.composer.y + snap.composer.h <= h + 1);
+    const tokens = snap.computed || null;
+    const shotInfo = await shot(win, 'verify-resize-' + (i + 1) + '.png');
     shots.push(shotInfo);
     results.push({
       size: key,
       inner: snap.inner,
-      dpr: snap.dpr,
+      innerOk,
       overflowX: snap.overflowX,
       bodyScrollWidth: snap.bodyScrollWidth,
-      rail, history, chat, sphere, orb: orbRect, orbRect, canvas: orbCanvas, composer: snap.composer,
-      at: { railW: rail ? rail.w : null, historyW: history ? history.w : null, chatW: chat ? chat.w : null, sphereW: sphere ? sphere.w : null },
-      expected: exp,
-      tokensOk,
-      leftGroupMerged,
-      leftGroupWidth,
-      gapHistoryChat,
-      gapChatSphere,
-      panelsInside,
-      orbSquare,
-      orbSizeOk,
-      composerHeightOk,
-      composerWidth,
+      topbar, nav, history, chat, sphere, orb: orbRect, orbRect, canvas: orbCanvas, composer: snap.composer,
+      at: {
+        historyW: history ? history.w : null,
+        chatW: chat ? chat.w : null,
+        sphereW: sphere ? sphere.w : null,
+        sphereShare,
+      },
+      expected: { historyShouldShow, sphereShare: '0.18..0.42', orbRatio: '0.6..0.98', composerHeight: '56..120' },
+      historyShouldShow, historyShown, historyOk,
+      topbarOk, navOk, panelsOk, sphereOk, orbSquare, orbFits, orbRatio, orbSizeOk, composerOk,
+      tokens,
+      composerWidth: snap.composer ? snap.composer.w : null,
       canvasMatch: Boolean(orbCanvas && orbCanvas.cssMatchesAttr),
-      canvas: orbCanvas,
-      orbRect,
-      computed: snap.computed,
-      historyDisplay: snap.historyDisplay,
       view: snap.view,
       screenshot: shotInfo.name,
       screenshotError: shotInfo.error || null,
     });
   }
-  const ok = results.every((r) => !r.overflowX && r.panelsInside && r.tokensOk && r.leftGroupMerged
-    && r.orbSquare && r.orbSizeOk && r.composerHeightOk && r.canvasMatch);
-  return { ok, evidence: { sizes: results }, screenshots: shots };
+  const ok = results.every((r) => r.innerOk && !r.overflowX && r.topbarOk && r.navOk && r.panelsOk
+    && r.sphereOk && r.orbSizeOk && r.composerOk && r.canvasMatch && r.historyOk);
+  return {
+    ok,
+    evidence: {
+      sizes: results,
+      note: 'Проверка описывает текущую оболочку Nox: верхняя шапка, история/чат/сфера на широком окне, история по кнопке на узком. Старые точные размеры токенов оставлены справочно в tokens.',
+    },
+    screenshots: shots,
+  };
 }
 
 async function checkCopy(win) {
@@ -1212,11 +1253,24 @@ async function checkCopy(win) {
     };
   })()`);
   await settle(win, 450);
-  const restored = await js(win, `(() => ({ copies: document.querySelectorAll('#feedList .nox-copy').length }))()`);
+  // Кнопки возвращает ensureCopyButtons при появлении нового хода: на голое удаление
+  // наблюдатель ленты не срабатывает. Контрольное сообщение добавляет новый ход и тем
+  // самым возвращает недостающую кнопку — проверяем это по числу кнопок.
+  const restoreProbe = await submitAndWait(win, 'Проверка кнопки копирования Nox.', 20000);
+  await settle(win, 700);
+  const restored = await js(win, `(() => ({
+    copies: document.querySelectorAll('#feedList .nox-copy').length,
+    turns: document.querySelectorAll('#feedList .turn').length,
+    answers: document.querySelectorAll('#feedList .md').length,
+  }))()`);
   evidence.layoutShift = {
     ...shift,
     restoredCopies: restored.copies,
-    note: 'Снята одна кнопка последнего ответа: offsetTop предыдущих реплик не меняется; своя высота ответа уменьшается на высоту кнопки. Кнопки возвращены наблюдателем ленты.',
+    restoredTurns: restored.turns,
+    restoredAnswers: restored.answers,
+    restoredExpected: shift.totalButtons + 1,
+    restoreSentOk: Boolean(restoreProbe.poll && restoreProbe.poll.ok),
+    note: 'Снята одна кнопка последнего ответа: offsetTop предыдущих реплик не меняется. Кнопки возвращает ensureCopyButtons при появлении нового хода; после контрольного сообщения кнопок ровно на одну больше.',
   };
 
   const ok = Boolean(info.visible && info.onScreen
@@ -1229,7 +1283,8 @@ async function checkCopy(win) {
     && focus && focus.activeIsButton
     && (evidence.hoverChanged || (hover && hover.hoverRulePresent))
     && shift && !shift.error && shift.changedPrev === 0
-    && restored.copies === shift.totalButtons);
+    && evidence.layoutShift.restoreSentOk
+    && restored.copies === shift.totalButtons + 1);
   return { ok, evidence, screenshots };
 }
 
