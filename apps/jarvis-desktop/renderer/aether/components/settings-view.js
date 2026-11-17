@@ -2,7 +2,9 @@
  * - поиск по всем категориям и отдельные страницы сферы, окна, оформления, доступа и голоса;
  * - единая «Библиотека сфер» (сохраняет обе существующие системы NoxOrb и JarvisOrb и все их варианты без визуальных правок);
  * - независимые настройки для каждой сферы, пресеты и сброс без потери параметров при переключении;
- * - шрифт подписи «The Nox» (IBM Plex Serif, Times New Roman, Georgia, Sitka), темы, акцент, свой фон и 9 эффектов;
+ * - шрифт подписи «The Nox» (IBM Plex Serif, Times New Roman, Georgia, Sitka), сетка превью всех тем,
+ *   восемь новых палитр Nox, вложенные гарнитуры (Manrope, Unbounded, Source Serif 4, JetBrains Mono),
+ *   акцент, свой фон, 9 эффектов и «Сбросить оформление»;
  * - временная кнопка безопасного отката на прошлый интерфейс (uiShell: 'legacy'). */
 (() => {
   'use strict';
@@ -13,7 +15,7 @@
     light: 'Светлая',
     graphite: 'Графит',
     lime: 'Лайм',
-    paper: 'Бумага',
+    paper: 'Тёплая бумага',
     forest: 'Лес',
     wine: 'Вино',
     cobalt: 'Кобальт',
@@ -36,6 +38,16 @@
     malachite: 'Малахит',
     copper: 'Медь',
     porcelain: 'Фарфор',
+    // Восемь новых палитр Nox. «Бумага» — новая светлая; старую тёплую бумагу зовём «Тёплая бумага»,
+    // чтобы подписи в списке не повторялись.
+    ocean: 'Океан',
+    terracotta: 'Терракота',
+    'paper-white': 'Бумага',
+    emerald: 'Изумруд',
+    'neon-noir': 'Неон-нуар',
+    lavender: 'Лаванда',
+    coffee: 'Кофе',
+    snow: 'Снег',
     system: 'Как в системе',
   };
 
@@ -477,18 +489,23 @@
         themeGrid.className = 'ae-field';
         const themeSelect = document.createElement('select');
         themeSelect.className = 'ae-select';
+        // jarvis.theme хранится как JSON-строка ('"ocean"'): без разбора в списке был бы мусор.
         let curTheme = document.documentElement.dataset.theme || 'dark';
-        try { curTheme = localStorage.getItem('jarvis.theme') || curTheme; } catch { /* без хранилища */ }
-        for (const id of T.IDS) {
+        try {
+          const savedTheme = JSON.parse(localStorage.getItem('jarvis.theme'));
+          if (typeof savedTheme === 'string') curTheme = savedTheme;
+        } catch { /* без хранилища или мусор */ }
+        for (const id of T.ALL_IDS) {
           themeSelect.add(new Option(THEME_LABELS[id] || id, id));
         }
-        themeSelect.value = T.IDS.includes(curTheme) ? curTheme : 'dark';
+        themeSelect.value = T.ALL_IDS.includes(curTheme) ? curTheme : 'dark';
         themeSelect.addEventListener('change', () => applyTheme(themeSelect.value));
         function applyTheme(id) {
           themeSelect.value = id;
           try {
             if (boot) localStorage.setItem(boot.THEME_CHOSEN_KEY, '1');
-            localStorage.setItem('jarvis.theme', themeSelect.value);
+            // theme-boot.js читает значение через JSON.parse и ждёт строку в кавычках.
+            localStorage.setItem('jarvis.theme', JSON.stringify(themeSelect.value));
           } catch { /* без хранилища */ }
           T.apply(themeSelect.value);
           document.dispatchEvent(new Event('jarvis:themechange'));
@@ -496,26 +513,65 @@
         }
         themeSelect.id = 'aeThemeSelect';
         themeGrid.append('Все темы', themeSelect);
+        // Сетка превью: каждая тема — мини-карточка с настоящими токенами темы
+        // (фон, панель, строка текста и цветная точка акцента). Порядок — как в списке.
         const gallery = document.createElement('div');
         gallery.className = 'ae-theme-gallery';
-        for (const id of ['dark', 'malachite', 'blue-hour', 'eclipse', 'copper', 'porcelain']) {
+        gallery.dataset.count = String(T.ALL_IDS.filter((id) => id !== 'system').length);
+        for (const id of T.ALL_IDS) {
+          if (id === 'system') continue;
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'ae-theme-card';
           button.dataset.themeId = id;
           button.setAttribute('aria-pressed', 'false');
+          button.title = `Тема «${THEME_LABELS[id] || id}»`;
+          button.setAttribute('aria-label', `Тема ${THEME_LABELS[id] || id}`);
           const sample = document.createElement('span');
           sample.className = 'ae-theme-sample';
           sample.dataset.theme = id;
           sample.setAttribute('aria-hidden', 'true');
-          sample.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
+          const rail = document.createElement('i');
+          rail.className = 'ae-tm-rail';
+          const panelSample = document.createElement('i');
+          panelSample.className = 'ae-tm-panel';
+          const line = document.createElement('i');
+          line.className = 'ae-tm-line';
+          const shortLine = document.createElement('i');
+          shortLine.className = 'ae-tm-line ae-tm-short';
+          panelSample.append(line, shortLine);
+          const dot = document.createElement('i');
+          dot.className = 'ae-tm-dot';
+          sample.append(rail, panelSample, dot);
           const title = document.createElement('span');
-          title.textContent = THEME_LABELS[id];
+          title.className = 'ae-theme-card-name';
+          title.textContent = THEME_LABELS[id] || id;
           button.append(sample, title);
           button.addEventListener('click', () => applyTheme(id));
           gallery.append(button);
         }
-        panel.append(gallery, themeGrid);
+        // «Сбросить оформление»: тема «Ночь», шрифты и акцент — как в теме, свой фон снят.
+        const resetRow = document.createElement('div');
+        resetRow.className = 'ae-head-actions ae-theme-reset-row';
+        const resetAppearance = document.createElement('button');
+        resetAppearance.type = 'button';
+        resetAppearance.className = 'ae-btn ae-btn-secondary ae-btn-sm';
+        resetAppearance.textContent = 'Сбросить оформление';
+        resetAppearance.title = 'Тема «Ночь», шрифты, эффекты и акцент — как в теме; своя картинка фона снимается';
+        resetAppearance.addEventListener('click', async () => {
+          if (window.NoxBackdrop?.has()) {
+            try { await window.NoxBackdrop.clear(); } catch { /* картинка могла быть уже снята */ }
+          }
+          T.resetAppearance();
+          try {
+            if (boot) localStorage.setItem(boot.THEME_CHOSEN_KEY, '1');
+          } catch { /* без хранилища */ }
+          themeSelect.value = 'signal';
+          store.toast('Оформление сброшено', 'ok');
+          renderBody();
+        });
+        resetRow.append(resetAppearance);
+        panel.append(gallery, themeGrid, resetRow);
         wrap.append(panel);
         const colorPanel = makePanel('Акцент и фон');
 
@@ -711,7 +767,7 @@
         select.dataset.look = key;
         for (const [id, [label, stack]] of Object.entries(options)) {
           const option = new Option(label, id);
-          if ((key === 'ui' || key === 'head') && stack && stack !== 'ui') option.style.fontFamily = stack;
+          if ((key === 'ui' || key === 'head' || key === 'mono') && stack && stack !== 'ui') option.style.fontFamily = stack;
           select.add(option);
         }
         select.value = value;
@@ -719,7 +775,7 @@
         return select;
       }
 
-      if ((group === 'appearance' || searchQuery) && T && matchesSearch('Типографика шрифты размер текста интерфейс заголовки ответы Inter Aptos IBM Plex Serif')) {
+      if ((group === 'appearance' || searchQuery) && T && matchesSearch('Типографика шрифты размер текста интерфейс заголовки ответы Inter Manrope Unbounded Source Serif 4 JetBrains Mono IBM Plex Serif код моноширинный')) {
         const panel = makePanel('Шрифты');
         const look = T.getLook();
         const grid = document.createElement('div');
@@ -728,6 +784,7 @@
           ['ui', 'Интерфейс', T.FONTS.ui],
           ['head', 'Заголовки', T.FONTS.head],
           ['reply', 'Ответы в чате', { theme: ['Как в теме'], ui: ['Как интерфейс'], head: ['Как заголовки'] }],
+          ['mono', 'Код и формулы', T.FONTS.mono],
           ['size', 'Размер текста', T.SIZES],
         ]) {
           const label = document.createElement('label');
@@ -735,13 +792,18 @@
           label.append(caption, makeLookSelect(key, options, look[key]));
           grid.append(label);
         }
+        // Образец показывает все три роли сразу: заголовок, текст ответа и моноширинную строку.
+        // Шрифты подставляются переменными, поэтому образец меняется без перерисовки панели.
         const sample = document.createElement('div');
         sample.className = 'ae-type-sample';
         const title = document.createElement('strong');
         title.textContent = 'План на сегодня';
         const prose = document.createElement('span');
         prose.textContent = 'Проверил расписание. Следующая встреча в 15:00.';
-        sample.append(title, prose);
+        const mono = document.createElement('code');
+        mono.className = 'ae-type-mono';
+        mono.textContent = 'const nox = "готов"; // 15:00';
+        sample.append(title, prose, mono);
         panel.append(sample, grid);
         wrap.append(panel);
       }

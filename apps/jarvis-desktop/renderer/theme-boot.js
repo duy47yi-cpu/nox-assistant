@@ -6,15 +6,21 @@
 
   const IDS = ['signal', 'dark', 'light', 'graphite', 'lime', 'paper', 'forest', 'wine', 'cobalt', 'aurora', 'ember', 'dawn', 'glass',
     'liquid', 'liquidday', 'frost', 'gradient', 'gradientday', 'midnight', 'neon', 'starry', 'moonlight', 'sunrise', 'blue-hour', 'eclipse', 'malachite', 'copper', 'porcelain', 'system'];
+  // Темы Nox Aether: восемь новых палитр. В классической оболочке (renderer/index.html)
+  // для них нет кнопок, поэтому отдельный список: выбор — сеткой в Настройках → Оформление.
+  const AETHER_IDS = ['ocean', 'terracotta', 'paper-white', 'emerald', 'neon-noir', 'lavender', 'coffee', 'snow'];
+  // Всё, что предлагают оба окна выбора: старые темы и «Как в системе», затем новые.
+  const ALL_IDS = [...IDS, ...AETHER_IDS];
   const resolve = (id) => {
     // Убранные темы (archive, tablet, acrylic и их дневные) и мусор тихо открывают «Ночь».
-    if (id !== 'system') return IDS.includes(id) ? id : 'signal';
+    if (id !== 'system') return IDS.includes(id) || AETHER_IDS.includes(id) ? id : 'signal';
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'signal';
   };
   const apply = (id) => { document.documentElement.dataset.theme = resolve(id); applyAccent(); applyFx(); };
 
   // Цвета акцента: на тёмных темах светлее, на светлых темнее, чтобы текст и значки акцентом читались (от 4,5:1).
-  const LIGHT_THEMES = ['light', 'lime', 'paper', 'dawn', 'liquidday', 'frost', 'gradientday', 'porcelain'];
+  const LIGHT_THEMES = ['light', 'lime', 'paper', 'dawn', 'liquidday', 'frost', 'gradientday', 'porcelain',
+    'ocean', 'terracotta', 'paper-white', 'lavender', 'snow'];
   const ACCENTS = [
     { id: 'theme', name: 'Как в теме' },
     { id: 'blue', name: 'Синий', dark: '#6AA6FF', light: '#2554C7' },
@@ -110,14 +116,17 @@
   }
 
   // ── Свой вид: шрифты, размер текста, скругление, прозрачность панелей, свет за окном, размер шара ──
-  // Хранится в localStorage jarvis.look, применяется до первой отрисовки. Шрифты берутся из установленных в Windows
-  // и встроенных Inter и IBM Plex Serif: сеть окну закрыта, скачивать шрифты нельзя.
+  // Хранится в localStorage jarvis.look, применяется до первой отрисовки. Шесть гарнитур вложены в fonts/
+  // (Inter, IBM Plex Serif, Manrope, Unbounded, Source Serif 4, JetBrains Mono): сеть окну закрыта,
+  // скачивать шрифты нельзя. У каждого списка есть откат на системные шрифты Windows.
   const SANS = '"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif';
   const SERIF_END = ', Georgia, "Times New Roman", serif';
+  const MONO_END = '"Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace';
   const FONTS = {
     ui: {
       theme: ['Как в теме', null],
       inter: ['Inter', `"Inter", ${SANS}`],
+      manrope: ['Manrope', `"Manrope", ${SANS}`],
       system: ['Системный Windows', SANS],
       aptos: ['Aptos', `"Aptos", ${SANS}`],
       bahn: ['Bahnschrift', `"Bahnschrift", ${SANS}`],
@@ -129,13 +138,22 @@
     },
     head: {
       theme: ['Как в теме', null],
+      source: ['Source Serif 4', `"Source Serif 4"${SERIF_END}`],
+      unbounded: ['Unbounded', `"Unbounded", ${SANS}`],
       sitka: ['Sitka', `"Sitka Heading", "Sitka Text"${SERIF_END}`],
       plex: ['IBM Plex Serif', `"IBM Plex Serif"${SERIF_END}`],
       georgia: ['Georgia', `Georgia, "Times New Roman", serif`],
       times: ['Классический (Times New Roman)', `"Times New Roman", "Liberation Serif", Georgia, serif`],
       cambria: ['Cambria', `"Cambria"${SERIF_END}`],
       constantia: ['Constantia', `"Constantia"${SERIF_END}`],
+      system: ['Системный (Georgia)', `Georgia, "Times New Roman", serif`],
       ui: ['Тот же, что в интерфейсе', 'ui'],
+    },
+    // Код, формулы и HEX: отдельная ручка, чтобы JetBrains Mono включался по желанию.
+    mono: {
+      theme: ['Как в теме', null],
+      jetbrains: ['JetBrains Mono', `"JetBrains Mono", ${MONO_END}`],
+      system: ['Системный Windows', MONO_END],
     },
   };
   const SIZES = { s: ['Мелкий', 0.92], m: ['Обычный', 1], l: ['Крупный', 1.08], xl: ['Очень крупный', 1.16] };
@@ -164,7 +182,7 @@
   };
   const WIN_RADII = { 0: ['Прямые', 0], 8: ['8', 8], 14: ['14', 14], 22: ['22', 22], 28: ['28', 28] };
   const FS = { '2xs': 11, xs: 12, sm: 13, md: 14, read: 15, lg: 16, xl: 20, '2xl': 24 };
-  const LOOK_DEFAULT = { ui: 'theme', head: 'theme', reply: 'theme', size: 'm', round: 'm', panel: 'm', orb: 'm', blur: 'm', bg: 'theme', bgDim: '40', bgBlur: '6', fx: 'theme', glow: true, winAlpha: '0', winRadius: '0' };
+  const LOOK_DEFAULT = { ui: 'theme', head: 'theme', mono: 'theme', reply: 'theme', size: 'm', round: 'm', panel: 'm', orb: 'm', blur: 'm', bg: 'theme', bgDim: '40', bgBlur: '6', fx: 'theme', glow: true, winAlpha: '0', winRadius: '0' };
   let look = { ...LOOK_DEFAULT };
 
   // Битое сохранённое значение не должно ломать окно: каждая настройка проверяется по своему списку,
@@ -175,6 +193,7 @@
     return {
       ui: pickId(FONTS.ui, v.ui, LOOK_DEFAULT.ui),
       head: pickId(FONTS.head, v.head, LOOK_DEFAULT.head),
+      mono: pickId(FONTS.mono, v.mono, LOOK_DEFAULT.mono),
       reply: pickId({ theme: 1, head: 1, ui: 1 }, v.reply, LOOK_DEFAULT.reply),
       size: pickId(SIZES, v.size, LOOK_DEFAULT.size),
       round: pickId(ROUNDS, v.round, LOOK_DEFAULT.round),
@@ -200,6 +219,12 @@
     else r.style.removeProperty('--font');
     if (headStack) r.style.setProperty('--font-head', headStack);
     else r.style.removeProperty('--font-head');
+    if (look.mono === 'theme') r.style.removeProperty('--mono');
+    else r.style.setProperty('--mono', (FONTS.mono[look.mono] || FONTS.mono.theme)[1]);
+    // Флаг для оболочки Aether: свой шрифт интерфейса перебивает её тёмную гарнитуру облика
+    // (у темы «Тёмная» он иначе замкнут сам на себя — см. aether.css).
+    if (look.ui === 'theme') delete r.dataset.uiFont;
+    else r.dataset.uiFont = 'custom';
     if (look.reply === 'theme') r.style.removeProperty('--font-reply');
     else r.style.setProperty('--font-reply', look.reply === 'ui' ? (uiStack || 'var(--font)') : (headStack || 'var(--font-head)'));
     if (look.reply === 'theme') r.style.removeProperty('--ae-answer-font');
@@ -261,6 +286,15 @@
     resetLook();
     setAccent('theme');
   }
+  // «Сбросить оформление»: тема «Ночь», шрифты, эффекты и акцент — как в теме.
+  // Своя картинка фона снимается в Настройках (NoxBackdrop), здесь — только оформление окна.
+  function resetAppearance() {
+    resetLook();
+    setAccent('theme');
+    apply('signal');
+    try { localStorage.setItem('jarvis.theme', JSON.stringify('signal')); } catch { /* нет хранилища */ }
+    document.dispatchEvent(new Event('jarvis:themechange'));
+  }
   try { look = sanitizeLook(JSON.parse(localStorage.getItem('jarvis.look'))); } catch { look = { ...LOOK_DEFAULT }; }
   applyLook();
 
@@ -281,8 +315,8 @@
   });
 
   window.JarvisTheme = {
-    IDS, resolve, apply, ACCENTS, setAccent, getAccent: () => accent, getAccentInfo: () => ({ ...accentInfo }), normHex, MIN_CONTRAST,
+    IDS, AETHER_IDS, ALL_IDS, resolve, apply, ACCENTS, setAccent, getAccent: () => accent, getAccentInfo: () => ({ ...accentInfo }), normHex, MIN_CONTRAST,
     FONTS, SIZES, ROUNDS, PANELS, ORBS, BLURS, BGS, BG_DIMS, BG_BLURS, FXS, THEME_FX, WIN_ALPHAS, WIN_RADII, LOOK_DEFAULT, sanitizeLook,
-    contrast, readable, getLook: () => ({ ...look }), setLook, resetLook, resetToTheme,
+    contrast, readable, getLook: () => ({ ...look }), setLook, resetLook, resetToTheme, resetAppearance,
   };
 })();

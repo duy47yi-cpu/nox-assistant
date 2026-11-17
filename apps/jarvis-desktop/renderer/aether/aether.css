@@ -2211,40 +2211,137 @@ html[data-aether][data-glass="off"] :is(.ae-chat-view, .ae-orb-stage) { backdrop
 .ae-settings-group > .ae-set-row + .ae-set-row { border-top: 1px solid var(--border); }
 .ae-settings-group .ae-field { gap: 6px; min-width: 0; }
 .ae-settings-group .ae-workshop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Сетка превью тем: маленькая карточка повторяет окно — рейка, панель, строки и цветная точка.
+ * Все цвета берутся из токенов выбранной темы, поэтому образец — настоящее превью, а не картинка. */
 .ae-theme-gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 108px), 1fr));
   gap: 8px;
-  margin: 10px 0;
+  margin: 10px 0 4px;
 }
 .ae-theme-card {
   display: grid;
-  gap: 6px;
-  padding: 5px 5px 8px;
+  gap: 5px;
+  min-width: 0;
+  padding: 4px 4px 7px;
   text-align: left;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 9px;
   background: var(--surface);
   color: var(--text);
   font: inherit;
+  font-size: var(--fs-xs, 12px);
+  line-height: 16px;
   cursor: pointer;
 }
-.ae-theme-card > span:last-child { padding-inline: 4px; }
-.ae-theme-card:hover { background: var(--surface-2); }
-.ae-theme-card[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.ae-theme-sample {
-  display: grid;
-  align-content: end;
-  gap: 4px;
-  padding: 9px 10px;
-  height: 44px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: linear-gradient(110deg, var(--bg) 23%, var(--surface-2) 24%, var(--surface));
+.ae-theme-card-name {
+  overflow: hidden;
+  padding-inline: 3px;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.ae-theme-sample i { display: block; height: 3px; width: 57%; border-radius: 2px; background: var(--text-3); margin-inline-start: 14%; }
-.ae-theme-sample i:nth-child(2) { width: 36%; }
-.ae-theme-sample i:last-child { width: 19%; background: var(--hue); }
+.ae-theme-card:hover { background: var(--surface-2); }
+.ae-theme-card:hover .ae-theme-card-name { color: var(--text); }
+.ae-theme-card[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.ae-theme-card[aria-pressed="true"] .ae-theme-card-name { color: var(--text); font-weight: var(--fw-strong, 600); }
+.ae-theme-sample {
+  position: relative;
+  display: block;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-image, none), var(--bg);
+}
+.ae-theme-sample .ae-tm-rail {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 9px;
+  border-inline-end: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
+.ae-theme-sample .ae-tm-panel {
+  position: absolute;
+  inset-block: 8px;
+  inset-inline: 16px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+.ae-theme-sample .ae-tm-line {
+  position: absolute;
+  top: 8px;
+  inset-inline: 7px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--text-2);
+}
+.ae-theme-sample .ae-tm-short {
+  top: 15px;
+  inset-inline: 7px 26px;
+  background: var(--text-3);
+}
+.ae-theme-sample .ae-tm-dot {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hue);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hue) 26%, transparent);
+}
+.ae-theme-reset-row { margin-top: 2px; }
+/* Образец шрифтов: моноширинная строка показывает третью роль — код, формулы и HEX. */
+.ae-type-mono {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: var(--fs-xs, 12px);
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Разделы Aether на светлых и новых темах: страница и настройки берут фон своей палитры,
+ * а не тёмно-синюю подложку облика из nox-luxify.css. Старые тёмные темы сохраняют
+ * привычный градиент; «Своя картинка» и прозрачность окна остаются главными. */
+html[data-aether]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"],
+  [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"],
+  [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"],
+  [data-theme="snow"], [data-theme="emerald"], [data-theme="neon-noir"], [data-theme="coffee"]):not([data-win-alpha]):not([data-own-bg]) body.ae-body {
+  background-color: var(--bg);
+  background-image: var(--bg-image, none);
+}
+/* Панели Настроек в этих темах — из токенов темы, а не тёмно-синие из nox-luxify.css:
+ * иначе на светлой палитре подписи поля тёмные на тёмном. */
+html[data-aether]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"],
+  [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"],
+  [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"],
+  [data-theme="snow"], [data-theme="emerald"], [data-theme="neon-noir"], [data-theme="coffee"]) .ae-settings-page .ae-settings-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+/* Цвет текста оболочки — из темы: на светлой палитре белый текст облика не виден вне явно окрашенных строк. */
+html[data-aether] body.ae-body { color: var(--text); }
+/* Акцент темы в чате: пузырь своего сообщения и кнопка отправки, а не синий облик nox-luxify. */
+html[data-aether] .ae-send-btn { background: var(--accent); color: var(--accent-ink, #14120E); }
+html[data-aether] .ae-chat-view .ae-user-bubble {
+  background: var(--accent-bg, color-mix(in srgb, var(--accent) 16%, var(--surface)));
+  border: 1px solid var(--accent-line, color-mix(in srgb, var(--accent) 36%, var(--border)));
+}
+/* Выбор гарнитуры интерфейса в Настройках должен доходить до оболочки Aether.
+ * У темы «Тёмная» облик задаёт тёмную гарнитуру сам себе — включаем шрифт темы,
+ * только когда владелец выбрал свой (html[data-ui-font], ставит theme-boot.js),
+ * чтобы не получить замкнутую переменную. */
+html[data-aether]:not([data-theme="dark"]),
+html[data-aether][data-ui-font] {
+  --lx-font: var(--font, "Segoe UI", Inter, Roboto, Arial, sans-serif);
+}
 .ae-hex-form { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .ae-hex-form .ae-input { width: 100px; min-width: 0; font-family: var(--mono); }
 .ae-hex-label { font-family: var(--mono); color: var(--text-2); font-size: var(--fs-xs); }

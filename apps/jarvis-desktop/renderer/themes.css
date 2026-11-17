@@ -3,13 +3,20 @@
  * --g1..--g3 — точки градиента фона: текст проверяется и по ним. */
 
 /* ── Шрифты: единственное место для семейств, размеров и весов ────────
- * Inter (интерфейс) и IBM Plex Serif (заголовки, часы) — OFL, файлы и лицензии в fonts/. */
+ * Шесть гарнитур вложены в fonts/ (OFL, лицензии рядом): Inter — интерфейс,
+ * IBM Plex Serif — заголовки, Manrope — спокойный гротеск для чтения,
+ * Unbounded — широкие заголовки, Source Serif 4 — книжный сериф,
+ * JetBrains Mono — код, формулы, HEX. Сеть окну закрыта: только свои файлы. */
 @font-face { font-family: "Inter"; src: url("fonts/Inter-Variable.ttf") format("truetype"); font-weight: 100 900; font-style: normal; font-display: swap; }
 @font-face { font-family: "IBM Plex Serif"; src: url("fonts/IBMPlexSerif-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Manrope"; src: url("fonts/Manrope-Variable.ttf") format("truetype"); font-weight: 200 800; font-style: normal; font-display: swap; }
+@font-face { font-family: "Unbounded"; src: url("fonts/Unbounded-Variable.ttf") format("truetype"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Source Serif 4"; src: url("fonts/SourceSerif4-Variable.ttf") format("truetype"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/JetBrainsMono-Variable.ttf") format("truetype"); font-weight: 100 800; font-style: normal; font-display: swap; }
 :root {
   --font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
-  --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+  --mono: "JetBrains Mono", "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
 
   --fs-2xs: 11px;
   --fs-xs: 12px;
@@ -281,6 +288,140 @@ body, .theme-mini {
   --ok: #396641; --warn: #805413; --err: #9B3840; --on-stop: #FFFFFF;
 }
 
+/* ── Новые наборы Nox: восемь спокойных палитр с вложенными гарнитурами ──────
+ * У каждой — полный набор токенов: фон и панели, три ступени текста, цвет раздела
+ * и его оттенки для «Журнала», «Дел», «Команд» и «Настроек», состояния и тени.
+ * Текст проверен от 4,5:1 на всех поверхностях (renderer/themes.test.js), поэтому
+ * палитры плотные: светлые — с тёмным текстом, тёмные — со светлым.
+ * Фон ровный (--bg-image: none): мягкий цвет живёт в самих панелях, а не в пятнах. */
+[data-theme="ocean"] {
+  color-scheme: light;
+  --theme-font: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --g1: #E9F1F4; --g2: #E9F1F4; --g3: #E9F1F4;
+  --bg: #E9F1F4; --bg-image: none;
+  --surface: #F9FCFD; --surface-2: #E1EBEF; --surface-3: #D0E0E6; --border: #B8CDD5;
+  --text: #0C2430; --text-2: #2C4754; --text-3: #3B5764;
+  --hue: #0D6572; --accent-ink: #FFFFFF;
+  --hue-deals: #6A3F8A; --hue-journal: #1D6338; --hue-commands: #1F4E8A; --hue-settings: #8C2F5A;
+  --contour: #C9DCE2; --contour-index: #93B7C2;
+  --ok: #1B6B3F; --warn: #7A4E00; --err: #AA2F2A; --on-stop: #FFFFFF;
+  --scrim: #0C243055; --shadow-pop: 0 8px 24px #0C24301F; --shadow-dialog: 0 24px 64px #0C243033;
+  --panel-pct: 4%; --glass-blur: 20px;
+}
+
+[data-theme="terracotta"] {
+  color-scheme: light;
+  --theme-font: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --g1: #F3E8E1; --g2: #F3E8E1; --g3: #F3E8E1;
+  --bg: #F3E8E1; --bg-image: none;
+  --surface: #FFFBF7; --surface-2: #EEE0D7; --surface-3: #E7D7CB; --border: #D0B7A8;
+  --text: #2B1A14; --text-2: #553E31; --text-3: #684C3B;
+  --hue: #A33A20; --accent-ink: #FFFFFF;
+  --hue-deals: #6A3F7A; --hue-journal: #1D5E3A; --hue-commands: #1F4E7A; --hue-settings: #8A2F4A;
+  --contour: #E2CEC0; --contour-index: #C09E89;
+  --ok: #1B6B3C; --warn: #5F5C00; --err: #A82E22; --on-stop: #FFFFFF;
+  --scrim: #2B1A1455; --shadow-pop: 0 8px 24px #2B1A1424; --shadow-dialog: 0 24px 64px #2B1A1438;
+  --panel-pct: 4%; --glass-blur: 20px;
+}
+
+[data-theme="paper-white"] {
+  color-scheme: light;
+  --theme-font: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --g1: #F7F5F0; --g2: #F7F5F0; --g3: #F7F5F0;
+  --bg: #F7F5F0; --bg-image: none;
+  --surface: #FFFFFF; --surface-2: #EFEBE3; --surface-3: #E3DDD1; --border: #CFC7B8;
+  --text: #1D1A14; --text-2: #474236; --text-3: #5A5446;
+  --hue: #1F4E79; --accent-ink: #FFFFFF;
+  --hue-deals: #6A3F7A; --hue-journal: #1D5E3A; --hue-commands: #0C5E6E; --hue-settings: #8A2F4A;
+  --contour: #E8E2D6; --contour-index: #C4B9A4;
+  --ok: #1B6B3C; --warn: #7A4E00; --err: #A82E22; --on-stop: #FFFFFF;
+  --scrim: #1D1A1455; --shadow-pop: 0 8px 24px #1D1A141F; --shadow-dialog: 0 24px 64px #1D1A1433;
+  --panel-pct: 5%; --glass-blur: 16px;
+}
+
+[data-theme="emerald"] {
+  color-scheme: dark;
+  --theme-font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --g1: #0A1D17; --g2: #0A1D17; --g3: #0A1D17;
+  --bg: #0A1D17; --bg-image: none;
+  --surface: #102820; --surface-2: #17352B; --surface-3: #204438; --border: #2E5A4A;
+  --text: #EAF6EF; --text-2: #BCD4C7; --text-3: #9CBCAB;
+  --hue: #5FE3A6; --accent-ink: #062018;
+  --hue-deals: #C9A6FF; --hue-journal: #5FE3A6; --hue-commands: #7FD8FF; --hue-settings: #FF9CCB;
+  --contour: #173D30; --contour-index: #3B7A61;
+  --ok: #7CE8AC; --warn: #FFCB5C; --err: #FF9A8C; --on-stop: #062018;
+  --scrim: #04130E80; --shadow-pop: 0 8px 24px #04130E66; --shadow-dialog: 0 24px 64px #04130E99;
+  --panel-pct: 4%; --glass-blur: 20px;
+}
+
+[data-theme="neon-noir"] {
+  color-scheme: dark;
+  --theme-font: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "Unbounded", "Segoe UI Variable Text", system-ui, sans-serif;
+  --g1: #0B0A10; --g2: #0B0A10; --g3: #0B0A10;
+  --bg: #0B0A10; --bg-image: none;
+  --surface: #14121B; --surface-2: #1C1A26; --surface-3: #262333; --border: #3A3550;
+  --text: #F2F0FA; --text-2: #C6C2D8; --text-3: #A6A1BE;
+  --hue: #E9FF57; --accent-ink: #10110A;
+  --hue-deals: #FF6AD5; --hue-journal: #7CFFB2; --hue-commands: #45E6FF; --hue-settings: #FF86D0;
+  --contour: #241F33; --contour-index: #5A4E7A;
+  --ok: #7CFFB0; --warn: #FF6B8A; --err: #FF7A6E; --on-stop: #0B0A10;
+  --scrim: #05040A80; --shadow-pop: 0 8px 24px #05040A66; --shadow-dialog: 0 24px 64px #05040A99;
+  --panel-pct: 3%; --glass-blur: 24px;
+}
+
+[data-theme="lavender"] {
+  color-scheme: light;
+  --theme-font: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --g1: #F0ECF6; --g2: #F0ECF6; --g3: #F0ECF6;
+  --bg: #F0ECF6; --bg-image: none;
+  --surface: #FCFAFF; --surface-2: #EAE4F3; --surface-3: #DED6EC; --border: #CCC0DF;
+  --text: #211A2E; --text-2: #4A3E5F; --text-3: #5D5073;
+  --hue: #593C99; --accent-ink: #FFFFFF;
+  --hue-deals: #A33A66; --hue-journal: #1D5E3A; --hue-commands: #1F4E7A; --hue-settings: #6A3F8A;
+  --contour: #E1DAEE; --contour-index: #BCADD6;
+  --ok: #1B6B4A; --warn: #7C4E00; --err: #A82E3C; --on-stop: #FFFFFF;
+  --scrim: #211A2E55; --shadow-pop: 0 8px 24px #211A2E24; --shadow-dialog: 0 24px 64px #211A2E38;
+  --panel-pct: 4%; --glass-blur: 18px;
+}
+
+[data-theme="coffee"] {
+  color-scheme: dark;
+  --theme-font: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --g1: #1B1310; --g2: #1B1310; --g3: #1B1310;
+  --bg: #1B1310; --bg-image: none;
+  --surface: #241A15; --surface-2: #2E221B; --surface-3: #3C2C23; --border: #574135;
+  --text: #F7EDE2; --text-2: #D8C4B2; --text-3: #BEA48F;
+  --hue: #D99A5B; --accent-ink: #241407;
+  --hue-deals: #C9A6FF; --hue-journal: #A8E8B8; --hue-commands: #8FD8F5; --hue-settings: #FFB3C8;
+  --contour: #3A281F; --contour-index: #7A5541;
+  --ok: #A8E0B0; --warn: #FFE066; --err: #FF9E8A; --on-stop: #241407;
+  --scrim: #120C0980; --shadow-pop: 0 8px 24px #120C0966; --shadow-dialog: 0 24px 64px #120C0999;
+  --panel-pct: 4%; --glass-blur: 22px;
+}
+
+[data-theme="snow"] {
+  color-scheme: light;
+  --theme-font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --g1: #ECF1F5; --g2: #ECF1F5; --g3: #ECF1F5;
+  --bg: #ECF1F5; --bg-image: none;
+  --surface: #FBFDFF; --surface-2: #E5ECF2; --surface-3: #D7E2EB; --border: #C5D3DF;
+  --text: #101C26; --text-2: #32495B; --text-3: #41586A;
+  --hue: #1E5C84; --accent-ink: #FFFFFF;
+  --hue-deals: #6A3F8A; --hue-journal: #1D6338; --hue-commands: #0C5E6E; --hue-settings: #8A2F4A;
+  --contour: #DCE6EE; --contour-index: #AFC2D2;
+  --ok: #1B6B44; --warn: #7C5200; --err: #A62E2E; --on-stop: #FFFFFF;
+  --scrim: #101C2655; --shadow-pop: 0 8px 24px #101C261F; --shadow-dialog: 0 24px 64px #101C2633;
+  --panel-pct: 6%; --glass-blur: 26px;
+}
+
 /* ── Градиентные: панели спокойные, цвет живёт в фоне ─────────── */
 [data-theme="aurora"] {
   color-scheme: dark;
@@ -527,7 +668,7 @@ html[data-fx] .theme-fx { display: block; }
   --fx-moon-halo: color-mix(in srgb, var(--fx-moon-tint) 11%, transparent);
   --fx-moon-beam: color-mix(in srgb, var(--fx-moon-tint) 6%, transparent);
 }
-:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"]) {
+:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"], [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"], [data-theme="snow"]) {
   --fx-star-1: color-mix(in srgb, var(--text) 90%, transparent);
   --fx-star-2: color-mix(in srgb, color-mix(in srgb, var(--warn) 65%, var(--text)) 88%, transparent);
   --fx-star-3: color-mix(in srgb, color-mix(in srgb, var(--hue) 75%, var(--text)) 85%, transparent);
@@ -573,7 +714,7 @@ html[data-fx="waves"] .theme-fx::after {
   background: var(--fx-wave-dark) repeat-x 0 100% / 1200px 100%;
   animation: fxWave 85s linear infinite;
 }
-html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"]) .theme-fx::before, html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"]) .theme-fx::after { background-image: var(--fx-wave-light); }
+html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"], [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"], [data-theme="snow"]) .theme-fx::before, html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"], [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"], [data-theme="snow"]) .theme-fx::after { background-image: var(--fx-wave-light); }
 @keyframes fxWave { to { background-position-x: -1200px; } }
 
 /* Лунный свет: мягкое пятно света сверху справа и редкий косой луч; свет медленно дышит. */
@@ -687,7 +828,7 @@ html[data-animations="off"] .theme-fx::after { animation: none !important; }
 
 /* ── Стекло панели чата ─ контур и фон видны сквозь матовую панель ─ */
 [data-theme] { --glass: 80%; --glass-edge: #FFFFFF24; }
-:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"]) { --glass: 86%; --glass-edge: #FFFFFF99; }
+:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"], [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"], [data-theme="snow"]) { --glass: 86%; --glass-edge: #FFFFFF99; }
 :is([data-theme="glass"]) { --glass: 64%; --glass-edge: #FFFFFF1F; }
 /* Стеклянные наборы: жидкое — прозрачнее, матовое — плотнее и сильнее размыто. */
 :is([data-theme="liquid"], [data-theme="moonlight"]) { --glass: 62%; --glass-edge: #FFFFFF26; }

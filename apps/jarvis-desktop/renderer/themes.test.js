@@ -17,11 +17,14 @@ const lum = (h) => {
 };
 const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
 
-test('есть все темы из theme-boot.js', () => {
+test('есть все темы из theme-boot.js: старые и восемь новых', () => {
   const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
   const ids = [...boot.match(/IDS = \[([^\]]+)\]/)[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]).filter((i) => i !== 'system');
-  assert.deepStrictEqual(Object.keys(themes).sort(), ids.sort());
+  const aether = [...boot.match(/AETHER_IDS = \[([^\]]+)\]/)[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]);
+  assert.deepStrictEqual(Object.keys(themes).sort(), [...ids, ...aether].sort());
   assert.ok(ids.length >= 8);
+  assert.equal(aether.length, 8, 'восемь новых тем Nox');
+  assert.equal(new Set([...ids, ...aether]).size, ids.length + aether.length, 'id не повторяются');
 });
 
 // Наборы по мотивам Luxify: каждый есть в IDS, в themes.css и кнопкой с подписью.
@@ -148,13 +151,17 @@ test('убранные варианты archive, tablet, acrylic нигде не
   assert.ok(!presence.includes('Три варианта вида'));
 });
 
-test('у каждой темы кнопка, а светлые темы совпадают с color-scheme', () => {
+test('у каждой темы есть выбор, а светлые темы совпадают с color-scheme', () => {
   const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  const settings = fs.readFileSync(path.join(__dirname, 'aether', 'components', 'settings-view.js'), 'utf8');
+  const aether = [...boot.match(/AETHER_IDS = \[([^\]]+)\]/)[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]);
   const light = [...boot.match(/LIGHT_THEMES = \[([^\]]+)\]/)[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]);
   const scheme = Object.fromEntries([...css.matchAll(/\[data-theme="([a-z-]+)"\] \{\s*color-scheme: (dark|light)/g)].map((m) => [m[1], m[2]]));
   for (const id of Object.keys(themes)) {
-    assert.ok(html.includes(`data-theme-opt="${id}"`), `кнопка ${id}`);
+    // Старые темы выбираются кнопкой в классическом окне; новые — превью-карточкой в Aether.
+    const inAether = aether.includes(id) && new RegExp(`['"]?${id}['"]?: '`).test(settings) && settings.includes('T.ALL_IDS');
+    assert.ok(inAether || html.includes(`data-theme-opt="${id}"`), `выбор темы ${id}`);
     assert.ok(scheme[id], `color-scheme у ${id}`);
     assert.equal(light.includes(id), scheme[id] === 'light', `LIGHT_THEMES и color-scheme у ${id}`);
   }
@@ -292,4 +299,192 @@ test('уменьшение движения (Л5): гаснет движение
   }
   // Движение каждого эффекта объявлено на псевдоэлементах слоя — их и гасят оба правила.
   for (const id of offered) assert.ok(css.includes('html[data-fx="' + id + '"] .theme-fx::before {'), 'рисунок ' + id);
+});
+
+
+// ── Восемь новых тем: русские названия, полный набор токенов, контраст ────
+const settingsSource = fs.readFileSync(path.join(__dirname, 'aether', 'components', 'settings-view.js'), 'utf8');
+const aetherCss = fs.readFileSync(path.join(__dirname, 'aether', 'aether.css'), 'utf8');
+const bootSource = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
+const NEW_THEMES = {
+  ocean: 'Океан',
+  terracotta: 'Терракота',
+  'paper-white': 'Бумага',
+  emerald: 'Изумруд',
+  'neon-noir': 'Неон-нуар',
+  lavender: 'Лаванда',
+  coffee: 'Кофе',
+  snow: 'Снег',
+};
+const themeLabels = (() => {
+  const block = settingsSource.match(/const THEME_LABELS = \{([\s\S]*?)\n  \};/);
+  assert.ok(block, 'THEME_LABELS в Настройках');
+  return Object.fromEntries([...block[1].matchAll(/(?:'([a-z-]+)'|([a-z]+)): '([^']+)'/g)].map((m) => [m[1] || m[2], m[3]]));
+})();
+
+test('новые темы: восемь русских названий в Настройках без повторов', () => {
+  const labels = Object.values(themeLabels);
+  assert.equal(new Set(labels).size, labels.length, labels.join(', '));
+  for (const [id, name] of Object.entries(NEW_THEMES)) {
+    assert.equal(themeLabels[id], name, `подпись ${id}`);
+    assert.ok(themes[id], `тема ${id} в themes.css`);
+  }
+  assert.equal(Object.keys(NEW_THEMES).length, 8);
+});
+
+test('новая тема — полный набор токенов: панели, три ступени текста, разделы, состояния и тени', () => {
+  const required = ['bg', 'g1', 'g2', 'g3', 'surface', 'surface-2', 'surface-3', 'border',
+    'text', 'text-2', 'text-3', 'hue', 'accent-ink', 'hue-deals', 'hue-journal', 'hue-commands', 'hue-settings',
+    'contour', 'contour-index', 'ok', 'warn', 'err', 'on-stop'];
+  for (const id of Object.keys(NEW_THEMES)) {
+    const block = css.match(new RegExp(`\\[data-theme="${id}"\\] \\{([^}]*)\\}`))[1];
+    for (const token of required) assert.ok(themes[id][token], `${id}: --${token}`);
+    assert.match(block, /--bg-image: none/, `${id}: ровный фон без пятен`);
+    assert.match(block, /--theme-font:/, `${id}: гарнитура интерфейса`);
+    assert.match(block, /--theme-font-head:/, `${id}: гарнитура заголовков`);
+    assert.match(block, /--panel-pct: \d+%; --glass-blur: \d+px;/, `${id}: плотность и размытие панелей`);
+    assert.match(block, /--scrim: #[0-9A-Fa-f]{8}/, `${id}: затемнение диалогов`);
+    assert.match(block, /color-scheme: (dark|light)/, `${id}: схема окна`);
+  }
+  // Тёмные темы должны быть тёмными, светлые — светлыми: иначе текст и подложка спорят.
+  for (const id of Object.keys(NEW_THEMES)) {
+    const light = /color-scheme: light/.test(css.match(new RegExp(`\\[data-theme="${id}"\\] \\{([^}]*)\\}`))[1]);
+    assert.equal(lum(themes[id].bg) > 0.5, light, `${id}: фон соответствует схеме`);
+  }
+});
+
+test('свой акцент читается и на новых темах, включая «Бумагу» и «Неон-нуар»', () => {
+  const hexOf = (c) => '#' + c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+  const read = (hex, backs) => {
+    const rgb0 = rgb(hex);
+    const ok = (c) => backs.every((b) => ratio(hexOf(c), b) >= 4.5);
+    if (ok(rgb0)) return hex;
+    const backsRgb = backs.map(rgb);
+    const dark = backsRgb.reduce((sum, b) => sum + lum(hexOf(b)), 0) / backsRgb.length < 0.4;
+    const target = dark ? [255, 255, 255] : [0, 0, 0];
+    for (let i = 1; i <= 20; i++) {
+      const c = rgb0.map((v, j) => Math.round(v + (target[j] - v) * (i / 20)));
+      if (ok(c)) return hexOf(c);
+    }
+    return hexOf(target);
+  };
+  const inkOn = (hex) => (ratio(hex, '#FFFFFF') >= ratio(hex, '#0B1018') ? '#FFFFFF' : '#0B1018');
+  const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
+  const accents = [...boot.match(/ACCENTS = \[([\s\S]*?)\n  \];/)[1].matchAll(/\{ id: '([a-z]+)', name: '[^']+', dark: '(#[0-9A-F]{6})', light: '(#[0-9A-F]{6})' \}/g)]
+    .map((m) => ({ id: m[1], dark: m[2], light: m[3] }));
+  assert.ok(accents.length >= 6);
+  const hard = ['#111111', '#FAFAFA', '#FFFF00', '#777777', '#000080', '#3A7BD5'];
+  for (const id of Object.keys(NEW_THEMES)) {
+    const t = themes[id];
+    const backs = ['bg', 'surface', 'surface-2', 'surface-3'].map((k) => t[k]);
+    const light = /color-scheme: light/.test(css.match(new RegExp(`\\[data-theme="${id}"\\] \\{([^}]*)\\}`))[1]);
+    for (const want of [...accents.map((a) => (light ? a.light : a.dark)), ...hard]) {
+      const hue = read(want, backs);
+      for (const back of backs) assert.ok(ratio(hue, back) >= 4.5, `${id}: акцент ${hue} на ${back}`);
+      assert.ok(ratio(hue, inkOn(hue)) >= 4.5, `${id}: подпись на плашке ${hue}`);
+    }
+  }
+});
+
+// ── Вложенные шрифты: подключены файлами, доступны в Настройках, откат на системный ──
+test('четыре новых шрифта подключены из fonts/ и предлагаются в Настройках', () => {
+  const fonts = [
+    ['Manrope', 'Manrope-Variable.ttf', '200 800'],
+    ['Unbounded', 'Unbounded-Variable.ttf', '200 900'],
+    ['Source Serif 4', 'SourceSerif4-Variable.ttf', '200 900'],
+    ['JetBrains Mono', 'JetBrainsMono-Variable.ttf', '100 800'],
+  ];
+  for (const [family, file, weight] of fonts) {
+    assert.match(css, new RegExp(`@font-face \\{ font-family: "${family.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"; src: url\\("fonts/${file}"\\).*?font-weight: ${weight};`), `@font-face ${family}`);
+    const full = path.join(__dirname, 'fonts', file);
+    assert.ok(fs.existsSync(full), `файл ${file}`);
+    assert.ok(fs.statSync(full).size > 50000, `размер ${file}`);
+  }
+  // FONTS: интерфейс — Manrope, заголовки — Source Serif 4 и Unbounded, код — JetBrains Mono.
+  assert.match(bootSource, /manrope: \['Manrope'/);
+  assert.match(bootSource, /source: \['Source Serif 4'/);
+  assert.match(bootSource, /unbounded: \['Unbounded'/);
+  assert.match(bootSource, /mono: \{[\s\S]*?jetbrains: \['JetBrains Mono'/);
+  assert.match(bootSource, /mono: 'theme'/);
+  // У каждого списка есть системный откат, а не только вложенная гарнитура.
+  assert.match(bootSource, /system: \['Системный Windows'/);
+  assert.match(bootSource, /system: \['Системный \(Georgia\)'/);
+  // Настройки: ручка «Код и формулы», образец и полный сброс.
+  assert.match(settingsSource, /\['mono', 'Код и формулы', T\.FONTS\.mono\]/);
+  assert.match(settingsSource, /ae-type-mono/);
+  assert.match(settingsSource, /Сбросить оформление/);
+  assert.match(settingsSource, /T\.resetAppearance\(\)/);
+  assert.match(aetherCss, /\.ae-type-mono \{[^}]*font-family: var\(--mono\)/);
+  assert.match(aetherCss, /\.ae-theme-card[\s\S]*?\.ae-theme-sample \{[^}]*background: var\(--bg-image, none\), var\(--bg\)/, 'превью темы берёт фон темы');
+  assert.match(aetherCss, /\.ae-tm-rail \{[^}]*background: color-mix\(in srgb, var\(--surface\)/, 'превью показывает панель темы');
+  assert.match(aetherCss, /\.ae-tm-dot \{[^}]*background: var\(--hue\)/, 'превью показывает акцент темы');
+  // Выбор интерфейсной гарнитуры доходит до оболочки Aether (иначе nox-luxify держит свою).
+  assert.match(aetherCss, /--lx-font: var\(--font,/, 'оболочка берёт выбранный шрифт интерфейса');
+  assert.match(aetherCss, /html\[data-aether\]\[data-ui-font\]/, 'свой шрифт включает шрифт темы и у «Тёмной»');
+  assert.match(bootSource, /dataset\.uiFont = 'custom'/, 'theme-boot ставит флаг своего шрифта');
+  // Панели Настроек на новых и светлых темах — из токенов темы, а не тёмно-синие.
+  assert.match(aetherCss, /\.ae-settings-page \.ae-settings-group \{\s*background: var\(--surface\);\s*border: 1px solid var\(--border\);/, 'панели настроек в цвет темы');
+  // Тема хранится так же, как её читает theme-boot.js (JSON-строка), и список читает её обратно.
+  assert.match(settingsSource, /JSON\.stringify\(themeSelect\.value\)/, 'тема сохраняется JSON-строкой');
+  assert.match(settingsSource, /JSON\.parse\(localStorage\.getItem\('jarvis\.theme'\)\)/, 'сохранённая тема читается через JSON.parse');
+});
+
+test('тема, шрифты и сброс оформления работают без перезагрузки (theme-boot в песочнице)', () => {
+  const vm = require('node:vm');
+  const store = new Map();
+  const props = {};
+  const attrs = {};
+  const root = {
+    dataset: new Proxy({}, {
+      get: (_, key) => attrs['data-' + String(key)],
+      set: (_, key, value) => { attrs['data-' + String(key)] = String(value); return true; },
+      deleteProperty: (_, key) => { delete attrs['data-' + String(key)]; return true; },
+    }),
+    style: {
+      setProperty(name, value) { props[name] = String(value); },
+      removeProperty(name) { delete props[name]; },
+      getPropertyValue(name) { return props[name] || ''; },
+    },
+    removeAttribute(name) { delete attrs[name]; },
+    getAttribute(name) { return name in attrs ? attrs[name] : null; },
+    setAttribute(name, value) { attrs[name] = String(value); },
+  };
+  const sandbox = {
+    window: { matchMedia: () => ({ matches: false }), addEventListener() {} },
+    document: { documentElement: root, dispatchEvent() {} },
+    localStorage: {
+      getItem: (key) => (store.has(key) ? store.get(key) : null),
+      setItem: (key, value) => store.set(key, String(value)),
+      removeItem: (key) => store.delete(key),
+    },
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    Event: class { constructor(type) { this.type = type; } },
+    console,
+  };
+  vm.runInNewContext(bootSource, sandbox);
+  const T = sandbox.window.JarvisTheme;
+  // Восемь новых тем — в общем списке и открываются без перезагрузки.
+  for (const id of Object.keys(NEW_THEMES)) assert.ok(T.ALL_IDS.includes(id), id);
+  T.apply('paper-white');
+  assert.equal(root.dataset.theme, 'paper-white');
+  T.apply('neon-noir');
+  assert.equal(root.dataset.theme, 'neon-noir');
+  // Выбор всех четырёх вложенных гарнитур: интерфейс, заголовки, ответы и код.
+  T.setLook({ ui: 'manrope', head: 'source', reply: 'head', mono: 'jetbrains', size: 'm' });
+  assert.match(props['--font'], /Manrope/);
+  assert.match(props['--font-head'], /Source Serif 4/);
+  assert.match(props['--font-reply'], /Source Serif 4/);
+  assert.match(props['--mono'], /JetBrains Mono/);
+  // «Сбросить оформление» возвращает «Ночь», шрифты и акцент темы.
+  T.resetAppearance();
+  assert.equal(root.dataset.theme, 'signal');
+  assert.equal(props['--font'], undefined);
+  assert.equal(props['--font-head'], undefined);
+  assert.equal(props['--font-reply'], undefined);
+  assert.equal(props['--mono'], undefined);
+  assert.equal(JSON.parse(store.get('jarvis.theme')), 'signal');
+  assert.equal(JSON.parse(store.get('jarvis.accent')), 'theme');
+  // Битое значение моноширинного шрифта не ломает окно.
+  assert.equal(T.sanitizeLook({ mono: 'нет-такого' }).mono, 'theme');
+  assert.equal(T.sanitizeLook({ ui: 'manrope', head: 'unbounded', mono: 'jetbrains' }).mono, 'jetbrains');
 });
