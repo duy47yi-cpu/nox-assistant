@@ -59,7 +59,8 @@ html[data-aether][data-theme="dark"] .ae-rail-v2 {
   --rlx-pill-shadow: 0 0 0 1px color-mix(in srgb, #04070F 74%, transparent),
     0 12px 30px rgba(4, 9, 20, 0.6), 0 3px 10px rgba(4, 9, 20, 0.5),
     inset 0 1px 0 color-mix(in srgb, #FFFFFF 12%, transparent);
-  --rlx-focus: var(--lx-accent-glow, #5070DD);
+  /* Кольцо фокуса на тёмной теме светлее акцента: контраст к тёмной панели 8:1 (было 3,9:1). */
+  --rlx-focus: color-mix(in srgb, var(--lx-accent-glow, #5070DD) 55%, #FFFFFF);
 }
 
 /* ── Геометрия окна: колонка под вставную панель ─────────────── */

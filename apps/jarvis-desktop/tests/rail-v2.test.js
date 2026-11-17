@@ -179,3 +179,38 @@ test('широкий экран: колонка под панель, узкий 
   assert.match(compact, /grid-template-columns: 64px minmax\(0, 1fr\)/);
   assert.match(compact, /--rlx-icon:\s*22px/);
 });
+
+test('токены рейки определены для всех 36 тем из IDS', () => {
+  const boot = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'theme-boot.js'), 'utf8');
+  const readIds = (name) => {
+    const block = new RegExp('const ' + name + ' = \\[([\\s\\S]*?)\\];').exec(boot);
+    return block ? [...block[1].matchAll(/'([^']+)'/g)].map((match) => match[1]) : [];
+  };
+  const ids = [...readIds('IDS'), ...readIds('AETHER_IDS')].filter((id) => id !== 'system');
+  assert.equal(ids.length, 36, 'в IDS и AETHER_IDS должно быть 36 настоящих тем');
+  const themes = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'themes.css'), 'utf8');
+  const missing = ids.filter((id) => !themes.includes('[data-theme="' + id + '"]'));
+  assert.deepEqual(missing, [], 'у каждой темы должны быть токены в themes.css');
+  const css = read('rail-v2.css');
+  assert.match(css, /--rlx-text:\s*var\(--text/);
+  assert.match(css, /--rlx-text-2:\s*var\(--text-2/);
+  assert.match(css, /--rlx-accent:\s*var\(--hue/);
+  assert.match(css, /--rlx-bg:[\s\S]*?var\(--surface[\s\S]*?var\(--bg/);
+  assert.match(css, /--rlx-focus:\s*var\(--hue/);
+  // Тёмная тема: кольцо фокуса светлее акцента, иначе контраст к панели ниже 4,5:1.
+  assert.match(css, /html\[data-aether\]\[data-theme="dark"\] \.ae-rail-v2 \{[\s\S]*?--rlx-focus:\s*color-mix\(in srgb, var\(--lx-accent-glow[^;]+55%, #FFFFFF\)/);
+});
+
+test('режим --rail-themes проверяет все темы, контраст и поповеры', () => {
+  const qa = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'aether-qa.js'), 'utf8');
+  assert.match(qa, /has\('rail-themes'\)/);
+  assert.match(qa, /async function runRailThemesQa/);
+  assert.match(qa, /readIds\('IDS'\)/);
+  assert.match(qa, /readIds\('AETHER_IDS'\)/);
+  assert.match(qa, /themeIds\.length === 36/);
+  assert.match(qa, /item\.min < 4\.5/);
+  assert.match(qa, /'rail-theme-' \+ id \+ '-1200x720\.png'/);
+  assert.match(qa, /'rail-theme-' \+ id \+ '-864x520\.png'/);
+  assert.match(qa, /escClosed/);
+  assert.match(qa, /outsideClosed/);
+});

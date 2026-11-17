@@ -29,6 +29,7 @@ const OUT_DIR = path.resolve(arg('out-dir', path.join(REPO_ROOT, 'docs', 'design
 const KEEP_TEMP = has('keep-temp');
 const CHAT_REDESIGN = has('chat-redesign');
 const WIDGETS_ONLY = has('widgets-only');
+const RAIL_THEMES = has('rail-themes');
 const TIMEOUT_MS = 240000;
 const CMD_EXE = path.join(process.env.SystemRoot || 'C:/Windows', 'System32', 'cmd.exe');
 const VSCODE_EXE = [
@@ -2120,6 +2121,188 @@ async function runQa(win) {
   }, failCount === 0 ? 0 : 1);
 }
 
+// Режим --rail-themes: все темы из IDS (renderer/theme-boot.js), контраст рейки,
+// снимки шести представительных тем и живые проверки поповеров/пилюль на 864×520.
+async function runRailThemesQa(win) {
+  const checks = [];
+  const screenshots = [];
+  const check = (name, ok, detail) => checks.push({ name, ok: Boolean(ok), detail });
+  const round = (value) => Math.round(value * 100) / 100;
+  const parseColor = (value) => {
+    const text = String(value || '');
+    const rgb = text.match(/rgba?\(([^)]+)\)/);
+    if (rgb) {
+      const parts = rgb[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+      return { r: parts[0], g: parts[1], b: parts[2] };
+    }
+    const srgb = text.match(/color\(srgb ([^)]+)\)/);
+    if (srgb) {
+      const parts = srgb[1].split(/[ /]+/).filter(Boolean).map(Number);
+      return { r: parts[0] * 255, g: parts[1] * 255, b: parts[2] * 255 };
+    }
+    return null;
+  };
+  const relLum = (color) => {
+    const f = (v) => { const x = v / 255; return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(color.r) + 0.7152 * f(color.g) + 0.0722 * f(color.b);
+  };
+  const contrast = (a, b) => {
+    if (!a || !b) return 0;
+    const la = relLum(a);
+    const lb = relLum(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  };
+  const blend = (top, bottom, alpha) => ({
+    r: top.r * alpha + bottom.r * (1 - alpha),
+    g: top.g * alpha + bottom.g * (1 - alpha),
+    b: top.b * alpha + bottom.b * (1 - alpha),
+  });
+  const themeSource = fs.readFileSync(path.join(APP_DIR, 'renderer', 'theme-boot.js'), 'utf8');
+  const readIds = (name) => {
+    const block = new RegExp('const ' + name + ' = \\[([\\s\\S]*?)\\];').exec(themeSource);
+    return block ? [...block[1].matchAll(/'([^']+)'/g)].map((match) => match[1]) : [];
+  };
+  const themeIds = [...readIds('IDS'), ...readIds('AETHER_IDS')].filter((id) => id !== 'system');
+  const labelsSource = fs.readFileSync(path.join(APP_DIR, 'renderer', 'aether', 'components', 'settings-view.js'), 'utf8');
+  const labelsBlock = /const THEME_LABELS = \{([\s\S]*?)\n  \};/.exec(labelsSource);
+  const labels = {};
+  if (labelsBlock) {
+    for (const match of labelsBlock[1].matchAll(/(?:'([^']+)'|([\w-]+)):\s*'([^']+)'/g)) labels[match[1] || match[2]] = match[3];
+  }
+  const labelOf = (id) => labels[id] || id;
+  const originTheme = await js(win, 'document.documentElement.dataset.theme || "signal"');
+  await js(win, 'window.__noxAether.setRoute("chat")');
+  await setViewport(win, 1200, 720);
+  await settle(win, 600);
+  const measured = await js(win, `(() => {
+    const root = document.documentElement;
+    const previous = root.dataset.theme;
+    const ids = ${JSON.stringify(themeIds)};
+    const out = [];
+    for (const id of ids) {
+      root.dataset.theme = id;
+      const rail = document.querySelector('.ae-utility-rail');
+      const railStyle = getComputedStyle(rail);
+      const button = document.querySelector('#lxAiModalBtn');
+      const buttonStyle = getComputedStyle(button);
+      const pill = getComputedStyle(button, '::before');
+      const probe = document.createElement('span');
+      probe.style.outlineColor = 'var(--rlx-focus)';
+      probe.style.backgroundColor = 'var(--rlx-accent)';
+      rail.append(probe);
+      const focus = getComputedStyle(probe).outlineColor;
+      const accent = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      out.push({ id, panel: railStyle.backgroundColor, button: buttonStyle.color, accent, focus, pillBg: pill.backgroundColor, pillText: pill.color });
+    }
+    root.dataset.theme = previous || 'signal';
+    return out;
+  })()`);
+  const metrics = measured.map((item) => {
+    const panel = parseColor(item.panel);
+    const button = parseColor(item.button);
+    const accent = parseColor(item.accent);
+    const focus = parseColor(item.focus);
+    const pillBg = parseColor(item.pillBg);
+    const pillText = parseColor(item.pillText);
+    const panelTop = panel && accent ? blend(accent, panel, 0.09) : panel;
+    const textPanel = contrast(button, panel);
+    const textTop = contrast(button, panelTop);
+    const pill = contrast(pillText, pillBg);
+    const ring = contrast(focus, panel);
+    return { id: item.id, label: labelOf(item.id), textPanel: round(textPanel), textTop: round(textTop), pill: round(pill), focus: round(ring), min: round(Math.min(textPanel, textTop, pill, ring)) };
+  });
+  const weak = metrics.filter((item) => item.min < 4.5);
+  check('Все темы из IDS собраны: ' + themeIds.length, themeIds.length === 36, themeIds);
+  check('Все темы: контраст рейки не ниже 4,5:1', weak.length === 0, { weak, metrics });
+  const representatives = ['signal', 'dark', 'paper-white', 'snow', 'neon-noir', 'ocean'];
+  for (const id of representatives) {
+    await js(win, `document.documentElement.dataset.theme = ${JSON.stringify(id)}; true`);
+    await settle(win, 360);
+    await js(win, 'window.__noxAether.setRoute("chat")');
+    await settle(win, 220);
+    screenshots.push(await shot(win, 'rail-theme-' + id + '-1200x720.png'));
+  }
+  await setViewport(win, 864, 520);
+  for (const id of representatives) {
+    await js(win, `document.documentElement.dataset.theme = ${JSON.stringify(id)}; true`);
+    await settle(win, 360);
+    await js(win, 'window.__noxAether.setRoute("chat")');
+    await settle(win, 220);
+    screenshots.push(await shot(win, 'rail-theme-' + id + '-864x520.png'));
+  }
+  await js(win, `document.documentElement.dataset.theme = ${JSON.stringify(originTheme)}; true`);
+  await settle(win, 360);
+  const hoverPill = async (selector) => {
+    const point = await js(win, `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      const bounds = el.getBoundingClientRect();
+      return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+    })()`);
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(point.x), y: Math.round(point.y) });
+    await settle(win, 320);
+    const detail = await js(win, `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      const pseudo = getComputedStyle(el, '::before');
+      const bounds = el.getBoundingClientRect();
+      const context = document.createElement('canvas').getContext('2d');
+      context.font = [pseudo.fontStyle, pseudo.fontWeight, pseudo.fontSize, pseudo.fontFamily].join(' ');
+      const text = context.measureText(el.getAttribute('data-label') || '').width;
+      const width = text + parseFloat(pseudo.paddingLeft) + parseFloat(pseudo.paddingRight) + parseFloat(pseudo.borderLeftWidth) + parseFloat(pseudo.borderRightWidth);
+      const left = bounds.right + parseFloat(pseudo.left);
+      return {
+        label: el.getAttribute('data-label'), title: el.getAttribute('title'), aria: el.getAttribute('aria-label'),
+        visible: pseudo.visibility === 'visible' && pseudo.opacity === '1',
+        left: Math.round(left), right: Math.round(left + width), fits: left + width <= innerWidth,
+      };
+    })()`);
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: win.getContentSize()[0] - 40, y: 140 });
+    await settle(win, 140);
+    return detail;
+  };
+  const pills = {};
+  for (const selector of ['#lxAiModalBtn', '#aeLimitsTrigger', '#aeAccountTrigger']) pills[selector] = await hoverPill(selector);
+  check('Пилюли у правого края на 864: видны, с title/aria и в окне',
+    Object.values(pills).every((item) => item && item.visible && item.fits && item.title && item.aria), pills);
+  const popovers = await js(win, `(() => {
+    const rail = document.querySelector('.ae-utility-rail');
+    const result = {};
+    for (const key of ['Limits', 'Account']) {
+      const trigger = document.querySelector('#ae' + key + 'Trigger');
+      const panel = document.querySelector('#ae' + key + 'Panel');
+      trigger.click();
+      const bounds = panel.getBoundingClientRect();
+      const railBounds = rail.getBoundingClientRect();
+      const item = {
+        open: !panel.hidden,
+        rightOfRail: bounds.left > railBounds.right,
+        inViewport: bounds.left >= 0 && bounds.top >= 0 && bounds.right <= innerWidth && bounds.bottom <= innerHeight,
+        clipped: panel.scrollWidth > panel.clientWidth + 1,
+      };
+      panel.querySelector('button').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      item.escClosed = panel.hidden;
+      item.focusRestored = document.activeElement === trigger;
+      trigger.click();
+      document.querySelector('#noxChat').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      item.outsideClosed = panel.hidden;
+      result[key] = item;
+    }
+    return result;
+  })()`);
+  check('Поповеры аккаунта и лимитов на 864: в окне, Esc и клик мимо закрывают',
+    Object.values(popovers).every((item) => item.open && item.rightOfRail && item.inViewport && !item.clipped && item.escClosed && item.focusRestored && item.outsideClosed), popovers);
+  await js(win, 'document.querySelector("#aeLimitsTrigger").click()');
+  await settle(win, 260);
+  screenshots.push(await shot(win, 'rail-popover-limits-864x520.png'));
+  await js(win, `(() => { const panel = document.querySelector('#aeLimitsPanel'); panel.querySelector('button').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); })()`);
+  check('Все снимки нужного размера',
+    screenshots.every((item) => item.name.includes(String(item.width) + 'x' + String(item.height))),
+    screenshots.map((item) => ({ name: item.name, width: item.width, height: item.height })));
+  check('Нет ошибок консоли и страницы', consoleErrors.length === 0 && pageErrors.length === 0, { consoleErrors, pageErrors });
+  const passCount = checks.filter((item) => item.ok).length;
+  const fail = checks.length - passCount;
+  finish({ ok: fail === 0, pass: passCount, fail, checks, screenshots, themes: metrics, weakThemes: weak }, fail ? 1 : 0);
+}
 app.on('browser-window-created', (_event, win) => {
   try { win.webContents.setBackgroundThrottling(false); } catch { /* ignore */ }
   win.webContents.on('console-message', (_ev, level, msg) => {
@@ -2133,7 +2316,7 @@ app.on('browser-window-created', (_event, win) => {
     const url = win.webContents.getURL();
     if (!/renderer[\\/]aether[\\/]index\.html/i.test(url)) return;
     mainWin = win;
-    const run = CHAT_REDESIGN || WIDGETS_ONLY ? runChatRedesignQa : runQa;
+    const run = RAIL_THEMES ? runRailThemesQa : CHAT_REDESIGN || WIDGETS_ONLY ? runChatRedesignQa : runQa;
     run(win).catch((err) => {
       finish({ ok: false, error: err && err.stack ? err.stack : String(err), consoleErrors, pageErrors }, 1);
     });
