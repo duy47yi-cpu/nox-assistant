@@ -584,3 +584,126 @@ test('тёмные темы не попали в светлый хром', () =>
     assert.ok(!block.includes('data-theme="' + id + '"'), 'тёмная тема ' + id + ' осталась как была');
   }
 });
+
+
+// ── Глубокие экраны и единый акцент тёмных тем ─────────────────────────────
+const darkThemeIds = [...css.matchAll(/\[data-theme="([a-z-]+)"\] \{\s*color-scheme: dark/g)].map((m) => m[1]);
+const darkChromeIds = darkThemeIds.filter((id) => id !== 'dark');
+const lightChromeBlock = luxify.match(/\/\* ── Светлый хром[\s\S]*?\n(html\[data-aether\]:is\(([^)]*)\) \{([\s\S]*?)\n\})/);
+const darkChromeBlock = luxify.match(/\/\* ── Единый акцент тёмных тем[\s\S]*?\n(html\[data-aether\]:is\(([^)]*)\) \{([\s\S]*?)\n\})/);
+const tint = (color, surface, weight) => mixHex(color, surface, weight);
+const hex8 = (value) => /^#([0-9A-Fa-f]{6})([0-9A-Fa-f]{2})$/.exec(value || '');
+
+test('глубокие экраны: мастер, журнал, MCP-форма и модалка — поверхности из темы', () => {
+  const rules = [
+    ['карточка мастера', /html\[data-aether\]:is\([^)]*\) \.lx-ai-card \{[^}]*background: var\(--surface-2\)/],
+    ['строка шага мастера', /html\[data-aether\]:is\([^)]*\) \.lx-ai-step-row \{[^}]*background: var\(--surface\)/],
+    ['степпер', /html\[data-aether\]:is\([^)]*\) \.lx-stepper-pill \{[^}]*background: var\(--surface-2\)/],
+    ['номер шага', /html\[data-aether\]:is\([^)]*\) \.lx-stepper-num \{[^}]*color: var\(--text\)/],
+    ['подсказка о нехватке', /html\[data-aether\]:is\([^)]*\) \.lx-missing-box \{[^}]*var\(--warn\)/],
+    ['ошибка мастера', /html\[data-aether\]:is\([^)]*\) \.lx-error-box \{[^}]*var\(--err\)/],
+    ['строка журнала', /html\[data-aether\]:is\([^)]*\) \.lx-launch-row \{[^}]*background: var\(--surface\)/],
+    ['бейдж журнала', /\.lx-launch-badge\.is-ok \{ background: color-mix\(in srgb, var\(--ok\) 10%/],
+    ['форма MCP', /html\[data-aether\]:is\([^)]*\) \.lx-input[^{]*\{[^}]*background: var\(--surface-2\)/],
+    ['поиск MCP', /html\[data-aether\]:is\([^)]*\) \.lx-search-input \{ background: var\(--surface-2\)/],
+    ['модалка Nox AI', /html\[data-aether\]:is\([^)]*\) \.lx-modal \{ background: var\(--surface\); color: var\(--text\);/],
+    ['скрим модалки', /html\[data-aether\]:is\([^)]*\) \.lx-modal-backdrop \{ background: var\(--scrim/],
+  ];
+  for (const [label, re] of rules) assert.match(luxify, re, 'правило: ' + label);
+  assert.ok(lightChromeBlock, 'светлый блок хрома');
+});
+
+test('глубокие экраны: контраст 4,5:1 на светлых темах, скрим затемняет', () => {
+  for (const id of lightIds) {
+    const t = themes[id];
+    const pairs = [
+      ['текст на surface-3', t.text, t['surface-3']],
+      ['второй текст на surface-3', t['text-2'], t['surface-3']],
+      ['третий текст на surface-3', t['text-3'], t['surface-3']],
+      ['текст в плашке «не хватает»', t.text, tint(t.warn, t.surface, 0.12)],
+      ['ошибка в плашке', t.err, tint(t.err, t.surface, 0.12)],
+      ['успех в бейдже', t.ok, tint(t.ok, t.surface, 0.10)],
+      ['предупреждение в бейдже', t.warn, tint(t.warn, t.surface, 0.10)],
+      ['ошибка в бейдже', t.err, tint(t.err, t.surface, 0.10)],
+    ];
+    for (const [name, fg, bg] of pairs) {
+      const r = ratio(fg, bg);
+      assert.ok(r >= 4.5, id + ': ' + name + ' = ' + r.toFixed(2));
+    }
+    // Скрим: затемняет фон и отделяет поверхность модалки; альфа не меньше 20%.
+    // Старые темы берут общий скрим из блока [data-theme], новые задают свой.
+    const block = css.match(new RegExp('\\[data-theme="' + id + '"\\] \\{([^}]*)\\}'))[1];
+    const defaultScrim = /\[data-theme\] \{[^}]*--scrim: (#[0-9A-Fa-f]{8})/.exec(css);
+    const scrim = /--scrim: (#[0-9A-Fa-f]{8})/.exec(block) || defaultScrim;
+    assert.ok(scrim, id + ': --scrim в теме или общий');
+    const parts = hex8(scrim[1]);
+    assert.ok(parts, id + ': --scrim восьмизначный');
+    const alpha = parseInt(parts[2], 16) / 255;
+    assert.ok(alpha >= 0.2, id + ': скрим заметно затемняет');
+    const scrimRgb = rgb('#' + parts[1]);
+    const bgRgb = rgb(t.bg);
+    const under = '#' + scrimRgb.map((v, i) => Math.round(v * alpha + bgRgb[i] * (1 - alpha)).toString(16).padStart(2, '0')).join('');
+    assert.ok(lum(under) < lum(t.bg), id + ': скрим делает фон темнее');
+    assert.ok(ratio(t.surface, under) >= 1.5, id + ': поверхность модалки отделяется от скрима');
+  }
+});
+
+test('единый акцент тёмных тем: все тёмные, кроме «Тёмной», берут --hue', () => {
+  assert.ok(darkChromeBlock, 'блок «Единый акцент тёмных тем»');
+  const covered = [...darkChromeBlock[2].matchAll(/data-theme="([a-z-]+)"/g)].map((m) => m[1]).sort();
+  assert.deepStrictEqual(covered, darkChromeIds.slice().sort(), 'все тёмные темы, кроме dark');
+  assert.ok(!covered.includes('dark'), '«Тёмная» не входит в блок');
+  const map = darkChromeBlock[3];
+  const darkSection = luxify.slice(luxify.indexOf('/* ── Единый акцент тёмных тем'));
+  assert.match(map, /--lx-accent: var\(--hue\)/, 'акцент облика — --hue темы');
+  assert.match(map, /--lx-accent-glow: var\(--hue\)/, 'свечение/фокус — --hue');
+  assert.match(map, /--lx-bg: var\(--surface\)/, 'поверхности хрома — поверхности темы');
+  const rules = [
+    ['выбранная вкладка шапки', /\.ae-topbar \.ae-nav-btn\.is-active,[\s\S]*?background: var\(--accent-bg/],
+    ['тумблер', /\.lx-toggle-input:checked \+ \.lx-toggle-track \{ background: var\(--hue\)/],
+    ['ползунок', /\.lx-slider \{ background: linear-gradient\(90deg, var\(--hue\)/],
+    ['вкладка раздела', /\.lx-pill-tab\.is-active \{ background: var\(--hue\); color: var\(--accent-ink\)/],
+    ['кнопка с акцентом', /\.lx-pill-primary \{ background: var\(--hue\); color: var\(--accent-ink\)/],
+    ['выбранная строка команд', /\.lx-tree-row\.is-selected \{[\s\S]*?var\(--hue\)[\s\S]*?color: var\(--accent-ink\)/],
+    ['активная вкладка команд', /\.lx-cmd-seg-btn\.is-active \{[\s\S]*?var\(--hue\)[\s\S]*?color: var\(--accent-ink\)/],
+  ];
+  for (const [label, re] of rules) assert.match(darkSection, re, 'акцент тёмных: ' + label);
+  // «Тёмная» осталась прежней: старый блок облика на месте.
+  assert.match(luxify, /html\[data-aether\]\[data-theme="dark"\],\s*\n\.ae-theme-sample\[data-theme="dark"\]/);
+  const darkRules = darkSection.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!darkRules.includes('#2559E8'), 'в правилах тёмных нет старого синего');
+});
+
+test('единый акцент тёмных тем: контраст текста и плашек от 4,5:1', () => {
+  for (const id of darkChromeIds) {
+    const t = themes[id];
+    const pairs = [
+      ['текст на выбранной вкладке', t.text, tint(t.hue, t.surface, 0.18)],
+      ['текст на активной кнопке рейки', t.text, tint(t.hue, t.surface, 0.26)],
+      ['подпись на акцентной кнопке', t['accent-ink'], t.hue],
+      ['успех в бейдже', t.ok, tint(t.ok, t.surface, 0.10)],
+      ['предупреждение в бейдже', t.warn, tint(t.warn, t.surface, 0.10)],
+      ['ошибка в бейдже', t.err, tint(t.err, t.surface, 0.10)],
+    ];
+    for (const [name, fg, bg] of pairs) {
+      const r = ratio(fg, bg);
+      assert.ok(r >= 4.5, id + ': ' + name + ' = ' + r.toFixed(2));
+    }
+  }
+});
+
+test('кольца фокуса: кнопки композера и карточки каталога — без полупрозрачности, от 3:1', () => {
+  const aether = fs.readFileSync(path.join(__dirname, 'aether', 'aether.css'), 'utf8');
+  const composer = aether.match(/\.ae-composer-footer button:focus-visible \{([^}]*)\}/);
+  assert.ok(composer, 'правило фокуса кнопок композера');
+  assert.match(composer[1], /outline: 2px solid var\(--accent\);/, 'кольцо сплошным акцентом');
+  assert.doesNotMatch(composer[1], /70%, transparent/, 'без полупрозрачного кольца');
+  const card = aether.match(/\.ae-grid-card:focus-visible \{([^}]*)\}/);
+  assert.ok(card, 'правило фокуса карточки каталога');
+  assert.match(card[1], /outline: 2px solid var\(--focus, var\(--accent\)\);/, 'контур из токена фокуса');
+  assert.match(card[1], /outline-offset: 2px;/, 'отступ контура');
+  for (const id of Object.keys(themes)) {
+    const r = ratio(themes[id].hue, themes[id].surface);
+    assert.ok(r >= 3, id + ': кольцо фокуса на поверхности = ' + r.toFixed(2));
+  }
+});
