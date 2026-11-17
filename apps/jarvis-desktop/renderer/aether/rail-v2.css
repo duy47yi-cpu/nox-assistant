@@ -1,0 +1,302 @@
+/* Рейка Nox Aether v2 — вставная закруглённая панель вместо плоской полосы:
+ * - панель с отступом 8 px, скруглением 16, тонкой рамкой и мягкой тенью из токенов темы;
+ * - вверху знак Nox 28 px («Главная»), ниже смысловые группы: Nox AI и сфера, история,
+ *   внизу озвучка и аккаунт; между группами тонкие разделители;
+ * - у каждой кнопки есть подпись-пилюля при наведении и клавиатурном фокусе;
+ * - активное состояние — заливка из акцента темы, заметное кольцо focus-visible;
+ * - на окне уже 980 px рейка компактнее; уменьшение движения уважается.
+ * Подключается последней и перекрывает прежнюю рейку из aether.css и nox-luxify.css. */
+
+/* Цвета рейки — из токенов темы: на светлых палитрах (Бумага, Снег, Океан,
+ * Лаванда и других) панель светлая, текст и иконки тёмные; акцент, рамка,
+ * наведение и кольцо фокуса берутся из темы. Тёмная тема Aether сохраняет
+ * привычный тёмно-синий облик из nox-luxify.css (ниже — явное переопределение). */
+.ae-rail-v2 {
+  --rlx-inset: 8px;
+  --rlx-radius: 16px;
+  --rlx-btn: 40px;
+  --rlx-icon: 24px;
+  --rlx-accent: var(--hue, var(--accent, #2559E8));
+  --rlx-text: var(--text, #FFFFFF);
+  --rlx-text-2: var(--text-2, #C7D0E0);
+  --rlx-line: color-mix(in srgb, var(--rlx-text) 14%, transparent);
+  --rlx-line-strong: color-mix(in srgb, var(--rlx-text) 22%, transparent);
+  --rlx-bg: linear-gradient(180deg,
+    color-mix(in srgb, var(--rlx-accent) 9%, transparent) 0%,
+    transparent 38%),
+    color-mix(in srgb, var(--surface, #1A2131) 64%, var(--bg, #0B1429));
+  --rlx-hover: color-mix(in srgb, var(--rlx-accent) 17%, transparent);
+  --rlx-active: color-mix(in srgb, var(--rlx-accent) 26%, transparent);
+  --rlx-active-line: color-mix(in srgb, var(--rlx-accent) 46%, transparent);
+  --rlx-pill-bg: color-mix(in srgb, var(--surface-2, #132357) 58%, var(--surface, #1A2131));
+  --rlx-pill-line: color-mix(in srgb, var(--rlx-accent) 42%, var(--border, transparent));
+  /* Пилюля — отдельный всплывающий слой: кольцо-подложка отделяет её от карточки чата. */
+  --rlx-pill-shadow: 0 0 0 1px color-mix(in srgb, var(--rlx-text) 13%, transparent),
+    0 12px 30px rgba(4, 9, 20, 0.28), 0 3px 10px rgba(4, 9, 20, 0.22),
+    inset 0 1px 0 color-mix(in srgb, #FFFFFF 10%, transparent);
+  --rlx-shadow: var(--shadow-pop, 0 8px 24px rgba(0, 0, 0, 0.35));
+  --rlx-focus: var(--hue, var(--accent, #5070DD));
+}
+
+/* Тёмная тема Aether: прежний тёмно-синий облик облика Nox остаётся как был. */
+html[data-aether][data-theme="dark"] .ae-rail-v2 {
+  --rlx-accent: var(--lx-accent, #2559E8);
+  --rlx-text: var(--lx-text, #FFFFFF);
+  --rlx-text-2: var(--lx-text-2, #C7D0E0);
+  --rlx-line: color-mix(in srgb, var(--lx-text, #FFFFFF) 11%, transparent);
+  --rlx-line-strong: color-mix(in srgb, var(--lx-text, #FFFFFF) 16%, transparent);
+  --rlx-bg: linear-gradient(180deg,
+    color-mix(in srgb, var(--lx-accent-glow, #5070DD) 14%, transparent) 0%,
+    transparent 34%),
+    color-mix(in srgb, var(--lx-panel-2, #132357) 34%, var(--lx-bg-deep, #0B1429));
+  --rlx-hover: color-mix(in srgb, var(--lx-accent, #2559E8) 18%, transparent);
+  --rlx-active: color-mix(in srgb, var(--lx-accent, #2559E8) 30%, transparent);
+  --rlx-active-line: color-mix(in srgb, var(--lx-accent-glow, #5070DD) 46%, transparent);
+  --rlx-pill-bg: linear-gradient(180deg,
+    color-mix(in srgb, var(--lx-panel, #172552) 52%, #0B1429) 0%,
+    color-mix(in srgb, var(--lx-panel-2, #132357) 34%, #070C18) 100%);
+  --rlx-pill-line: color-mix(in srgb, var(--lx-accent-glow, #5070DD) 38%, transparent);
+  --rlx-pill-shadow: 0 0 0 1px color-mix(in srgb, #04070F 74%, transparent),
+    0 12px 30px rgba(4, 9, 20, 0.6), 0 3px 10px rgba(4, 9, 20, 0.5),
+    inset 0 1px 0 color-mix(in srgb, #FFFFFF 12%, transparent);
+  --rlx-focus: var(--lx-accent-glow, #5070DD);
+}
+
+/* ── Геометрия окна: колонка под вставную панель ─────────────── */
+.ae-shell {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+/* ── Сама панель ─────────────────────────────────────────────── */
+.ae-utility-rail {
+  margin: var(--rlx-inset);
+  padding: 8px;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  border: 1px solid var(--rlx-line);
+  border-right: 1px solid var(--rlx-line);
+  border-radius: var(--rlx-radius);
+  background: var(--rlx-bg);
+  box-shadow: var(--rlx-shadow), inset 0 1px 0 color-mix(in srgb, #FFFFFF 6%, transparent);
+  overflow: visible;
+  z-index: 36;
+}
+
+/* Знак Nox сверху — Главная */
+.ae-rail-brand {
+  flex: 0 0 auto;
+  margin-bottom: 2px;
+}
+
+.ae-rail-brand .lx-logo-svg {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  filter: drop-shadow(0 0 9px color-mix(in srgb, var(--rlx-accent) 52%, transparent));
+}
+
+.ae-rail-brand.is-active,
+.ae-rail-brand[aria-current="page"] {
+  background: var(--rlx-active);
+  box-shadow: inset 0 0 0 1px var(--rlx-active-line);
+}
+
+/* Группы и разделители */
+.ae-rail-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.ae-rail-sep {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 1px;
+  margin: 6px auto;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--rlx-line-strong), transparent);
+}
+
+.ae-rail-spacer {
+  flex: 1 1 auto;
+  min-height: 8px;
+}
+
+/* ── Кнопки рейки ────────────────────────────────────────────── */
+.ae-utility-rail :is(.ae-rail-button, .ae-limits-trigger, .ae-account-trigger) {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--rlx-btn);
+  height: var(--rlx-btn);
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--rlx-text-2);
+  cursor: pointer;
+  transition: background-color 140ms ease-out, color 140ms ease-out, box-shadow 140ms ease-out;
+}
+
+.ae-utility-rail :is(button > .ae-ico, .ae-limits-ring) {
+  width: var(--rlx-icon);
+  height: var(--rlx-icon);
+}
+
+.ae-utility-rail :is(.ae-rail-button, .ae-limits-trigger, .ae-account-trigger):hover {
+  background: var(--rlx-hover);
+  color: var(--rlx-text);
+}
+
+.ae-utility-rail :is(.ae-rail-button, .ae-limits-trigger, .ae-account-trigger):active {
+  background: var(--rlx-active);
+}
+
+/* Активное состояние: открытая история, видимая сфера, открытые настройки, текущий раздел */
+.ae-utility-rail :is(.ae-rail-button, .ae-limits-trigger, .ae-account-trigger):is([aria-expanded="true"], [aria-current="page"], .is-active) {
+  background: var(--rlx-active);
+  color: var(--rlx-text);
+  box-shadow: inset 0 0 0 1px var(--rlx-active-line);
+}
+
+/* Заметное кольцо для клавиатуры */
+.ae-utility-rail :is(.ae-rail-button, .ae-limits-trigger, .ae-account-trigger):focus-visible {
+  outline: 2px solid var(--rlx-focus);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+/* ── Подписи-пилюли при наведении и фокусе ───────────────────── */
+.ae-utility-rail button[data-label]::before {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 18px);
+  top: 50%;
+  z-index: 70;
+  padding: 7px 12px;
+  border: 1px solid var(--rlx-pill-line);
+  border-radius: 999px;
+  background: var(--rlx-pill-bg);
+  color: var(--rlx-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  box-shadow: var(--rlx-pill-shadow);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(-4px);
+  transition: opacity 140ms ease-out, transform 140ms ease-out, visibility 0ms linear 140ms;
+}
+
+.ae-utility-rail button[data-label]:is(:hover, :focus-visible)::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
+  transition: opacity 140ms ease-out, transform 140ms ease-out, visibility 0ms;
+}
+
+/* ── Нижняя группа: озвучка и аккаунт ────────────────────────── */
+.ae-utility-rail .ae-rail-group:last-child {
+  margin-top: 0;
+}
+
+.ae-utility-rail .ae-account-controls {
+  margin-top: 0;
+  gap: 2px;
+  align-items: center;
+  width: 100%;
+}
+
+.ae-utility-rail .ae-account-trigger {
+  width: var(--rlx-btn);
+  height: var(--rlx-btn);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--rlx-text-2);
+  font-size: 11px;
+}
+
+.ae-utility-rail .ae-account-trigger[data-signed-in="true"] {
+  background: var(--rlx-accent);
+  color: var(--accent-ink, #FFFFFF);
+}
+
+.ae-utility-rail .ae-account-trigger:hover,
+.ae-utility-rail .ae-account-trigger[aria-expanded="true"] {
+  outline: none;
+  border-color: transparent;
+}
+
+/* Точка состояния сферы — ближе к правому верхнему углу кнопки, цвет из темы */
+#aeStageToggle:not([data-state="idle"])::after {
+  inset: 7px 6px auto auto;
+  background: var(--rlx-accent);
+}
+
+#aeStageToggle[data-state="success"]::after { background: var(--ok, #4ADE80); }
+#aeStageToggle[data-state="error"]::after { background: var(--err, #FF7F78); }
+#aeStageToggle[data-state="waiting_approval"]::after { background: var(--warn, #FFC24D); }
+
+/* ── Узкое окно: компактнее, панель 48 px ────────────────────── */
+@media (max-width: 980px) {
+  .ae-shell {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .ae-rail-v2 {
+    --rlx-btn: 36px;
+    --rlx-icon: 22px;
+  }
+
+  .ae-utility-rail {
+    padding: 6px;
+  }
+
+  .ae-rail-brand .lx-logo-svg {
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+  }
+
+  .ae-rail-sep {
+    width: 20px;
+    margin: 4px auto;
+  }
+
+  .ae-utility-rail button[data-label]::before {
+    left: calc(100% + 14px);
+    padding: 6px 10px;
+    font-size: 11.5px;
+  }
+}
+
+/* ── Уважение уменьшения движения ────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .ae-utility-rail *,
+  .ae-utility-rail *::before,
+  .ae-utility-rail *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+html[data-motion="off"] .ae-utility-rail *,
+html[data-animations="off"] .ae-utility-rail *,
+html[data-motion="off"] .ae-utility-rail *::before,
+html[data-animations="off"] .ae-utility-rail *::before {
+  transition: none !important;
+  animation: none !important;
+}

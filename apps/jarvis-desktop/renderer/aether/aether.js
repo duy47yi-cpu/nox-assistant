@@ -43,11 +43,12 @@
     toastHost.className = 'ae-toast-host';
     toastHost.setAttribute('aria-live', 'polite');
 
-    const { icon } = window.NoxAetherIcons;
+    const { icon, logoSphere } = window.NoxAetherIcons;
 
     const rail = document.createElement('aside');
-    rail.className = 'ae-utility-rail';
-    rail.setAttribute('aria-label', 'Служебные кнопки');
+    rail.className = 'ae-utility-rail ae-rail-v2';
+    rail.id = 'aeUtilityRail';
+    rail.setAttribute('aria-label', 'Служебная рейка');
     function railButton(id, label, iconName) {
       const button = document.createElement('button');
       button.type = 'button';
@@ -55,13 +56,18 @@
       button.className = 'ae-rail-button';
       button.title = label;
       button.setAttribute('aria-label', label);
+      button.dataset.label = label;
       button.append(icon(iconName));
       return button;
     }
 
     const aiModalBtn = railButton('lxAiModalBtn', 'Настройки Nox AI', 'sparkles');
     aiModalBtn.setAttribute('aria-haspopup', 'dialog');
-    aiModalBtn.addEventListener('click', () => aiModal.open());
+    aiModalBtn.setAttribute('aria-controls', 'lxAiModal');
+    aiModalBtn.addEventListener('click', () => {
+      aiModal.open();
+      syncAll(store.state);
+    });
 
     const muteBtn = railButton('lxMuteBtn', 'Озвучка', 'volumeOff');
     muteBtn.addEventListener('click', () => {
@@ -92,10 +98,63 @@
       syncAll(store.state);
     });
 
+    // Знак Nox вверху рейки — короткий путь на «Главную».
+    const homeBtn = document.createElement('button');
+    homeBtn.type = 'button';
+    homeBtn.id = 'aeRailHomeBtn';
+    homeBtn.className = 'ae-rail-button ae-rail-brand';
+    homeBtn.title = 'Главная';
+    homeBtn.setAttribute('aria-label', 'Главная');
+    homeBtn.dataset.label = 'Главная';
+    homeBtn.append(logoSphere('ae-rail-logo'));
+    homeBtn.addEventListener('click', () => store.setRoute('personal'));
+
+    // История и аккаунт: те же обработчики и aria, но с понятным значком и подписью.
     historyDrawer.trigger.classList.add('ae-rail-button');
+    historyDrawer.trigger.dataset.label = 'История чатов';
+    historyDrawer.trigger.replaceChildren(icon('history'));
+    const limitsTrigger = accountPanel.el.querySelector('#aeLimitsTrigger');
+    if (limitsTrigger) limitsTrigger.dataset.label = 'Лимиты';
+    const accountTrigger = accountPanel.el.querySelector('#aeAccountTrigger');
+    if (accountTrigger) accountTrigger.dataset.label = 'Аккаунт';
+
+    // Порядок элементов служебной рейки; ниже раскладываем их по смысловым группам.
     rail.append(aiModalBtn, muteBtn, historyDrawer.trigger, stageBtn, accountPanel.el);
 
+    function railGroup(label, ...children) {
+      const group = document.createElement('div');
+      group.className = 'ae-rail-group';
+      group.setAttribute('role', 'group');
+      group.setAttribute('aria-label', label);
+      group.append(...children);
+      return group;
+    }
+    function railSeparator() {
+      const sep = document.createElement('div');
+      sep.className = 'ae-rail-sep';
+      sep.setAttribute('aria-hidden', 'true');
+      return sep;
+    }
+    const railSpacer = document.createElement('div');
+    railSpacer.className = 'ae-rail-spacer';
+    railSpacer.setAttribute('aria-hidden', 'true');
+
+    rail.replaceChildren(
+      homeBtn,
+      railSeparator(),
+      railGroup('Nox AI', aiModalBtn, stageBtn),
+      railSeparator(),
+      railGroup('История', historyDrawer.trigger),
+      railSpacer,
+      railSeparator(),
+      railGroup('Озвучка и аккаунт', muteBtn, accountPanel.el)
+    );
+
     appRoot.replaceChildren(topbar.el, rail, mainContent, toastHost, aiModal.el);
+
+    // Открытие и закрытие окна Nox AI не меняет состояние store — подсвечиваем кнопку рейки отдельно.
+    new MutationObserver(() => syncAll(store.state))
+      .observe(aiModal.el, { attributes: true, attributeFilter: ['hidden'] });
 
     // Отрисовка тостов
     let lastToastSig = '';
@@ -143,6 +202,15 @@
       }
       muteBtn.title = cloudVoice ? (audible ? 'Выключить звук' : 'Включить звук') : 'Настройки озвучки';
       muteBtn.setAttribute('aria-label', muteBtn.title);
+      muteBtn.dataset.label = muteBtn.title;
+
+      // Рейка: активные состояния и aria у служебных кнопок.
+      const brandActive = st.route === 'personal';
+      homeBtn.classList.toggle('is-active', brandActive);
+      homeBtn.setAttribute('aria-current', brandActive ? 'page' : 'false');
+      const aiOpen = aiModal.isOpen();
+      aiModalBtn.classList.toggle('is-active', aiOpen);
+      aiModalBtn.setAttribute('aria-expanded', String(aiOpen));
 
       topbar.render(st);
       accountPanel.render(st);

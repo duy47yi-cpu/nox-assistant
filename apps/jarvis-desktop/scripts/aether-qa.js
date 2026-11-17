@@ -865,9 +865,127 @@ async function runChatRedesignQa(win) {
       && layout.translucent > 0 && layout.translucent < 180 && layout.opaque === 255, layout);
     screenshots.push(await shot(win, `01-пустой-чат-${w}x${h}.png`));
   }
-  const railGeometry = await js(win, `(() => {
+  // Рейка v2: вставная панель, бренд → «Главная», группы, подписи-пилюли.
+  const railProbe = () => js(win, `(() => {
     const rail = document.querySelector('.ae-utility-rail');
-    const controls = [...rail.querySelectorAll('button')].filter((b) => b.getClientRects().length);
+    const controls = [...rail.querySelectorAll('button')].filter((b) => b.getClientRects().length > 0);
+    const brand = document.querySelector('#aeRailHomeBtn');
+    const brandIcon = brand && brand.querySelector('svg');
+    const bounds = rail.getBoundingClientRect();
+    return {
+      ids: controls.map((b) => b.id),
+      labels: controls.every((b) => b.getAttribute('title')
+        && b.getAttribute('aria-label') && b.getAttribute('data-label')),
+      brandIcon: brandIcon ? Math.round(brandIcon.getBoundingClientRect().width) : 0,
+      groups: [...rail.querySelectorAll('.ae-rail-group')].map((g) => g.getAttribute('aria-label')),
+      panel: { x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.round(bounds.width) },
+      radius: getComputedStyle(rail).borderRadius,
+      overflow: document.documentElement.scrollWidth > innerWidth,
+      tabs: [...document.querySelectorAll('#aeTopbar .ae-nav-label')].map((tab) => tab.innerText),
+    };
+  })()`);
+  const hoverPill = async (selector) => {
+    const point = await js(win, `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      const bounds = el.getBoundingClientRect();
+      return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+    })()`);
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(point.x), y: Math.round(point.y) });
+    await settle(win, 320);
+    const detail = await js(win, `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      const pseudo = getComputedStyle(el, '::before');
+      const bounds = el.getBoundingClientRect();
+      const context = document.createElement('canvas').getContext('2d');
+      context.font = [pseudo.fontStyle, pseudo.fontWeight, pseudo.fontSize, pseudo.fontFamily].join(' ');
+      const text = context.measureText(el.getAttribute('data-label') || '').width;
+      const width = text + parseFloat(pseudo.paddingLeft) + parseFloat(pseudo.paddingRight)
+        + parseFloat(pseudo.borderLeftWidth) + parseFloat(pseudo.borderRightWidth);
+      const left = bounds.right + parseFloat(pseudo.left);
+      return {
+        label: el.getAttribute('data-label'),
+        title: el.getAttribute('title'),
+        aria: el.getAttribute('aria-label'),
+        visible: pseudo.visibility === 'visible' && pseudo.opacity === '1',
+        left: Math.round(left), right: Math.round(left + width), fits: left + width <= innerWidth,
+      };
+    })()`);
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: win.getContentSize()[0] - 40, y: 140 });
+    await settle(win, 160);
+    return detail;
+  };
+  await setViewport(win, 1200, 720);
+  const railWide = await railProbe();
+  check('Рейка v2 на 1200×720: панель 56, 7 кнопок с брендом 28, группы, без скролла',
+    railWide.ids.join('|') === 'aeRailHomeBtn|lxAiModalBtn|aeStageToggle|aeHistoryToggle|lxMuteBtn|aeLimitsTrigger|aeAccountTrigger'
+    && railWide.labels && railWide.brandIcon === 28 && railWide.panel.width === 56
+    && railWide.panel.x === 8 && railWide.radius === '16px'
+    && railWide.groups.join('|') === 'Nox AI|История|Озвучка и аккаунт' && !railWide.overflow
+    && railWide.tabs.join(' · ') === 'Главная · Команды · Дополнения · Nox AI · Настройки', railWide);
+  const brandHome = await js(win, `(() => {
+    const brand = document.querySelector('#aeRailHomeBtn');
+    brand.click();
+    return { route: window.__noxAether.getRoute(), current: brand.getAttribute('aria-current') };
+  })()`);
+  check('Бренд рейки ведёт на «Главную»', brandHome.route === 'personal' && brandHome.current === 'page', brandHome);
+  const aiPill = await hoverPill('#lxAiModalBtn');
+  check('Подпись верхней кнопки видна при наведении и не уходит за окно', aiPill.visible && aiPill.fits
+    && aiPill.title && aiPill.aria, aiPill);
+  await js(win, `window.__noxAether.setRoute('chat')`);
+  win.show();
+  win.focus();
+  await settle(win, 160);
+  await js(win, `document.querySelector('#aeRailHomeBtn').focus()`);
+  await settle(win, 80);
+  let tabPressed = false;
+  try {
+    win.webContents.debugger.attach('1.3');
+    await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', {
+      type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9,
+    });
+    await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', {
+      type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9,
+    });
+    tabPressed = true;
+  } catch { /* CDP занят — ниже обычный ввод */ }
+  finally { try { win.webContents.debugger.detach(); } catch { /* ignore */ } }
+  if (!tabPressed) {
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });
+  }
+  await settle(win, 220);
+  const railFocus = await js(win, `(() => {
+    let el = document.activeElement;
+    const rail = document.querySelector('.ae-utility-rail');
+    if (rail.contains(el) && !el.matches(':focus-visible') && typeof el.focus === 'function') {
+      el.focus({ focusVisible: true });
+      el = document.activeElement;
+    }
+    const pseudo = getComputedStyle(el, '::before');
+    return {
+      insideRail: rail.contains(el), id: el.id, label: el.getAttribute('data-label'),
+      pill: pseudo.visibility === 'visible' && pseudo.opacity === '1',
+      focusVisible: el.matches(':focus-visible'),
+      outline: getComputedStyle(el).outlineWidth,
+    };
+  })()`);
+  check('Рейка: клавиатурный фокус даёт кольцо 2 px и подпись', railFocus.insideRail
+    && railFocus.pill && railFocus.focusVisible && parseFloat(railFocus.outline) >= 2, railFocus);
+  await js(win, `document.activeElement.blur()`);
+  await setViewport(win, 864, 520);
+  const railCompact = await railProbe();
+  check('Рейка v2 на 864×520: компактная панель 48, бренд 24, без скролла',
+    railCompact.ids.length === 7 && railCompact.labels && railCompact.brandIcon === 24
+    && railCompact.panel.width === 48 && railCompact.panel.x === 8 && railCompact.radius === '16px'
+    && !railCompact.overflow, railCompact);
+  const limitsPill = await hoverPill('#aeLimitsTrigger');
+  const accountPill = await hoverPill('#aeAccountTrigger');
+  check('Подписи «Лимиты» и «Аккаунт» на 864: hover, title/aria и помещаются в окно',
+    limitsPill.visible && limitsPill.fits && limitsPill.title && limitsPill.aria
+    && accountPill.visible && accountPill.fits && accountPill.title && accountPill.aria,
+  { limits: limitsPill, account: accountPill });
+  const railActions = await js(win, `(() => {
+    const rail = document.querySelector('.ae-utility-rail');
     const stage = document.querySelector('#aeOrbStage');
     const toggle = document.querySelector('#aeStageToggle');
     const chat = document.querySelector('#noxChat');
@@ -888,17 +1006,11 @@ async function runChatRedesignQa(win) {
       panel.querySelector('button').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       return position && panel.hidden && document.activeElement === trigger;
     });
-    return { ids: controls.map((b) => b.id), labels: controls.every((b) => b.getAttribute('aria-label')),
-      iconSizes: controls.map((b) => b.firstElementChild?.getBoundingClientRect().width),
-      railWidth: rail.getBoundingClientRect().width, collapsed, restored, panels,
-      overflow: document.documentElement.scrollWidth > innerWidth,
-      tabs: [...document.querySelectorAll('#aeTopbar .ae-nav-label')].map((tab) => tab.innerText) };
+    document.activeElement.blur();
+    return { collapsed, restored, panels };
   })()`);
-  check('Рейка, вкладки, поповеры и сворачивание сферы на 864×520',
-    railGeometry.railWidth === 56 && railGeometry.labels && railGeometry.iconSizes.length === 6 &&
-    railGeometry.iconSizes.every((w) => w === 24) && railGeometry.collapsed && railGeometry.restored &&
-    railGeometry.panels.every(Boolean) && !railGeometry.overflow &&
-    railGeometry.tabs.join(' · ') === 'Главная · Команды · Дополнения · Nox AI · Настройки', railGeometry);
+  check('Рейка: сворачивание сферы и поповеры лимитов/аккаунта', railActions.collapsed
+    && railActions.restored && railActions.panels.every(Boolean), railActions);
 
   await sendText(win, 'Открой терминал и VS Code');
   const progress = await waitUntil(async () => {
