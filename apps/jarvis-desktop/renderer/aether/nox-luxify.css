@@ -1497,12 +1497,6 @@ html[data-aether] *::-webkit-scrollbar-thumb:hover {
   border-right: 1px solid rgba(80, 112, 221, 0.14);
 }
 
-.ae-composer {
-  background: var(--lx-panel-2);
-  border: 1px solid rgba(80, 112, 221, 0.22);
-  border-radius: var(--lx-r-card);
-}
-
 .ae-send-btn {
   background: var(--lx-accent);
   color: #FFFFFF;
@@ -1827,6 +1821,7 @@ html[data-motion="off"] * {
   .ae-nav-btn,
   .ae-nav-btn .ae-nav-ico,
   .ae-utility-rail button,
+  .ae-mic-btn,
   .lx-pill-btn,
   .lx-icon-btn,
   .lx-toggle-track,

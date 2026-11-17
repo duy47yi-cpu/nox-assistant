@@ -1,16 +1,12 @@
-/* Боковая панель истории чатов и рабочих пространств.
- * На широких окнах плавно сворачивается; на узких (< 980px) открывается как наложенный ящик без сжатия чата. */
+/* Колонка истории чатов и рабочих пространств внутри экрана Nox AI.
+ * На широких окнах это постоянная колонка слева от ленты и плавно сворачивается в 0;
+ * на узких (< 980px) выезжает поверх по кнопке, не сжимая чат. */
 (() => {
   'use strict';
 
-  function startOfTodayMs() {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-  }
-
   function createHistoryDrawer({ store }) {
     const { icon } = window.NoxAetherIcons;
+    const time = window.NoxAetherTime;
 
     const wrap = document.createElement('aside');
     wrap.className = 'ae-sidebar-wrap';
@@ -92,14 +88,11 @@
       if (ok) wsForm.hidden = true;
     });
 
-    const title = document.createElement('h2');
-    title.className = 'ae-history-title';
-    title.textContent = 'История';
-    wsBlock.append(title, wsRow, wsForm);
+    wsBlock.append(wsRow, wsForm);
 
-    // ── Новый чат и поиск ──────────────────────────────────────
-    const actionsRow = document.createElement('div');
-    actionsRow.className = 'ae-sidebar-actions';
+    // ── Новый чат и сворачивание колонки ───────────────────────
+    const headRow = document.createElement('div');
+    headRow.className = 'ae-sidebar-head';
 
     const newBtn = document.createElement('button');
     newBtn.type = 'button';
@@ -122,7 +115,19 @@
     searchInput.addEventListener('input', () => renderList(store.state));
     searchWrap.append(searchIco, searchInput);
 
-    actionsRow.append(newBtn, searchWrap);
+    const collapseBtn = document.createElement('button');
+    collapseBtn.type = 'button';
+    collapseBtn.className = 'ae-icon-btn ae-btn-sm ae-sidebar-collapse';
+    collapseBtn.title = 'Свернуть историю (Ctrl+B)';
+    collapseBtn.setAttribute('aria-label', 'Свернуть историю чатов');
+    collapseBtn.append(icon('panelLeft'));
+    collapseBtn.addEventListener('click', () => store.toggleHistory(false));
+
+    headRow.append(newBtn, collapseBtn);
+
+    const actionsRow = document.createElement('div');
+    actionsRow.className = 'ae-sidebar-actions';
+    actionsRow.append(searchWrap);
 
     // ── Список чатов ───────────────────────────────────────────
     const listBox = document.createElement('div');
@@ -157,17 +162,29 @@
       openBtn.className = 'ae-chat-open';
       openBtn.setAttribute('aria-current', active ? 'true' : 'false');
 
+      const titleLine = document.createElement('span');
+      titleLine.className = 'ae-chat-line';
       const title = document.createElement('span');
       title.className = 'ae-chat-title';
       title.textContent = chat.title || 'Новый чат';
-      openBtn.append(title);
+      title.title = title.textContent;
+      titleLine.append(title);
 
       const hasDraft = st.drafts.has(chat.id) && chat.id !== st.activeChatId;
       if (hasDraft) {
         const draftTag = document.createElement('span');
         draftTag.className = 'ae-chat-draft-tag';
         draftTag.textContent = 'Черновик';
-        openBtn.append(draftTag);
+        titleLine.append(draftTag);
+      }
+      openBtn.append(titleLine);
+
+      const stamp = time.formatChatStamp(Number(chat.updatedAt));
+      if (stamp) {
+        const stampEl = document.createElement('span');
+        stampEl.className = 'ae-chat-time';
+        stampEl.textContent = stamp;
+        openBtn.append(stampEl);
       }
 
       openBtn.addEventListener('click', async () => {
@@ -217,14 +234,7 @@
         return;
       }
 
-      const todayStart = startOfTodayMs();
-      const today = [];
-      const earlier = [];
-      for (const c of filtered) {
-        const ts = Number(c.updatedAt || c.createdAt || Date.now());
-        if (ts >= todayStart) today.push(c);
-        else earlier.push(c);
-      }
+      const { today, earlier } = time.splitChats(filtered);
 
       const addGroup = (label, items) => {
         if (!items.length) return;
@@ -271,7 +281,7 @@
       renderList(st);
     }
 
-    aside.append(wsBlock, actionsRow, listBox);
+    aside.append(headRow, wsBlock, actionsRow, listBox);
     wrap.append(backdrop, aside);
     return { el: wrap, trigger, toggle, render };
   }

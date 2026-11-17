@@ -26,6 +26,7 @@
     verifying: 'thinking',
     waiting_approval: 'waiting_approval',
     success: 'success',
+    partial: 'idle',
     cancelled: 'idle',
     error: 'error',
   };
@@ -41,6 +42,7 @@
     verifying: 'verifying',
     waiting_approval: 'waiting_approval',
     success: 'success',
+    partial: 'idle',
     cancelled: 'cancelled',
     error: 'error',
   };

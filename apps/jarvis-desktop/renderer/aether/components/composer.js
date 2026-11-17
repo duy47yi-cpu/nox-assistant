@@ -1,8 +1,8 @@
 /* Поле ввода Nox Aether:
  * - авто-высота, отправка по Enter (Shift+Enter — новая строка), без двойной отправки;
  * - вложения файлов и «обвести область экрана»;
- * - кнопка микрофона и переключатель режима диктовки;
- * - выбор модели и глубины обдумывания (#pickTrigger / #pickPanel с теми же контрактами тестов). */
+ * - справа две круглые кнопки: микрофон (диктовка через dictation:*) и отправка/стоп;
+ * - компактный чип режима агента и выбор модели (#pickTrigger / #pickPanel с теми же контрактами тестов). */
 (() => {
   'use strict';
 
@@ -32,7 +32,7 @@
     return `${fileSizeNumber.format(bytes)} ${units[unit]}`;
   }
 
-  function createComposer({ store, bridge, onSendTrigger, onTyping, onVoiceSettings }) {
+  function createComposer({ store, bridge, onSendTrigger, onTyping }) {
     const { icon } = window.NoxAetherIcons;
 
     const wrap = document.createElement('div');
@@ -122,20 +122,16 @@
     const micBtn = document.createElement('button');
     micBtn.type = 'button';
     micBtn.id = 'dictationBtn';
-    micBtn.className = 'ae-tool-btn ae-mic-btn';
-    const micLabel = document.createElement('span');
-    micLabel.className = 'ae-mic-label';
-    micBtn.append(icon('mic'), micLabel);
-    micBtn.addEventListener('click', () => {
-      if (store.state.settings.dictation !== true) onVoiceSettings();
-      else store.toggleDictation();
-    });
+    micBtn.className = 'ae-mic-btn';
+    micBtn.append(icon('mic'));
+    micBtn.addEventListener('click', () => store.toggleDictation());
 
     const dictModeBtn = document.createElement('button');
     dictModeBtn.type = 'button';
     dictModeBtn.id = 'dictationStateBtn';
     dictModeBtn.className = 'ae-dict-chip';
     dictModeBtn.hidden = true;
+    dictModeBtn.setAttribute('aria-label', 'Переключить режим микрофона');
     dictModeBtn.addEventListener('click', () => store.cycleDictationMode());
 
     const agentBtn = document.createElement('button');
@@ -143,6 +139,7 @@
     agentBtn.id = 'agentModeBtn';
     agentBtn.className = 'ae-agent-toggle';
     agentBtn.setAttribute('aria-pressed', 'false');
+    agentBtn.setAttribute('aria-label', 'Режим агента');
     agentBtn.title = 'Режим агента: пошаговые действия на экране и в системе';
     const agentLabel = document.createElement('span');
     agentLabel.textContent = 'Агент';
@@ -261,7 +258,7 @@
     });
 
     pickWrap.append(pickTrigger, pickPanel);
-    leftTools.append(attachBtn, regionBtn, micBtn, dictModeBtn, agentBtn, pickWrap);
+    leftTools.append(attachBtn, regionBtn, dictModeBtn, agentBtn, pickWrap);
 
     const rightTools = document.createElement('div');
     rightTools.className = 'ae-composer-send-wrap';
@@ -279,7 +276,7 @@
       }
     });
 
-    rightTools.append(sendBtn);
+    rightTools.append(micBtn, sendBtn);
     footer.append(leftTools, rightTools);
     wrap.append(filesRow, ta, footer);
 
@@ -366,12 +363,16 @@
       const dictError = dictEnabled ? st.dictation.error : '';
       const recording = dictEnabled && st.dictation.recording && !dictError;
       const namedMode = recording && (st.dictation.mode === 'quiet' || !st.dictation.full);
-      micBtn.hidden = !dictAvailable || (!dictEnabled && !store.isEmptyChat());
+      micBtn.disabled = !dictAvailable;
       micBtn.classList.toggle('is-recording', Boolean(recording));
       micBtn.classList.toggle('has-error', Boolean(dictError));
-      micLabel.textContent = !dictEnabled ? 'Настроить голос' : dictError ? 'Повторить' : recording ? 'Остановить' : 'Говорить';
-      micBtn.title = dictError || (recording ? 'Остановить голосовой ввод' : micLabel.textContent);
-      micBtn.setAttribute('aria-label', dictError ? `${dictError}. Повторить голосовой ввод` : micBtn.title);
+      const micTitle = !dictAvailable ? 'Голосовой ввод недоступен'
+        : dictError ? `${dictError}. Повторить голосовой ввод`
+        : !dictEnabled ? 'Голосовой ввод: диктовка выключена в Настройках'
+        : recording ? 'Остановить голосовой ввод'
+        : 'Включить голосовой ввод';
+      micBtn.title = micTitle;
+      micBtn.setAttribute('aria-label', micTitle);
       if (dictEnabled) micBtn.setAttribute('aria-pressed', String(Boolean(recording)));
       else micBtn.removeAttribute('aria-pressed');
 

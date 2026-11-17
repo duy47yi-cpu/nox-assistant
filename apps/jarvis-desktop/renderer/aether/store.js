@@ -5,6 +5,10 @@
 (function (root) {
   'use strict';
 
+  const time = (typeof module !== 'undefined' && module.exports && typeof require === 'function')
+    ? require('./time')
+    : (root.NoxAetherTime || {});
+
   const ROUTES = ['chat', 'commands', 'mcp', 'personal', 'settings'];
   const MODE_NAMES = {
     full: 'Полный доступ',
@@ -21,6 +25,11 @@
     high: 'Глубоко',
   };
   const APPROVAL_ARM_MS = 700;
+  const HISTORY_KEY = 'aether.historyOpen';
+  const HISTORY_NARROW_PX = 980;
+  const TIMES_KEY = 'aether.messageTimes';
+  const TIMES_CHATS = 20;
+  const TIMES_TURNS = 100;
 
   // Извлекает прикреплённые файлы из сохранённой реплики (как parseUserHistory в app.js).
   function parseUserHistory(text) {
@@ -197,6 +206,67 @@
     const orbLib = deps.orbLib || (typeof window !== 'undefined' ? window.NoxOrbLibrary : null);
     const storage = deps.storage !== undefined ? deps.storage : (typeof localStorage !== 'undefined' ? localStorage : null);
 
+    // Колонка истории — постоянная часть экрана чата: по умолчанию открыта, выбор владельца переживает перезапуск.
+    function readHistoryPref() {
+      try {
+        const raw = storage ? storage.getItem(HISTORY_KEY) : null;
+        return raw === null || raw === undefined ? true : raw === '1';
+      } catch { return true; }
+    }
+
+    function readMessageTimes() {
+      const map = new Map();
+      try {
+        const raw = storage ? storage.getItem(TIMES_KEY) : null;
+        const data = raw ? JSON.parse(raw) : null;
+        if (!data || typeof data !== 'object') return map;
+        for (const [id, turns] of Object.entries(data)) {
+          if (!Array.isArray(turns)) continue;
+          map.set(id, turns.filter((t) => t && Number.isFinite(t.u)).slice(-TIMES_TURNS));
+        }
+      } catch { /* повреждённая запись не мешает чату */ }
+      return map;
+    }
+
+    const messageTimes = readMessageTimes();
+
+    function persistMessageTimes() {
+      if (!storage) return;
+      try {
+        const data = {};
+        for (const id of [...messageTimes.keys()].slice(-TIMES_CHATS)) data[id] = messageTimes.get(id);
+        storage.setItem(TIMES_KEY, JSON.stringify(data));
+      } catch { /* ignore */ }
+    }
+
+    function turnsOf(chatId) {
+      const id = chatId || '__default__';
+      const list = messageTimes.get(id) || [];
+      messageTimes.delete(id);
+      messageTimes.set(id, list);
+      return list;
+    }
+
+    function recordUserTime(chatId, text, at) {
+      const list = turnsOf(chatId);
+      list.push({ h: time.fingerprint(text), u: at, a: null });
+      if (list.length > TIMES_TURNS) list.splice(0, list.length - TIMES_TURNS);
+      persistMessageTimes();
+    }
+
+    function recordReplyTime(chatId, at) {
+      const list = messageTimes.get(chatId || '__default__');
+      const last = list && list[list.length - 1];
+      if (!last || last.a !== null) return;
+      last.a = at;
+      persistMessageTimes();
+    }
+
+    function forgetMessageTimes(chatId) {
+      if (!messageTimes.delete(chatId || '__default__')) return;
+      persistMessageTimes();
+    }
+
     const scrub = (s) => (ui && typeof ui.scrub === 'function' ? ui.scrub(s) : String(s == null ? '' : s));
     const toolTitle = (name) => (ui && typeof ui.toolTitle === 'function' ? ui.toolTitle(name) : (name || 'Действие'));
     const cleanSummary = (s) => (ui && typeof ui.cleanSummary === 'function' ? ui.cleanSummary(s) : String(s || ''));
@@ -243,10 +313,9 @@
       currentWorkspaceId: 'default',
       chats: [],
       activeChatId: null,
-      historyOpen: false,
+      historyOpen: readHistoryPref(),
       historyLoading: false,
       sendingLock: false,
-      pendingComposeAnim: false,
       agentMode: false,
       pendingCommandId: null,
       lastUserPhrase: '',
@@ -333,6 +402,16 @@
       if (state.stopped && !state.trackerBusy) return 'idle';
       if (state.approvals.queue.length > 0) return 'waiting_approval';
       if (state.dictation.recording && !state.trackerBusy) return 'listening';
+      if (!state.trackerBusy) {
+        const last = [...state.feedItems].reverse().find((it) => it && it.kind === 'assistant');
+        if (last) {
+          if (last.cancelled) return 'cancelled';
+          const st = String(last.workStatus || '').toLowerCase();
+          if (st === 'partial') return 'partial';
+          if (st === 'error' || st === 'failed') return 'error';
+          if (st === 'done' && last.actions && last.actions.some((a) => a && a.verified === 'confirmed')) return 'success';
+        }
+      }
       return state.trackerState || 'idle';
     }
 
@@ -363,10 +442,29 @@
       notify(true);
     }
 
+    let historyParked = false;
+
     function toggleHistory(force) {
       state.historyOpen = typeof force === 'boolean' ? force : !state.historyOpen;
-      try { if (storage) storage.setItem('aether.historyOpen', state.historyOpen ? '1' : '0'); } catch { /* ignore */ }
+      historyParked = false;
+      try { if (storage) storage.setItem(HISTORY_KEY, state.historyOpen ? '1' : '0'); } catch { /* ignore */ }
       notify(true);
+    }
+
+    // Узкое окно: колонка не сжимает чат, а выезжает поверх по кнопке. Свернутую сами колонку
+    // возвращаем при расширении окна, не затирая выбор владельца.
+    function syncHistoryViewport() {
+      if (typeof window === 'undefined') return;
+      const narrow = window.innerWidth < HISTORY_NARROW_PX;
+      if (narrow && state.historyOpen) {
+        historyParked = true;
+        state.historyOpen = false;
+        notify(true);
+      } else if (!narrow && historyParked) {
+        historyParked = false;
+        state.historyOpen = readHistoryPref();
+        notify(true);
+      }
     }
 
     function setDraftText(text) {
@@ -436,9 +534,11 @@
         notify();
         return;
       }
+      const doneAt = Date.now();
       state.feedItems = [...state.feedItems, {
         id: t.id,
         kind: 'assistant',
+        at: doneAt,
         userPhrase: String(t.userPhrase || lastFeedUserPhrase() || '').trim(),
         text: t.text,
         actions: t.actions.map((a) => ({ ...a })),
@@ -450,12 +550,13 @@
         detailsOpen: false,
         cancelled: Boolean(options.cancelled),
         workStatus: options.status || '',
-        workElapsedMs: Math.max(0, Date.now() - t.startedAt),
+        workElapsedMs: Math.max(0, doneAt - t.startedAt),
         savedCommandId: null,
         savedCommandName: '',
         savedCommandError: '',
         savingCommand: false,
       }];
+      recordReplyTime(state.activeChatId, doneAt);
       notify();
     }
 
@@ -724,8 +825,19 @@
     }
 
     // ── Событие от ядра ──────────────────────────────────────────
+    // Запоздавший итог действия после Esc/стопа (afterStop/late) приходит уже после done.
+    // Ход закрыт, и такой итог не должен создавать новый ход: иначе в ленте остаётся живая
+    // строка «Ход работы» и «Думаю…» при том, что работа уже остановлена.
+    function isLateAfterStop(ev) {
+      return Boolean(ev && (ev.afterStop === true || ev.late === true));
+    }
+
     function onAgentEvent(ev) {
       if (!ev || typeof ev !== 'object') return;
+      if (isLateAfterStop(ev) && !state.activeTurn
+        && (ev.type === 'tool_start' || ev.type === 'tool_result' || ev.type === 'approval_request')) {
+        return; // итог остаётся в журнале, но мёртвый ход в ленте не воскресает
+      }
       if (ev.type === 'approval_request' && (state.taskApprovals.has(ev.id) || ev.taskId)) {
         if (ev.taskId) state.taskApprovals.set(ev.id, ev.taskId);
         pushApproval(ev);
@@ -758,11 +870,14 @@
             setRoute('chat');
           })();
           break;
-        case 'quick_user':
+        case 'quick_user': {
+          const quickAt = Date.now();
           state.lastUserPhrase = String(ev.text || '').trim();
-          state.feedItems = [...state.feedItems, { id: nextId('u'), kind: 'user', text: String(ev.text || ''), files: [] }];
+          state.feedItems = [...state.feedItems, { id: nextId('u'), kind: 'user', at: quickAt, text: String(ev.text || ''), files: [] }];
+          recordUserTime(state.activeChatId, String(ev.text || ''), quickAt);
           ensureActiveTurn();
           break;
+        }
         case 'text': {
           const t = ensureActiveTurn();
           t.text += String(ev.delta || '');
@@ -886,6 +1001,7 @@
 
     // ── Загрузка и синхронизация с IPC ───────────────────────────
     async function loadInitial() {
+      syncHistoryViewport();
       const kind = await bridge.ensureBridge();
       state.link = kind;
       await Promise.allSettled([
@@ -1001,6 +1117,7 @@
         return;
       }
       const mySeq = ++histSeq;
+      const chatId = state.activeChatId || '__default__';
       state.historyLoading = true;
       notify();
       try {
@@ -1008,10 +1125,9 @@
         if (mySeq !== histSeq) return;
         const arr = Array.isArray(rows) ? rows : [];
         state.activeTurn = null;
-        state.pendingComposeAnim = false;
         state.lastUserPhrase = '';
         let prevUserPhrase = '';
-        state.feedItems = arr.map((m) => {
+        const mapped = arr.map((m) => {
           if (m.role === 'user') {
             const parsed = parseUserHistory(m.text);
             prevUserPhrase = String(parsed.text || '').trim();
@@ -1035,6 +1151,7 @@
             savingCommand: false,
           };
         });
+        state.feedItems = time.withTurnTimes(mapped, messageTimes.get(chatId));
       } catch (err) {
         if (mySeq === histSeq) toast(`История не загрузилась: ${bridge.errText(err)}`, 'error');
       } finally {
@@ -1176,20 +1293,21 @@
       const files = Array.isArray(rawFiles) ? rawFiles.slice() : [];
       if (!text && !files.length) return { ok: false, reason: 'empty' };
 
-      const wasEmpty = isEmptyChatState(state);
       const sendText = text || 'Посмотри приложенные файлы.';
       state.sendingLock = true;
-      state.pendingComposeAnim = wasEmpty;
       state.lastSentPayload = { text: sendText, files: files.map((f) => ({ ...f })) };
       state.lastUserPhrase = text;
 
       // Сразу отображаем реплику и очищаем текущий черновик (без дублей).
+      const sentAt = Date.now();
       state.feedItems = [...state.feedItems, {
         id: nextId('u'),
         kind: 'user',
+        at: sentAt,
         text: sendText,
         files: files.map((f) => ({ name: f.name, path: f.path, size: f.size })),
       }];
+      recordUserTime(state.activeChatId, sendText, sentAt);
       state.currentDraftText = '';
       state.currentDraftFiles = [];
       saveCurrentDraft();
@@ -1207,7 +1325,6 @@
         result = { ok: false, error: bridge.errText(err) };
       } finally {
         state.sendingLock = false;
-        state.pendingComposeAnim = false;
       }
 
       if (result && result.ok === false) {
@@ -1276,6 +1393,7 @@
         const res = await bridge.call('chatClose', chatId);
         if (res && res.ok === false) { toast(res.error || 'Не удалось закрыть чат', 'error'); return false; }
         state.drafts.delete(chatId);
+        forgetMessageTimes(chatId);
         await refreshChats(true);
         restoreDraftFor(state.activeChatId);
         await loadChatHistory();
@@ -1297,6 +1415,7 @@
         state.activeTurn = null;
         state.feedItems = [];
         state.lastUserPhrase = '';
+        forgetMessageTimes(state.activeChatId);
         notify(true);
         toast('Чат очищен', 'ok');
         return true;
@@ -1430,11 +1549,7 @@
       toast,
       setRoute,
       toggleHistory,
-      consumeComposeAnim: () => {
-        if (!state.pendingComposeAnim) return false;
-        state.pendingComposeAnim = false;
-        return true;
-      },
+      syncHistoryViewport,
       setDraftText,
       addDraftFiles,
       removeDraftFile,

@@ -8,7 +8,6 @@
 (() => {
   'use strict';
 
-  const STARTERS = ['Сверни окна', 'Что по погоде?', 'Открой рабочую папку'];
   const PARTIAL_LABELS = {
     done: 'Выполнено', failed: 'Не удалось выполнить', unverified: 'Не подтверждено',
   };
@@ -77,10 +76,11 @@
     });
   }
 
-  function createChatView({ store, bridge, orbStage, onVoiceSettings }) {
+  function createChatView({ store, bridge, orbStage }) {
     const ui = window.JarvisUI || {};
     const md = window.NoxAetherMarkdown;
     const { icon } = window.NoxAetherIcons;
+    const time = window.NoxAetherTime;
     const scrub = typeof ui.scrub === 'function' ? ui.scrub : (s) => String(s || '');
     const toolTitle = typeof ui.toolTitle === 'function' ? ui.toolTitle : (t) => String(t || 'Шаг');
     const argsPretty = typeof ui.argsPretty === 'function' ? ui.argsPretty : () => '';
@@ -99,24 +99,26 @@
     const column = document.createElement('div');
     column.className = 'ae-chat-column';
 
-    // Область пустого чата (центрируется над полем ввода)
+    // Приветствие занимает свободное место между шапкой и полем ввода.
     const emptyHero = document.createElement('div');
     emptyHero.className = 'ae-empty-hero';
 
     const emptyTitle = document.createElement('h1');
     emptyTitle.className = 'ae-empty-title';
-    emptyTitle.textContent = 'Что сделать на компьютере?';
+    emptyTitle.setAttribute('aria-live', 'polite');
+    emptyHero.append(emptyTitle);
 
-    const emptySub = document.createElement('p');
-    emptySub.className = 'ae-empty-sub';
-    emptySub.textContent = 'Напишите поручение или выберите пример.';
-
-    const starterRow = document.createElement('div');
-    starterRow.className = 'ae-starters';
-    starterRow.setAttribute('role', 'group');
-    starterRow.setAttribute('aria-label', 'Примеры поручений');
-
-    emptyHero.append(emptyTitle, emptySub, starterRow);
+    function renderGreeting(st) {
+      const easterEgg = /^nox\.\.\?$/i.test(st.currentDraftText.trim());
+      const hour = new Date().getHours();
+      let greeting = 'Я рядом';
+      if (easterEgg) greeting = 'Nox..?';
+      else if (st.dictation.recording) greeting = 'Слушаю.';
+      else if (hour >= 5 && hour < 12) greeting = 'Кофе, чай, что желаете?';
+      else if (hour >= 18) greeting = 'Добрый вечер.';
+      if (emptyTitle.textContent !== greeting) emptyTitle.textContent = greeting;
+      emptyHero.classList.toggle('is-easter-egg', easterEgg);
+    }
 
     // Лента сообщений
     const feedWrap = document.createElement('div');
@@ -142,22 +144,17 @@
     // Слот подтверждения (показывается над полем ввода, фокусируя внимание без шума)
     const approvalCard = window.NoxAetherApprovalCard.createApprovalCard({ store });
 
-    // Поле ввода (единый экземпляр без пересоздания при переходе empty -> docked)
+    // Одно поле ввода внизу пустого и открытого чата.
     let stickBottom = true;
-    let captureBeforeSendRect = null;
 
     const composer = window.NoxAetherComposer.createComposer({
       store,
       bridge,
-      onVoiceSettings,
       onSendTrigger: () => {
-        if (store.isEmptyChat()) {
-          captureBeforeSendRect = dockWrap.getBoundingClientRect();
-        }
         stickBottom = true;
       },
       onTyping: (text, caret) => {
-        syncStarters(text, store.state.currentDraftFiles.length);
+        if (store.isEmptyChat()) renderGreeting(store.state);
         if (orbStage) {
           orbStage.setComposer(text);
           if (text.length) orbStage.gesture('type', caret);
@@ -171,20 +168,6 @@
 
     column.append(feedWrap, emptyHero, dockWrap);
     root.append(bannerWrap, column);
-
-    function syncStarters(text, fileCount) {
-      for (const chip of starterRow.children) chip.disabled = Boolean(text.trim() || fileCount);
-    }
-
-    for (const phrase of STARTERS) {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'ae-starter-chip';
-      chip.append(phrase, icon('chevronRight'));
-      chip.title = 'Подставить в поле ввода';
-      chip.addEventListener('click', () => composer.insertStarter(phrase));
-      starterRow.append(chip);
-    }
 
     // Управление прокруткой ленты
     function isNearBottom() {
@@ -493,11 +476,6 @@
     function buildPartialCard(items) {
       const card = document.createElement('div');
       card.className = 'ae-partial-card';
-      const title = document.createElement('strong');
-      title.className = 'ae-partial-title';
-      title.textContent = items.every((item) => item.status === 'done') ? 'Выполнено'
-        : items.some((item) => item.status === 'done') ? 'Выполнено частично'
-          : items.every((item) => item.status === 'unverified') ? 'Не подтверждено' : 'Не выполнено';
       const list = document.createElement('ul');
       for (const item of items) {
         const row = document.createElement('li');
@@ -516,7 +494,7 @@
         row.append(status, text);
         list.append(row);
       }
-      card.append(title, list);
+      card.append(list);
       return card;
     }
 
@@ -593,6 +571,13 @@
           bubble.append(fl);
         }
         msg.append(bubble);
+        const userStamp = time.formatClock(Number(item.at));
+        if (userStamp) {
+          const stampEl = document.createElement('span');
+          stampEl.className = 'ae-msg-time';
+          stampEl.textContent = userStamp;
+          msg.insertBefore(stampEl, bubble);
+        }
         return msg;
       }
 
@@ -670,9 +655,12 @@
         if (!reply) {
           reply = document.createElement('div');
           reply.className = 'ae-reply';
+          const head = document.createElement('div');
+          head.className = 'ae-reply-head';
           const author = document.createElement('div');
           author.className = 'ae-reply-author';
           author.textContent = 'Nox';
+          head.append(author);
           const content = document.createElement('div');
           content.className = 'ae-reply-content';
           const copyBtn = document.createElement('button');
@@ -681,11 +669,27 @@
           copyBtn.title = 'Скопировать ответ';
           copyBtn.setAttribute('aria-label', 'Скопировать ответ');
           copyBtn.append(icon('copy'));
-          reply.append(author, content, copyBtn);
+          reply.append(head, content, copyBtn);
           msg.append(reply);
         }
       } else {
         reply?.remove();
+      }
+
+      if (reply) {
+        const head = reply.querySelector('.ae-reply-head');
+        const stamp = time.formatClock(Number(item.at ?? item.startedAt));
+        let stampEl = head.querySelector('.ae-msg-time');
+        if (stamp) {
+          if (!stampEl) {
+            stampEl = document.createElement('span');
+            stampEl.className = 'ae-msg-time';
+            head.append(stampEl);
+          }
+          stampEl.textContent = stamp;
+        } else {
+          stampEl?.remove();
+        }
       }
 
       const replyContent = reply?.querySelector('.ae-reply-content');
@@ -814,7 +818,6 @@
       bannerWrap.replaceChildren();
     }
 
-    let wasEmptyPrev = true;
     let lastFeedItems = null;
     let lastInteractiveKey = '';
     let lastActiveSig = '';
@@ -859,43 +862,15 @@
       toggleElapsedTimer(Boolean(liveWork));
 
       const isEmpty = store.isEmptyChat();
-      const shouldAnim = store.consumeComposeAnim() || (wasEmptyPrev && !isEmpty && Boolean(captureBeforeSendRect));
-
+      root.classList.toggle('is-empty', isEmpty);
+      root.classList.toggle('is-docked', !isEmpty);
+      emptyHero.hidden = !isEmpty;
+      feedWrap.hidden = isEmpty;
       if (isEmpty) {
-        syncStarters(st.currentDraftText, st.currentDraftFiles.length);
-        root.classList.add('is-empty');
-        root.classList.remove('is-docked');
-        emptyHero.hidden = false;
-        feedWrap.hidden = true;
+        renderGreeting(st);
         toBottomBtn.hidden = true;
-        wasEmptyPrev = true;
-        captureBeforeSendRect = null;
         return;
       }
-
-      const beforeRect = captureBeforeSendRect || (wasEmptyPrev ? dockWrap.getBoundingClientRect() : null);
-      captureBeforeSendRect = null;
-
-      root.classList.remove('is-empty');
-      root.classList.add('is-docked');
-      emptyHero.hidden = true;
-      feedWrap.hidden = false;
-
-      if (wasEmptyPrev && shouldAnim && beforeRect && document.documentElement.dataset.animations !== 'off'
-        && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-        const afterRect = dockWrap.getBoundingClientRect();
-        const dy = beforeRect.top - afterRect.top;
-        if (Math.abs(dy) > 6 && typeof dockWrap.animate === 'function') {
-          dockWrap.animate(
-            [
-              { transform: `translateY(${dy}px)`, opacity: 0.96 },
-              { transform: 'translateY(0)', opacity: 1 },
-            ],
-            { duration: 280, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
-          );
-        }
-      }
-      wasEmptyPrev = false;
 
       // При поступлении текста меняется только текущий ответ.
       const active = st.activeTurn;
@@ -963,6 +938,11 @@
     return {
       el: root,
       focusComposer: () => composer.focus(),
+      insertStarter: (text) => {
+        composer.insertStarter(text);
+        composer.focus();
+      },
+      widgetDock: dockWrap,
       render,
       destroy: () => {
         if (liveElapsedTimer) clearInterval(liveElapsedTimer);

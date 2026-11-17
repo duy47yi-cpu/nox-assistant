@@ -28,6 +28,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const OUT_DIR = path.resolve(arg('out-dir', path.join(REPO_ROOT, 'docs', 'design', 'nox-aether', 'screenshots-gate2')));
 const KEEP_TEMP = has('keep-temp');
 const CHAT_REDESIGN = has('chat-redesign');
+const WIDGETS_ONLY = has('widgets-only');
 const TIMEOUT_MS = 240000;
 const CMD_EXE = path.join(process.env.SystemRoot || 'C:/Windows', 'System32', 'cmd.exe');
 const VSCODE_EXE = [
@@ -120,6 +121,19 @@ let qaClockRequests = 0;
 const openedPresentations = [];
 const openedSources = [];
 const revealedArtifacts = [];
+const openedMusic = [];
+if (CHAT_REDESIGN || WIDGETS_ONLY) {
+  const { systemTools } = require('../src/tools/system');
+  const tool = systemTools.find((tool) => tool.name === 'url_open');
+  const { run, verify } = tool;
+  tool.run = (args, ctx) => {
+    if (!args.url.startsWith('https://www.youtube.com/results?')) return run(args, ctx);
+    openedMusic.push(args.url);
+    return { ok: true, summary: 'Принят адрес тестового музыкального поиска', data: { qaMusic: true } };
+  };
+  tool.verify = (args, result, ctx) => result.data?.qaMusic
+    ? { status: 'confirmed', evidence: 'Адрес получен тестовым открывателем' } : verify(args, result, ctx);
+}
 shell.openExternal = async (url) => { openedSources.push(url); };
 const originalFetch = globalThis.fetch;
 globalThis.fetch = (input, options) => {
@@ -531,6 +545,213 @@ async function waitIdle(win, timeout = 18000) {
   return ok;
 }
 
+async function checkDayWidgets(win, check, captureBoth) {
+  const panel = '.ae-day-widgets';
+  const selector = (suffix) => JSON.stringify(`${panel} ${suffix}`);
+  const waitForMusic = (state) => waitUntil(() =>
+    js(win, `document.querySelector('${panel}')?.dataset.music === ${JSON.stringify(state)}`), 3000);
+  const setRoute = (route) => js(win, `window.__noxAether.setRoute(${JSON.stringify(route)})`);
+  const reopenChat = async () => {
+    await setRoute('settings');
+    await setRoute('chat');
+  };
+  const file = path.join(dataDir, 'music-history.json');
+  const reminder = path.join(dataDir, 'reminders.json');
+  const bad = '{ повреждённая история';
+  const text = 'Кино — Группа крови';
+  await setViewport(win, 1200, 720);
+  const legacy = await js(win, 'window.jarvis.widgetsData()');
+  check('Классический экран получает прежний ответ', legacy.weather && legacy.music === null && !legacy.version, legacy);
+
+  const empty = await waitForMusic('empty') && await js(win, `(() => {
+    const el = document.querySelector('${panel}');
+    return el.innerText.includes('Ещё не включали') && el.querySelector('.ae-day-cover').hidden
+      && el.querySelector('.ae-day-open').hidden && !el.querySelector('.ae-day-pick').hidden
+      && el.querySelector('.ae-day-reminder').hidden;
+  })()`);
+  check('Пустая история и отсутствие напоминаний', empty);
+  const draft = await js(win, `(() => {
+    const store = window.__noxAether.store;
+    const before = store.state.feedItems.length;
+    document.querySelector(${selector('.ae-day-pick')}).click();
+    const field = document.activeElement;
+    const picked = field.matches('textarea') && field.value === 'включи музыку' && store.state.feedItems.length === before;
+    field.value = 'Мой черновик';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector(${selector('.ae-day-pick')}).click();
+    const kept = field.value === 'Мой черновик';
+    field.value = '';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    return { picked, kept };
+  })()`);
+  check('Подобрать музыку заполняет черновик и сохраняет ранее написанное', draft.picked && draft.kept, draft);
+
+  fs.writeFileSync(file, bad, 'utf8');
+  await reopenChat();
+  const damaged = await waitForMusic('error') && await js(win, `(() => {
+    const el = document.querySelector('${panel}');
+    return el.innerText.includes('Файл истории повреждён') &&
+      el.querySelector('[role=status]').textContent.includes('История музыки недоступна');
+  })()`);
+  check('Повреждённая история, объявление ошибки и сохранность файла', damaged && fs.readFileSync(file, 'utf8') === bad);
+
+  const due = new Date(Math.min(Date.now() + 40 * 60000, new Date().setHours(23, 59, 59, 999)));
+  new (require('../src/schedule/store').ReminderStore)(reminder).add({ text: 'Созвон по макету', dueAt: due });
+  fs.writeFileSync(file, JSON.stringify([{ query: text, service: 'youtube', at: new Date().toISOString() }]), 'utf8');
+  const web = [];
+  const fetch = globalThis.fetch;
+  const settingsFile = path.join(dataDir, 'settings.json');
+  const settings = fs.readFileSync(settingsFile, 'utf8');
+  fs.writeFileSync(settingsFile, JSON.stringify({
+    ...JSON.parse(settings),
+    city: 'Астана',
+    calendar: { type: 'url', url: 'https://calendar.example.test/schedule.ics' },
+  }), 'utf8');
+  globalThis.fetch = (input) => {
+    web.push(new URL(input.url || input).hostname);
+    return Promise.resolve(new Response('', { status: 503 }));
+  };
+  const resources = await js(win, 'performance.getEntriesByType("resource").length');
+  let recovered;
+  try {
+    await js(win, `document.querySelector(${selector('.ae-day-retry')}).click()`);
+    recovered = await waitForMusic('ok');
+  } finally {
+    globalThis.fetch = fetch;
+    fs.writeFileSync(settingsFile, settings, 'utf8');
+  }
+  const network = await js(win, `performance.getEntriesByType('resource').slice(${resources})
+    .map((entry) => entry.name).filter((url) => /^https?:/.test(url))`);
+  check('Повторить обновляет панель и не обращается к сети', recovered && web.length === 0 && network.length === 0, { web, network });
+  const reminderVisible = await js(win, `document.querySelector(${selector('.ae-day-reminder')}).innerText`);
+  check('Строка «Далее» загружена из напоминаний', /Созвон по макету/.test(reminderVisible), reminderVisible);
+
+  for (const [w, h] of [[1200, 720], [864, 520]]) {
+    await setViewport(win, w, h);
+    const geometry = await js(win, `(() => {
+      const el = document.querySelector('${panel}');
+      const stage = el.parentElement.getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      const sphere = document.querySelector('.ae-orb-caption').getBoundingClientRect();
+      const time = el.querySelector('time');
+      const system = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      return { width: Math.round(box.width), height: Math.round(box.height),
+        fits: box.top >= sphere.bottom && box.bottom <= stage.bottom && box.left >= stage.left && box.right <= stage.right
+          && el.scrollWidth === el.clientWidth && document.documentElement.scrollWidth <= innerWidth,
+        time: time.textContent, system, offset: el.classList.contains('is-compact') };
+    })()`);
+    check(`Системные часы и геометрия ${w}×${h}`, geometry.fits && geometry.time === geometry.system
+      && geometry.offset === (w === 864) && geometry.height === (w === 864 ? 64 : 164), geometry);
+  }
+  await captureBoth('09-виджеты');
+  await setViewport(win, 1200, 720);
+  win.focus();
+  await js(win, "document.querySelector('.ae-orb-canvas-wrap').focus()");
+  async function tab() {
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });
+    await settle(win, 40);
+    return js(win, `({ label: document.activeElement.getAttribute('aria-label'),
+      outline: getComputedStyle(document.activeElement).outlineWidth })`);
+  }
+  const first = await tab();
+  const second = await tab();
+  check('Последовательность Tab и видимый контур', first.label === `Открыть снова: ${text}` && first.outline === '2px'
+    && second.label === 'Подобрать музыку' && second.outline === '2px', { first, second });
+  await js(win, `document.querySelector(${selector('.ae-day-open')}).click()`);
+  const open = await waitUntil(() => openedMusic.at(-1), 3000);
+  check('Открыть снова отправляет точный поиск в сохранённый сервис', open && new URL(open).searchParams.get('search_query') === text, open);
+
+  const looks = await js(win, `(() => {
+    const el = document.querySelector('${panel}');
+    const root = document.documentElement;
+    const previous = { theme: root.dataset.theme, motion: root.dataset.motion, glass: root.dataset.glass };
+    const result = ['dark', 'light'].map((theme) => {
+      root.dataset.theme = theme;
+      root.dataset.motion = 'off';
+      root.dataset.glass = 'off';
+      const style = getComputedStyle(el);
+      const luminance = (value) => value.match(/\\d+/g).slice(0, 3).map(Number).map((n) => n / 255)
+        .map((v) => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
+        .reduce((sum, value, i) => sum + value * [.2126, .7152, .0722][i], 0);
+      const bg = luminance(style.backgroundColor);
+      const fg = luminance(getComputedStyle(el.querySelector('.ae-day-date')).color);
+      return { theme, blur: style.backdropFilter, motion: style.animationName,
+        contrast: (Math.max(bg, fg) + .05) / (Math.min(bg, fg) + .05) };
+    });
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete root.dataset[name];
+      else root.dataset[name] = value;
+    }
+    return result;
+  })()`);
+  check('Стекло и движение выключаются, контраст в светлой и тёмной теме', looks.every((s) =>
+    s.blur === 'none' && s.motion === 'none' && s.contrast >= 4.5), looks);
+  const positions = await js(win, `(() => {
+    const boot = window.NoxAetherBoot;
+    const current = boot.readWorkshop();
+    const store = window.__noxAether.store;
+    const el = document.querySelector('${panel}');
+    const apply = (value) => { boot.applyWorkshopToDom({ ...current, ...value }); store.notify(true); };
+    const dock = ['top', 'hidden'].map((orbPosition) => {
+      apply({ orbPosition });
+      const composer = document.querySelector('.ae-composer-dock');
+      return { beforeComposer: composer.firstElementChild === el, height: Math.round(el.getBoundingClientRect().height) };
+    });
+    apply({});
+    const setVisibility = (value) => {
+      store.setRoute('settings');
+      document.querySelector('#aeSettingsView [data-section="window"]').click();
+      const control = [...document.querySelectorAll('#aeSettingsView label')].find((label) =>
+        label.textContent.startsWith('Панель «Часы и музыка»'))?.querySelector('select');
+      if (!control) return false;
+      control.value = value;
+      control.dispatchEvent(new Event('change', { bubbles: true }));
+      store.setRoute('chat');
+      return boot.readWorkshop().dayWidgets === (value === 'on');
+    };
+    const off = setVisibility('off') && el.hidden && el.getBoundingClientRect().height === 0;
+    const restored = setVisibility('on') && !el.hidden;
+    return { dock, off, restored };
+  })()`);
+  check('Панель переносится над вводом и скрывается настройкой',
+    positions.dock.every((slot) => slot.beforeComposer && slot.height === 56) && positions.off && positions.restored, positions);
+  await setViewport(win, 864, 450);
+  const low = await js(win, `document.querySelector(${selector('.ae-day-music')}).hidden`);
+  await setViewport(win, 650, 520);
+  const narrow = await js(win, `document.querySelector('${panel}').hidden`);
+  check('В низком окне остаются часы, в узком панель скрыта', low && narrow, { low, narrow });
+  await setViewport(win, 864, 520);
+
+  // Учёт интервалов самого компонента, включая переход окна в нативное скрытое состояние.
+  await setRoute('settings');
+  await js(win, `(() => {
+    const schedule = window.setInterval;
+    const clear = window.clearInterval;
+    const active = new Map();
+    window.setInterval = (fn, delay, ...args) => {
+      const id = schedule(fn, delay, ...args);
+      if (fn.name === 'render' || fn.name === 'refresh') active.set(id, delay);
+      return id;
+    };
+    window.clearInterval = (id) => { active.delete(id); clear(id); };
+    window.__qaWidgetTimers = active;
+  })()`);
+  await setRoute('chat');
+  const timers = await js(win, '[...window.__qaWidgetTimers.values()]');
+  win.webContents.setBackgroundThrottling(true);
+  win.minimize();
+  const suspended = await waitUntil(() =>
+    js(win, 'document.hidden && window.__qaWidgetTimers.size === 0'), 2500);
+  win.restore();
+  win.show();
+  const resumed = await waitUntil(() =>
+    js(win, '!document.hidden && window.__qaWidgetTimers.size === 2'), 2500);
+  win.webContents.setBackgroundThrottling(false);
+  check('Тик 10 с, обновление 60 с, оба интервала останавливаются в скрытом окне',
+    timers.join() === '10000,60000' && suspended && resumed, { timers, suspended, resumed });
+}
+
 async function runChatRedesignQa(win) {
   const checks = [];
   const screenshots = [];
@@ -559,13 +780,91 @@ async function runChatRedesignQa(win) {
 
   if (!await waitUntil(() => js(win, 'Boolean(window.__noxAether)'))) throw new Error('Окно чата не загрузилось');
   await js(win, "window.__noxAether.setRoute('chat')");
+  await checkDayWidgets(win, check, captureBoth);
+  if (WIDGETS_ONLY) {
+    const fail = checks.filter((c) => !c.ok).length;
+    finish({ ok: fail === 0, pass: checks.length - fail, fail, checks, screenshots }, fail ? 1 : 0);
+    return;
+  }
+  const greetings = await js(win, `(() => {
+    const { store } = window.__noxAether;
+    const title = document.querySelector('.ae-empty-title');
+    const hero = title.parentElement;
+    const field = document.querySelector('#chatInput');
+    const originalGetHours = Date.prototype.getHours;
+    const input = (text) => {
+      field.value = text;
+      field.dispatchEvent(new Event('input'));
+    };
+    try {
+      const byHour = [4, 5, 11, 12, 17, 18].map((hour) => {
+        Date.prototype.getHours = () => hour;
+        store.notify(true);
+        return title.textContent;
+      });
+      store.onDictationEvent({ type: 'state', state: 'listening' });
+      const voice = title.textContent;
+      store.onDictationEvent({ type: 'state', state: 'stopped' });
+      const before = store.state.feedItems.length;
+      input('Nox..?');
+      const easterEgg = title.textContent === 'Nox..?' && hero.classList.contains('is-easter-egg')
+        && field.value === 'Nox..?' && store.state.feedItems.length === before && !store.state.sendingLock;
+      input('');
+      return { byHour, voice, easterEgg, restored: title.textContent, controls: hero.querySelectorAll('button').length };
+    } finally {
+      Date.prototype.getHours = originalGetHours;
+      store.notify(true);
+    }
+  })()`);
+  check('Приветствие следует времени и диктовке, пасхалка работает локально',
+    greetings.byHour.join('|') === 'Я рядом|Кофе, чай, что желаете?|Кофе, чай, что желаете?|Я рядом|Я рядом|Добрый вечер.'
+    && greetings.voice === 'Слушаю.' && greetings.easterEgg && greetings.restored === 'Добрый вечер.' && !greetings.controls, greetings);
+
+  const measureComposer = async () => js(win, `(() => {
+    const chat = document.querySelector('#noxChat').getBoundingClientRect();
+    const composer = document.querySelector('#aeComposer');
+    const bounds = composer.getBoundingClientRect();
+    const hero = document.querySelector('.ae-empty-hero').getBoundingClientRect();
+    const title = document.querySelector('.ae-empty-title').getBoundingClientRect();
+    const context = document.createElement('canvas').getContext('2d');
+    const alpha = () => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = getComputedStyle(composer).backgroundColor;
+      context.fillRect(0, 0, 1, 1);
+      return context.getImageData(0, 0, 1, 1).data[3];
+    };
+    const root = document.documentElement;
+    const glass = root.dataset.glass;
+    const translucent = alpha();
+    root.dataset.glass = 'off';
+    const opaque = alpha();
+    if (glass === undefined) delete root.dataset.glass;
+    else root.dataset.glass = glass;
+    return {
+      bottom: bounds.bottom,
+      inset: chat.bottom - bounds.bottom,
+      centerX: Math.abs((hero.left + hero.right - title.left - title.right) / 2),
+      centerY: Math.abs((hero.top + hero.bottom - title.top - title.bottom) / 2),
+      translucent, opaque,
+    };
+  })()`);
+
   await js(win, `window.__chatStates = [];
     const stage = document.querySelector('#aeOrbStage');
     const button = document.querySelector('#aeStageToggle');
     new MutationObserver(() => {
       window.__chatStates.push({ orb: stage.dataset.state, rail: button.dataset.state });
     }).observe(stage, { attributes: true, attributeFilter: ['data-state'] });`);
-  await captureBoth('01-пустой-чат');
+  const emptyLayouts = [];
+  for (const [w, h] of [[1200, 720], [864, 520]]) {
+    await setViewport(win, w, h);
+    const layout = await measureComposer();
+    emptyLayouts.push(layout);
+    check(`Нижнее поле ввода, прозрачность и центр приветствия ${w}×${h}`,
+      layout.inset >= 8 && layout.inset <= 24 && layout.centerX < 2 && layout.centerY < 2
+      && layout.translucent > 0 && layout.translucent < 180 && layout.opaque === 255, layout);
+    screenshots.push(await shot(win, `01-пустой-чат-${w}x${h}.png`));
+  }
   const railGeometry = await js(win, `(() => {
     const rail = document.querySelector('.ae-utility-rail');
     const controls = [...rail.querySelectorAll('button')].filter((b) => b.getClientRects().length);
@@ -592,13 +891,13 @@ async function runChatRedesignQa(win) {
     return { ids: controls.map((b) => b.id), labels: controls.every((b) => b.getAttribute('aria-label')),
       iconSizes: controls.map((b) => b.firstElementChild?.getBoundingClientRect().width),
       railWidth: rail.getBoundingClientRect().width, collapsed, restored, panels,
-      starters: document.querySelectorAll('.ae-starter-chip').length, overflow: document.documentElement.scrollWidth > innerWidth,
+      overflow: document.documentElement.scrollWidth > innerWidth,
       tabs: [...document.querySelectorAll('#aeTopbar .ae-nav-label')].map((tab) => tab.innerText) };
   })()`);
   check('Рейка, вкладки, поповеры и сворачивание сферы на 864×520',
     railGeometry.railWidth === 56 && railGeometry.labels && railGeometry.iconSizes.length === 6 &&
     railGeometry.iconSizes.every((w) => w === 24) && railGeometry.collapsed && railGeometry.restored &&
-    railGeometry.panels.every(Boolean) && railGeometry.starters === 3 && !railGeometry.overflow &&
+    railGeometry.panels.every(Boolean) && !railGeometry.overflow &&
     railGeometry.tabs.join(' · ') === 'Главная · Команды · Дополнения · Nox AI · Настройки', railGeometry);
 
   await sendText(win, 'Открой терминал и VS Code');
@@ -608,6 +907,9 @@ async function runChatRedesignQa(win) {
     return /Открываю|открыть/i.test(line) && line;
   }, 18000);
   if (progress) screenshots.push(await shot(win, '02-ход-864x520.png'));
+  const activeLayout = await measureComposer();
+  check('Первая отправка сохраняет положение поля ввода', Math.abs(activeLayout.bottom - emptyLayouts[1].bottom) < 2,
+    { empty: emptyLayouts[1].bottom, active: activeLayout.bottom });
   await waitForResult(43000);
   const applicationTurn = await js(win, `(() => {
     const item = window.__noxAether.store.state.feedItems.filter((m) => m.kind === 'assistant').at(-1);
@@ -787,7 +1089,7 @@ async function runQa(win) {
       arrowMovesFocus,
       hasLegacyGarbage: /Разговор|Поровну|Присутствие|Демо-данные/.test(topText),
       isEmpty: chat.classList.contains('is-empty'),
-      composerCentered: cmp.top < cr.top + cr.height * 0.72,
+      composerAtBottom: cr.bottom - cmp.bottom >= 8 && cr.bottom - cmp.bottom <= 24,
       orbOk: orb.width > 80 && orb.height > 80,
       overflow,
       sig: document.querySelector('.ae-orb-signature')?.textContent.trim(),
@@ -795,7 +1097,7 @@ async function runQa(win) {
   })()`);
   push('topbar-clean-5-items', !navCheck.hasLegacyGarbage && navCheck.labels.length === 5 && !navCheck.historyInTopbar && navCheck.arrowMovesFocus, navCheck);
   push('history-above-account', navCheck.historyAboveAccount, navCheck);
-  push('empty-chat-centered-and-orb-1200', navCheck.isEmpty && navCheck.composerCentered && navCheck.orbOk && !navCheck.overflow && navCheck.sig === 'The Nox', navCheck);
+  push('empty-chat-bottom-composer-and-orb-1200', navCheck.isEmpty && navCheck.composerAtBottom && navCheck.orbOk && !navCheck.overflow && navCheck.sig === 'The Nox', navCheck);
   shots.push(await shot(win, '01-empty-1200x720.png'));
 
   await setViewport(win, 864, 520);
@@ -1458,22 +1760,10 @@ async function runQa(win) {
   push('narrow-864-nav-history-workshop', narrowMenuOpen.open && narrowMenuOpen.fits
     && narrowMenuOpen.fields === 6 && !narrowSettingsOverflow, { narrowMenuOpen, narrowSettingsOverflow, dictCheck });
 
-  // Пример заполняет черновик. Проверка разрешения ниже использует Блокнот.
+  // Проверка разрешения для первого поручения в новом чате.
   await js(win, `window.__noxAether.store.createNewChat()`);
-  const starterDraft = await js(win, `(() => {
-    const button = document.querySelector('.ae-starter-chip');
-    const field = document.querySelector('#chatInput');
-    field.value = 'Свой черновик';
-    field.dispatchEvent(new Event('input'));
-    const draftProtected = button.disabled;
-    field.value = '';
-    field.dispatchEvent(new Event('input'));
-    button.click();
-    return draftProtected && field.value === 'Сверни окна'
-      && document.activeElement === field && document.querySelector('#noxChat').classList.contains('is-empty');
-  })()`);
   await sendText(win, 'Открой Блокнот');
-  const starterApproval = await waitUntil(() => js(win, `(() => {
+  const firstApproval = await waitUntil(() => js(win, `(() => {
     const dock = document.querySelector('#aeApprovalDock');
     const reject = dock.querySelector('[data-decision="reject"]');
     if (dock.hidden || !reject || !/notepad/i.test(dock.innerText)) return false;
@@ -1481,8 +1771,8 @@ async function runQa(win) {
     return true;
   })()`), 6000, 60);
   await waitIdle(win, 10000);
-  const starterRefused = await js(win, `Boolean(document.querySelector('.ae-action-outcome[data-status="refused"]'))`);
-  push('starter-prefills-and-uses-real-approval', starterDraft && starterApproval && starterRefused, { starterDraft, starterApproval, starterRefused });
+  const firstRefused = await js(win, `Boolean(document.querySelector('.ae-action-outcome[data-status="refused"]'))`);
+  push('first-command-uses-real-approval', firstApproval && firstRefused, { firstApproval, firstRefused });
   shots.push(await shot(win, '16-first-command-refused-864x520.png'));
 
   // Два реальных вызова ядра через чат. Запуск Office подменён только на границе Electron.
@@ -1731,7 +2021,7 @@ app.on('browser-window-created', (_event, win) => {
     const url = win.webContents.getURL();
     if (!/renderer[\\/]aether[\\/]index\.html/i.test(url)) return;
     mainWin = win;
-    const run = CHAT_REDESIGN ? runChatRedesignQa : runQa;
+    const run = CHAT_REDESIGN || WIDGETS_ONLY ? runChatRedesignQa : runQa;
     run(win).catch((err) => {
       finish({ ok: false, error: err && err.stack ? err.stack : String(err), consoleErrors, pageErrors }, 1);
     });

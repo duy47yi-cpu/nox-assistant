@@ -22,7 +22,10 @@
     const settingsView = window.NoxAetherSettingsView.createSettingsView({ store, bridge });
     const aiModal = window.NoxAetherAiModal.createAiModal({ store, bridge });
     const chatView = window.NoxAetherChatView.createChatView({
-      store, bridge, orbStage, onVoiceSettings: settingsView.openVoiceSettings,
+      store, bridge, orbStage,
+    });
+    const dayWidgets = window.NoxAetherDayWidgets.createDayWidgets({
+      bridge, choose: chatView.insertStarter, reportError: (text) => store.toast(text, 'error'),
     });
 
     // Рабочая зона чата (история + диалог + сцена сферы)
@@ -115,7 +118,15 @@
       chatStageShell.hidden = !isChat;
       if (!isChat) chatStageShell.querySelector('.ae-sources-popover:popover-open')?.hidePopover();
       orbStage.el.hidden = !isChat || stageCollapsed;
-      const stageVisible = isChat && !stageCollapsed && document.documentElement.dataset.aeOrbPos !== 'hidden';
+      const { aeOrbPos, aeDayWidgets } = document.documentElement.dataset;
+      const stageVisible = isChat && !stageCollapsed && aeOrbPos !== 'hidden';
+      const docked = !stageVisible || aeOrbPos === 'top';
+      dayWidgets.place({
+        active: isChat && aeDayWidgets !== 'off',
+        host: docked ? chatView.widgetDock : orbStage.el,
+        docked,
+        workspace: st.currentWorkspaceId,
+      });
       stageBtn.setAttribute('aria-expanded', String(stageVisible));
       const stageLabel = stageVisible ? 'Свернуть панель сферы' : 'Показать панель сферы';
       const stageState = store.getOrbEffectiveState();
@@ -190,11 +201,7 @@
     });
 
     // Подстройка боковой истории при смене ширины окна
-    window.addEventListener('resize', () => {
-      if (window.innerWidth < 980 && store.state.historyOpen) {
-        store.toggleHistory(false);
-      }
-    });
+    window.addEventListener('resize', () => store.syncHistoryViewport());
 
     // Первичная загрузка данных
     await store.loadInitial();

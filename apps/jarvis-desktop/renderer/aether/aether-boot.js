@@ -16,6 +16,7 @@
     orbPosition: 'right',  // 'right' | 'left' | 'top' | 'hidden'
     density: 'calm',       // 'calm' | 'compact'
     orbSplitPx: 360,
+    dayWidgets: true,
     accentGlow: false,
   };
 
@@ -36,6 +37,7 @@
     root.dataset.aeOrbPos = ['right', 'left', 'top', 'hidden'].includes(c.orbPosition) ? c.orbPosition : 'right';
     root.dataset.aeDensity = ['calm', 'compact'].includes(c.density) ? c.density : 'calm';
     root.dataset.aeGlow = c.accentGlow === false ? 'off' : 'on';
+    root.dataset.aeDayWidgets = c.dayWidgets === false ? 'off' : 'on';
 
     const sigMap = {
       plex: '"IBM Plex Serif", "Times New Roman", Georgia, serif',

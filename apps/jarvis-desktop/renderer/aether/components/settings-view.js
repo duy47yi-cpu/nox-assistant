@@ -373,7 +373,7 @@
       }
 
       // ── 2. Подпись «The Nox», композиция и шрифт ────────────────
-      if ((group === 'window' || searchQuery) && boot && matchesSearch('Окно чат The Nox подпись шрифт Times New Roman IBM Plex Serif композиция ширина сфера положение плотность свечение')) {
+      if ((group === 'window' || searchQuery) && boot && matchesSearch('Окно чат The Nox подпись шрифт Times New Roman IBM Plex Serif композиция ширина сфера положение плотность свечение панель часы музыка')) {
         const curW = boot.readWorkshop();
         const panel = makePanel('Композиция и подпись «The Nox»', 'Подпись под сферой и распределение пространства чата.');
 
@@ -413,6 +413,11 @@
             ['top', 'Компактно сверху'],
             ['hidden', 'Скрыть сферу'],
           ], (v) => updateWorkshop({ orbPosition: v })),
+
+          mkSelect('Панель «Часы и музыка»', curW.dayWidgets === false ? 'off' : 'on', [
+            ['on', 'Показывать'],
+            ['off', 'Скрыть'],
+          ], (v) => updateWorkshop({ dayWidgets: v === 'on' })),
 
           mkSelect('Ширина колонки чата', curW.chatWidth, [
             ['narrow', 'Сдержанная (узкая)'],

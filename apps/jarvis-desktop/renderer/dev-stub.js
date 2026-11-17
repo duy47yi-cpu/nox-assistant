@@ -484,7 +484,25 @@ const stubReminders = params.get('reminders') === '0' ? [] : [
       if (i >= 0) dealsStub.splice(i, 1);
       return { ok: i >= 0 };
     },
-    widgetsData: async () => ({ weather: { city: stubCity, temp: 21, apparent: 19, precipitation: 0.2, error: null }, music: { query: 'Кино — Группа крови', service: 'youtube', at: new Date(Date.now() - 40 * 60000).toISOString() } }),
+    widgetsData: async (options) => {
+      const now = Date.now();
+      const music = { query: 'Кино — Группа крови', service: 'youtube', at: new Date(now - 40 * 60000).toISOString() };
+      if (options?.view === 'day') {
+        const reminder = stubReminders[0];
+        return {
+          version: 2, now,
+          clock: {
+            state: 'ok',
+            next: reminder ? { kind: 'reminder', state: 'ok', text: reminder.text, at: reminder.dueAt } : null,
+          },
+          music: { state: 'ok', error: null, last: music, serviceTitle: 'YouTube' },
+        };
+      }
+      return { weather: { city: stubCity, temp: 21, apparent: 19, precipitation: 0.2, error: null }, music };
+    },
+    widgetsOpenMusic: async (last) => ({
+      ok: Boolean(window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(last.query)}`, '_blank')),
+    }),
     widgetsSetCity: async (city) => {
       stubCity = String(city ?? '').trim().slice(0, 100) || null;
       return { ok: true, city: stubCity };

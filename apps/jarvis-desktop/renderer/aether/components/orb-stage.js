@@ -17,6 +17,7 @@
     listening: 'Слушает',
     speaking: 'Отвечает',
     success: 'Готово',
+    partial: 'Выполнено частично',
     cancelled: 'Остановлено',
     error: 'Ошибка',
   };

@@ -75,13 +75,13 @@ function makeFakeBridge(overrides = {}) {
   };
 }
 
-test('Store: 5 маршрутов, центрирование пустого чата, FLIP-флаг и черновики между чатами', async () => {
+test('Store: 5 маршрутов, состояние пустого чата и черновики между чатами', async () => {
   assert.deepEqual(ROUTES, ['chat', 'commands', 'mcp', 'personal', 'settings']);
   const { bridge } = makeFakeBridge();
   const store = createStore({ bridge, storage: makeMemStorage(), ui: { scrub: (s) => s, toolTitle: (t) => t } });
   await store.loadInitial();
 
-  // Пустой чат с1 -> центрированное состояние
+  // Чат c1 пуст.
   assert.equal(store.isEmptyChat(), true);
   assert.equal(store.state.activeChatId, 'c1');
 
@@ -89,9 +89,8 @@ test('Store: 5 маршрутов, центрирование пустого ч�
   store.setDraftText('Черновик первого чата');
   await store.selectChat('c2');
 
-  // В c2 сразу непустой чат (докован, pendingComposeAnim = false — никаких ложных анимаций!)
+  // В c2 сразу видна история.
   assert.equal(store.isEmptyChat(), false);
-  assert.equal(store.consumeComposeAnim(), false);
   assert.equal(store.state.currentDraftText, '');
 
   // Возвращаемся в c1 -> черновик сохранён, чат пустой
@@ -99,10 +98,9 @@ test('Store: 5 маршрутов, центрирование пустого ч�
   assert.equal(store.state.currentDraftText, 'Черновик первого чата');
   assert.equal(store.isEmptyChat(), true);
 
-  // Отправка из пустого чата запускает consumeComposeAnim
+  // Первая реплика появляется сразу после отправки.
   const pSend = store.sendChatMessage('Запусти проверку', []);
-  assert.equal(store.consumeComposeAnim(), true);
-  assert.equal(store.consumeComposeAnim(), false);
+  assert.equal(store.isEmptyChat(), false);
   await pSend;
   assert.equal(isEmptyChatState(store.state), false);
 });
@@ -183,3 +181,46 @@ test('Store: диктовка text дописывает черновик, оши
   assert.ok(store.state.feedItems.some((i) => i.kind === 'error'));
   assert.equal(store.state.lastSentPayload.text, 'Проверь почту');
 });
+
+test('Store: запоздавший итог действия после стопа не воскрешает ход и не оставляет «Думаю…»', async () => {
+  const { bridge } = makeFakeBridge();
+  const store = createStore({ bridge, storage: makeMemStorage(), ui: { scrub: (s) => s, toolTitle: (t) => t } });
+  await store.loadInitial();
+
+  // Ход на экране: ожидание шага, затем Esc/стоп и honest done(cancelled).
+  store.onAgentEvent({ type: 'quick_user', text: 'Сделай на экране: подожди на экране' });
+  store.onAgentEvent({ type: 'tool_start', id: 'w1', name: 'ui_wait', step: 1, status: 'running' });
+  store.onAgentEvent({ type: 'tool_result', id: 'w1', name: 'ui_wait', ok: true, summary: 'ждёт' });
+  store.onAgentEvent({ type: 'done', status: 'cancelled', cancelled: true, replyText: 'Остановлено.' });
+
+  assert.equal(store.state.activeTurn, null, 'после стопа активного хода нет');
+  assert.equal(store.state.feedItems.filter((i) => i.kind === 'assistant').length, 1, 'в ленте один отменённый ответ');
+  assert.equal(store.state.feedItems.at(-1).cancelled, true);
+
+  // Ядро присылает настоящий итог действия уже после стопа (afterStop/late).
+  // Раньше из него рождался новый живой ход и в ленте висело «Ход работы → Думаю…».
+  store.onAgentEvent({
+    type: 'tool_result', id: 'w1', name: 'ui_wait', ok: false, status: 'failed',
+    summary: 'завершилось после запроса остановки', afterStop: true, late: true,
+  });
+
+  assert.equal(store.state.activeTurn, null, 'поздний итог не создаёт новый ход');
+  assert.equal(store.state.feedItems.filter((i) => i.kind === 'assistant').length, 1, 'нового ответа нет');
+  assert.equal(store.getLiveWorkText(), '', 'живой строки прогресса нет');
+  assert.doesNotMatch(JSON.stringify(store.state.feedItems) + store.getLiveWorkText(), /Думаю/);
+});
+
+test('Store: обычный итог действия без активного хода по-прежнему создаёт ход', async () => {
+  const { bridge } = makeFakeBridge();
+  const store = createStore({ bridge, storage: makeMemStorage(), ui: { scrub: (s) => s, toolTitle: (t) => t } });
+  await store.loadInitial();
+
+  store.onAgentEvent({ type: 'quick_user', text: 'Открой журнал' });
+  store.onAgentEvent({ type: 'tool_start', id: 'r1', name: 'workspace_read', step: 1, status: 'running' });
+  store.onAgentEvent({ type: 'tool_result', id: 'r1', name: 'workspace_read', ok: true, summary: 'прочитал' });
+  assert.ok(store.state.activeTurn, 'живой ход с обычным событием на месте');
+  store.onAgentEvent({ type: 'done', status: 'succeeded', replyText: 'Готово.' });
+  assert.equal(store.state.activeTurn, null);
+  assert.equal(store.state.feedItems.filter((i) => i.kind === 'assistant').at(-1).text, 'Готово.');
+});
+
