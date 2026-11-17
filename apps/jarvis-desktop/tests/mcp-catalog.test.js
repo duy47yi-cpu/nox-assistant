@@ -383,12 +383,14 @@ test('значки: mcp-logos.js — снимок всех 80 сервисов, 
     assert.equal(service.transport, entry.transport);
     assert.equal(service.verified, entry.verified);
     assert.equal(JSON.stringify(service.envKeys), JSON.stringify(entry.envKeys));
-    assert.equal(service.docs || undefined, entry.docs);
+    // В снимке окна адреса и инструкции хранятся без схемы: файл в рантайме не ходит в сеть.
+    const withoutScheme = (value) => String(value || '').replace(/^https?:\/\//i, '');
+    assert.equal(service.docs || undefined, entry.docs ? withoutScheme(entry.docs) : undefined);
     if (entry.transport === 'stdio') {
       assert.equal(service.command, entry.command);
       assert.equal(JSON.stringify(service.args), JSON.stringify(entry.args));
     } else {
-      assert.equal(service.url, entry.url);
+      assert.equal(service.url, withoutScheme(entry.url));
       assert.equal(service.command, undefined);
     }
     const brand = logos.brand(entry.id);

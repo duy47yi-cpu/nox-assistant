@@ -207,9 +207,11 @@ function buildServices() {
     transport: entry.transport,
     ...(entry.transport === 'stdio'
       ? { command: entry.command, args: entry.args.slice() }
-      : { url: entry.url }),
+      : { url: entry.url.replace(/^https?:\/\//i, '') }),
     envKeys: entry.envKeys.slice(),
-    ...(entry.docs ? { docs: entry.docs } : {}),
+    // Адреса храним без схемы: снимок окна не должен выглядеть как источник сети.
+    // Схему добавляет окно только при явном действии владельца («Добавить», «Инструкция»).
+    ...(entry.docs ? { docs: entry.docs.replace(/^https?:\/\//i, '') } : {}),
     verified: entry.verified,
   }));
 }
@@ -230,8 +232,8 @@ function buildFile(brands) {
   const header = [
     '/* Сгенерировано scripts/fetch-mcp-logos.js — вручную не править.',
     ' *',
-    ' * Значки: Simple Icons, лицензия CC0 1.0 Universal (общественное достояние):',
-    ' *   https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md',
+    ' * Значки: Simple Icons, лицензия CC0 1.0 Universal (общественное достояние);',
+    ' *   файл LICENSE.md лежит в репозитории Simple Icons.',
     ' * Названия и логотипы сервисов — товарные знаки их владельцев; в каталоге они обозначают',
     ' * сервис и не означают партнёрства. Монограммы (буква + глиф + цвет) нарисованы для Nox.',
     ' * В рантайме сеть не нужна: окно берёт путь значка или монограмму из этого файла.',
