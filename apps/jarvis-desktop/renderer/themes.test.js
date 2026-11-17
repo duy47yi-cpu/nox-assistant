@@ -488,3 +488,99 @@ test('тема, шрифты и сброс оформления работают
   assert.equal(T.sanitizeLook({ mono: 'нет-такого' }).mono, 'theme');
   assert.equal(T.sanitizeLook({ ui: 'manrope', head: 'unbounded', mono: 'jetbrains' }).mono, 'jetbrains');
 });
+
+
+// ── Светлый хром: шапка, рейка, история и служебные страницы ────────────────
+const luxify = fs.readFileSync(path.join(__dirname, 'aether', 'nox-luxify.css'), 'utf8');
+const railV2 = fs.readFileSync(path.join(__dirname, 'aether', 'rail-v2.css'), 'utf8');
+const lightIds = [...css.matchAll(/\[data-theme="([a-z-]+)"\] \{\s*color-scheme: light/g)].map((m) => m[1]).sort();
+const mixHex = (a, b, w) => {
+  const A = rgb(a), B = rgb(b);
+  return '#' + A.map((v, i) => Math.max(0, Math.min(255, Math.round(v * w + B[i] * (1 - w)))).toString(16).padStart(2, '0')).join('');
+};
+
+test('светлый хром покрывает все светлые темы и только их', () => {
+  const block = luxify.match(/\/\* ── Светлый хром[\s\S]*?\n(html\[data-aether\]:is\(([^)]*)\) \{([\s\S]*?)\n\})/);
+  assert.ok(block, 'блок «Светлый хром» в nox-luxify.css');
+  const covered = [...block[2].matchAll(/data-theme="([a-z-]+)"/g)].map((m) => m[1]).sort();
+  assert.deepStrictEqual(covered, lightIds, 'светлых тем ровно столько же, сколько в themes.css');
+  assert.ok(covered.length >= 13, 'все светлые палитры, включая новые');
+  for (const id of covered) {
+    assert.ok(themes[id], 'тема ' + id + ' есть в themes.css');
+    assert.ok(lum(themes[id].bg) > 0.5, id + ': фон светлый');
+    assert.ok(lum(themes[id].surface) > 0.5, id + ': поверхность светлая');
+  }
+  const map = block[3];
+  assert.match(map, /--lx-bg: var\(--surface\)/, 'шапка/панели берут поверхность темы');
+  assert.match(map, /--lx-bg-deep: var\(--bg\)/, 'глубокий фон — фон темы');
+  assert.match(map, /--lx-panel: var\(--surface-2\)/, 'панели — вторая поверхность темы');
+  assert.match(map, /--lx-panel-2: var\(--surface-3\)/, 'вложенные панели — третья поверхность темы');
+  assert.match(map, /--lx-card: var\(--surface\)/, 'карточки — поверхность темы');
+  assert.match(map, /--lx-text: var\(--text\)/, 'текст хрома — текст темы');
+  assert.match(map, /--lx-text-2: var\(--text-2\)/, 'второй текст хрома — второй текст темы');
+  assert.match(map, /--lx-accent: var\(--hue\)/, 'акцент хрома — акцент темы');
+});
+
+test('шапка и рейка на светлых темах не тёмные, контраст текста от 4,5:1', () => {
+  for (const id of lightIds) {
+    const t = themes[id];
+    const topbar = mixHex(t.surface, t.bg, 0.93);
+    const accentBg = mixHex(t.hue, t.surface, 0.18);
+    const railBg = mixHex(t.surface, t.bg, 0.64);
+    const railActive = mixHex(t.hue, t.surface, 0.26);
+    assert.ok(lum(topbar) > 0.5, id + ': шапка светлая');
+    assert.ok(lum(railBg) > 0.5, id + ': рейка светлая');
+    const cases = [
+      ['текст бренда', t.text, topbar],
+      ['вкладки', t['text-2'], topbar],
+      ['иконки вкладок', t['text-3'], topbar],
+      ['выбранная вкладка', t.text, accentBg],
+      ['переключатель режима', t['text-2'], t.surface],
+      ['кнопки окна', t['text-2'], topbar],
+      ['поле поиска', t.text, t.surface],
+      ['подсказка поиска', t['text-3'], t.surface],
+      ['рейка', t.text, railBg],
+      ['рейка, второй текст', t['text-2'], railBg],
+      ['активная кнопка рейки', t.text, railActive],
+    ];
+    for (const [name, fg, bg] of cases) {
+      const r = ratio(fg, bg);
+      assert.ok(r >= 4.5, id + ': ' + name + ' ' + fg + ' на ' + bg + ' = ' + r.toFixed(2));
+    }
+  }
+});
+
+test('правила светлого хрома: шапка, вкладки, режим, окно, поиск и рейка', () => {
+  // Фрагменты наших правил из блока «Светлый хром» (повторяющийся длинный селектор опускаем).
+  for (const [label, re] of [
+    ['фон шапки', /\.ae-topbar \{\s*background: color-mix\(in srgb, var\(--surface\) 93%, var\(--bg\)\);/],
+    ['бренд', /\.lx-topbar-brand \{ color: var\(--text\); \}/],
+    ['вкладки', /\.ae-topbar \.ae-nav-btn \{ color: var\(--text-2\); \}/],
+    ['выбранная вкладка', /\.ae-topbar \.ae-nav-btn\.is-active,[\s\S]*?background: var\(--accent-bg/],
+    ['переключатель режима', /\.ae-mode-pill \{ background: var\(--surface\); border-color: var\(--border\); color: var\(--text-2\); \}/],
+    ['кнопки окна', /\.ae-win-btn \{ color: var\(--text-2\); \}/],
+    ['поиск MCP', /\.lx-search-input \{ background: var\(--surface-2\); color: var\(--text\); \}/],
+    ['поиск команд', /\.lx-cmd-search-input \{ background: var\(--surface-2\); border-color: var\(--border\); color: var\(--text\); \}/],
+    ['поповер модалки', /\.lx-modal \{ background: var\(--surface\); color: var\(--text\);/],
+    ['страница команд', /\.lx-tree-row \{ background: var\(--surface\); border-color: var\(--border\); color: var\(--text-2\); \}/],
+    ['страница дополнений', /\.lx-addon-card \{ background: var\(--surface-2\); \}/],
+    ['страница «Личное»', /\.lx-extra-stat \{ background: var\(--surface-2\); \}/],
+  ]) {
+    assert.match(luxify, re, 'правило: ' + label);
+  }
+  // Рейку делает отдельный агент (rail-v2.css): проверяем контракт, сам файл не правим.
+  // На светлых темах рейка берёт --text/--surface/--bg темы, у «Тёмной» остаётся прежний облик.
+  assert.match(railV2, /\.ae-rail-v2 \{[\s\S]*?--rlx-text: var\(--text/, 'рейка берёт текст темы');
+  assert.match(railV2, /--rlx-bg: linear-gradient[\s\S]*?var\(--surface[\s\S]*?var\(--bg/, 'рейка берёт фон и поверхность темы');
+  assert.match(railV2, /--rlx-accent: var\(--hue/, 'акцент рейки — акцент темы');
+  assert.match(railV2, /html\[data-aether\]\[data-theme="dark"\] \.ae-rail-v2/, 'тёмная тема Aether сохраняет прежний облик рейки');
+});
+
+test('тёмные темы не попали в светлый хром', () => {
+  const darkIds = [...css.matchAll(/\[data-theme="([a-z-]+)"\] \{\s*color-scheme: dark/g)].map((m) => m[1]);
+  const block = luxify.match(/\/\* ── Светлый хром[\s\S]*?\n(html\[data-aether\]:is\(([^)]*)\) \{([\s\S]*?)\n\})/)[2];
+  assert.ok(darkIds.length >= 15);
+  for (const id of darkIds) {
+    assert.ok(!block.includes('data-theme="' + id + '"'), 'тёмная тема ' + id + ' осталась как была');
+  }
+});
