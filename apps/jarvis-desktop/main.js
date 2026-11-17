@@ -25,8 +25,9 @@ const { DeepSeekClient } = require('./src/brain/deepseek');
 const { StubBrain } = require('./src/brain/stub');
 const { Agent, repairToolHistory, safeTarget } = require('./src/agent/loop');
 const { chatHistoryRows, sourceIcon } = require('./src/agent/sources');
-const { artifactFile, artifactFrom, actionReport, partialReport } = require('./src/agent/chat-reply');
+const { artifactFile, artifactFrom, actionReport, partialReport, isReadOnlyStatusTool } = require('./src/agent/chat-reply');
 const modes = require('./src/policy/modes');
+const { readMusicHistoryState, musicSnapshot, clockSnapshot } = require('./src/widgets/day');
 const { ApprovalBroker, parseApprovalAnswer, voiceApprovalTarget, DEFAULT_AUTO_CANCEL_MS } = require('./src/policy/approvals');
 const { Journal, maskHistory, searchJournal, maskEventForWindow } = require('./src/journal/journal');
 const { emulatedMotionFeatures } = require('./src/appearance/motion');
@@ -56,6 +57,7 @@ const { getCurrentWeather } = require('./src/weather/open-meteo');
 const { NO_AUDIO_MESSAGE } = require('./src/voice/dictation');
 const { createVad, voicePhrase, voiceInputSettings, SETTINGS: VOICE_CHOICES, DEFAULT_WAKE_WORDS } = require('./src/voice/input');
 const { modelAvailable, downloadModel, localGigaam, cloudProvider, createSttRouter } = require('./src/voice/stt');
+const { buildHotwords } = require('./src/voice/normalize');
 const { createFieldDictation, hintNeedsShow } = require('./src/voice/field-dictation');
 const { parseWakeWords } = require('./src/voice/wake');
 const voiceModes = require('./src/voice/modes');
@@ -247,6 +249,8 @@ const CHAT_REPLY_PROMPT = [
   'Если без ответа владельца нельзя выбрать действие, задай один уточняющий вопрос через clarify: question — вопрос, options — два или три коротких варианта ответа. Вызови clarify отдельно, без текста и других вызовов.',
   'Составную просьбу выполняй по порядку. При частичном результате перечисли по пунктам, что получилось и что не вышло или осталось непроверенным, с короткой причиной.',
   '«Готово» говори только после подтверждения результата инструментом (verified: confirmed). Если действие прошло, но эффект не проверен, так и скажи. Для созданного документа называй файл из результата инструмента и, если есть, число слайдов или строк.',
+  'Если нужных данных нет или действие невозможно, скажи это прямо одной фразой («подтверждённой цены нет», «заказать нельзя — нет в продаже») и не подменяй ответ догадкой.',
+  'Ряд однотипных чисел (процессор, память, температура, громкость) подавай строкой «процессор 20%, память 61%», а не абзацем.',
   'Ход инструментов уже виден в отдельной строке окна. Обычный шаг не предваряй отдельной фразой в чате, чтобы итог было легче прочитать.',
 ].join('\n');
 
@@ -2105,16 +2109,13 @@ const MUSIC_HISTORY_FILE = path.join(DATA_DIR, 'music-history.json');
 const MUSIC_HISTORY_MAX = 50;
 
 function readMusicHistory() {
-  try {
-    const data = JSON.parse(fs.readFileSync(MUSIC_HISTORY_FILE, 'utf8'));
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
+  return readMusicHistoryState(MUSIC_HISTORY_FILE).entries;
 }
 
 function rememberMusic(service, query) {
-  const rest = readMusicHistory().filter((e) => !(e.query === query && e.service === service));
+  const { entries, error } = readMusicHistoryState(MUSIC_HISTORY_FILE);
+  if (error) return;
+  const rest = entries.filter((e) => e && !(e.query === query && e.service === service));
   const next = [{ service, query, at: new Date().toISOString() }, ...rest].slice(0, MUSIC_HISTORY_MAX);
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -2370,16 +2371,23 @@ async function runLocalSequence(plan, scope = {}) {
   }
   const summary = summarizeChainResult(plan || cmd, out);
   const resultsList = Array.isArray(out?.results) ? out.results : [];
+  // Итог понижают только настоящие действия: чтения и автоснимки (screen_look, desktop_observe,
+  // read_*, всё с args.auto) всегда «не проверены», но это наблюдение, а не действие без проверки.
+  // Иначе подтверждённое действие рядом с обязательным снимком экрана давало «Не подтверждено».
+  let unverifiedActions = 0;
   const actions = flattenStepTree(cmd.steps).flatMap((step, index) => {
     const entry = stepResults.get(step);
     const name = entry?.result.tool || step.tool;
     if ((entry?.result.risk || registry.get(name)?.risk) === 'T0') return [];
+    const args = step.args || step.params;
     const result = entry?.result || { ok: false, summary: 'Пропущено после ошибки предыдущего шага' };
     const status = !result.ok ? 'failed' : result.verified === 'confirmed' ? 'succeeded' : 'unverified';
-    return [actionReport({ name, step: index + 1, target: entry?.target || safeTarget(step.args || step.params), status, result })];
+    const action = actionReport({ name, step: index + 1, target: entry?.target || safeTarget(args), status, result });
+    if (action.status === 'unverified' && !isReadOnlyStatusTool(name, args)) unverifiedActions += 1;
+    return [action];
   });
   const partial = summary.cancelled ? null : partialReport(actions);
-  const status = summary.status === 'succeeded' && actions.some((action) => action.status === 'unverified')
+  const status = summary.status === 'succeeded' && unverifiedActions > 0
     ? 'unverified' : summary.status;
   const okCount = resultsList.filter((r) => r && r.ok === true && r.verified !== 'failed').length;
   const isPartial = !summary.cancelled && !out?.ok && (out?.partial === true || summary.partial === true || okCount > 0);
@@ -2656,9 +2664,11 @@ async function runChatTurn(event, text, files, opts = {}, voiceCommand = '') {
     const screenJob = screenTask(phrase);
     if (screenJob) {
       keepBusy = true;
+      // Экранный ход — прямая просьба владельца: разрешаем снимки на время хода (F-3).
+      screenAllowed = true;
       const screenRef = dealOpen(phrase);
       const running = new ScreenAgent({
-        brain: runtime.guardedBrain, tools, look: screenTools({ allowed: () => true })[0], policy: modes, approvals, journal,
+        brain: runtime.guardedBrain, tools, look: screenTools({ allowed: () => screenAllowed })[0], policy: modes, approvals, journal,
         emit: emitToWindow, mode, workspace: WORKSPACE, turnsLog: TURNS_LOG, stop: stopSwitch,
       });
       screenAgent = running;
@@ -2674,6 +2684,7 @@ async function runChatTurn(event, text, files, opts = {}, voiceCommand = '') {
         })
         .finally(() => {
           if (screenAgent === running) screenAgent = null;
+          screenAllowed = false;
           busy = false;
         });
       return { ok: true, command: null };
@@ -3898,9 +3909,16 @@ ipcMain.handle('deals:clear', (event, ref) => {
 
 // Виджеты главного экрана: город с погодой и последняя музыка. Погоду даёт open-meteo;
 // кэш на 30 минут лежит внутри модуля погоды, поэтому минутный тик виджета не ходит в сеть каждый раз.
-ipcMain.handle('widgets:data', async (event) => {
+ipcMain.handle('widgets:data', async (event, options) => {
   if (!fromWindow(event)) return null;
   const settings = readSettings();
+  if (options?.view === 'day') {
+    const now = Date.now();
+    const timeZone = typeof settings.calendar?.timeZone === 'string' ? settings.calendar.timeZone : undefined;
+    const clock = clockSnapshot(() => reminders.list({ workspaceId: currentWorkspaceId() }), now, timeZone || undefined);
+    const { music } = musicSnapshot(readMusicHistoryState(MUSIC_HISTORY_FILE));
+    return { version: 2, now, clock, music };
+  }
   const city = typeof settings.city === 'string' ? settings.city.trim().slice(0, 100) : '';
   const first = readMusicHistory()[0];
   const music = first && typeof first.query === 'string'
@@ -3922,6 +3940,34 @@ ipcMain.handle('widgets:data', async (event) => {
     }
   }
   return { weather, music };
+});
+
+ipcMain.handle('widgets:openMusic', async (event, expected) => {
+  if (!fromWindow(event)) return { ok: false };
+  const { music, entry } = musicSnapshot(readMusicHistoryState(MUSIC_HISTORY_FILE));
+  const last = music.last;
+  if (!last?.service || last.service !== expected?.service || last.query !== expected?.query || last.at !== expected?.at) {
+    return { ok: false, error: 'История музыки изменилась. Попробуйте ещё раз.' };
+  }
+  try {
+    const url = SERVICES[last.service].url(entry.query.trim().toWellFormed());
+    if (url.length > 2048) return { ok: false, error: 'Музыкальный запрос слишком длинный для ссылки.' };
+    // Нажатие кнопки разрешает один конкретный поиск. Общая политика по-прежнему проверяет адрес.
+    const args = { url };
+    const sessionAllow = new Set([modes.allowKey('url_open', args)]);
+    const workspaceId = currentWorkspaceId();
+    const result = await runCommand({
+      id: 'widget:music',
+      steps: [{ tool: 'url_open', args }],
+    }, {
+      tools: commandTools, policy: { decide: (request) => modes.decide({ ...request, sessionAllow }) },
+      mode, ownerCommand: true, stop: stopSwitch,
+      journal: { append: (row) => journal.append({ ...row, workspaceId }) },
+    });
+    return { ok: result.ok, error: result.ok ? null : result.results[0]?.summary };
+  } catch {
+    return { ok: false, error: 'Не удалось открыть музыку.' };
+  }
 });
 
 ipcMain.handle('widgets:setCity', (event, city) => {
@@ -4323,6 +4369,9 @@ const localStt = localGigaam({
 });
 const cloudStt = cloudProvider({
   url: process.env.NOX_STT_URL, key: process.env.NOX_STT_KEY, model: process.env.NOX_STT_MODEL,
+  // Подсказка распознавателю: имена программ и типовые команды из словаря нормализации.
+  // Локальный движок её не принимает (CTC без языковой модели), облачный — полем prompt.
+  prompt: () => buildHotwords(),
 });
 const speechRecognition = createSttRouter({
   local: localStt, cloud: cloudStt, online: () => net.isOnline(),
