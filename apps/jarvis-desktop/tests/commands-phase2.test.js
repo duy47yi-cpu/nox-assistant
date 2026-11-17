@@ -424,3 +424,64 @@ test('обращение «Джарвис», филлеры «сэр»/«пож�
   assert.equal(matchCommand('сверни все окна', store.list(), { prefixMode: true, wakeWords: [] }).command.id, saved.id);
   assert.equal(resolveLocalTurn('сверни все окна', { store, prefixMode: true, wakeWords: [] }).title, 'Свернуть всё');
 });
+
+// Ложный антоним из живого прогона 12-й фазы (acceptance/phase12/live/s3b): «верни все окна»
+// отличалось от «сверни все окна» одной вставленной буквой и запускало «Свернуть все окна»
+// (windows_minimize_all). Опечатка в первом слове меняет действие на противоположное, поэтому
+// запасной fuzzy-путь не должен её пропускать. Опечатки в остальных словах и в конце фразы
+// остаются рабочими: fuzzy целиком не выключен.
+test('фраза-антоним «верни все окна» не запускает «Свернуть все окна», а опечатки внутри фразы находятся', (t) => {
+  const { matchCommand } = require('../src/commands/match');
+  const { SAMPLE_COMMANDS } = require('../src/commands/samples');
+  const dir = tmpDir(t);
+  const store = new CommandStore(path.join(dir, 'commands.json'));
+  const saved = store.save({
+    name: 'Свернуть всё',
+    phrases: ['сверни все окна'],
+    steps: [{ type: 'hotkey', params: { keys: 'win+d' } }],
+    enabled: true,
+  });
+  // Пара антиподов: в паке media обе фразы («включи звук», «выключи звук») лежат в одной команде
+  // «Звук: выключить или включить», поэтому две разные команды собираем здесь руками.
+  store.save({ name: 'Звук: включить', phrases: ['включи звук'], steps: [{ type: 'hotkey', params: { keys: 'win+d' } }] });
+  store.save({ name: 'Звук: выключить', phrases: ['выключи звук'], steps: [{ type: 'hotkey', params: { keys: 'win+d' } }] });
+  store.save({ name: 'Ютуб', phrases: ['ютуб'], optionalPhrases: ['врубай'], steps: [{ type: 'hotkey', params: { keys: 'win+d' } }] });
+
+  // 1) Обратный глагол — не опечатка: «верни» и «сверни» просят разное.
+  assert.equal(matchCommand('верни все окна', store.list()), null, '«верни» не превращается в «сверни»');
+  assert.equal(matchCommand('верни все окна', SAMPLE_COMMANDS), null, 'на штатном наборе команд — тоже null');
+  assert.equal(resolveLocalTurn('верни все окна', { store }), null, 'локальный путь не уводит в чужое действие');
+
+  // 2) Точное совпадение и «необязательный глагол + фраза» не сломаны.
+  const exact = matchCommand('сверни все окна', store.list());
+  assert.equal(exact.command.id, saved.id);
+  assert.equal(exact.via, 'exact');
+  assert.equal(matchCommand('сверни все окна', SAMPLE_COMMANDS).command.name, 'Свернуть все окна');
+  assert.equal(matchCommand('ютуб', store.list()).command.name, 'Ютуб');
+  assert.equal(matchCommand('открой ютуб', store.list()).command.name, 'Ютуб');
+  assert.equal(matchCommand('врубай ютуб', store.list()).verb, 'врубай');
+  assert.equal(matchCommand('открой сверни все окна', store.list()).verb, 'открой');
+
+  // 3) Опечатки в остальных словах и в конце фразы по-прежнему распознаются.
+  for (const typo of ['сверни все окнa', 'сверни все окн', 'сверни вче окна', 'сверни все окно']) {
+    const hit = matchCommand(typo, store.list());
+    assert.ok(hit, 'опечатка «' + typo + '» должна находить команду');
+    assert.equal(hit.command.id, saved.id, typo);
+    assert.equal(hit.via, 'fuzzy', typo);
+  }
+  // Та же опечатка после необязательного глагола — второй запасной проход.
+  assert.equal(matchCommand('открой сверни все окнa', store.list()).verb, 'открой');
+  // Fuzzy не убит целиком: одиночное слово с опечаткой находится (правило про первое слово
+  // касается только фраз из двух и более слов).
+  const calendar = [{ id: 'k', name: 'Календарь', phrases: ['календарь'], steps: [], enabled: true }];
+  assert.equal(matchCommand('календар', calendar).via, 'fuzzy');
+
+  // 4) Антиподы «включи звук» / «выключи звук» не путаются: точное совпадение важнее,
+  //    а одинокая команда не подтягивает противоположную фразу опечаткой.
+  assert.equal(matchCommand('включи звук', store.list()).command.name, 'Звук: включить');
+  assert.equal(matchCommand('выключи звук', store.list()).command.name, 'Звук: выключить');
+  const muteOnly = store.list().filter((item) => item.name === 'Звук: выключить');
+  const unmuteOnly = store.list().filter((item) => item.name === 'Звук: включить');
+  assert.equal(matchCommand('включи звук', muteOnly), null, 'без своей команды фраза не становится антиподом');
+  assert.equal(matchCommand('выключи звук', unmuteOnly), null, 'и наоборот');
+});

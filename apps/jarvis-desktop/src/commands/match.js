@@ -29,6 +29,8 @@ const DEFAULT_START_VERBS = Object.freeze([
   'перейди', 'перейди в', 'перейди на',
   'перейти', 'перейти в', 'перейти на',
   'включи', 'включить', 'включай',
+  'активируй', 'активировать', 'активируя',
+  'переключи', 'переключить',
   'выполни', 'выполнить',
 ]);
 
@@ -72,6 +74,24 @@ function isOneEditAway(a, b) {
   }
   if (i < la || j < lb) edits += 1;
   return edits === 1;
+}
+
+// Первое слово фразы — это действие: «сверни», «включи», «выключи». Расхождение в нём меняет
+// смысл на противоположный, хотя до «опечатки» остаётся одна буква: «верни все окна» и
+// «сверни все окна» (живой прогон 12-й фазы, windows_minimize_all). Поэтому для фраз из двух и
+// более слов fuzzy разрешён только при совпадающем первом слове. Одиночные слова («календарь»,
+// «ютуб») правило не трогает: там вся фраза — одно слово, и опечатка в нём допустима.
+function changesFirstWord(a, b) {
+  const left = String(a == null ? '' : a).trim().split(' ');
+  const right = String(b == null ? '' : b).trim().split(' ');
+  if (left.length < 2 || right.length < 2) return false;
+  return left[0] !== right[0];
+}
+
+// Опечатка распознавания, после которой действие остаётся прежним.
+function isTypoAway(a, b) {
+  if (changesFirstWord(a, b)) return false;
+  return isOneEditAway(a, b);
 }
 
 // Пределы: сообщение — это короткая команда, а не текст. Длинный «мусор» не разбираем и не роняем.
@@ -342,10 +362,11 @@ function matchPrepared(wanted, prepared) {
   }
   if (byVerb.size > 1) return null;
 
-  // Запасной шаг для опечатки ASR (1 редакционная правка в слове >= 5 букв, если подходит ровно одна команда).
+  // Запасной шаг для опечатки ASR (1 редакционная правка, если подходит ровно одна команда).
+  // Первое слово (действие) при этом не меняется — см. isTypoAway.
   const byFuzzy = new Map();
   for (const [phrase, commands] of prepared.byPhrase.entries()) {
-    if (isOneEditAway(wanted, phrase)) {
+    if (isTypoAway(wanted, phrase)) {
       for (const command of commands) {
         byFuzzy.set(command, { command, matched: wanted, phrase, verb: null, via: 'fuzzy' });
       }
@@ -357,7 +378,7 @@ function matchPrepared(wanted, prepared) {
     const remainder = wanted.slice(prefix.length);
     if (!remainder) continue;
     for (const [phrase, commands] of prepared.byPhrase.entries()) {
-      if (!isOneEditAway(remainder, phrase)) continue;
+      if (!isTypoAway(remainder, phrase)) continue;
       for (const command of commands) {
         if (byFuzzy.has(command)) continue;
         const allowed = prepared.allowedVerbs.get(command);

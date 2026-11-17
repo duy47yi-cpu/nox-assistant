@@ -12,7 +12,7 @@
     { type: 'click', tool: 'ui_click', label: 'Клик по элементу', icon: 'mousePointer', argKey: 'target', placeholder: 'Кнопка «Отправить» или координаты' },
     { type: 'volume', tool: 'volume_set', label: 'Громкость звука', icon: 'volume', argKey: 'percent', placeholder: '0–100' },
     { type: 'type_text', tool: 'ui_type', label: 'Ввод текста', icon: 'pencil', argKey: 'text', placeholder: 'Текст для ввода' },
-    { type: 'wait', tool: 'wait', label: 'Пауза', icon: 'clock', argKey: 'seconds', placeholder: 'Секунд, например 2' },
+    { type: 'wait', tool: 'wait', label: 'Пауза', icon: 'clock', argKey: 'ms', placeholder: 'Миллисекунд, например 1000' },
     { type: 'ai', tool: 'speak', label: 'Сказать / Ответ', icon: 'sparkles', argKey: 'text', placeholder: 'Что сказать или выполнить' },
   ];
 
@@ -66,8 +66,42 @@
         children: normTreeFb(s.children, depth + 1),
       };
     }).filter(Boolean);
+    // Пауза живёт по контракту инструмента wait: миллисекунды в ms (0…10000), секунд нет.
+    // Запасные копии нужны, если чистый модуль cmd-steps.js не загрузился.
+    const FB_WAIT_MAX_MS = 10000;
+    const fbWaitMsFromSeconds = (value) => {
+      const seconds = Number(value);
+      if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+      return Math.min(FB_WAIT_MAX_MS, Math.round(seconds * 1000));
+    };
+    const fbMigrateWaitParams = (params) => {
+      if (!params || typeof params !== 'object' || Array.isArray(params)) return null;
+      if (!Object.prototype.hasOwnProperty.call(params, 'seconds')) return null;
+      const { seconds, ...rest } = params;
+      const explicitMs = Number(rest.ms);
+      const ms = rest.ms !== undefined && Number.isFinite(explicitMs) ? explicitMs : fbWaitMsFromSeconds(seconds);
+      return { ...rest, ms };
+    };
+    const fbWaitStepArgs = (type, tool, params, args) => {
+      if (type !== 'wait' && tool !== 'wait') return { params, args };
+      let nextParams = fbMigrateWaitParams(params) || params;
+      let nextArgs = fbMigrateWaitParams(args) || args;
+      if (nextParams.ms === undefined && nextArgs.ms !== undefined) nextParams = { ...nextParams, ms: nextArgs.ms };
+      if (nextArgs.ms === undefined && nextParams.ms !== undefined) nextArgs = { ...nextArgs, ms: nextParams.ms };
+      return { params: nextParams, args: nextArgs };
+    };
     const cmdSteps = {
       TOOL_TO_STEP_TYPE: rawCs.TOOL_TO_STEP_TYPE || TOOL_TO_TYPE_FB,
+      WAIT_MAX_MS: rawCs.WAIT_MAX_MS || FB_WAIT_MAX_MS,
+      defaultStepParams: rawCs.defaultStepParams || ((type, argKey = 'text') => (
+        type === 'volume' ? { percent: 50 }
+          : type === 'wait' ? { ms: 1000 }
+            : type === 'hotkey' ? { keys: 'Ctrl+S' }
+              : { [argKey || 'text']: '' }
+      )),
+      migrateWaitParams: rawCs.migrateWaitParams || fbMigrateWaitParams,
+      // Параметры паузы всегда в миллисекундах: params для редактора, args для runner.
+      waitStepArgs: rawCs.waitStepArgs || fbWaitStepArgs,
       normalizeStepTree: rawCs.normalizeStepTree || normTreeFb,
       countTreeSteps: rawCs.countTreeSteps || ((arr) => (Array.isArray(arr) ? arr : []).reduce((n, s) => n + 1 + (s?.children ? normTreeFb(s.children).length : 0), 0)),
       groupCommands: rawCs.groupCommands || ((list) => [{ folder: null, title: 'Без папки', commands: Array.isArray(list) ? list : [] }]),
@@ -244,7 +278,7 @@
         openNewWriteCommand({});
         return;
       }
-      const nextStep = makeDefaultStep('wait', { seconds: 1 });
+      const nextStep = makeDefaultStep('wait');
       if (selectedStepPath && selectedStepPath.length) {
         const parentPath = selectedStepPath.slice(0, -1);
         const insertAt = selectedStepPath[selectedStepPath.length - 1] + 1;
@@ -299,10 +333,7 @@
       const meta = STEP_TYPE_META[type] || STEP_TYPE_META.wait;
       const params = overrideParams
         ? { ...overrideParams }
-        : (type === 'volume' ? { percent: 50 }
-          : type === 'wait' ? { seconds: 2 }
-            : type === 'hotkey' ? { keys: 'Ctrl+S' }
-              : { [meta.argKey]: '' });
+        : cmdSteps.defaultStepParams(meta.type, meta.argKey);
       return cmdSteps.normalizeStepTree([{
         id: `step-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
         type: meta.type,
@@ -467,11 +498,14 @@
       return (Array.isArray(steps) ? steps : []).map((s) => {
         const meta = STEP_TYPE_META[s.type] || null;
         const tool = s.tool || (meta && meta.tool) || 'wait';
-        const args = { ...(s.args && typeof s.args === 'object' ? s.args : s.params) };
-        const params = { ...(s.params && typeof s.params === 'object' ? s.params : args) };
+        const type = s.type || (cmdSteps.TOOL_TO_STEP_TYPE[tool] || 'wait');
+        const rawArgs = { ...(s.args && typeof s.args === 'object' ? s.args : s.params) };
+        const rawParams = { ...(s.params && typeof s.params === 'object' ? s.params : rawArgs) };
+        // В сохранённой команде у паузы только ms: другого инструмент wait не принимает.
+        const { params, args } = cmdSteps.waitStepArgs(type, tool, rawParams, rawArgs);
         return {
           id: s.id,
-          type: s.type || (cmdSteps.TOOL_TO_STEP_TYPE[tool] || 'wait'),
+          type,
           tool,
           params,
           args,
@@ -1303,7 +1337,7 @@
       addChildBtn.className = 'lx-cmd-mini-btn';
       addChildBtn.textContent = '+ Вложенный';
       addChildBtn.addEventListener('click', () => {
-        const child = makeDefaultStep('wait', { seconds: 1 });
+        const child = makeDefaultStep('wait');
         collapsedStepIds.delete(node.id);
         const curLen = Array.isArray(node.children) ? node.children.length : 0;
         const nextTree = cmdSteps.insertTreeNode(targetDraft.steps, stepPath, curLen, child);
@@ -1330,13 +1364,7 @@
       }
       typeSel.addEventListener('change', () => {
         const meta = STEP_TYPE_META[typeSel.value] || STEP_TYPE_META.wait;
-        const nextParams = typeSel.value === 'volume'
-          ? { percent: 50 }
-          : typeSel.value === 'wait'
-            ? { seconds: 2 }
-            : typeSel.value === 'hotkey'
-              ? { keys: 'Ctrl+S' }
-              : { [meta.argKey]: '' };
+        const nextParams = cmdSteps.defaultStepParams(meta.type, meta.argKey);
         const nextTree = cmdSteps.updateTreeNode(targetDraft.steps, stepPath, (prev) => ({
           ...prev,
           type: meta.type,
@@ -1417,15 +1445,20 @@
         paramLbl.textContent = node.type === 'app_start' ? 'Программа или ссылка'
           : node.type === 'hotkey' ? 'Сочетание клавиш'
             : node.type === 'volume' ? 'Громкость (%)'
-              : node.type === 'wait' ? 'Секунд ожидания'
+              : node.type === 'wait' ? `Пауза, мс (0–${cmdSteps.WAIT_MAX_MS})`
                 : 'Параметр';
         const paramIn = document.createElement('input');
         paramIn.className = 'lx-cmd-input';
         paramIn.placeholder = meta.placeholder || '';
         const primaryKey = node.type === 'app_start' && curParams.url !== undefined ? 'url' : meta.argKey;
         const val = curParams[primaryKey] !== undefined ? curParams[primaryKey]
-          : (curParams.name ?? curParams.target ?? curParams.keys ?? curParams.percent ?? curParams.seconds ?? curParams.text ?? '');
+          : (curParams.name ?? curParams.target ?? curParams.keys ?? curParams.percent ?? curParams.ms ?? curParams.text ?? '');
         paramIn.type = (node.type === 'volume' || node.type === 'wait') ? 'number' : 'text';
+        if (node.type === 'wait') {
+          // Предел тот же, что у инструмента wait: 0…10000 мс.
+          paramIn.min = '0';
+          paramIn.max = String(cmdSteps.WAIT_MAX_MS);
+        }
         paramIn.value = String(val);
         paramIn.addEventListener('input', () => {
           const parsed = paramIn.type === 'number' && paramIn.value !== '' ? Number(paramIn.value) : paramIn.value;
@@ -1653,7 +1686,7 @@
         addTopStep.className = 'lx-cmd-mini-btn';
         addTopStep.textContent = '+ Добавить шаг в конец';
         addTopStep.addEventListener('click', () => {
-          const next = makeDefaultStep('wait', { seconds: 1 });
+          const next = makeDefaultStep('wait');
           draft.steps = cmdSteps.insertTreeNode(draft.steps, [], draft.steps.length, next);
           selectedStepPath = [draft.steps.length - 1];
           selectedKind = 'step';
@@ -2088,7 +2121,7 @@
       addBtn.className = 'lx-cmd-mini-btn';
       addBtn.textContent = '+ Добавить шаг';
       addBtn.addEventListener('click', () => {
-        const next = makeDefaultStep('wait', { seconds: 1 });
+        const next = makeDefaultStep('wait');
         writeDraft.steps = cmdSteps.insertTreeNode(writeDraft.steps, [], writeDraft.steps.length, next);
         writeSelectedPath = [writeDraft.steps.length - 1];
         renderBody();

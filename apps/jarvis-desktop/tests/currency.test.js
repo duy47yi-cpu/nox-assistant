@@ -33,6 +33,19 @@ test('просьба про курс: валюты из слов владель�
   assert.equal(parseCurrencyRequest(''), null);
 });
 
+test('составная фраза не отдаётся курсу: остальные просьбы не теряются (DEMO 1)', () => {
+  const demo = 'Джарвис, открой погоду в Яндексе, курсы доллара в ЭйДже и YouTube в Хроме';
+  assert.equal(parseCurrencyRequest(demo), null, 'в фразе есть другие просьбы — курс не отвечает за всю фразу');
+  assert.equal(parseCurrencyRequest('открой погоду в Яндексе и курс доллара'), null);
+  assert.equal(parseCurrencyRequest('курс доллара и что там по погоде'), null);
+
+  // Просьба, где все куски про валюту, остаётся просьбой о курсе.
+  assert.deepEqual(parseCurrencyRequest('курс доллара, курс евро и курс юаня'), ['USD', 'EUR', 'CNY']);
+  assert.deepEqual(parseCurrencyRequest('сколько стоит евро и фунт'), ['EUR', 'GBP']);
+  assert.deepEqual(parseCurrencyRequest('покажи курс доллара, пожалуйста'), ['USD']);
+  assert.deepEqual(parseCurrencyRequest('Джарвис, какой курс доллара'), ['USD'], 'обращение и запятая не делают фразу составной');
+});
+
 test('коды валют: только ISO из известных, не больше пяти', () => {
   assert.deepEqual(normalizeCodes(['usd', 'EUR', 'USD']), ['USD', 'EUR']);
   assert.equal(normalizeCodes(['RUB']), null);

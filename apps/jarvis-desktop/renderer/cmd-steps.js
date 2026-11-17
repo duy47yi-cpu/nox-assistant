@@ -57,6 +57,47 @@
     shell_run: 'shell',
   };
 
+  // ── Пауза: контракт инструмента wait — миллисекунды в ms (0…10000) ───────
+  // Инструмент wait принимает только ms; запись в секундах он отвергает («пауза от 0 до 10000 мс»).
+  // Новые шаги создаём сразу в миллисекундах, а старые команды переводим при загрузке.
+  const WAIT_MAX_MS = 10000;
+  const DEFAULT_WAIT_MS = 1000;
+
+  function waitMsFromSeconds(value) {
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+    return Math.min(WAIT_MAX_MS, Math.round(seconds * 1000));
+  }
+
+  // Новые параметры паузы с ms вместо секунд; null — переводить нечего (или это не пауза).
+  function migrateWaitParams(params) {
+    if (!params || typeof params !== 'object' || Array.isArray(params)) return null;
+    if (!Object.prototype.hasOwnProperty.call(params, 'seconds')) return null;
+    const { seconds, ...rest } = params;
+    const explicitMs = Number(rest.ms);
+    const ms = rest.ms !== undefined && Number.isFinite(explicitMs) ? explicitMs : waitMsFromSeconds(seconds);
+    return { ...rest, ms };
+  }
+
+  // Параметры нового шага: пауза сразу в миллисекундах, другие типы — как раньше.
+  function defaultStepParams(type, argKey = 'text') {
+    if (type === 'volume') return { percent: 50 };
+    if (type === 'wait') return { ms: DEFAULT_WAIT_MS };
+    if (type === 'hotkey') return { keys: 'Ctrl+S' };
+    return { [argKey || 'text']: '' };
+  }
+
+  // Приводит params и args паузы к миллисекундам: обе копии должны совпадать,
+  // потому что runner читает args, а редактор показывает params.
+  function waitStepArgs(type, tool, params, args) {
+    if (type !== 'wait' && tool !== 'wait') return { params, args };
+    let nextParams = migrateWaitParams(params) || params;
+    let nextArgs = migrateWaitParams(args) || args;
+    if (nextParams.ms === undefined && nextArgs.ms !== undefined) nextParams = { ...nextParams, ms: nextArgs.ms };
+    if (nextArgs.ms === undefined && nextParams.ms !== undefined) nextArgs = { ...nextArgs, ms: nextParams.ms };
+    return { params: nextParams, args: nextArgs };
+  }
+
   function makeStepId(existingIds, hint = 'step') {
     let idx = 1;
     while (existingIds.has(`${hint}-${idx}`)) idx += 1;
@@ -88,12 +129,14 @@
       const type = typeof raw.type === 'string' && raw.type.trim()
         ? raw.type.trim()
         : (TOOL_TO_STEP_TYPE[tool] || 'wait');
-      const args = raw.args && typeof raw.args === 'object'
+      const rawArgs = raw.args && typeof raw.args === 'object'
         ? { ...raw.args }
         : (raw.params && typeof raw.params === 'object' ? { ...raw.params } : {});
-      const params = raw.params && typeof raw.params === 'object'
+      const rawParams = raw.params && typeof raw.params === 'object'
         ? { ...raw.params }
-        : { ...args };
+        : { ...rawArgs };
+      // Старая пауза в секундах переводится в миллисекунды; остальные шаги не трогаем.
+      const { params, args } = waitStepArgs(type, tool, rawParams, rawArgs);
       return {
         ...raw,
         id,
@@ -708,6 +751,11 @@
     warningsForSteps,
     STEP_TYPE_TO_TOOL,
     TOOL_TO_STEP_TYPE,
+    WAIT_MAX_MS,
+    DEFAULT_WAIT_MS,
+    defaultStepParams,
+    migrateWaitParams,
+    waitStepArgs,
     normalizeStepTree,
     countTreeSteps,
     flattenTreeForRender,

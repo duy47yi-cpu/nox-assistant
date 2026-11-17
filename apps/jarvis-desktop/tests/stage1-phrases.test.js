@@ -168,6 +168,42 @@ test('Part A compound phrases resolve offline, wake/fillers, semicolons, linkers
   });
 });
 
+test('DEMO 1: составная фраза не сводится к одной части, непонятое честно названо', async () => {
+  // Живой прогон 12-й фазы: «погода, курс и YouTube» получил ответ только про курс.
+  // Локальный путь не вправе ответить одной частью: погода и YouTube здесь не разбираются,
+  // значит фраза идёт дальше (к модели) целиком, а не превращается в ответ про курс.
+  const demo = 'Джарвис, открой погоду в Яндексе, курсы доллара в ЭйДже и YouTube в Хроме';
+  assert.equal(resolveLocalTurn(demo), null);
+  assert.equal(await resolveLocalTurnAsync(demo), null);
+
+  // Понятные части выполняются, непонятая названа в notes; шагов из непонятого нет.
+  const partial = resolveLocalTurn('сделай тише, сверни окна, закажи пиццу');
+  assert.ok(partial);
+  assert.equal(partial.partial, true);
+  assert.equal(partial.parts.length, 2);
+  assert.deepEqual(partial.steps, [
+    parseOffline('тише').steps[0],
+    { tool: 'windows_minimize_all', args: {} },
+  ]);
+  assert.deepEqual(partial.unresolved, ['закажи пиццу']);
+  assert.match(partial.notes[partial.notes.length - 1], /Не понято: «закажи пиццу»/);
+  assert.match(partial.title, /не всё понято/);
+
+  // Частичный план так же работает в асинхронном пути (его и зовёт main.js).
+  const partialAsync = await resolveLocalTurnAsync('сделай тише, сверни окна, закажи пиццу');
+  assert.ok(partialAsync);
+  assert.equal(partialAsync.partial, true);
+  assert.deepEqual(partialAsync.steps, partial.steps);
+
+  // Одна понятная часть — по-прежнему null: половину цепочки не запускаем.
+  assert.equal(resolveLocalTurn('сделай тише и закажи пиццу'), null);
+  // Явно составная фраза из двух понятных частей — прежний полный план без пометок.
+  const full = resolveLocalTurn('сделай тише и сверни окна');
+  assert.ok(full);
+  assert.equal(full.partial, undefined);
+  assert.equal(full.parts.length, 2);
+});
+
 test('guardrails and limits return null for questions, prose, ambiguous/partial/unsafe chains, and excess lengths', () => {
   assert.equal(resolveLocalTurn(''), null);
   assert.equal(resolveLocalTurn('   '), null);

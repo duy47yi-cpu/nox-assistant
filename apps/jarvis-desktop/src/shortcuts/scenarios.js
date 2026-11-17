@@ -1302,6 +1302,70 @@ function buildChunkText(tokens, start, end) {
   return words.length ? words.join(' ') : null;
 }
 
+// Непонятый кусок фразы словами: без ведущих запятых и связок («, и найди…» → «найди…»).
+// Нужен только для честной заметки «что не понято»: шагов из него не строим.
+function unresolvedText(tokens, start, end, links) {
+  let i = start;
+  for (;;) {
+    while (i <= end && (tokens[i].kind === 'comma' || tokens[i].kind === 'fcomma')) i += 1;
+    const linkLen = linkerWordLengthAt(tokens, i, links);
+    if (linkLen > 0 && i + linkLen <= end + 1) {
+      i += linkLen;
+      continue;
+    }
+    break;
+  }
+  const words = [];
+  for (; i <= end && i < tokens.length; i += 1) {
+    if (tokens[i].kind === 'word') words.push(tokens[i].raw);
+    else if (words.length && words[words.length - 1] !== ',') words.push(',');
+  }
+  const text = words.join(' ').replace(/\s+,/g, ',').trim();
+  return text || null;
+}
+
+// Сколько кусков во фразе и есть ли между ними разделитель. Куски — то, что разделено запятой
+// или связкой; из них собирается составной план.
+function compoundChunkInfo(tokens, links = LINK_SEQUENCES) {
+  let chunks = 0;
+  let words = 0;
+  let sawSeparator = false;
+  for (let i = 0; i < tokens.length;) {
+    const tok = tokens[i];
+    if (tok.kind === 'comma' || tok.kind === 'fcomma') {
+      sawSeparator = true;
+      if (words > 0) {
+        chunks += 1;
+        words = 0;
+      }
+      i += 1;
+      continue;
+    }
+    const linkLen = linkerWordLengthAt(tokens, i, links);
+    if (linkLen > 0 && words > 0) {
+      sawSeparator = true;
+      chunks += 1;
+      words = 0;
+      i += linkLen;
+      continue;
+    }
+    words += 1;
+    i += 1;
+  }
+  if (words > 0) chunks += 1;
+  return { chunks, sawSeparator };
+}
+
+// Явно составная фраза: есть разделитель (запятая, «и», «затем», «потом») и не меньше двух кусков.
+// Такую фразу составной разбор пробует раньше одиночных перехватов: иначе одна часть (курс)
+// отвечает за всю фразу и остальные просьбы теряются (DEMO 1, 12-я фаза).
+function looksLikeCompoundPhrase(rawText, links = LINK_SEQUENCES) {
+  const tokens = tokenizeForCompound(rawText);
+  if (tokens.length < 3) return false;
+  const info = compoundChunkInfo(tokens, links);
+  return info.sawSeparator && info.chunks >= 2;
+}
+
 function finalizeCompoundParts(parts, ctx = {}) {
   if (!parts || parts.length < 2 || parts.length > MAX_PARTS) return null;
 
@@ -1338,6 +1402,24 @@ function finalizeCompoundParts(parts, ctx = {}) {
     parts: flatParts,
     steps,
     notes,
+  };
+}
+
+// Частичный составной план: выполняем только то, что поняли, а непонятое честно называем.
+// Выдуманных шагов нет: каждая часть — настоящий разобранный сценарий.
+function finalizePartialCompoundParts(parts, unresolved, ctx = {}) {
+  const unknown = (Array.isArray(unresolved) ? unresolved : []).map((item) => String(item || '').trim()).filter(Boolean);
+  if (!unknown.length) return null;
+  const plan = finalizeCompoundParts(parts, ctx);
+  if (!plan) return null;
+  const note = `Не понято: «${unknown.join('», «')}». Это не выполнено — скажите иначе.`;
+  return {
+    ...plan,
+    partial: true,
+    unresolved: unknown,
+    notes: [...(plan.notes || []), note],
+    title: `${plan.title} (не всё понято)`,
+    name: `${plan.title} (не всё понято)`,
   };
 }
 
@@ -1447,6 +1529,169 @@ async function resolveCompoundAsync(rawText, eligibleCommands, ctx = {}) {
 
   const matchedParts = await dfs(0, 0);
   return finalizeCompoundParts(matchedParts, ctx);
+}
+
+// Синхронный составной разбор, который не отменяет найденное из-за одной непонятой части:
+// возвращает { parts, unresolved } и только потом превращается в план (не меньше двух частей).
+function collectPartialCompoundSync(tokens, links, resolveSeg) {
+  const memo = new Map();
+
+  function dfs(start, depth) {
+    if (start >= tokens.length) return { parts: [], unresolved: [] };
+    if (depth >= MAX_PARTS) return null;
+    const memoKey = `${start}:${depth}`;
+    if (memo.has(memoKey)) return memo.get(memoKey);
+    memo.set(memoKey, null);
+
+    // Длинная часть важнее: «включи и игру» остаётся одной командой, а не двумя кусками.
+    for (let end = tokens.length - 1; end >= start; end -= 1) {
+      if (tokens[end].kind !== 'word') continue;
+      const chunkText = buildChunkText(tokens, start, end);
+      const candidate = chunkText ? resolveSeg(chunkText) : null;
+      if (!candidate) continue;
+
+      if (end === tokens.length - 1) {
+        if (depth === 0) continue; // одна часть — это не составная фраза
+        const found = { parts: [candidate], unresolved: [] };
+        memo.set(memoKey, found);
+        return found;
+      }
+
+      const nextStarts = nextStartsFromSeparator(tokens, end + 1, links);
+      for (const nextStart of nextStarts) {
+        const rest = dfs(nextStart, depth + 1);
+        if (rest) {
+          const found = { parts: [candidate, ...rest.parts], unresolved: rest.unresolved };
+          memo.set(memoKey, found);
+          return found;
+        }
+      }
+
+      // Хвост за настоящим разделителем не разобрался: понятную часть оставляем, непонятое называем.
+      // Без разделителя хвост — это часть той же просьбы («перерыв на 0 минут»), делить её нельзя.
+      if (nextStarts.length > 0) {
+        const tail = unresolvedText(tokens, nextStarts[0], tokens.length - 1, links);
+        if (tail) {
+          const found = { parts: [candidate], unresolved: [tail] };
+          memo.set(memoKey, found);
+          return found;
+        }
+      }
+    }
+
+    // С этого места часть не начинается: пропускаем кусок до ближайшего разделителя.
+    for (let i = start; i < tokens.length; i += 1) {
+      const starts = nextStartsFromSeparator(tokens, i, links);
+      if (!starts.length) continue;
+      const text = unresolvedText(tokens, start, i - 1, links);
+      const rest = dfs(starts[0], depth);
+      if (!rest) break;
+      const found = {
+        parts: rest.parts,
+        unresolved: text ? [text, ...rest.unresolved] : rest.unresolved,
+      };
+      memo.set(memoKey, found);
+      return found;
+    }
+
+    return null;
+  }
+
+  return dfs(0, 0);
+}
+
+function resolveCompoundPartialSync(rawText, eligibleCommands, ctx = {}) {
+  const tokens = tokenizeForCompound(rawText);
+  if (tokens.length < 3) return null;
+  const links = compoundLinkSequences(ctx.linkWords);
+  // Больше MAX_PARTS кусков — не разбираем: раньше такой предел давал null, и он остаётся.
+  if (compoundChunkInfo(tokens, links).chunks > MAX_PARTS) return null;
+  const segCache = new Map();
+  const resolveSeg = (chunkText) => {
+    if (segCache.has(chunkText)) return segCache.get(chunkText);
+    const resolved = resolveSegmentSync(chunkText, eligibleCommands, ctx);
+    segCache.set(chunkText, resolved);
+    return resolved;
+  };
+  const found = collectPartialCompoundSync(tokens, links, resolveSeg);
+  if (!found) return null;
+  return finalizePartialCompoundParts(found.parts, found.unresolved, ctx);
+}
+
+// Асинхронный частичный разбор: тот же поиск, но каждая часть разрешается через await.
+async function resolveCompoundPartialAsync(rawText, eligibleCommands, ctx = {}) {
+  const tokens = tokenizeForCompound(rawText);
+  if (tokens.length < 3) return null;
+  const links = compoundLinkSequences(ctx.linkWords);
+  // Больше MAX_PARTS кусков — не разбираем: раньше такой предел давал null, и он остаётся.
+  if (compoundChunkInfo(tokens, links).chunks > MAX_PARTS) return null;
+  const segCache = new Map();
+  const memo = new Map();
+
+  async function dfs(start, depth) {
+    if (start >= tokens.length) return { parts: [], unresolved: [] };
+    if (depth >= MAX_PARTS) return null;
+    const memoKey = `${start}:${depth}`;
+    if (memo.has(memoKey)) return memo.get(memoKey);
+    memo.set(memoKey, null);
+
+    for (let end = tokens.length - 1; end >= start; end -= 1) {
+      if (tokens[end].kind !== 'word') continue;
+      const chunkText = buildChunkText(tokens, start, end);
+      if (!chunkText) continue;
+      if (!segCache.has(chunkText)) {
+        segCache.set(chunkText, await resolveSegmentAsync(chunkText, eligibleCommands, ctx));
+      }
+      const candidate = segCache.get(chunkText);
+      if (!candidate) continue;
+
+      if (end === tokens.length - 1) {
+        if (depth === 0) continue;
+        const found = { parts: [candidate], unresolved: [] };
+        memo.set(memoKey, found);
+        return found;
+      }
+
+      const nextStarts = nextStartsFromSeparator(tokens, end + 1, links);
+      for (const nextStart of nextStarts) {
+        const rest = await dfs(nextStart, depth + 1);
+        if (rest) {
+          const found = { parts: [candidate, ...rest.parts], unresolved: rest.unresolved };
+          memo.set(memoKey, found);
+          return found;
+        }
+      }
+
+      if (nextStarts.length > 0) {
+        const tail = unresolvedText(tokens, nextStarts[0], tokens.length - 1, links);
+        if (tail) {
+          const found = { parts: [candidate], unresolved: [tail] };
+          memo.set(memoKey, found);
+          return found;
+        }
+      }
+    }
+
+    for (let i = start; i < tokens.length; i += 1) {
+      const starts = nextStartsFromSeparator(tokens, i, links);
+      if (!starts.length) continue;
+      const text = unresolvedText(tokens, start, i - 1, links);
+      const rest = await dfs(starts[0], depth);
+      if (!rest) break;
+      const found = {
+        parts: rest.parts,
+        unresolved: text ? [text, ...rest.unresolved] : rest.unresolved,
+      };
+      memo.set(memoKey, found);
+      return found;
+    }
+
+    return null;
+  }
+
+  const found = await dfs(0, 0);
+  if (!found) return null;
+  return finalizePartialCompoundParts(found.parts, found.unresolved, ctx);
 }
 
 function passesProseGuardrails(rawText) {
@@ -1582,6 +1827,15 @@ function resolveLocalTurn(text, ctx = {}) {
 
   const eligibleCommands = getStoreCommands(ctx.store).filter((cmd) => cmd && !isUntouchedSampleWorkCommand(cmd));
 
+  // Явно составная фраза: составной разбор идёт раньше одиночных перехватов. Иначе одна часть
+  // (например «курс доллара») отвечает за всю фразу, а остальные просьбы теряются (DEMO 1, 12-я фаза).
+  // Полный план — когда понятны все части; частичный — когда понятны не меньше двух, остальное честно названо.
+  if (looksLikeCompoundPhrase(trimmed, compoundLinkSequences(ctx.linkWords))) {
+    const compoundFirst = resolveCompoundSync(trimmed, eligibleCommands, ctx)
+      || resolveCompoundPartialSync(trimmed, eligibleCommands, ctx);
+    if (compoundFirst) return compoundFirst;
+  }
+
   const userHit = matchUserCommandSingle(trimmed, eligibleCommands, ctx);
   if (userHit) return userHit.result;
 
@@ -1633,6 +1887,13 @@ async function resolveLocalTurnAsync(text, ctx = {}) {
   }
 
   const eligibleCommands = getStoreCommands(ctx.store).filter((cmd) => cmd && !isUntouchedSampleWorkCommand(cmd));
+
+  // См. resolveLocalTurn: явно составная фраза сначала разбирается как цепочка частей.
+  if (looksLikeCompoundPhrase(trimmed, compoundLinkSequences(ctx.linkWords))) {
+    const compoundFirst = (await resolveCompoundAsync(trimmed, eligibleCommands, ctx))
+      || (await resolveCompoundPartialAsync(trimmed, eligibleCommands, ctx));
+    if (compoundFirst) return compoundFirst;
+  }
 
   const userHit = matchUserCommandSingle(trimmed, eligibleCommands, ctx);
   if (userHit) return userHit.result;

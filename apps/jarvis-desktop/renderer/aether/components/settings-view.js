@@ -73,8 +73,8 @@
     const searchInp = document.createElement('input');
     searchInp.type = 'search';
     searchInp.className = 'ae-input ae-search-wide';
-    searchInp.placeholder = 'Поиск в настройках';
-    searchInp.setAttribute('aria-label', 'Поиск по всем настройкам');
+    searchInp.placeholder = 'Поиск';
+    searchInp.setAttribute('aria-label', 'Поиск в настройках');
     const searchWrap = document.createElement('label');
     searchWrap.className = 'ae-page-search';
     searchWrap.append(icon('search'), searchInp);

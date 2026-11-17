@@ -65,3 +65,10 @@ test('Разделы остаются в шапке, служебные кноп
   assert.match(topbarJs, /ArrowLeft/);
   assert.match(luxCss, /grid-template-columns:\s*56px minmax\(0,\s*1fr\)/);
 });
+
+test('Поиск в Настройках: короткий placeholder, полное имя для экранного диктора', () => {
+  const src = fs.readFileSync(path.join(AETHER_DIR, 'components', 'settings-view.js'), 'utf8');
+  // На 864×520 колонка настроек 156 px: длинный «Поиск в настройках» обрезается.
+  assert.match(src, /searchInp\.placeholder = 'Поиск';/);
+  assert.match(src, /searchInp\.setAttribute\('aria-label', 'Поиск в настройках'\);/);
+});
