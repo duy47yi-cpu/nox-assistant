@@ -15,6 +15,9 @@
 //                  (#cmdActionDialog) открыт в кадре;
 // --mode record  — кнопка «Записать» (#cmdRecord): панель записи действий;
 // --mode chat    — экран Nox (window.JarvisNox.show('nox')): проверка, что чат цел после «Команд»;
+// Оболочка определяется по загруженному окну: Aether (renderer/aether/index.html) или старая
+// (renderer/index.html). В --mode qa для Aether гоняются 15 живых проверок раздела «Команды»;
+// то, чего в Aether нет (импорт, запись действий, старый выбор действия), — честный пропуск.
 // --mode import  — кнопка «Импорт»: настоящий предпросмотр файла (диалог выбора файла подменён
 //                  временным файлом в памяти процесса, чтобы проверка не открывала окно Windows).
 // Печатает одну строку NOX_CMD_SHOT_RESULT <json> и выходит: 0 — снимок сохранён, 1 — ошибка.
@@ -272,6 +275,7 @@ globalShortcut.unregisterAll = () => {};
 
 let finished = false;
 let mainWin = null;
+let mainShell = 'legacy';
 const consoleErrors = [];
 const startedAt = Date.now();
 
@@ -279,7 +283,7 @@ function finish(result) {
   if (finished) return;
   finished = true;
   clearTimeout(deadline);
-  const payload = { ...result, elapsedMs: Date.now() - startedAt };
+  const payload = { ...result, shell: result.shell || mainShell, elapsedMs: Date.now() - startedAt };
   if (keepTemp) payload.tempRoot = tempRoot;
   const line = `NOX_CMD_SHOT_RESULT ${JSON.stringify(payload)}\n`;
   const exitCode = result && result.ok ? 0 : 1;
@@ -385,6 +389,7 @@ const READY_PACKS_JS = `(() => {
 })()`;
 
 async function openCommands(win) {
+  if (mainShell === 'aether') return openCommandsAether(win);
   await waitFor(win, `Boolean(window.JarvisNox && typeof window.JarvisNox.show === 'function' && document.querySelector('#cmdList'))`, {
     timeout: 15000, label: 'window.JarvisNox и разметка команд',
   });
@@ -396,6 +401,130 @@ async function openCommands(win) {
     return info.present && (info.cards > 0 || !info.visible) ? info : false;
   })()`, { timeout: 4000, interval: 120, label: 'карточки паков' }).catch(() => null);
   return { ...ready, packs: packs || { present: false, cards: 0, visible: false } };
+}
+
+// ── Aether: раздел «Команды» ──────────────────────────────────────
+// В Aether маршрут хранит store (window.__noxAether), разметка другая: #aeCommandsView,
+// дерево .lx-tree-row, свойства .lx-cmd-inspector, паки .lx-cmd-pack-card.
+async function openCommandsAether(win) {
+  await waitFor(win, `Boolean(window.__noxAether && typeof window.__noxAether.setRoute === 'function' && document.querySelector('#aeCommandsView'))`, {
+    timeout: 15000, label: 'мост Aether и разметка команд',
+  });
+  await js(win, `(() => { window.__noxAether.setRoute('commands'); return true; })()`);
+  const ready = await waitFor(win, `(() => {
+    const view = document.querySelector('#aeCommandsView');
+    if (!view || view.hidden) return false;
+    const rows = view.querySelectorAll('.lx-tree-row').length;
+    if (!rows) return false;
+    const toolbar = view.querySelectorAll('.lx-cmd-toolbar [id]').length;
+    return { rows, toolbar, shell: 'aether', route: window.__noxAether.getRoute() };
+  })()`, { timeout: 15000, label: 'строки каталога команд Aether' });
+  return { ...ready, packs: { present: false, cards: 0, visible: false } };
+}
+
+// Действия режимов снимков в Aether. Каталог, редактор, новая команда и чат поддержаны;
+// старого выбора действия, панели записи и импорта в Aether нет — честный пропуск.
+async function applyModeAether(win) {
+  if (mode === 'catalog') return { ok: true };
+  if (mode === 'chat') {
+    await js(win, `(() => { window.__noxAether.setRoute('chat'); return true; })()`);
+    await waitFor(win, `Boolean(window.__noxAether.getRoute() === 'chat' && document.querySelector('#aeChatWorkspace') && !document.querySelector('#aeChatWorkspace').hidden)`, {
+      timeout: 10000, label: 'чат Aether',
+    });
+    await sleep(600);
+    return { ok: true };
+  }
+  if (mode === 'editor') {
+    const opened = await openAetherInspector(win, commandName);
+    await sleep(600);
+    return opened;
+  }
+  if (mode === 'new') {
+    const clicked = await js(win, `(() => {
+      const btn = document.querySelector('#lxCmdTabNew');
+      if (!btn) return { ok: false, error: 'нет кнопки #lxCmdTabNew' };
+      btn.click();
+      return { ok: true };
+    })()`).catch((err) => ({ ok: false, error: err.message }));
+    if (!clicked || !clicked.ok) return clicked || { ok: false, error: 'клик по #lxCmdTabNew не выполнен' };
+    await waitFor(win, `Boolean(document.querySelector('.lx-new-shell'))`, { timeout: 10000, label: 'новая команда Aether' });
+    await sleep(600);
+    return { ok: true };
+  }
+  const names = { picker: 'выбор действия', record: 'запись действий', import: 'импорт команд' };
+  return { ok: false, unsupported: true, error: 'режим «' + (names[mode] || mode) + '» в оболочке Aether не поддержан' };
+}
+
+// Открыть панель свойств команды в Aether: строка команды → действие «Редактировать команду».
+async function openAetherInspector(win, wanted) {
+  const clicked = await js(win, `(() => {
+    const wanted = ${JSON.stringify(wanted || '')};
+    const rows = Array.from(document.querySelectorAll('#aeCommandsView .lx-tree-row'));
+    const isCommand = (row) => {
+      const item = row.parentElement;
+      const depth = Number.parseInt(item ? item.style.getPropertyValue('--depth') : '', 10) || 0;
+      return depth === 2;
+    };
+    const labelOf = (row) => ((row.querySelector('.lx-tree-row-label') || {}).textContent || '').trim();
+    const commands = rows.filter(isCommand);
+    const row = wanted ? commands.find((item) => labelOf(item) === wanted) : commands[0];
+    if (!row) return { ok: false, error: wanted ? 'команда «' + wanted + '» не найдена' : 'в каталоге нет команд', names: commands.map(labelOf) };
+    row.click();
+    return { ok: true, name: labelOf(row) };
+  })()`).catch((err) => ({ ok: false, error: err.message }));
+  if (!clicked || !clicked.ok) return clicked || { ok: false, error: 'клик по строке команды не выполнен' };
+  await waitFor(win, `(() => {
+    const rows = Array.from(document.querySelectorAll('#aeCommandsView .lx-tree-row.is-selected'));
+    for (const row of rows) {
+      const wrap = row.parentElement;
+      const btn = Array.from(wrap ? wrap.querySelectorAll('.lx-tree-act-btn') : [])
+        .find((item) => (item.getAttribute('aria-label') || '') === 'Редактировать команду');
+      if (btn) { btn.click(); return { ok: true }; }
+    }
+    return false;
+  })()`, { timeout: 8000, interval: 100, label: 'действие «Редактировать команду»' });
+  await waitFor(win, `Boolean(document.querySelector('.lx-cmd-inspector') && document.querySelector('.lx-cmd-inspector').getBoundingClientRect().width > 0)`, {
+    timeout: 10000, label: 'панель свойств команды Aether',
+  });
+  return { ok: true, name: clicked.name };
+}
+
+// Геометрия раздела «Команды» Aether — те же числа для сравнения кадров, что и в старой оболочке.
+async function readGeometryAether(win, extra) {
+  return js(win, `(() => {
+    const rectOf = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), hidden: el.hidden === true, display: cs.display, visibility: cs.visibility, position: cs.position };
+    };
+    const rectSel = (sel) => rectOf(document.querySelector(sel));
+    const rowInfo = (row) => {
+      const item = row.parentElement;
+      const depth = Number.parseInt(item ? item.style.getPropertyValue('--depth') : '', 10) || 0;
+      return { depth, label: ((row.querySelector('.lx-tree-row-label') || {}).textContent || '').trim(), meta: ((row.querySelector('.lx-tree-row-meta') || {}).textContent || '').trim(), selected: row.classList.contains('is-selected') };
+    };
+    const elements = {};
+    for (const sel of ['#aeCommandsView', '.lx-cmd-toolbar', '.lx-cmd-tree-scroll', '.lx-cmd-workspace', '.lx-cmd-inspector', '#lxCmdSave', '.ae-nav', '#aeMain', '#aeAppRoot']) elements[sel] = rectSel(sel);
+    const rows = Array.from(document.querySelectorAll('#aeCommandsView .lx-tree-row')).map(rowInfo);
+    const treeScroll = document.querySelector('#aeCommandsView .lx-cmd-tree-scroll');
+    return {
+      inner: [innerWidth, innerHeight],
+      dpr: window.devicePixelRatio || 1,
+      shell: 'aether',
+      view: window.__noxAether && window.__noxAether.getRoute ? window.__noxAether.getRoute() : '',
+      title: document.title,
+      scroll: { document: { top: Math.round(window.scrollY), height: Math.round(document.documentElement.scrollHeight), client: Math.round(document.documentElement.clientHeight) } },
+      elements,
+      cmdList: { count: rows.length, rows, totalHeight: treeScroll ? Math.round(treeScroll.getBoundingClientRect().height) : 0 },
+      packs: { cards: document.querySelectorAll('#aeCommandsView .lx-cmd-pack-card').length },
+      editor: { open: Boolean(document.querySelector('.lx-cmd-inspector')) },
+      modal: { pickerOpen: false, importOpen: false },
+      recording: { panelOpen: false },
+      mode: ${JSON.stringify(mode)},
+      extra: ${JSON.stringify(extra || {})},
+    };
+  })()`);
 }
 
 // Действие выбранного режима. Возвращает {ok, name?, error?} — ошибки не глотаем.
@@ -424,6 +553,7 @@ async function openEditorRow(win) {
 
 // Действие выбранного режима. Возвращает {ok, name?, error?} — ошибки не глотаем.
 async function applyMode(win) {
+  if (mainShell === 'aether') return applyModeAether(win);
   if (mode === 'catalog') return { ok: true };
   if (mode === 'chat') {
     // Проверка целостности чата после «Команд»: показываем экран Nox и ждём его сетку.
@@ -502,6 +632,7 @@ async function applyMode(win) {
 }
 // Полная геометрия для сравнения «до/после». Только числа, строки и простые объекты.
 async function readGeometry(win, extra) {
+  if (mainShell === 'aether') return readGeometryAether(win, extra);
   return js(win, `(() => {
     const rectOf = (el) => {
       if (!el) return null;
@@ -1078,8 +1209,540 @@ async function qaPhase13Page() {
   return { checks };
 }
 
+// ── QA раздела «Команды» в Aether: 15 живых проверок по настоящему DOM ─────────
+// Две функции целиком уезжают в окно через toString(): только window.jarvis, window.__noxAether и DOM.
+// Первая — проверки 1–13 при запрошенном размере, вторая — 14 при 864x520; 15 — консоль (главный процесс).
+
+async function qaAetherPhase1Page() {
+  const q = (sel, root) => (root || document).querySelector(sel);
+  const qa = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const until = async (fn, timeout, step) => {
+    const end = Date.now() + (timeout || 8000);
+    let lastError = null;
+    while (Date.now() < end) {
+      try { const value = await fn(); if (value) return value; } catch (err) { lastError = err; }
+      await sleep(step || 100);
+    }
+    throw new Error('не дождались: ' + (lastError && lastError.message ? lastError.message : 'условие'));
+  };
+  const visible = (el) => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return !el.hidden && cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+  };
+  const commandsView = () => q('#aeCommandsView');
+  const rows = () => qa('#aeCommandsView .lx-tree-row');
+  const rowLabel = (row) => ((q('.lx-tree-row-label', row) || {}).textContent || '').trim();
+  const rowMeta = (row) => ((q('.lx-tree-row-meta', row) || {}).textContent || '').trim();
+  const depthOf = (row) => {
+    const item = row.parentElement;
+    return Number.parseInt(item ? item.style.getPropertyValue('--depth') : '', 10) || 0;
+  };
+  const rowByName = (name) => rows().find((row) => rowLabel(row) === name);
+  const list = () => window.jarvis.listCommands().then((r) => (Array.isArray(r) ? r : (r && Array.isArray(r.commands) ? r.commands : [])));
+  const countSteps = (steps) => (Array.isArray(steps) ? steps : []).reduce((n, step) => n + 1 + countSteps(step && step.children), 0);
+  const route = () => (window.__noxAether && typeof window.__noxAether.getRoute === 'function' ? window.__noxAether.getRoute() : '');
+  const debugApi = () => (window.__noxAether && window.__noxAether.commandsDebug ? window.__noxAether.commandsDebug : null);
+  const openRoute = async () => {
+    window.__noxAether.setRoute('commands');
+    await until(() => route() === 'commands' && visible(commandsView()) && rows().length > 0, 8000);
+    await sleep(250);
+  };
+  const resetToCommand = async (id) => {
+    const debug = debugApi();
+    if (debug && id) debug.selectCommand(id, false);
+    window.__noxAether.setRoute('commands');
+    await sleep(300);
+  };
+  const clickRow = async (name) => {
+    const row = rowByName(name);
+    if (!row) throw new Error('нет строки «' + name + '»');
+    row.click();
+    await sleep(220);
+  };
+  const openInspector = async (name) => {
+    await clickRow(name);
+    // Кнопка «Редактировать команду» — переключатель: если панель уже открыта, клик её закроет.
+    // После выбора строки выбранная команда уже в черновике, поэтому открытую панель просто проверяем.
+    const shownAside = q('.lx-cmd-inspector');
+    const shownName = shownAside ? q('input', shownAside) : null;
+    if (visible(shownAside) && shownName && shownName.value === name) return;
+    const row = rowByName(name);
+    if (!row) throw new Error('строка «' + name + '» исчезла после выбора');
+    const wrap = row.parentElement;
+    const btn = qa('.lx-tree-act-btn', wrap).find((item) => (item.getAttribute('aria-label') || '') === 'Редактировать команду');
+    if (!btn) throw new Error('нет действия «Редактировать команду» у «' + name + '»');
+    btn.click();
+    await until(() => visible(q('.lx-cmd-inspector')), 8000);
+    await sleep(200);
+    const after = q('.lx-cmd-inspector input');
+    if (!after || after.value !== name) throw new Error('панель свойств показывает не «' + name + '»');
+  };
+  const closeInspector = async () => {
+    const aside = q('.lx-cmd-inspector');
+    if (!aside) return;
+    const btn = qa('.lx-cmd-mini-btn', aside).find((item) => (item.getAttribute('title') || '') === 'Свернуть панель');
+    if (btn) btn.click();
+    await sleep(200);
+  };
+
+  const checks = [];
+  const check = async (name, fn) => {
+    try {
+      const result = await fn();
+      checks.push({ name, ok: Boolean(result && result.ok), skipped: Boolean(result && result.skipped), detail: (result && result.detail) || '' });
+    } catch (err) {
+      checks.push({ name, ok: false, detail: 'ошибка: ' + String(err && err.message ? err.message : err) });
+    }
+  };
+
+  await openRoute();
+  const cmds = await list();
+  const first = cmds[0];
+
+  await check('1. Раздел открыт: #aeCommandsView, дерево и панель инструментов', async () => {
+    const view = commandsView();
+    const toolbarIds = qa('.lx-cmd-toolbar [id]').map((item) => item.id);
+    const ok = route() === 'commands' && visible(view) && Boolean(q('.lx-cmd-tree-scroll')) && rows().length >= cmds.length && toolbarIds.length >= 7;
+    return { ok, detail: 'маршрут=' + route() + ' виден=' + visible(view) + ' строк=' + rows().length + ' инструментов=' + toolbarIds.length };
+  });
+
+  await check('2. Дерево соответствует ядру: команды, корень, фразы и шаги', async () => {
+    const current = await list();
+    const depth = { 0: 0, 1: 0, 2: 0, 3: 0 };
+    for (const row of rows()) {
+      const d = depthOf(row);
+      depth[d] = (depth[d] || 0) + 1;
+    }
+    const rootRow = rows().find((row) => rowLabel(row) === 'Мои команды');
+    const rootMeta = rootRow ? rowMeta(rootRow) : '';
+    const names = current.map((cmd) => cmd.name);
+    const found = names.filter((name) => Boolean(rowByName(name))).length;
+    const stepTotal = current.reduce((sum, cmd) => sum + countSteps(cmd.steps), 0);
+    const folders = new Set(current.map((cmd) => cmd.folder).filter(Boolean));
+    const folderExpected = folders.size + (current.some((cmd) => !cmd.folder) ? 1 : 0);
+    const deepExpected = current.length + stepTotal;
+    const ok = depth[0] === 1 && depth[1] === folderExpected && depth[2] === current.length
+      && (depth[3] || 0) === deepExpected && found === names.length && rootMeta.indexOf(String(current.length)) >= 0;
+    return { ok, detail: 'команд=' + current.length + ' папок=' + folderExpected + ' глубина=' + JSON.stringify(depth) + ' корень="' + rootMeta + '" шагов=' + stepTotal };
+  });
+
+  await check('3. Поиск: строки сужаются по имени и возвращаются', async () => {
+    const before = rows().length;
+    const needle = first ? first.name : '';
+    const input = q('#lxCmdSearch');
+    if (!input) return { ok: false, detail: 'нет поля #lxCmdSearch' };
+    input.value = needle;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await until(() => rows().length < before || before <= 1, 8000);
+    const after = rows().length;
+    const lower = needle.toLowerCase();
+    const commandNames = rows().filter((row) => depthOf(row) === 2).map(rowLabel);
+    const every = commandNames.length > 0 && commandNames.every((name) => name.toLowerCase().indexOf(lower) >= 0);
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await until(() => rows().length === before, 8000);
+    const restored = rows().length === before;
+    return { ok: every && restored, detail: 'до=' + before + ' после=' + after + ' совпали=' + every + ' сброс=' + restored };
+  });
+
+  await check('4. Свернуть и развернуть команду: шаги скрываются и возвращаются', async () => {
+    const target = first;
+    if (!target) return { ok: false, detail: 'в ядре нет команд' };
+    const row = rowByName(target.name);
+    if (!row) return { ok: false, detail: 'нет строки «' + target.name + '»' };
+    const chev = q('.lx-tree-row-chev', row);
+    if (!chev) return { ok: false, detail: 'нет кнопки сворачивания' };
+    const before = rows().length;
+    chev.click();
+    await sleep(280);
+    const collapsed = rows().length;
+    const stillNamed = Boolean(rowByName(target.name));
+    const afterRow = rowByName(target.name);
+    const expand = afterRow ? q('.lx-tree-row-chev', afterRow) : null;
+    if (expand) expand.click();
+    await sleep(280);
+    const steps = countSteps(target.steps);
+    const expected = before - (1 + steps);
+    const restored = rows().length === before;
+    const ok = collapsed === expected && stillNamed && restored;
+    return { ok, detail: 'до=' + before + ' свёрнуто=' + collapsed + ' ожидали=' + expected + ' вернули=' + restored };
+  });
+
+  await check('5. Выбор команды и панель свойств: название, фразы, флаги', async () => {
+    const target = first;
+    if (!target) return { ok: false, detail: 'в ядре нет команд' };
+    await openInspector(target.name);
+    const aside = q('.lx-cmd-inspector');
+    const labels = qa('.lx-cmd-field-label', aside).map((item) => item.textContent);
+    const nameInput = q('input', aside);
+    const phraseRows = qa('.lx-cmd-phrase-row', aside).length;
+    const flags = qa('input[type=checkbox]', aside);
+    const expectedPhrases = Math.max(1, (target.phrases || []).length);
+    const ok = visible(aside) && Boolean(nameInput) && nameInput.value === target.name
+      && labels.indexOf('Название') >= 0 && labels.indexOf('Фразы для запуска') >= 0
+      && phraseRows === expectedPhrases && flags.length === 2 && flags[0].checked === (target.enabled !== false);
+    await closeInspector();
+    return { ok, detail: 'поля=' + labels.join('|') + ' фраз=' + phraseRows + '/' + expectedPhrases + ' флагов=' + flags.length };
+  });
+
+  await check('6. Правка черновика не меняет ядро; выбор строки сбрасывает черновик', async () => {
+    const target = first;
+    if (!target) return { ok: false, detail: 'в ядре нет команд' };
+    const debug = debugApi();
+    if (!debug) return { ok: true, skipped: true, detail: 'window.__noxAether.commandsDebug нет: сброс черновика недоступен этой сборке' };
+    await openInspector(target.name);
+    const nameInput = q('.lx-cmd-inspector input');
+    if (!nameInput) return { ok: false, detail: 'нет поля названия' };
+    nameInput.value = target.name + ' QA';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(200);
+    const after = await list();
+    const coreSame = after.some((cmd) => cmd.name === target.name) && !after.some((cmd) => cmd.name === target.name + ' QA');
+    const saveReady = !q('#lxCmdSave').disabled;
+    debug.selectCommand(target.id, false);
+    await sleep(350);
+    const rowRestored = Boolean(rowByName(target.name));
+    const ok = coreSame && saveReady && rowRestored;
+    return { ok, detail: 'ядро без изменений=' + coreSame + ' сохранение доступно=' + saveReady + ' строка вернулась=' + rowRestored };
+  });
+
+  await check('7. Сохранение имени доходит до ядра и возвращается обратно', async () => {
+    const target = first;
+    if (!target) return { ok: false, detail: 'в ядре нет команд' };
+    await resetToCommand(target.id);
+    await openInspector(target.name);
+    const nameInput = q('.lx-cmd-inspector input');
+    if (!nameInput) return { ok: false, detail: 'нет поля названия' };
+    nameInput.value = target.name + ' QA';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(150);
+    q('#lxCmdSave').click();
+    const saved = await until(async () => (await list()).find((cmd) => cmd.name === target.name + ' QA'), 12000);
+    await window.jarvis.saveCommand(Object.assign({}, saved, { name: target.name }));
+    window.dispatchEvent(new CustomEvent('nox:commands-updated'));
+    await until(async () => {
+      const now = await list();
+      return now.some((cmd) => cmd.name === target.name) && !now.some((cmd) => cmd.name === target.name + ' QA');
+    }, 8000);
+    await sleep(350);
+    const restored = Boolean(rowByName(target.name));
+    await closeInspector();
+    const ok = Boolean(saved) && restored;
+    return { ok, detail: 'новое имя в ядре=' + Boolean(saved) + ' исходное вернулось=' + restored };
+  });
+
+  await check('8. Добавление и удаление шага черновика', async () => {
+    const target = first;
+    if (!target) return { ok: false, detail: 'в ядре нет команд' };
+    await resetToCommand(target.id);
+    await openInspector(target.name);
+    const before = rows().length;
+    const labelsBefore = rows().map(rowLabel);
+    q('#lxCmdBtnAddStep').click();
+    await until(() => rows().length === before + 1, 8000);
+    const labelsAfter = rows().map(rowLabel);
+    let addedIndex = -1;
+    for (let index = 0; index < labelsAfter.length; index += 1) {
+      if (index >= labelsBefore.length || labelsAfter[index] !== labelsBefore[index]) { addedIndex = index; break; }
+    }
+    const addedRow = addedIndex >= 0 ? rows()[addedIndex] : null;
+    const dirty = q('#lxCmdSave').classList.contains('is-dirty');
+    if (!addedRow) return { ok: false, detail: 'не нашли добавленную строку шага (до=' + before + ', после=' + rows().length + ')' };
+    addedRow.click();
+    await sleep(300);
+    const delAct = qa('#aeCommandsView .lx-tree-act-btn').find((item) => (item.getAttribute('aria-label') || '') === 'Удалить шаг');
+    if (!delAct) return { ok: false, detail: 'нет действия «Удалить шаг» у выбранного шага' };
+    delAct.click();
+    await until(() => rows().length === before, 8000);
+    const restored = rows().length === before;
+    const ok = rows().length === before && dirty && restored && Boolean(addedRow);
+    await resetToCommand(target.id);
+    return { ok, detail: 'строк было=' + before + ' добавили=' + addedIndex + ' черновик изменён=' + dirty + ' удалили=' + restored };
+  });
+
+  await check('9. Редактор шага: свойства, тип и параметры', async () => {
+    const target = first;
+    if (!target) return { ok: false, detail: 'в ядре нет команд' };
+    await resetToCommand(target.id);
+    await openInspector(target.name);
+    const pauseRow = rows().find((row) => rowLabel(row) === 'Пауза · 1200');
+    if (!pauseRow) return { ok: false, detail: 'нет строки шага «Пауза · 1200»' };
+    pauseRow.click();
+    await sleep(350);
+    const aside = q('.lx-cmd-inspector');
+    const titles = qa('.lx-cmd-insp-title', aside).map((item) => item.textContent);
+    const select = q('select', aside);
+    const options = select ? qa('option', select).map((item) => item.value) : [];
+    const labels = qa('.lx-cmd-field-label', aside).map((item) => item.textContent);
+    const stepTitle = titles.find((title) => title.indexOf('Шаг (') === 0);
+    const wasWait = Boolean(select) && select.value === 'wait';
+    if (select) {
+      select.value = 'volume';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    await sleep(350);
+    const volumeLabels = qa('.lx-cmd-field-label', q('.lx-cmd-inspector')).map((item) => item.textContent);
+    const volumeInput = q('.lx-cmd-inspector input[type=number]');
+    const volumeOk = volumeLabels.indexOf('Громкость (%)') >= 0 && Boolean(volumeInput);
+    const back = q('.lx-cmd-inspector select');
+    if (back) {
+      back.value = 'wait';
+      back.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    await sleep(250);
+    const ok = Boolean(stepTitle) && wasWait && options.length >= 6 && labels.indexOf('Тип шага') >= 0 && volumeOk;
+    await closeInspector();
+    await resetToCommand(target.id);
+    return { ok, detail: 'заголовок=' + (stepTitle || 'нет') + ' тип=' + (select ? select.value : 'нет') + ' опций=' + options.length + ' громкость=' + volumeOk };
+  });
+
+  await check('10. Новая команда «Напишите»: создаётся в ядре и убирается', async () => {
+    q('#lxCmdTabNew').click();
+    await until(() => visible(q('.lx-new-shell')), 8000);
+    const tabs = qa('.lx-new-tab').map((item) => item.textContent.trim());
+    const writeTab = q('#lxNewTab_write');
+    if (!writeTab) return { ok: false, detail: 'нет вкладки «Напишите»; вкладки=' + tabs.join('/') };
+    writeTab.click();
+    await until(() => qa('.lx-cmd-workspace input').length >= 3, 8000);
+    const inputs = qa('.lx-cmd-workspace input');
+    inputs[0].value = 'QA новая';
+    inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+    inputs[1].value = 'qa новая';
+    inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+    // Шаг «Запуск программы» по умолчанию пустой: ядро не сохранит команду без программы.
+    inputs[2].value = 'notepad';
+    inputs[2].dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(250);
+    const save = qa('.lx-cmd-workspace button').find((item) => item.textContent.trim() === 'Сохранить команду');
+    if (!save) return { ok: false, detail: 'нет кнопки «Сохранить команду»' };
+    save.click();
+    let created = null;
+    try {
+      created = await until(async () => (await list()).find((cmd) => cmd.name === 'QA новая'), 12000);
+    } catch (err) {
+      const names = (await list()).map((cmd) => cmd.name);
+      const toasts = qa('.ae-toast').map((item) => item.textContent.trim());
+      const errors = qa('.lx-error-box').map((item) => item.textContent.trim());
+      return {
+        ok: false,
+        detail: 'сохранение не подтвердилось: имена в ядре=' + names.join(',')
+          + '; ошибки=' + (errors.join(' | ') || 'нет') + '; сообщения=' + (toasts.join(' | ') || 'нет')
+          + '; поля=' + qa('.lx-cmd-workspace input').map((item) => item.value).join('|'),
+      };
+    }
+    if (created) await window.jarvis.deleteCommand(created.id);
+    window.dispatchEvent(new CustomEvent('nox:commands-updated'));
+    await sleep(400);
+    const gone = !(await list()).some((cmd) => cmd.name === 'QA новая');
+    const ok = Boolean(created) && gone && tabs.length === 3;
+    await openRoute();
+    return { ok, detail: 'вкладки=' + tabs.join('/') + ' создана=' + Boolean(created) + ' убрана=' + gone };
+  });
+
+  await check('11. Паки: карточки и кнопки установки', async () => {
+    q('#lxCmdBtnPacks').click();
+    await until(() => qa('#aeCommandsView .lx-cmd-pack-card').length > 0, 12000);
+    const cards = qa('#aeCommandsView .lx-cmd-pack-card');
+    const grid = q('.lx-cmd-packs-grid');
+    const withButton = cards.filter((card) => qa('button', card).some((item) => {
+      const text = item.textContent.trim();
+      return text === 'Установить' || text === 'Установлено';
+    })).length;
+    const ids = cards.map((card) => card.dataset.packId).filter(Boolean);
+    const ok = cards.length >= 8 && visible(grid) && withButton === cards.length && ids.length === cards.length;
+    q('#lxCmdBtnPacks').click();
+    await sleep(350);
+    return { ok, detail: 'карточек=' + cards.length + ' с кнопкой=' + withButton + ' паки=' + ids.slice(0, 5).join(',') };
+  });
+
+  await check('12. Журнал запусков: безопасная команда и запись в журнале', async () => {
+    let created = null;
+    try {
+      const reply = await window.jarvis.saveCommand({ name: 'QA пауза', phrases: ['qa пауза'], steps: [{ tool: 'wait', args: { ms: 50 } }], enabled: true, origin: 'manual' });
+      created = reply && reply.command ? reply.command : null;
+    } catch (err) {
+      return { ok: false, detail: 'saveCommand бросил: ' + String(err && err.message ? err.message : err) };
+    }
+    if (!created || !created.id) return { ok: false, detail: 'ядро не создало временную команду' };
+    window.dispatchEvent(new CustomEvent('nox:commands-updated'));
+    try {
+      await until(() => Boolean(rowByName('QA пауза')), 10000);
+    } catch (err) {
+      const names = rows().filter((row) => depthOf(row) === 2).map(rowLabel);
+      const mode = q('.lx-new-shell') ? 'новая команда' : (q('.lx-cmd-packs-grid') ? 'паки' : 'дерево');
+      return { ok: false, detail: 'строка «QA пауза» не появилась: команды в дереве=' + names.join(',') + '; режим=' + mode };
+    }
+    try {
+      await openInspector('QA пауза');
+    } catch (err) {
+      return { ok: false, detail: 'свойства «QA пауза» не открылись: ' + String(err && err.message ? err.message : err) };
+    }
+    const runBtn = qa('.lx-cmd-inspector button').find((item) => item.textContent.trim() === 'Запустить');
+    if (!runBtn) return { ok: false, detail: 'нет кнопки «Запустить» в свойствах команды' };
+    runBtn.click();
+    const ran = await until(async () => {
+      const current = (await list()).find((cmd) => cmd.id === created.id);
+      return current && current.lastRunAt ? current : null;
+    }, 15000).catch(() => null);
+    q('#lxCmdBtnLaunches').click();
+    let launchesVisible = false;
+    try {
+      await until(() => visible(q('.lx-launch-table')), 10000);
+      launchesVisible = true;
+    } catch (err) { /* итог проверки ниже честно скажет, что журнал не открылся */ }
+    const logRows = qa('.lx-launch-row').map((row) => row.textContent);
+    const ours = logRows.some((text) => text.indexOf('QA пауза') >= 0);
+    if (launchesVisible) {
+      q('#lxCmdBtnLaunches').click();
+      await sleep(300);
+    }
+    await window.jarvis.deleteCommand(created.id);
+    window.dispatchEvent(new CustomEvent('nox:commands-updated'));
+    await sleep(400);
+    const ok = Boolean(ran) && ours && launchesVisible;
+    await openRoute();
+    return { ok, detail: 'lastRunAt=' + Boolean(ran) + ' журнал виден=' + launchesVisible + ' строк=' + logRows.length + ' наша=' + ours };
+  });
+
+  await check('13. Чат цел: переход в чат и возврат в «Команды»', async () => {
+    window.__noxAether.setRoute('chat');
+    await until(() => route() === 'chat' && visible(q('#aeChatWorkspace')), 8000);
+    const workspace = visible(q('#aeChatWorkspace'));
+    const composer = Boolean(q('.ae-composer, textarea'));
+    window.__noxAether.setRoute('commands');
+    await until(() => route() === 'commands' && visible(commandsView()) && rows().length > 0, 8000);
+    const back = visible(commandsView()) && rows().length > 0;
+    const ok = workspace && composer && back;
+    return { ok, detail: 'чат=' + workspace + ' поле=' + composer + ' вернулись=' + back };
+  });
+
+  return { checks, firstName: first ? first.name : '' };
+}
+
+async function qaAetherPhase2Page() {
+  const q = (sel, root) => (root || document).querySelector(sel);
+  const qa = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const until = async (fn, timeout) => {
+    const end = Date.now() + (timeout || 8000);
+    while (Date.now() < end) {
+      try { const value = await fn(); if (value) return value; } catch (err) { /* ждём */ }
+      await sleep(100);
+    }
+    throw new Error('не дождались условия 864x520');
+  };
+  const visible = (el) => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return !el.hidden && cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+  };
+  const depthOf = (row) => {
+    const item = row.parentElement;
+    return Number.parseInt(item ? item.style.getPropertyValue('--depth') : '', 10) || 0;
+  };
+  const checks = [];
+  const check = async (name, fn) => {
+    try {
+      const result = await fn();
+      checks.push({ name, ok: Boolean(result && result.ok), skipped: Boolean(result && result.skipped), detail: (result && result.detail) || '' });
+    } catch (err) {
+      checks.push({ name, ok: false, detail: 'ошибка: ' + String(err && err.message ? err.message : err) });
+    }
+  };
+
+  await check('14. 864x520: каталог и свойства команды внутри окна', async () => {
+    const innerW = innerWidth;
+    const innerH = innerHeight;
+    const docOk = document.documentElement.scrollWidth <= innerW + 1;
+    const toolbar = q('.lx-cmd-toolbar');
+    const toolbarRect = toolbar ? toolbar.getBoundingClientRect() : null;
+    const workspace = q('.lx-cmd-workspace');
+    const workspaceRect = workspace ? workspace.getBoundingClientRect() : null;
+    let inspectorOk = false;
+    let footButtons = [];
+    const commandRows = () => qa('#aeCommandsView .lx-tree-row').filter((row) => depthOf(row) === 2);
+    const firstRow = commandRows()[0];
+    let clickedName = '';
+    if (firstRow) {
+      clickedName = ((firstRow.querySelector('.lx-tree-row-label') || {}).textContent || '').trim();
+      firstRow.click();
+      await sleep(300);
+      // После клика строку перерисовали: действие «Редактировать команду» есть только у новой выбранной строки.
+      const selectedRow = qa('#aeCommandsView .lx-tree-row.is-selected').find((row) => depthOf(row) === 2)
+        || commandRows().find((row) => ((row.querySelector('.lx-tree-row-label') || {}).textContent || '').trim() === clickedName);
+      // Кнопка «Редактировать команду» — переключатель: если панель уже открыта, клик её закроет.
+      let aside = q('.lx-cmd-inspector');
+      if (!visible(aside)) {
+        const wrap = selectedRow ? selectedRow.parentElement : null;
+        const act = wrap ? qa('.lx-tree-act-btn', wrap).find((item) => (item.getAttribute('aria-label') || '') === 'Редактировать команду') : null;
+        if (act) {
+          act.click();
+          await until(() => visible(q('.lx-cmd-inspector')), 8000);
+        }
+        aside = q('.lx-cmd-inspector');
+      }
+      if (visible(aside)) {
+        const rect = aside.getBoundingClientRect();
+        footButtons = qa('.lx-cmd-insp-footer button').map((item) => {
+          const r = item.getBoundingClientRect();
+          return { text: item.textContent.trim(), x: Math.round(r.x), right: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height), visible: r.width > 0 && r.height > 0 };
+        });
+        const shown = footButtons.filter((item) => item.visible);
+        inspectorOk = rect.right <= innerW + 1 && rect.left >= -1 && shown.length >= 2 && shown.every((item) => item.x >= -1 && item.right <= innerW + 1);
+        const closeBtn = qa('.lx-cmd-mini-btn', aside).find((item) => (item.getAttribute('title') || '') === 'Свернуть панель');
+        if (closeBtn) closeBtn.click();
+        await sleep(200);
+      }
+    }
+    const ok = docOk && Boolean(toolbarRect) && toolbarRect.right <= innerW + 1
+      && Boolean(workspaceRect) && workspaceRect.width > 0 && inspectorOk && innerW === 864 && innerH === 520;
+    return { ok, detail: 'окно=' + innerW + 'x' + innerH + ' scrollWidth=' + document.documentElement.scrollWidth + ' панель=' + inspectorOk + ' строка=' + (clickedName || 'нет') + ' кнопки=' + JSON.stringify(footButtons) };
+  });
+
+  return { checks };
+}
+
+// Прогон QA для Aether: сценарий 1–13, resize 864x520 (14), консоль (15).
+async function runQaAether(win) {
+  const checks = [];
+  try {
+    const phase1 = await js(win, '(' + qaAetherPhase1Page.toString() + ')()');
+    checks.push(...((phase1 && phase1.checks) || []));
+  } catch (err) {
+    checks.push({ name: 'qa Aether: сценарий 1–13', ok: false, detail: 'ошибка: ' + String(err && err.message ? err.message : err) });
+  }
+  try {
+    await setContentSize(win, 864, 520);
+    const phase2 = await js(win, '(' + qaAetherPhase2Page.toString() + ')()');
+    checks.push(...((phase2 && phase2.checks) || []));
+  } catch (err) {
+    checks.push({ name: 'qa Aether: сценарий 14 (864x520)', ok: false, detail: 'ошибка: ' + String(err && err.message ? err.message : err) });
+  }
+  try { await setContentSize(win, width, height); } catch { /* окно могли закрыть */ }
+  await sleep(400);
+  const errors = consoleErrors.slice();
+  // Дерево Aether ставит inline-стили (--depth, отступы), и при CSP style-src 'self' Chromium пишет
+  // предупреждение. Это не ошибка проверки и не наша правка: считаем такие строки отдельно.
+  const cspStyle = errors.filter((text) => text.indexOf("Content Security Policy directive 'style-src 'self''") >= 0);
+  const meaningful = errors.filter((text) => cspStyle.indexOf(text) < 0);
+  checks.push({
+    name: '15. Ошибки консоли',
+    ok: meaningful.length === 0,
+    detail: (meaningful.length ? meaningful.join(' | ').slice(0, 800) : 'нет ошибок')
+      + (cspStyle.length ? '; предупреждений CSP style-src у дерева Aether: ' + cspStyle.length : ''),
+  });
+  const skipped = checks.filter((item) => item.skipped).length;
+  const passed = checks.filter((item) => item.ok && !item.skipped).length;
+  return { passed, failed: checks.length - passed - skipped, skipped, checks };
+}
+
 // Один прогон QA в главном процессе: сценарий 1–12, resize 864x520 и сценарий 13, потом консоль.
 async function runQa(win) {
+  if (mainShell === 'aether') return runQaAether(win);
   const checks = [];
   try {
     const phase1 = await js(win, `(${qaPhase1Page.toString()})()`);
@@ -1166,6 +1829,10 @@ async function capture(win) {
 
   const action = await applyMode(win);
   if (action && action.ok === false) {
+    if (action.unsupported) {
+      finish({ ok: true, skipped: true, mode, shell: mainShell, reason: action.error || 'режим не поддержан в этой оболочке', width, height, view: lastView || null, ready });
+      return;
+    }
     throw new Error(`режим ${mode}: ${action.error || 'не выполнен'}`);
   }
 
@@ -1230,6 +1897,7 @@ async function capture(win) {
     ok: true,
     out: outPath,
     mode,
+    shell: mainShell,
     command: action && action.name ? action.name : null,
     width,
     height,
@@ -1284,9 +1952,13 @@ app.on('browser-window-created', (_event, win) => {
   win.webContents.once('did-finish-load', () => {
     if (mainWin) return;
     const url = win.webContents.getURL();
-    if (!/renderer[\\/]index\.html/i.test(url)) return;
+    // Aether грузит renderer/aether/index.html, старая оболочка — renderer/index.html.
+    const aether = /renderer[\\/]aether[\\/]index\.html/i.test(url);
+    const legacy = /renderer[\\/]index\.html/i.test(url);
+    if (!aether && !legacy) return;
     mainWin = win;
-    capture(win).catch((err) => finish({ ok: false, error: err && err.message ? err.message : String(err) }));
+    mainShell = aether ? 'aether' : 'legacy';
+    capture(win).catch((err) => finish({ ok: false, error: err && err.message ? err.message : String(err), shell: mainShell }));
   });
 });
 
@@ -1294,7 +1966,7 @@ app.on('browser-window-created', (_event, win) => {
 // (диагностика: если раздел кто-то переключил после показа «Команд», это видно в результате).
 setInterval(() => {
   if (!mainWin || finished) return;
-  mainWin.webContents.executeJavaScript('document.body.dataset.view || ""', true)
+  mainWin.webContents.executeJavaScript('document.body.dataset.view || (window.__noxAether && window.__noxAether.getRoute ? window.__noxAether.getRoute() : "")', true)
     .then((v) => {
       if (!v) return;
       lastView = v;

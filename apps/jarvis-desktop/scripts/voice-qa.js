@@ -61,6 +61,7 @@ async function until(fn, label, timeout = 16000) {
   throw new Error('Не дождались: ' + label);
 }
 
+const processStartedAt = Date.now();
 let server;
 let online = reminderCheck;
 let requests = 0;
@@ -151,70 +152,253 @@ async function main() {
   assert.deepEqual(cloudRequests, []);
   result.legacySettingsSilent = true;
 
+  // Снимок окна: композитор иногда не отдаёт кадр с первого раза (UnknownVizError на прогретом
+  // движке или сразу после resize). Повторяем с паузой и настоящим кадром отрисовки — без подмены.
+  async function screenshot(name, width, height) {
+    let lastError = null;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        await js('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))').catch(() => null);
+        const shot = await win.webContents.capturePage();
+        assert.deepEqual(shot.getSize(), { width, height });
+        const png = shot.toPNG();
+        assert.ok(png.length > 1000, 'пустой кадр');
+        fs.writeFileSync(path.join(out, `${name}-${width}x${height}.png`), png);
+        return { attempt };
+      } catch (error) {
+        lastError = error;
+        await wait(350);
+      }
+    }
+    throw new Error(`снимок ${name} ${width}x${height}: ${lastError && lastError.message ? lastError.message : lastError}`);
+  }
+  const screens = [];
+  const screensStartedAt = Date.now();
   for (const [width, height] of [[1200, 720], [864, 520]]) {
     win.setContentSize(width, height);
     for (const [section, name] of [['voice', 'voice-input'], ['speech', 'speech-output']]) {
       await js(`document.querySelector('[data-section="${section}"]').click()`);
       await wait(180);
-      const shot = await win.webContents.capturePage();
-      assert.deepEqual(shot.getSize(), { width, height });
-      fs.writeFileSync(path.join(out, `${name}-${width}x${height}.png`), shot.toPNG());
+      screens.push({ name: `${name}-${width}x${height}`, ...(await screenshot(name, width, height)) });
     }
   }
   result.screens = 4;
+  result.screensRetries = screens.filter((screen) => screen.attempt > 1);
+  result.screensMs = Date.now() - screensStartedAt;
+  // ── Живой голосовой прогон: готовность движка и повтор шага с диагностикой ──
+  // На первом прогоне локальная модель поднимается с холодного кеша (7+ с), а диктовку включают
+  // уже после снимков. Раньше готовность записи и строка журнала ждались фиксированные 16 с, поэтому
+  // первый прогон падал с «Не дождались: аудиопоток микрофона» или «HTTP-распознавание». Теперь
+  // ждём настоящую готовность движка (recording), затем строку журнала; при неудаче перезапускаем
+  // слушание и сохраняем диагностику рядом с отчётом.
+  const dictationState = () => js('window.jarvis.dictationState()').catch((error) => ({ ok: false, error: error.message }));
+  const voiceEvents = () => js('(window.__voiceQaEvents || []).length').catch(() => 0);
+  async function installVoiceDiagnostics() {
+    const snippet = [
+      '(() => {',
+      '  if (!window.__voiceQaEvents) window.__voiceQaEvents = [];',
+      '  if (window.__voiceQaOff) return true;',
+      '  window.__voiceQaOff = window.jarvis.onDictationEvent((event) => {',
+      '    window.__voiceQaEvents.push({ at: Date.now(), type: event && event.type, message: event && event.message, state: event && event.state, reply: event && event.reply });',
+      '    if (window.__voiceQaEvents.length > 80) window.__voiceQaEvents.shift();',
+      '  });',
+      '  return true;',
+      '})()',
+    ].join('\n');
+    await js(snippet);
+  }
+  async function voiceDiagnostics({ label, journalMark = 0, eventsMark = 0 }) {
+    const diagnostics = { label, at: new Date().toISOString() };
+    diagnostics.state = await dictationState();
+    try { diagnostics.window = { visible: win.isVisible(), minimized: win.isMinimized(), focused: win.isFocused() }; } catch { diagnostics.window = null; }
+    try { diagnostics.events = await js('(window.__voiceQaEvents || []).slice(' + eventsMark + ')'); } catch { diagnostics.events = null; }
+    try {
+      diagnostics.journal = journal().slice(journalMark)
+        .map((row) => ({ tool: row.tool, decision: row.decision, ok: row.ok, summary: row.summary }));
+    } catch { diagnostics.journal = null; }
+    try {
+      const current = await settings();
+      diagnostics.settings = {
+        dictation: current.dictation, voice: current.voice, sttEngine: current.sttEngine,
+        sttCloudAllowed: current.sttCloudAllowed, sttModelFolder: current.sttModelFolder,
+        wakeWords: current.wakeWords, prefixMode: current.prefixMode, microphone: current.microphone,
+      };
+    } catch { diagnostics.settings = null; }
+    return diagnostics;
+  }
+  async function startVoiceStep() {
+    await js("window.jarvis.dictationMode('off')");
+    await wait(250);
+    const reply = await js("window.jarvis.dictationMode('listening')");
+    if (reply && reply.ok === false) throw new Error('режим «Слушаю» не включился: ' + (reply.error || reply.reason || 'без причины'));
+    const started = Date.now();
+    await until(() => dictationState().then((state) => state && state.recording), 'движок распознавания готов (микрофон пишет)', 90000);
+    return Date.now() - started;
+  }
+  let voiceRetries = 0;
+  let voiceAttempts = [];
+  function writeVoiceDiagnostics(label, attemptLog) {
+    const diagnosticsPath = path.join(out, 'voice-live-diagnostics.json');
+    fs.writeFileSync(diagnosticsPath, JSON.stringify({ label, attempts: attemptLog }, null, 2));
+    return diagnosticsPath;
+  }
+  // Ожидание готовности движка и строки журнала; при неудаче — перезапуск слушания и диагностика.
+  async function listenAndWait(label, check, { journalMark, timeout = 45000, attempts = 3 } = {}) {
+    const attemptLog = [];
+    const mark = Number.isInteger(journalMark) ? journalMark : journal().length;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const eventsMark = await voiceEvents();
+      const started = Date.now();
+      try {
+        const readyMs = await startVoiceStep();
+        const value = await until(() => check(journal().slice(mark), mark), label, timeout);
+        const elapsedMs = Date.now() - started;
+        attemptLog.push({ attempt, ok: true, readyMs, elapsedMs });
+        voiceAttempts = voiceAttempts.concat(attemptLog.slice(-1));
+        return { value, readyMs, elapsedMs, attempts: attemptLog };
+      } catch (error) {
+        attemptLog.push({
+          attempt, ok: false, elapsedMs: Date.now() - started, error: error.message,
+          diagnostics: await voiceDiagnostics({ label: label + ' · попытка ' + attempt, journalMark: mark, eventsMark }),
+        });
+        voiceAttempts = voiceAttempts.concat(attemptLog.slice(-1));
+        if (attempt === attempts) {
+          voiceRetries += attempt - 1;
+          const diagnosticsPath = writeVoiceDiagnostics(label, attemptLog);
+          throw new Error(label + ': не дождались за ' + attempts + ' попыток (последняя: ' + error.message + '); диагностика: ' + diagnosticsPath);
+        }
+        voiceRetries += 1;
+      }
+    }
+    throw new Error(label + ': не дождались');
+  }
+  // Повтор шага, который не ждёт строку журнала (например, фраза в истории чата):
+  // между попытками слушание перезапускается, чтобы прозвучала следующая фраза.
+  async function withVoiceRetry(label, run, { attempts = 3 } = {}) {
+    const attemptLog = [];
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const eventsMark = await voiceEvents();
+      const started = Date.now();
+      try {
+        const value = await run(attempt);
+        attemptLog.push({ attempt, ok: true, elapsedMs: Date.now() - started });
+        voiceAttempts = voiceAttempts.concat(attemptLog.slice(-1));
+        return { value, attempts: attemptLog };
+      } catch (error) {
+        attemptLog.push({
+          attempt, ok: false, elapsedMs: Date.now() - started, error: error.message,
+          diagnostics: await voiceDiagnostics({ label: label + ' · попытка ' + attempt, eventsMark }),
+        });
+        voiceAttempts = voiceAttempts.concat(attemptLog.slice(-1));
+        if (attempt === attempts) {
+          voiceRetries += attempt - 1;
+          const diagnosticsPath = writeVoiceDiagnostics(label, attemptLog);
+          throw new Error(label + ': не дождались за ' + attempts + ' попыток (последняя: ' + error.message + '); диагностика: ' + diagnosticsPath);
+        }
+        voiceRetries += 1;
+        await startVoiceStep().catch(() => null);
+      }
+    }
+    throw new Error(label + ': не дождались');
+  }
+
   if (live) {
+    const liveStarted = Date.now();
     await js("document.querySelector('[data-section=workshop]').click()");
+    await installVoiceDiagnostics();
+    const timings = { screensMs: result.screensMs, liveStartedAt: new Date().toISOString() };
+    result.timings = timings;
     const before = journal().length;
     await set('prefixMode', true);
     await set('wakeWords', 'эй нокс');
-    await js("window.jarvis.dictationMode('listening')");
-    await until(() => js('window.jarvis.dictationState().then(s => s.recording)'), 'аудиопоток микрофона');
-    const local = await until(() => journal().slice(before).find((row) => row.tool === 'распознавание речи' && row.ok), 'локальное распознавание', 32000);
-    assert.match(local.summary, /локальный.*сверни все окна/u);
-    result.local = local.summary;
+
+    // 1. Локальный движок: сначала готовность записи (подъём модели), потом строка журнала.
+    const localStarted = Date.now();
+    const local = await listenAndWait(
+      'локальное распознавание',
+      (rows) => rows.find((row) => row.tool === 'распознавание речи' && row.ok && String(row.summary || '').startsWith('локальный')),
+      { journalMark: before, timeout: 45000 },
+    );
+    assert.match(local.value.summary, /локальный.*сверни все окна/u);
+    result.local = local.value.summary;
+    timings.localReadyMs = local.readyMs;
+    timings.localMs = Date.now() - localStarted;
+    timings.localAttempts = local.attempts.length;
     await js("window.jarvis.dictationMode('off')");
 
+    // 2. Облачное HTTP-распознавание через локальный тестовый сервер (как в живом продукте).
     online = true;
     assert.equal(requests, 0);
     await js("Promise.all([window.jarvis.setSetting('wakeWords', 'эй нокс'), window.jarvis.setSetting('sttCloudAllowed', true)])");
-    await js("window.jarvis.dictationMode('listening')");
-    const cloud = await until(() => journal().find((row) => row.ok && row.tool === 'распознавание речи' && row.summary.startsWith('облачный')), 'HTTP-распознавание');
-    result.cloud = cloud.summary;
+    const cloudStarted = Date.now();
+    const cloud = await listenAndWait(
+      'HTTP-распознавание',
+      (rows) => rows.find((row) => row.tool === 'распознавание речи' && row.ok && String(row.summary || '').startsWith('облачный')),
+      { journalMark: journal().length, timeout: 45000 },
+    );
+    result.cloud = cloud.value.summary;
+    timings.cloudReadyMs = cloud.readyMs;
+    timings.cloudMs = Date.now() - cloudStarted;
+    timings.cloudAttempts = cloud.attempts.length;
+
     const historyHasTime = () => js("window.jarvis.chatHistory().then(x => JSON.stringify(x).includes('который час'))");
     assert.equal(await historyHasTime(), false);
     result.prefixRequired = true;
     await js("window.jarvis.setSetting('prefixMode', false)");
-    await until(historyHasTime, 'команда без префикса');
-    result.noPrefix = true;
+    const noPrefix = await withVoiceRetry('команда без префикса доходит до чата', async () => {
+      await startVoiceStep();
+      return until(historyHasTime, 'команда без префикса доходит до чата', 45000);
+    });
+    result.noPrefix = Boolean(noPrefix.value);
     result.silentReply = speechEvents.length === 0;
     assert.equal(result.silentReply, true);
     await js("window.jarvis.setSetting('prefixMode', true)");
+
+    // 3. Отказ облака: сервер отвечает 503, диктовка переходит на локальный движок.
     fail = true;
-    const fallback = await until(() => journal().find((row) => row.decision === 'fallback'), 'отказ облачного HTTP');
-    result.cloudFailure = fallback.summary;
-    const after = journal().length;
+    const fallback = await listenAndWait(
+      'отказ облачного HTTP',
+      (rows) => rows.find((row) => row.decision === 'fallback'),
+      { journalMark: journal().length, timeout: 45000 },
+    );
+    result.cloudFailure = fallback.value.summary;
+
+    // 4. Сеть выключена: строка «облачный недоступен» без времени и локальный результат после неё.
     online = false;
-    const offlineIndex = await until(() => {
-      const index = journal().findIndex((row, index) => index >= after && row.decision === 'fallback' && !row.summary.includes('мс'));
-      return index < 0 ? null : index;
-    }, 'обнаружение отключённой сети');
-    await until(() => journal().slice(offlineIndex + 1).find((row) => row.ok && row.tool === 'распознавание речи' && row.summary.startsWith('локальный')), 'локальный результат после потери сети');
+    const offline = await listenAndWait(
+      'обнаружение отключённой сети и локальный результат',
+      (rows) => {
+        const index = rows.findIndex((row) => row.decision === 'fallback' && !String(row.summary || '').includes('мс'));
+        if (index < 0) return null;
+        const localAfter = rows.slice(index + 1).find((row) => row.ok && row.tool === 'распознавание речи' && String(row.summary || '').startsWith('локальный'));
+        return localAfter ? { fallback: rows[index], local: localAfter } : null;
+      },
+      { journalMark: journal().length, timeout: 60000 },
+    );
+    assert.ok(offline.value && offline.value.local, 'локальный результат после потери сети');
     await js("window.jarvis.dictationMode('off')");
     result.offlineFallback = true;
     result.requests = requests;
-    const failure = js(`(async () => {
-      const message = new Promise((resolve) => {
-        const unsubscribe = window.jarvis.onDictationEvent((event) => {
-          if (event.type === 'error') { unsubscribe(); resolve(event.message); }
-        });
-      });
-      await window.jarvis.setSetting('microphone', 'missing-voice-qa-device');
-      await window.jarvis.dictationMode('listening');
-      return message;
-    })()`);
-    result.micError = await until(() => Promise.race([failure, wait(90)]), 'сообщение о недоступном микрофоне');
+
+    // 5. Недоступный микрофон: честное сообщение об ошибке, а не молчание.
+    const failure = js([
+      '(async () => {',
+      '  const message = new Promise((resolve) => {',
+      '    const unsubscribe = window.jarvis.onDictationEvent((event) => {',
+      "      if (event.type === 'error') { unsubscribe(); resolve(event.message); }",
+      '    });',
+      '  });',
+      "  await window.jarvis.setSetting('microphone', 'missing-voice-qa-device');",
+      '  await window.jarvis.dictationMode("listening");',
+      '  return message;',
+      '})()',
+    ].join('\n'));
+    result.micError = await until(() => Promise.race([failure, wait(90)]), 'сообщение о недоступном микрофоне', 45000);
     await js("window.jarvis.dictationMode('off')");
     result.journal = journal().filter((row) => row.tool === 'распознавание речи');
+    timings.liveMs = Date.now() - liveStarted;
+    timings.retries = voiceRetries;
+    timings.attempts = voiceAttempts;
   }
 
   // Проверяем выбор в интерфейсе и все три выхода через ядро: образец, ответ и чтение.
@@ -253,6 +437,7 @@ async function main() {
 main().then(() => done(0)).catch((error) => { result.error = error.stack; done(1); });
 async function done(code) {
   server?.close();
+  result.elapsedMs = Date.now() - processStartedAt;
   const report = live ? 'voice-live.json' : reminderCheck ? 'reminder.json' : 'voice-screens.json';
   fs.writeFileSync(path.join(out, report), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
