@@ -80,12 +80,21 @@ function windowsCloseTools({ runner = runPowerShell, keepPids = () => [process.p
   });
   async function list(close, signal) {
     const res = await runner(SCRIPT, env(close), { timeoutMs: TIMEOUT_MS, signal });
-    if (!res.ok) return { ok: false, summary: res.summary };
+    if (!res || !res.ok) return { ok: false, summary: (res && res.summary) || 'не удалось получить список окон' };
     try {
       return { ok: true, windows: parseList(res.data && res.data.stdout) };
     } catch {
       return { ok: false, summary: 'не удалось разобрать список окон' };
     }
+  }
+  // Кандидаты для уточнения, когда сверху нельзя закрывать: короткий список заголовков.
+  function windowTitles(windows, limit = 3) {
+    return (Array.isArray(windows) ? windows : [])
+      .map((win) => String((win && win.title) || '').trim())
+      .filter(Boolean)
+      .slice(0, limit)
+      .map((title) => '«' + title + '»')
+      .join(', ');
   }
 
   const closeAll = {
@@ -138,7 +147,19 @@ function windowsCloseTools({ runner = runPowerShell, keepPids = () => [process.p
       const label = win.title ? `«${win.title}»` : 'окно';
       if (win.status === 'closed') return { ok: true, summary: `закрыто ${label}`, data: { status: win.status, title: win.title } };
       if (win.status === 'still_open') return { ok: false, summary: `${label} не закрылось: программа, возможно, ждёт ответа о сохранении`, data: { status: win.status, title: win.title } };
-      if (win.status === 'protected') return { ok: false, summary: 'это окно Джарвиса или Windows, его не закрываю', data: { status: win.status } };
+      if (win.status === 'protected') {
+        // Сверху окно самого Nox или оболочки Windows — закрывать его нельзя. Называем другие окна
+        // и просим выбрать: иначе повтор «закрой окно» вслепую ничего не даёт владельцу.
+        const others = await list(false, ctx.signal);
+        const names = others.ok ? windowTitles(others.windows) : '';
+        return {
+          ok: false,
+          summary: names
+            ? `это окно Джарвиса или Windows, его не закрываю. Какое окно закрыть: ${names}?`
+            : 'это окно Джарвиса или Windows, его не закрываю. Скажите, какое окно закрыть',
+          data: { status: win.status, candidates: others.ok ? others.windows.slice(0, 3).map((w) => w.title) : [] },
+        };
+      }
       if (win.status === 'not_main') return { ok: false, summary: 'сверху диалог, а не окно программы: закройте его сами', data: { status: win.status } };
       return { ok: false, summary: 'активного окна нет', data: { status: win.status } };
     },

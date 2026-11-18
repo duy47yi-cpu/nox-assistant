@@ -260,6 +260,43 @@ function stampMessage(m, stamp) {
   return { ...m, content: `${stamp}\n${m.content}` };
 }
 
+// Прошлый ход кончился неудачным действием, а владелец повторил ту же фразу: модель должна
+// сменить объект или спросить, а не повторять вызов вслепую (ловушка «закрой окно» дважды).
+// Чтения и наблюдения не считаем: их повтор — это сверка состояния, а не слепое действие.
+function repeatFailureHint(history) {
+  if (!Array.isArray(history) || history.length < 3) return '';
+  const phraseOf = (m) => String(m == null || m.content == null ? '' : m.content).trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.!?…]+$/u, '');
+  let current = history.length - 1;
+  while (current >= 0 && (history[current].role !== 'user' || history[current].fromTool)) current -= 1;
+  if (current < 0) return '';
+  let previous = current - 1;
+  while (previous >= 0 && (history[previous].role !== 'user' || history[previous].fromTool)) previous -= 1;
+  if (previous < 0) return '';
+  const phrase = phraseOf(history[current]);
+  if (!phrase || phrase !== phraseOf(history[previous])) return '';
+  const names = new Map();
+  for (let i = previous; i < current; i += 1) {
+    const message = history[i];
+    if (!message || message.role !== 'assistant' || !Array.isArray(message.tool_calls)) continue;
+    for (const call of message.tool_calls) {
+      if (call && call.id && call.function && call.function.name) names.set(call.id, call.function.name);
+    }
+  }
+  let failed = null;
+  for (let i = previous + 1; i < current; i += 1) {
+    const message = history[i];
+    if (!message || message.role !== 'tool' || typeof message.content !== 'string') continue;
+    let parsed = null;
+    try { parsed = JSON.parse(message.content); } catch { parsed = null; }
+    if (!parsed || parsed.ok !== false) continue;
+    if (isReadOnlyStatusTool(names.get(message.tool_call_id) || '')) continue;
+    failed = String(parsed.summary || '').trim().slice(0, 220);
+  }
+  if (failed === null) return '';
+  const what = failed ? `: ${failed}` : '';
+  return `Прошлая попытка того же действия не удалась${what}. Не повторяй тот же вызов вслепую: назови объект по имени (для окон — верхнее окно из списка) или уточни одним вопросом, что именно сделать.`;
+}
+
 // Сообщение для запроса. Картинка от инструмента (поле image) уходит модели только в текущем ходу,
 // в прошлых ходах остаётся текстом. Поле image в запрос не попадает.
 function wireMessage(m, current) {
@@ -1411,6 +1448,11 @@ class Agent {
     this._pendingImages = [];
   }
 
+  // Повтор той же просьбы после неудачи: подсказка не жать ту же кнопку вслепую.
+  _repeatFailureHint() {
+    return repeatFailureHint(this.history);
+  }
+
   // Подсказка после серии неподтверждённых действий: не считать сделанным и не повторять то же.
   _steerHint() {
     const n = this._unverifiedStreak || 0;
@@ -1477,7 +1519,7 @@ class Agent {
     // Всё, что до последнего сообщения пользователя, — прошлые ходы: их отправляем сжатыми.
     let lastUser = recent.length - 1;
     while (lastUser >= 0 && (recent[lastUser].role !== 'user' || recent[lastUser].fromTool)) lastUser -= 1;
-    const stamp = [this.clock ? this.clock() : '', this._turnContext, this._steerHint()].filter(Boolean).join('\n');
+    const stamp = [this.clock ? this.clock() : '', this._turnContext, this._steerHint(), this._repeatFailureHint()].filter(Boolean).join('\n');
     return head.concat(recent.map((m, i) => {
       const msg = stamp && i === lastUser ? stampMessage(m, stamp) : m;
       return wireMessage(msg, i >= lastUser);
@@ -1716,4 +1758,4 @@ function coerceToolArgs(tool, rawArgs) {
   return changed ? out : rawArgs;
 }
 
-module.exports = { Agent, MAX_TOOL_STEPS, MAX_REPEATS, repairToolHistory, PROGRESS_STATUSES, safeTarget, sourcesForWindow, coerceToolArgs };
+module.exports = { Agent, MAX_TOOL_STEPS, MAX_REPEATS, repairToolHistory, repeatFailureHint, PROGRESS_STATUSES, safeTarget, sourcesForWindow, coerceToolArgs };

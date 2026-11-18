@@ -183,3 +183,30 @@ test('чтение вслух: куски говорятся по очереди
   }, controller.signal);
   assert.deepEqual(stopped, ['а']);
 });
+
+// Ловушка Л7: сверху окно самого Nox или оболочки Windows. Молча повторять бесполезно —
+// инструмент называет другие окна и просит выбрать, какое закрыть.
+test('window_close_active: своё окно сверху — называет другие окна и спрашивает', async () => {
+  const runner = fakeRunner(
+    ok('{"status":"protected"}'),
+    ok('[{"pid":11,"name":"notepad","title":"Заметки — Блокнот"},{"pid":12,"name":"librewolf","title":"LibreWolf"}]'),
+  );
+  const tool = findTool(windowsCloseTools({ runner: runner.runner }), 'window_close_active');
+  const res = await tool.run({}, {});
+  assert.equal(res.ok, false);
+  assert.match(res.summary, /Джарвиса или Windows/);
+  assert.match(res.summary, /Какое окно закрыть: «Заметки — Блокнот», «LibreWolf»\?/);
+  assert.deepEqual(res.data.candidates, ['Заметки — Блокнот', 'LibreWolf']);
+  assert.equal(runner.calls[0].env.JARVIS_CLOSE, '1');
+  assert.equal(runner.calls[1].env.JARVIS_CLOSE, '0', 'список окон читается, а не закрывается');
+});
+
+test('window_close_active: список окон не получен — всё равно спрашивает, какое закрыть', async () => {
+  const runner = fakeRunner(ok('{"status":"protected"}'));
+  const tool = findTool(windowsCloseTools({ runner: runner.runner }), 'window_close_active');
+  const res = await tool.run({}, {});
+  assert.equal(res.ok, false);
+  assert.match(res.summary, /Джарвиса или Windows/);
+  assert.match(res.summary, /Скажите, какое окно закрыть/);
+  assert.deepEqual(res.data.candidates, []);
+});
