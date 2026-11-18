@@ -1,0 +1,180 @@
+/* Спокойный проход Aether (calm pass) — 19.11.2026.
+ * Ориентир — сдержанный премиальный вид по материалам конкурента (Luxify):
+ * почти чёрный фон, тонкие границы, много воздуха, крупный спокойный текст,
+ * тихие чипы и большая сцена с подписью под сферой.
+ * Только токены темы: --bg, --surface, --border, --text, --text-2/3, --accent.
+ * Подключается последним слоем и не меняет разметку и поведение. */
+
+/* ── Шапка: тише, активный раздел — подчёркивание, а не заливка ── */
+.ae-topbar {
+  height: 46px;
+  padding: 0 14px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--border) 38%, transparent);
+}
+.ae-topbar .ae-nav { gap: 2px; }
+.ae-topbar .ae-nav-btn {
+  height: 30px; padding: 0 10px;
+  border: 0; border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12.5px; font-weight: 500;
+  letter-spacing: .01em;
+  transition: background-color .16s ease, color .16s ease;
+}
+.ae-topbar .ae-nav-btn:hover {
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  color: var(--text);
+}
+.ae-topbar .ae-nav-btn.is-active,
+.ae-topbar .ae-nav-btn[aria-selected="true"] {
+  background: transparent;
+  border: 0; border-radius: 0;
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.ae-topbar .ae-nav-btn.is-active .ae-nav-ico,
+.ae-topbar .ae-nav-btn[aria-selected="true"] .ae-nav-ico { color: var(--accent); }
+
+/* ── Рейка: воздушнее, без плотной подложки ── */
+.ae-utility-rail {
+  background: color-mix(in srgb, var(--surface) 42%, transparent);
+  border-color: color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+/* ── История: крупнее строки, тише группы, мягкий активный пункт ── */
+.ae-sidebar-head { padding: 12px 14px 10px; }
+.ae-ws-block { padding: 6px 14px 12px; border-bottom: 0; }
+.ae-btn-new-chat {
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 500;
+  transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+}
+.ae-btn-new-chat:hover {
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+  color: var(--text);
+}
+.ae-chat-list { padding: 4px 8px 18px; gap: 2px; }
+.ae-chat-group-title {
+  padding: 16px 10px 6px;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: .14em;
+  color: var(--text-3);
+}
+.ae-chat-row { border-radius: 10px; }
+.ae-chat-open { padding: 9px 10px; font-size: 13.5px; }
+.ae-chat-row:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.ae-chat-row.is-active {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.ae-chat-row.is-active .ae-chat-open { color: var(--text); font-weight: 500; }
+
+/* ── Чат: воздух, спокойное чтение, меньше рамок ── */
+.ae-chat-view {
+  border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 30%, transparent);
+}
+.ae-feed { padding: 28px 6px 20px; gap: 22px; }
+.ae-msg.is-user { margin-top: 2px; }
+.ae-user-bubble {
+  max-width: min(78%, 560px);
+  padding: 11px 15px;
+  border-radius: 18px 18px 6px 18px;
+  background: color-mix(in srgb, var(--surface-2) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  font-size: var(--fs-read, 15px);
+  line-height: 1.55;
+}
+.ae-reply { gap: 7px; }
+.ae-reply-author {
+  font-size: 10.5px; font-weight: 650;
+  letter-spacing: .12em;
+  color: var(--text-3);
+}
+.ae-msg-time { font-size: 10.5px; letter-spacing: .02em; }
+.ae-reply-content { max-width: 68ch; }
+.ae-assistant-body { font-size: var(--fs-read, 15px); line-height: 1.62; }
+.ae-assistant-body p { margin-block: .5em; }
+
+/* ── Поле ввода: плавающая тихая пилюля ── */
+.ae-composer-dock { padding: 10px 0 20px; }
+.ae-composer {
+  border-radius: 24px;
+  padding: 12px 14px 10px;
+  background: color-mix(in srgb, var(--surface) 44%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+}
+.ae-composer:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+}
+.ae-textarea { font-size: var(--fs-read, 15px); }
+.ae-composer-footer { margin-top: 8px; }
+
+/* ── Сцена: подпись как у референса, тихие чипы и карточки ── */
+.ae-orb-stage {
+  border-color: color-mix(in srgb, var(--border) 30%, transparent);
+  background: transparent;
+}
+.ae-orb-caption { gap: 4px; }
+.ae-orb-signature { font-size: 17px; letter-spacing: .02em; color: var(--text-2); }
+.ae-orb-status {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--border) 45%, transparent);
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+.ae-orb-hint { letter-spacing: .02em; }
+.ae-day-widgets {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--border) 35%, transparent);
+  box-shadow: none;
+}
+
+/* ── Плавность ── */
+.ae-nav-btn, .ae-chat-row, .ae-btn-new-chat, .ae-composer, .ae-user-bubble {
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+
+/* ── Второй проход: тихие часы и музыка, чтобы сцена дышала ── */
+.ae-day-widgets {
+  /* Высота закреплена проверкой стенда: 164 обычная, 64 компакт; вид при этом тихий. */
+  min-height: 164px;
+  padding: 0 4px;
+  gap: 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  animation: none;
+}
+.ae-day-widgets:not(.is-compact):has(.ae-day-reminder:not([hidden])) { min-height: 164px; }
+.ae-day-time {
+  font-size: 24px;
+  line-height: 28px;
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: -.01em;
+}
+.ae-day-date, .ae-day-reminder { font-size: 11px; line-height: 15px; color: var(--text-3); }
+.ae-day-state { font-size: 10.5px; line-height: 13px; color: var(--text-3); margin-block-start: 3px; }
+.ae-day-state::before { width: 5px; height: 5px; }
+.ae-day-music {
+  padding-top: 7px;
+  margin-top: 2px;
+  border-top-color: color-mix(in srgb, var(--border) 40%, transparent);
+}
+.ae-day-cover { width: 34px; height: 34px; border-radius: 7px; opacity: .92; }
+.ae-day-title { font-size: 12px; font-weight: 500; color: var(--text-2); }
+.ae-day-detail { font-size: 10.5px; line-height: 14px; color: var(--text-3); }
+.ae-day-action::before {
+  border-color: color-mix(in srgb, var(--border) 45%, transparent);
+  background: transparent;
+}
+.ae-day-action:hover::before { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
