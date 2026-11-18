@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const { WorkspaceBook } = require('../src/workspaces/book');
 const { WorkspaceChat } = require('../src/workspaces/chat');
+const { studyTool } = require('../src/tools/study');
 
 function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nox-space-chat-'));
@@ -15,6 +16,48 @@ function setup(t) {
   fs.mkdirSync(opts.defaultRoot); fs.mkdirSync(opts.dataDir);
   return { opts, book: new WorkspaceBook(opts) };
 }
+
+test('учебный прогресс по темам различает помощь, закрывает ошибку независимой проверкой и предлагает усложнение', (t) => {
+  const { opts } = setup(t);
+  const file = path.join(opts.dataDir, 'study.json');
+  let run = 0;
+  const turn = (args, ownerText = 'Продолжим учёбу') => {
+    const out = studyTool(file).run(args, { runId: String(++run), ownerText });
+    assert.equal(out.ok, true, out.summary);
+    return out.data;
+  };
+  const start = (topic, exercise, reviewOf) => turn({ action: 'start', topic, exercise, reviewOf, newExercise: true });
+  const review = (item, outcome, attempt) => turn({
+    action: 'review', exerciseId: item.id, outcome, attempt, feedback: 'Перевод единиц',
+    hint: outcome === 'incorrect' ? 'В метре сто сантиметров.' : '',
+  }, attempt);
+  const original = start('Перевод единиц', 'Переведи 200 см в метры');
+  review(original, 'incorrect', '200 см = 20 м');
+  review(original, 'correct', '200 см = 2 м');
+  const initial = turn({ action: 'status' });
+  assert.equal(initial.progress.withHelp, 1);
+  assert.equal(initial.progress.next, 'review_error');
+  assert.equal(initial.progress.focus.id, original.id);
+  const check = start('Перевод единиц', 'Переведи 450 см в метры', original.id);
+  review(check, 'correct', '450 см = 4,5 м');
+  const after = turn({ action: 'status' });
+  assert.equal(after.progress.focus, null);
+  assert.equal(after.progress.firstTry, 1);
+  assert.equal(after.progress.next, 'practice');
+  const extra = start('перевод единиц', 'Переведи 670 см в метры');
+  review(extra, 'correct', '670 см = 6,7 м');
+  assert.equal(turn({ action: 'status' }).progress.next, 'next_level');
+
+  const different = start('Геометрия', 'Найди площадь квадрата со стороной 3 см');
+  turn({ action: 'hint_shown', exerciseId: different.id });
+  review(different, 'correct', '9 квадратных сантиметров');
+  const geometry = turn({ action: 'status' });
+  assert.equal(geometry.progress.firstTry, 0);
+  assert.equal(geometry.progress.withHelp, 1);
+  assert.equal(geometry.topics.length, 2);
+  turn({ action: 'select', topic: 'ПЕРЕВОД ЕДИНИЦ' });
+  assert.equal(turn({ action: 'status' }).current.id, extra.id);
+});
 
 test('учебный чат ждёт попытку, проверяет её запись и открывает её после перезапуска', async (t) => {
   const { book, opts } = setup(t);

@@ -6,6 +6,7 @@ const { maskSecretText } = require('../journal/journal');
 
 const ARTIFACT_WRITERS = new Set(['document_write', 'document_fill', 'workspace_write']);
 const ARTIFACT_EXTENSIONS = new Set(['.pptx', '.xlsx', '.csv', '.docx', '.pdf', '.md', '.txt']);
+const STUDY_PHOTO = /^Учебное фото [0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(?:jpg|png)$/u;
 const RESERVED_NAME = /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i;
 const ACTION_LABELS = {
   app_open: 'Открытие программы', app_close: 'Закрытие программы',
@@ -50,7 +51,8 @@ function clarificationFrom(args) {
 // Для карточек чата и действий по ним принимаем только обычные файлы в рабочей папке.
 function artifactFile(root, relativePath) {
   if (typeof relativePath !== 'string' || !relativePath || relativePath.length > 1024) return null;
-  if (/[\\<>:"|?*\x00-\x1f]/.test(relativePath) || !ARTIFACT_EXTENSIONS.has(path.extname(relativePath).toLowerCase())) return null;
+  if (/[\\<>:"|?*\x00-\x1f]/.test(relativePath) ||
+      (!ARTIFACT_EXTENSIONS.has(path.extname(relativePath).toLowerCase()) && !STUDY_PHOTO.test(relativePath))) return null;
   const parts = relativePath.split('/');
   if (parts.some((part) => !part || part.startsWith('.') || /[. ]$/.test(part) || RESERVED_NAME.test(part))) return null;
   try {
@@ -70,8 +72,9 @@ function artifactFile(root, relativePath) {
 }
 
 function artifactFrom(root, tool, result) {
-  if (!ARTIFACT_WRITERS.has(tool) || result?.ok !== true || result.verified !== 'confirmed') return null;
+  if (result?.ok !== true || result.verified !== 'confirmed') return null;
   const relativePath = result.data?.path;
+  if (!ARTIFACT_WRITERS.has(tool) && !(tool === 'study_session' && STUDY_PHOTO.test(relativePath))) return null;
   if (maskSecretText(relativePath) !== relativePath) return null;
   const info = artifactFile(root, relativePath);
   if (!info) return null;

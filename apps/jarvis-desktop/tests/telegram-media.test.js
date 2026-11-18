@@ -13,12 +13,16 @@ const path = require('path');
 const { TelegramBridge, MAX_REPLY, MEDIA_LIMIT, chunkText } = require('../src/telegram/bridge');
 const { createTelegramStudy } = require('../src/telegram/study');
 const { studyTool } = require('../src/tools/study');
+const { WorkspaceIndex } = require('../src/rag/index');
+const { artifactFrom } = require('../src/agent/chat-reply');
+const { ReminderStore } = require('../src/schedule/store');
+const { remindersTools } = require('../src/tools/reminders');
 
 function jsonResponse(value) {
   return { ok: true, status: 200, json: async () => value, arrayBuffer: async () => Buffer.from('') };
 }
 
-function fakeTelegram({ updates = [], files = {}, fileSize = 2048 } = {}) {
+function fakeTelegram({ updates = [], files = {}, fileSize = 2048, fileBytes = Buffer.from('голосовые-байты') } = {}) {
   const sent = [];
   const calls = [];
   const urls = [];
@@ -35,7 +39,7 @@ function fakeTelegram({ updates = [], files = {}, fileSize = 2048 } = {}) {
     if (String(url).includes('/file/bot')) {
       return {
         ok: true, status: 200, headers: { get: () => 'audio/ogg' },
-        arrayBuffer: async () => Buffer.from('голосовые-байты'),
+        arrayBuffer: async () => fileBytes,
       };
     }
     if (init.body instanceof FormData) {
@@ -132,6 +136,55 @@ test('Telegram продолжает последнее занятие с ПК, �
   assert.equal(current.attempts.at(-1).outcome, 'correct');
   assert.equal(pc.run({ ...create, exercise: 'Переведи 120 см в метры' }, context).ok, true);
   assert.match(await restarted('Мой ответ: 450 см / 100 = 4,5 м'), /открылась другая задача/);
+});
+
+test('фото на учёбу доходит до чата ПК, а напоминание сохраняет выбранную тему и ошибку', async (t) => {
+  const dir = tempMedia(t);
+  const root = path.join(dir, 'workspace');
+  fs.mkdirSync(root);
+  const index = new WorkspaceIndex(root);
+  const file = path.join(dir, 'study.json');
+  const store = new ReminderStore(path.join(dir, 'reminders.json'));
+  const now = () => new Date('2026-11-19T12:00:00Z');
+  const topic = 'Алгебра';
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1xkAAAAASUVORK5CYII=', 'base64');
+  const fake = fakeTelegram({ fileBytes: png, fileSize: png.length, updates: [[
+    { update_id: 51, message: { chat: { id: 555 }, photo: [{ file_id: 'p1' }], caption: `На учёбу: ${topic}` } },
+  ]] });
+  const turn = createTelegramStudy({
+    locations: () => [{ id: 'default', file, index, selected: true, name: 'Общее' }],
+    pinFile: path.join(dir, 'pin.json'), now,
+    readPhoto: async () => ({ ok: false }),
+    remind: async (workspaceId, args) => {
+      const tool = remindersTools(store, { now, workspaceId }).find((item) => item.name === 'remind_in');
+      const result = await tool.run(args);
+      assert.equal(result.ok, true);
+      assert.equal((await tool.verify(args, result)).status, 'confirmed');
+      return result.summary;
+    },
+  });
+  await bridgeWith(fake, { mediaDir: dir, handle: turn }).pollOnce();
+  assert.match(fake.sent.at(-1).body.text, /Фото сохранено в занятии по теме «Алгебра»/);
+  const pc = studyTool(file);
+  const ctx = (runId, ownerText) => ({ runId, ownerText });
+  const activity = pc.run({ action: 'status' }, ctx('pc-status', 'Продолжим тему'));
+  assert.equal(activity.data.current.needsTranscription, true);
+  const artifact = artifactFrom(root, 'study_session', { ...activity, verified: 'confirmed' });
+  assert.deepEqual(fs.readFileSync(path.join(root, artifact.path)), png);
+  assert.match(await turn('Мой ответ: x = 2'), /уточните условие/);
+  const { id } = activity.data.current;
+  assert.equal(pc.run({ action: 'set_condition', exerciseId: id, exercise: 'Реши 3x = 12' }, ctx('pc-set', 'Прочитай фото')).ok, true);
+  const attempt = 'x = 2';
+  assert.equal(pc.run({ action: 'review', exerciseId: id, attempt, outcome: 'incorrect',
+    feedback: 'Нужно разделить обе части на три', hint: 'Подставь ответ в уравнение.',
+  }, ctx('pc-review', attempt)).ok, true);
+  const shown = await turn('Продолжим тему: алгебра');
+  assert.match(shown.text, /Реши 3x = 12/);
+  assert.match(await turn('Мой прогресс'), /Стоит повторить: Нужно разделить обе части на три/);
+  assert.match(await turn('Напомни через 10 минут повторить тему'), /напомню через 10 мин/);
+  const [reminder] = store.list({ workspaceId: 'default' });
+  assert.equal(reminder.dueAt, '2026-11-19T12:10:00.000Z');
+  assert.match(reminder.text, /Алгебра.+Нужно разделить обе части на три/);
 });
 
 test('голосовое: скачивается, передаётся расшифровка, файл лежит во временной папке', async (t) => {

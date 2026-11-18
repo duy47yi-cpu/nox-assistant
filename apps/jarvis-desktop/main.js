@@ -3241,16 +3241,28 @@ let telegramBridge = null;
 const telegramStudy = createTelegramStudy({
   locations: () => {
     const book = workspaceHub?.book;
-    if (!book) return [{ id: 'default', file: path.join(DATA_DIR, 'study.json') }];
-    return book.list().spaces.map(({ id }) => ({
-      id, file: path.join(path.dirname(book.open(id).memory.filePath), 'study.json'),
-    }));
+    if (!book) return [{ id: 'default', name: 'Общее', selected: true, index: ownWorkspaceIndex, file: path.join(DATA_DIR, 'study.json') }];
+    const { selected, spaces } = book.list();
+    return spaces.map(({ id, name }) => {
+      const space = book.open(id);
+      return { id, name, selected: id === selected, index: space.index,
+        file: path.join(path.dirname(space.memory.filePath), 'study.json') };
+    });
   },
   pinFile: path.join(DATA_DIR, 'telegram-study.json'),
   brain: runtime.guardedBrain,
   policy: modes,
   journal: { append: (entry) => journal.append({ ...entry, source: 'telegram' }) },
   stop: stopSwitch,
+  remind: async (workspaceId, args) => {
+    const name = args.at ? 'remind_at' : 'remind_in';
+    const tool = remindersTools(reminders, { workspaceId }).find((item) => item.name === name);
+    const result = await tool.run(args);
+    if (!result.ok) return `Не удалось поставить напоминание. ${result.summary}.`;
+    const checked = await tool.verify(args, result);
+    return checked.status === 'confirmed' ? `${result.data.text}\n${result.summary}.`
+      : 'Не удалось подтвердить запись учебного напоминания.';
+  },
 });
 
 // Файл для отправки: только внутри рабочей папки. Абсолютные пути и «..» наружу отклоняются.
