@@ -311,7 +311,6 @@
         memoryAuto: true,
         terseReplies: true,
         keepAwake: 'while-working',
-        uiShell: 'aether',
         workspace: '',
         connectedFolders: [],
       },

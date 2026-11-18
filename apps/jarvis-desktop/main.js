@@ -126,6 +126,7 @@ const { missionTitle, DealStore, openTurn, closeTurn, closeOrphanTurns, syncDeal
 const { MissionScheduler, runMission } = require('./src/missions/scheduler');
 const { trayIcon, windowIcon } = require('./icon');
 const { makeConfig } = require('./src/config/env');
+const { chooseShell } = require('./src/config/shell');
 const { cloudSpeech, VOICE_OUTPUTS, voiceOutputMode, voiceOutputError } = require('./src/voice/output');
 const { sandboxRoot } = require('./src/config/sandbox');
 const { projectRoot, unpacked } = require('./src/config/paths');
@@ -3735,15 +3736,6 @@ ipcMain.handle('settings:set', (event, key, value) => {
       return { ok: false, error: err && err.message ? err.message : 'Неверная настройка календаря' };
     }
   }
-  if (key === 'uiShell') {
-    const nextShell = value === 'legacy' ? 'legacy' : value === 'aether' ? 'aether' : null;
-    if (!nextShell) return { ok: false };
-    saveSettings({ uiShell: nextShell });
-    if (win && !win.isDestroyed()) {
-      win.loadFile(path.join(__dirname, 'renderer', nextShell === 'legacy' ? 'index.html' : 'aether/index.html'));
-    }
-    return { ok: true, value: nextShell };
-  }
   if (!SETTING_KEYS.has(key) || typeof value !== 'boolean') return { ok: false };
   if (key === 'autoStart') {
     app.setLoginItemSettings({ openAtLogin: value });
@@ -4999,11 +4991,8 @@ function createWindow() {
   // Учёт расходов заблокирован — одна заметка после загрузки окна (раньше её некому показать).
   if (meterNotice) win.webContents.once('did-finish-load', () => sendToWindow({ type: 'task', status: null, message: meterNotice }));
   applyMotion(win.webContents);
-  const shellMode = process.env.NOX_UI === 'legacy'
-    ? 'legacy'
-    : process.env.NOX_UI === 'aether'
-      ? 'aether'
-      : (readSettings().uiShell === 'legacy' ? 'legacy' : 'aether');
+  // В выпуске окно всегда открывает Aether. Классический экран — только скрытая отладка: NOX_UI=legacy.
+  const shellMode = chooseShell(process.env);
   win.loadFile(path.join(__dirname, 'renderer', shellMode === 'legacy' ? 'index.html' : 'aether/index.html'));
   // Раньше приложение стартовало только в трее, и окно приходилось искать горячей клавишей.
   // Первый экран Nox показываем сразу; трей и Ctrl+Alt+J по-прежнему сворачивают и открывают окно.

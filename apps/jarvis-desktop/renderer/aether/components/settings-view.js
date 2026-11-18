@@ -5,7 +5,7 @@
  * - шрифт подписи «The Nox» (IBM Plex Serif, Times New Roman, Georgia, Sitka), сетка превью всех тем,
  *   восемь новых палитр Nox, вложенные гарнитуры (Manrope, Unbounded, Source Serif 4, JetBrains Mono),
  *   акцент, свой фон, 9 эффектов и «Сбросить оформление»;
- * - временная кнопка безопасного отката на прошлый интерфейс (uiShell: 'legacy'). */
+ * - оболочка одна (Aether): переключателя на прошлый вид в интерфейсе нет. */
 (() => {
   'use strict';
 
@@ -808,9 +808,9 @@
         wrap.append(panel);
       }
 
-      // ── 4. Анимации и временный откат оболочки ──────────────────
-      if ((group === 'window' || searchQuery) && matchesSearch('Анимации движение прошлый интерфейс откат legacy')) {
-        const panel = makePanel('Движение и оболочка окна');
+      // ── 4. Анимации ─────────────────────────────────────────────────
+      if ((group === 'window' || searchQuery) && matchesSearch('Анимации движение плавность')) {
+        const panel = makePanel('Движение');
         panel.append(makeToggleRow(
           'Плавные анимации интерфейса и сфер',
           'Выключите для экономии заряда или строгого уменьшения движения.',
@@ -818,31 +818,6 @@
           (v) => store.setSetting('motion', v)
         ));
 
-        const rbRow = document.createElement('div');
-        rbRow.className = 'ae-set-row';
-        const rbTxt = document.createElement('div');
-        rbTxt.className = 'ae-set-text';
-        const rbh = document.createElement('strong');
-        rbh.textContent = 'Прошлый интерфейс (временный откат)';
-        const rbs = document.createElement('span');
-        rbs.className = 'ae-item-meta';
-        rbs.textContent = 'Переключиться на прежнее окно для сравнения или проверки.';
-        rbTxt.append(rbh, rbs);
-        const rbBtn = document.createElement('button');
-        rbBtn.type = 'button';
-        rbBtn.className = 'ae-btn ae-btn-ghost ae-btn-sm';
-        rbBtn.textContent = 'Открыть прошлый вид';
-        rbBtn.addEventListener('click', async () => {
-          if (rbBtn.dataset.armed !== '1') {
-            rbBtn.dataset.armed = '1';
-            rbBtn.textContent = 'Точно переключить?';
-            setTimeout(() => { rbBtn.dataset.armed = ''; rbBtn.textContent = 'Открыть прошлый вид'; }, 3500);
-            return;
-          }
-          await store.setSetting('uiShell', 'legacy');
-        });
-        rbRow.append(rbTxt, rbBtn);
-        panel.append(rbRow);
         wrap.append(panel);
       }
 
