@@ -8,7 +8,7 @@ const os = require('os');
 const path = require('path');
 const { checkEffect } = require('../src/agent/effects');
 const { desktopTools } = require('../src/tools/desktop');
-const { systemTools } = require('../src/tools/system');
+const { systemTools, systemToolsFactory } = require('../src/tools/system');
 const { windowsTools } = require('../src/tools/windows');
 const { clipboardTools } = require('../src/tools/clipboard');
 const { commandModelTools } = require('../src/tools/commands');
@@ -117,10 +117,56 @@ test('command_set_hotkey: занятая клавиша — не успех и �
 
 test('то, что проверить нельзя, честно даёт «не проверено»', async () => {
   const all = [...desktopTools, ...systemTools];
-  for (const name of ['speak', 'monitor_off', 'pc_shutdown', 'volume_set', 'shell_run', 'windows_minimize_all']) {
+  for (const name of ['speak', 'monitor_off', 'pc_shutdown', 'shell_run', 'windows_minimize_all']) {
     const out = await checkEffect(find(all, name), {}, { ok: true, summary: 'готово', data: {} }, {});
     assert.equal(out.verified, 'unknown', name);
     assert.equal(out.ok, true, name);
     assert.match(out.summary, /не проверено/, name);
   }
+});
+
+test('volume_set: сверяется чтением громкости обратно — confirmed при допуске ±2%, failed с числами, unknown в фолбэке', async () => {
+  const okJson = (obj) => ({ ok: true, summary: 'готово', data: { stdout: JSON.stringify(obj) + '\n' } });
+  const setOut = (out) => okJson(Object.assign({ ok: true, mode: 'coreaudio', percent: 20, before: 40, after: 20, mute: false }, out));
+  const readOut = (percent) => okJson({ ok: true, mode: 'coreaudio', percent, mute: false });
+  const make = (setResult, readResult) => {
+    const calls = [];
+    const runner = async (script) => {
+      calls.push(script);
+      return script.includes('[NoxVolume.Core]::SetPercent(') ? setResult : readResult;
+    };
+    return { tool: find(systemToolsFactory({ runner }), 'volume_set'), calls };
+  };
+
+  const near = make(setOut({}), readOut(21));
+  const nearResult = await near.tool.run({ percent: 20 });
+  assert.equal((await checkEffect(near.tool, { percent: 20 }, nearResult, {})).verified, 'confirmed');
+  assert.equal(near.calls.length, 2, 'установка и отдельное чтение обратно');
+
+  const far = make(setOut({}), readOut(25));
+  const farChecked = await checkEffect(far.tool, { percent: 20 }, await far.tool.run({ percent: 20 }), {});
+  assert.equal(farChecked.verified, 'failed');
+  assert.equal(farChecked.ok, false);
+  assert.match(farChecked.evidence, /25%/);
+
+  // Core Audio недоступен: нажатия клавиш точный уровень не проверяют, честно «не проверено».
+  const fallback = make(okJson({ ok: true, mode: 'sendkeys', percent: 20 }), readOut(20));
+  const fallbackChecked = await checkEffect(fallback.tool, { percent: 20 }, await fallback.tool.run({ percent: 20 }), {});
+  assert.equal(fallbackChecked.verified, 'unknown');
+  assert.equal(fallbackChecked.ok, true);
+  assert.match(fallbackChecked.summary, /не проверено/);
+});
+
+test('volume_get: точный процент и mute через Core Audio, без API — честный отказ', async () => {
+  const okJson = (obj) => ({ ok: true, summary: 'готово', data: { stdout: JSON.stringify(obj) + '\n' } });
+  const tool = (out) => find(systemToolsFactory({ runner: async () => out }), 'volume_get');
+  const getTool = tool(okJson({ ok: true, mode: 'coreaudio', percent: 37, mute: true }));
+  assert.equal(getTool.name, 'volume_get');
+  const read = await getTool.run({});
+  assert.equal(read.ok, true);
+  assert.deepEqual(read.data, { mode: 'coreaudio', percent: 37, mute: true });
+  assert.match(read.summary, /37%/);
+  const refused = await tool(okJson({ ok: false, mode: 'unavailable', error: 'нет устройства' })).run({});
+  assert.equal(refused.ok, false);
+  assert.match(refused.summary, /не удалось узнать громкость/);
 });

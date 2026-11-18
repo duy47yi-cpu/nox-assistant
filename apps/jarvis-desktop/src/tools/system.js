@@ -234,6 +234,185 @@ function parseOpenOutput(stdout) {
   }
 }
 
+
+// Точная громкость через Windows Core Audio: интерфейс IAudioEndpointVolume читает и ставит уровень
+// напрямую, без эмуляции клавиш. C# COM-interop компилируется внутри PowerShell (Add-Type).
+// В C# нет одинарных кавычек — исходник вставляется в here-string PowerShell без экранирования.
+const CORE_AUDIO_TYPE = String.raw`
+using System;
+using System.Runtime.InteropServices;
+
+namespace NoxVolume
+{
+    [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
+    internal class MMDeviceEnumeratorComObject { }
+
+    // Порядок методов в интерфейсах — это порядок слотов vtable: менять нельзя, лишние слоты обязательны.
+    [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IMMDeviceEnumerator
+    {
+        int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
+        int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice device);
+        int GetDevice(string id, out IMMDevice device);
+        int RegisterEndpointNotificationCallback(IntPtr client);
+        int UnregisterEndpointNotificationCallback(IntPtr client);
+    }
+
+    [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IMMDevice
+    {
+        [PreserveSig] int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
+        int OpenPropertyStore(int access, out IntPtr store);
+        int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
+        int GetState(out int state);
+    }
+
+    [Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IAudioEndpointVolume
+    {
+        int RegisterControlChangeNotify(IntPtr notify);
+        int UnregisterControlChangeNotify(IntPtr notify);
+        int GetChannelCount(out uint count);
+        [PreserveSig] int SetMasterVolumeLevel(float levelDb, ref Guid eventContext);
+        [PreserveSig] int SetMasterVolumeLevelScalar(float level, ref Guid eventContext);
+        [PreserveSig] int GetMasterVolumeLevel(out float levelDb);
+        [PreserveSig] int GetMasterVolumeLevelScalar(out float level);
+        int SetChannelVolumeLevel(uint channel, float levelDb, ref Guid eventContext);
+        int SetChannelVolumeLevelScalar(uint channel, float level, ref Guid eventContext);
+        int GetChannelVolumeLevel(uint channel, out float levelDb);
+        int GetChannelVolumeLevelScalar(uint channel, out float level);
+        int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid eventContext);
+        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+        int GetVolumeStepInfo(out uint step, out uint stepCount);
+        int VolumeStepUp(ref Guid eventContext);
+        int VolumeStepDown(ref Guid eventContext);
+        int QueryHardwareSupport(out uint mask);
+        int GetVolumeRange(out float min, out float max, out float increment);
+    }
+
+    public static class Core
+    {
+        // Устройство воспроизведения по умолчанию (eRender = 0, eMultimedia = 1), затем его громкость.
+        private static IAudioEndpointVolume Endpoint()
+        {
+            IMMDeviceEnumerator enumerator = (IMMDeviceEnumerator)(new MMDeviceEnumeratorComObject());
+            IMMDevice device;
+            int hr = enumerator.GetDefaultAudioEndpoint(0, 1, out device);
+            if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+            Guid iid = typeof(IAudioEndpointVolume).GUID;
+            object obj;
+            hr = device.Activate(ref iid, 23, IntPtr.Zero, out obj);
+            if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+            return (IAudioEndpointVolume)obj;
+        }
+
+        public static int GetPercent()
+        {
+            IAudioEndpointVolume volume = Endpoint();
+            float scalar;
+            int hr = volume.GetMasterVolumeLevelScalar(out scalar);
+            if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+            int percent = (int)Math.Round(scalar * 100.0);
+            if (percent < 0) percent = 0;
+            if (percent > 100) percent = 100;
+            return percent;
+        }
+
+        public static bool GetMute()
+        {
+            IAudioEndpointVolume volume = Endpoint();
+            bool mute;
+            int hr = volume.GetMute(out mute);
+            if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+            return mute;
+        }
+
+        public static void SetPercent(int percent)
+        {
+            if (percent < 0) percent = 0;
+            if (percent > 100) percent = 100;
+            IAudioEndpointVolume volume = Endpoint();
+            Guid context = Guid.Empty;
+            int hr = volume.SetMasterVolumeLevelScalar(percent / 100f, ref context);
+            if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+        }
+    }
+}
+`;
+
+// Общая обёртка скрипта: типы C# + тело. Пользовательские значения сюда не склеиваются.
+function coreAudioScript(body) {
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    '[Console]::OutputEncoding = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false',
+    "$src = @'",
+    CORE_AUDIO_TYPE,
+    "'@",
+    ...body,
+  ].join('\n');
+}
+
+// Чтение: процент и признак mute. Ответ — одна строка JSON, чтобы разбор не зависел от вывода Add-Type.
+function coreAudioGetScript() {
+  return coreAudioScript([
+    'try {',
+    '  Add-Type -TypeDefinition $src -Language CSharp -ErrorAction Stop',
+    '  $percent = [NoxVolume.Core]::GetPercent()',
+    '  $mute = [NoxVolume.Core]::GetMute()',
+    "  ConvertTo-Json -Compress -InputObject @{ ok = $true; mode = 'coreaudio'; percent = [int]$percent; mute = [bool]$mute }",
+    '} catch {',
+    "  ConvertTo-Json -Compress -InputObject @{ ok = $false; mode = 'unavailable'; error = [string]$_.Exception.Message }",
+    '}',
+  ]);
+}
+
+// Установка: сперва типы и чтение «до». Недоступность Core Audio — повод для старого пути SendKeys,
+// а не для тихой ошибки. Процент подставляется числом: run уже проверил, что это целое 0–100.
+function coreAudioSetScript(percent) {
+  const ups = Math.round(percent / 2);
+  return coreAudioScript([
+    '$target = ' + percent,
+    '$available = $false',
+    "$errorText = ''",
+    'try {',
+    '  Add-Type -TypeDefinition $src -Language CSharp -ErrorAction Stop',
+    '  $before = [NoxVolume.Core]::GetPercent()',
+    '  $available = $true',
+    '} catch {',
+    '  $errorText = [string]$_.Exception.Message',
+    '}',
+    'if ($available) {',
+    '  try {',
+    '    [NoxVolume.Core]::SetPercent($target)',
+    '    Start-Sleep -Milliseconds 120',
+    '    $after = [NoxVolume.Core]::GetPercent()',
+    '    $mute = [NoxVolume.Core]::GetMute()',
+    "    ConvertTo-Json -Compress -InputObject @{ ok = $true; mode = 'coreaudio'; percent = [int]$target; before = [int]$before; after = [int]$after; mute = [bool]$mute }",
+    '  } catch {',
+    "    ConvertTo-Json -Compress -InputObject @{ ok = $false; mode = 'coreaudio'; percent = [int]$target; error = [string]$_.Exception.Message }",
+    '  }',
+    '} else {',
+    '  # Core Audio недоступен: старый путь нажатиями клавиш, шаг 2%.',
+    '  $w = New-Object -ComObject WScript.Shell',
+    '  for ($i = 0; $i -lt 50; $i++) { $w.SendKeys([char]174) }',
+    '  for ($i = 0; $i -lt ' + ups + '; $i++) { $w.SendKeys([char]175) }',
+    "  ConvertTo-Json -Compress -InputObject @{ ok = $true; mode = 'sendkeys'; percent = [int]$target; error = $errorText }",
+    '}',
+  ]);
+}
+
+// Разбор ответа скрипта громкости: последняя непустая строка — JSON. Мусор и пустой вывод — null.
+function parseCoreAudio(stdout) {
+  const text = String(stdout || '').trim();
+  const line = text.split(/\r?\n/).filter((part) => part.trim()).pop() || '';
+  if (!line) return null;
+  try {
+    const parsed = JSON.parse(line);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 // Имя процесса без пути и .exe, в нижнем регистре.
 function processNameOf(value) {
   return String(value || '').trim().toLowerCase().replace(/\.exe$/i, '');
@@ -270,11 +449,11 @@ function systemToolsFactory({
   getAppLaunchHook = () => appLaunchHook,
   fsImpl = fs,
 } = {}) {
-  // Громкость: SendKeys шагами по 2%. Сначала тихо до нуля, затем вверх до цели.
-  // Точной установки здесь нет, зато без COM-обёрток и без внешних утилит.
+  // Громкость: точная установка через Windows Core Audio и проверка чтением обратно (verify).
+  // Если Core Audio недоступен — старый путь SendKeys (шаг 2%); тогда verify честно «не проверено».
   const volumeSet = {
     name: 'volume_set',
-    description: 'Установить громкость системы в процентах (0–100). Приближённо, шагом 2%.',
+    description: 'Установить громкость системы точно в процентах (0–100) через Windows Core Audio, с чтением обратно. Если Core Audio недоступен — приближённо, шагом 2%.',
     risk: 'T0',
     parameters: {
       type: 'object',
@@ -288,18 +467,92 @@ function systemToolsFactory({
       if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
         return { ok: false, summary: 'громкость от 0 до 100', data: {} };
       }
-      const ups = Math.round(percent / 2);
-      const script = [
-        '$w = New-Object -ComObject WScript.Shell',
-        'for ($i = 0; $i -lt 50; $i++) { $w.SendKeys([char]174) }',
-        `for ($i = 0; $i -lt ${ups}; $i++) { $w.SendKeys([char]175) }`,
-      ].join('; ');
-      const res = await runner(script, {}, { signal: ctx.signal });
-      return { ...res, summary: res.ok ? `громкость ~${percent}%` : res.summary };
+      const res = await runner(coreAudioSetScript(percent), {}, { signal: ctx.signal, timeoutMs: 20000 });
+      const got = parseCoreAudio(res.data && res.data.stdout);
+      if (got && got.mode === 'coreaudio' && got.ok === false) {
+        // Core Audio есть, но установка не удалась: подменять ошибку нажатиями нельзя.
+        return {
+          ok: false,
+          summary: `не удалось установить громкость: ${String(got.error || 'ошибка Core Audio')}`,
+          data: { mode: 'coreaudio', percent, error: String(got.error || '') },
+        };
+      }
+      if (got && got.mode === 'coreaudio') {
+        const before = Math.round(Number(got.before));
+        const after = Math.round(Number(got.after));
+        const mute = Boolean(got.mute);
+        return {
+          ...res,
+          summary: `громкость ${Number.isFinite(after) ? after : percent}%${mute ? ', звук выключен' : ''}`,
+          data: {
+            ...res.data,
+            mode: 'coreaudio',
+            percent,
+            before: Number.isFinite(before) ? before : null,
+            after: Number.isFinite(after) ? after : null,
+            mute,
+          },
+        };
+      }
+      // Core Audio недоступен: скрипт уже нажал клавиши. Это успех «примерно», точность не проверена.
+      return {
+        ...res,
+        summary: res.ok ? `громкость ~${percent}%` : res.summary,
+        data: {
+          ...res.data,
+          mode: got && got.mode === 'sendkeys' ? 'sendkeys' : 'unknown',
+          percent,
+          ...(got && got.error ? { error: String(got.error) } : {}),
+        },
+      };
     },
-    verify: cannotVerify('громкость выставлена нажатиями клавиш, текущий уровень не считывается'),
+    async verify(args, result, ctx = {}) {
+      const data = (result && result.data) || {};
+      if (data.mode !== 'coreaudio') {
+        return { status: 'unknown', evidence: 'Core Audio недоступен, громкость выставлена нажатиями клавиш: точный уровень не считывался' };
+      }
+      const target = Number(data.percent);
+      if (!Number.isFinite(target)) return { status: 'unknown', evidence: 'в результате нет целевого процента' };
+      const res = await runner(coreAudioGetScript(), {}, { signal: ctx.signal, timeoutMs: 15000 });
+      const got = parseCoreAudio(res.data && res.data.stdout);
+      if (!got || got.mode !== 'coreaudio' || !Number.isFinite(Number(got.percent))) {
+        const why = String((got && got.error) || res.summary || 'нет ответа');
+        return { status: 'unknown', evidence: `не удалось прочитать громкость обратно через Core Audio (${why})` };
+      }
+      const now = Math.round(Number(got.percent));
+      if (Math.abs(now - target) <= 2) {
+        return { status: 'confirmed', evidence: `прочитал ${now}% (цель ${target}%, допуск ±2%)` };
+      }
+      return { status: 'failed', evidence: `прочитал ${now}%, а цель ${target}% (допуск ±2%)` };
+    },
   };
 
+  // Точное чтение громкости: процент и признак выключенного звука. Без Core Audio — честный отказ.
+  const volumeGet = {
+    name: 'volume_get',
+    description: 'Узнать текущую громкость системы точно: процент 0–100 и выключен ли звук. Чтение через Windows Core Audio.',
+    risk: 'T0',
+    parameters: { type: 'object', properties: {} },
+    async run(_args, ctx = {}) {
+      const res = await runner(coreAudioGetScript(), {}, { signal: ctx.signal, timeoutMs: 15000 });
+      const got = parseCoreAudio(res.data && res.data.stdout);
+      if (!got || got.mode !== 'coreaudio' || !Number.isFinite(Number(got.percent))) {
+        const why = String((got && got.error) || res.summary || 'нет ответа');
+        return {
+          ok: false,
+          summary: `не удалось узнать громкость: Windows Core Audio недоступен (${why})`,
+          data: { mode: 'unavailable' },
+        };
+      }
+      const percent = Math.max(0, Math.min(100, Math.round(Number(got.percent))));
+      const mute = Boolean(got.mute);
+      return {
+        ok: true,
+        summary: `громкость ${percent}%${mute ? ', звук выключен' : ''}`,
+        data: { mode: 'coreaudio', percent, mute },
+      };
+    },
+  };
   // Запуск программы по имени или пути. Имя передаётся через переменную окружения.
   const appOpen = {
     name: 'app_open',
@@ -474,7 +727,7 @@ function systemToolsFactory({
     },
   };
 
-  return [volumeSet, appOpen, shellRun, urlOpen];
+  return [volumeSet, volumeGet, appOpen, shellRun, urlOpen];
 }
 
 const systemTools = systemToolsFactory();
