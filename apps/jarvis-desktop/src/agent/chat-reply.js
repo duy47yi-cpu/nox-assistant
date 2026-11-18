@@ -158,7 +158,25 @@ function stripServiceTokens(text, toolNames = []) {
   return out.trim();
 }
 
+
+// Хвост про кнопку в ответе на вопрос о последствиях: «если скажете, где кнопка — уточню»,
+// «зависит от того, что за кнопка». Владелец спрашивал о последствиях, а не просил искать кнопку,
+// поэтому такие предложения убираем из конца ответа. Действуем только на вопрос о последствиях,
+// в обычных ответах текст не трогаем.
+const CONSEQUENCE_QUESTION = /что\s+будет\s*,?\s*если.*(нажм|удал|оплат|отправ|установ|очист|снест|запуст)|какие\s+последствия/i;
+const BUTTON_TAIL = /(где|что\s+за|какая|какую|назов|скажите|уточн|подскаж|если\s+скажете).{0,50}кнопк|кнопк.{0,50}(где|что\s+за|назов|скажите|уточн|подскаж)/i;
+function stripButtonLocationTail(text, ownerText = '') {
+  const out = String(text == null ? '' : text);
+  const ask = String(ownerText == null ? '' : ownerText);
+  if (!out.trim() || !CONSEQUENCE_QUESTION.test(ask)) return out;
+  const sentences = out.split(/(?<=[.!?])\s+/u);
+  const kept = sentences.filter((sentence) => !BUTTON_TAIL.test(sentence));
+  if (kept.length === sentences.length || !kept.length) return out;
+  const cleaned = kept.join(' ').replace(/\s{2,}/g, ' ').trim();
+  return cleaned || out;
+}
+
 module.exports = {
   CLARIFY_SPEC, clarificationFrom, artifactFile, artifactFrom, actionReport, partialReport, verifiedReceipt,
-  READ_ONLY_STATUS_ACTIONS, isReadOnlyStatusTool, hasUnverifiedAction, stripServiceTokens,
+  READ_ONLY_STATUS_ACTIONS, isReadOnlyStatusTool, hasUnverifiedAction, stripServiceTokens, stripButtonLocationTail,
 };

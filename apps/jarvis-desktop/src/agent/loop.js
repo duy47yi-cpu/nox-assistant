@@ -10,7 +10,7 @@ const { checkEffect } = require('./effects');
 const { makeToolContext } = require('./tool-context');
 const { uniqueSearchMatch } = require('../tools/install');
 const { collectSearchSources } = require('./sources');
-const { CLARIFY_SPEC, clarificationFrom, artifactFrom, actionReport, partialReport, verifiedReceipt, isReadOnlyStatusTool, stripServiceTokens } = require('./chat-reply');
+const { CLARIFY_SPEC, clarificationFrom, artifactFrom, actionReport, partialReport, verifiedReceipt, isReadOnlyStatusTool, stripServiceTokens, stripButtonLocationTail } = require('./chat-reply');
 
 // Лимит вызовов инструментов за один ход: защита от зацикливания модели.
 const MAX_TOOL_STEPS = 12;
@@ -1521,7 +1521,7 @@ class Agent {
           last.content = replyText = receipt;
         } else {
           // Не надеемся на модель: убираем из текста служебные id инструментов и «Шаг N».
-          const cleaned = stripServiceTokens(last.content, this._toolNames());
+          const cleaned = stripButtonLocationTail(stripServiceTokens(last.content, this._toolNames()), this._ownerText);
           if (cleaned && cleaned !== last.content) {
             last.content = cleaned;
             replyText = cleaned;
