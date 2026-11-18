@@ -25,6 +25,14 @@ test('вариант «зависит от того, где эта кнопка�
   assert.match(out, /Файл удалится/);
 });
 
+test('хвост про уточнение объекта тоже убирается', () => {
+  const answer = `Изменится: файл исчезнет. Потеряется: без корзины. Если скажете, что именно перед вами — файл или письмо — уточню.`;
+  const out = stripButtonLocationTail(answer, OWNER);
+  assert.doesNotMatch(out, /уточню/i);
+  assert.doesNotMatch(out, /если скажете/i);
+  assert.match(out, /Изменится: файл исчезнет/);
+});
+
 test('обычный вопрос не трогаем', () => {
   const answer = `Завтра будет дождь. Если скажете, где кнопка — уточню.`;
   assert.equal(stripButtonLocationTail(answer, 'что будет завтра?'), answer);
