@@ -3,6 +3,7 @@
 // Удалённое управление через Telegram-бота владельца: приём сообщений из одного чата и ответы в него.
 // Бот создаёт сам владелец, токен и номер его чата лежат в .env (NOX_TELEGRAM_TOKEN, NOX_TELEGRAM_OWNER_CHAT).
 // Чужие чаты игнорируются молча. Сам по себе мост ничего не выполняет: команды передаются в handle(text, media).
+// Обработчик может вернуть {text, onSent}, если состояние надо сохранить после ответа Telegram.
 //
 // Что умеет:
 // - текст: как раньше (handle получает текст);
@@ -242,8 +243,10 @@ class TelegramBridge {
         reply = `Не получилось: ${sanitize(err.message, this.token)}`;
       }
       // Мост не выдумывает ответ за модель: пустой ответ на вложение — честная фраза о том, что было принято.
-      const outgoing = reply && String(reply).trim() ? String(reply) : (media ? this.mediaFallback(media) : 'Готово.');
+      const textReply = typeof reply?.text === 'string' ? reply.text : reply;
+      const outgoing = textReply && String(textReply).trim() ? String(textReply) : (media ? this.mediaFallback(media) : 'Готово.');
       await this.send(outgoing, signal);
+      if (typeof reply?.onSent === 'function') await reply.onSent();
       handled += 1;
     }
     return handled;

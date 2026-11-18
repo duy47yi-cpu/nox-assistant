@@ -16,6 +16,49 @@ function setup(t) {
   return { opts, book: new WorkspaceBook(opts) };
 }
 
+test('учебный чат ждёт попытку, проверяет её запись и открывает её после перезапуска', async (t) => {
+  const { book, opts } = setup(t);
+  const study = book.create('Учёба');
+  const review = { action: 'review', attempt: '200 см = 20 м', outcome: 'incorrect',
+    feedback: 'Ошибка в переводе сантиметров', hint: 'Сколько сантиметров в одном метре?' };
+  const queue = [
+    { id: 'start', args: { action: 'start', topic: 'Единицы', exercise: 'Переведи 200 см в метры' } },
+    { id: 'early', args: review },
+    null,
+    { id: 'invented', args: { ...review, attempt: '200 см = 4 м' } },
+    { id: 'review', args: review },
+    null,
+  ];
+  const journal = { append() {} };
+  const brain = { async chat() {
+    const call = queue.shift();
+    return call
+      ? { content: '', toolCalls: [{ ...call, name: 'study_session' }] }
+      : { content: 'Продолжаем занятие.', toolCalls: [] };
+  } };
+  const chatOptions = { brain, journal, policy: require('../src/policy/modes'), memoryAuto: () => false };
+  const chat = new WorkspaceChat({ book, ...chatOptions });
+  chat.select(study.id);
+  const start = 'Хочу потренироваться';
+  await chat.run(start, { ownerText: start });
+  await chat.run(review.attempt, { ownerText: review.attempt });
+  const toolResults = chat.history().filter((message) => message.role === 'tool').map((message) => JSON.parse(message.content));
+  assert.equal(toolResults[0].verified, 'confirmed');
+  assert.match(toolResults[1].summary, /дождитесь ответа/);
+  assert.match(toolResults[2].summary, /дословный фрагмент/);
+  assert.equal(toolResults[3].verified, 'confirmed');
+
+  const reopened = new WorkspaceChat({ book: new WorkspaceBook(opts), ...chatOptions });
+  const status = { action: 'status' };
+  const context = { runId: 'resume', ownerText: 'Продолжим занятие' };
+  const saved = reopened.tools().get('study_session').run(status, context);
+  assert.equal(saved.data.current.exercise, 'Переведи 200 см в метры');
+  assert.equal(saved.data.current.attempts.length, 1);
+  assert.equal(saved.data.current.attempts[0].hint, review.hint);
+  reopened.select('default');
+  assert.equal(reopened.tools().get('study_session').run(status, context).data.current, null);
+});
+
 test('сводка непрочитанных доступна по запросу в пространстве и не попадает в историю другого', async (t) => {
   const { book } = setup(t);
   const work = book.create('Работа');

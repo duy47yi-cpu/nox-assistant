@@ -20,8 +20,10 @@ const {
 } = require('../src/tools/ocr');
 const {
   documentTools,
+  documentSearchReader,
   readPdf,
 } = require('../src/tools/documents');
+const { workspaceTools } = require('../src/tools/workspace');
 const { calendarTools } = require('../src/tools/calendar');
 const { mailTools, MailDraftStore, MAIL_TEMPLATES } = require('../src/tools/mail');
 const { renderTemplate, suggestRecipients } = require('../src/mail/drafts');
@@ -62,6 +64,33 @@ function makeMultiPagePdf(pageBodies) {
   }
   return Buffer.from(`%PDF-1.4\n${objs.join('\n')}\ntrailer<</Root 1 0 R>>\n%%EOF`);
 }
+
+test('workspace_search: страницы PDF и выдержки DOCX из подключённой папки', async (t) => {
+  const root = tempDir(t);
+  const course = tempDir(t);
+  const connected = new WorkspaceIndex(course);
+  const writer = documentTools(connected).find((tool) => tool.name === 'document_write');
+  assert.equal((await writer.run({ path: 'lecture.docx', format: 'docx', text: 'Solenoid induction depends on the coil.' })).ok, true);
+  fs.writeFileSync(path.join(course, 'course.pdf'), makeMultiPagePdf([
+    'BT /F1 14 Tf 10 100 Td (Introduction) Tj ET',
+    'BT /F1 14 Tf 10 100 Td (Solenoid induction depends on the current.) Tj ET',
+  ]));
+  fs.writeFileSync(path.join(course, 'broken.pdf'), 'broken');
+  const index = new WorkspaceIndex(root);
+  index.setFolders([course]);
+  const search = workspaceTools(index, { readSearchDocument: documentSearchReader() })
+    .find((tool) => tool.name === 'workspace_search');
+  const result = await search.run({ query: 'solenoid induction' });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.data.map((hit) => [path.basename(hit.path), hit.page, hit.snippet]), [
+    ['course.pdf', 2, 'Solenoid induction depends on the current.'],
+    ['lecture.docx', undefined, 'Solenoid induction depends on the coil.'],
+  ]);
+  assert.match(result.summary, /пропущено: 1/);
+
+  index.setFolders([]);
+  assert.deepEqual((await search.run({ query: 'solenoid' })).data, []);
+});
 
 // 1. Инвентаризация программ: творческие инструменты и локальный ИИ.
 test('apps inventory: расширенные creative и новая категория ai (Локальный ИИ)', (t) => {

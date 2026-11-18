@@ -17,7 +17,7 @@ const MAX_DESC = 160;
 const FORBIDDEN = new Set([
   'shell_run', 'mail_send', 'remember', 'forget', 'clipboard_set', 'clipboard_get',
   'windows_close_all', 'pc_shutdown', 'app_install', 'command_create', 'command_run',
-  'long_task_start', 'task_create', 'task_submit', 'mission_create', 'browser_tab_read',
+  'long_task_start', 'task_create', 'task_submit', 'mission_create', 'browser_tab_read', 'study_session',
 ]);
 // Только чтение — это не порядок действий, а разовый запрос. Такой ход навыком не становится.
 const READ_ONLY = new Set([

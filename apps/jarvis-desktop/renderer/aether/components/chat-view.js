@@ -33,7 +33,7 @@
   const SAVE_DENY_TOOLS = new Set([
     'mail_send', 'pc_shutdown', 'shell_run', 'app_close', 'ui_close_window',
     'app_install', 'windows_close_all', 'window_close_active',
-    'forget', 'deal_clear', 'cancel_reminder',
+    'forget', 'deal_clear', 'cancel_reminder', 'study_session',
   ]);
   const SAVE_FORBIDDEN_PREFIXES = ['mission_', 'command_'];
   const SAVE_READ_ONLY_TOOLS = new Set([

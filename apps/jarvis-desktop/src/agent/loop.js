@@ -1258,6 +1258,7 @@ class Agent {
         handsTainted: this._foreign === true,
         background: this.background,
         runId: this._runId,
+        ownerText: this._ownerText,
         step: info && Number.isInteger(info.step) ? info.step : null,
       });
       const r = await tool.run(args, ctx);

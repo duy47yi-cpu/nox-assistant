@@ -55,6 +55,7 @@ Nox Assistant — продукт. Джарвис — имя помощника �
 | Проверка результата действия | `verify` у инструмента, `src/agent/effects.js` |
 | Память | `src/memory/store.js`, авто-память `src/memory/learn.js`, инструменты в `src/tools/memory.js` |
 | Поиск по подключённым папкам | индекс в `src/rag/index.js`, чтение по режиму в `workspace_read` (`src/tools/workspace.js`), список `connectedFolders` в настройках, `folders:add` и `folders:remove` в `main.js` |
+| Учёба по своим материалам | Поиск PDF и DOCX в чате через `workspace_search` (`src/tools/workspace.js`, `src/rag/index.js`, `src/tools/documents.js`), номер страницы PDF. `src/tools/study.js` хранит задачи, попытки и подсказки в `study.json` своего пространства и выбирает последнюю ошибку для короткой проверки. `src/telegram/study.js` поднимает последнее занятие у владельца, а `telegram-study.json` связывает ответ с показанной задачей |
 | Долгая работа без владельца | `src/missions/long.js` |
 | Задачи по расписанию | `src/missions/` |
 | Что Джарвис сообщает сам, тишина, лимит в час | `src/notify/watch.js`; настройки `watchWindow`, `watchTelegram`, `watchPerHour` в `settings.json` |

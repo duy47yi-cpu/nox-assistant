@@ -13,6 +13,7 @@ function makeToolContext({
   runId = null,
   taskId = null,
   step = null,
+  ownerText = '',
 } = {}) {
   return Object.freeze({
     workspace: String(workspace || ''),
@@ -24,6 +25,7 @@ function makeToolContext({
     runId: runId === null || runId === undefined ? null : String(runId),
     taskId: taskId === null || taskId === undefined ? null : String(taskId),
     step: Number.isInteger(step) ? step : null,
+    ownerText: typeof ownerText === 'string' ? ownerText : '',
   });
 }
 

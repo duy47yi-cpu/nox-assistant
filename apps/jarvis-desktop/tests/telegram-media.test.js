@@ -11,6 +11,8 @@ const os = require('os');
 const path = require('path');
 
 const { TelegramBridge, MAX_REPLY, MEDIA_LIMIT, chunkText } = require('../src/telegram/bridge');
+const { createTelegramStudy } = require('../src/telegram/study');
+const { studyTool } = require('../src/tools/study');
 
 function jsonResponse(value) {
   return { ok: true, status: 200, json: async () => value, arrayBuffer: async () => Buffer.from('') };
@@ -63,6 +65,74 @@ function tempMedia(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
+
+test('Telegram продолжает последнее занятие с ПК, сохраняет проверку и принимает ответ после перезапуска', async (t) => {
+  const dir = tempMedia(t);
+  const other = path.join(dir, 'other.json');
+  const physics = path.join(dir, 'physics.json');
+  const pinFile = path.join(dir, 'telegram-study.json');
+  const pc = studyTool(physics);
+  const create = { action: 'start', topic: 'Перевод единиц', exercise: 'Переведи 200 см в метры', reference: 'Лекция 2.pdf, с. 7' };
+  assert.equal(studyTool(other).run({ ...create, topic: 'Химия' }, { ownerText: 'Начнём', runId: 'other' }).ok, true);
+  fs.utimesSync(other, 1, 1);
+  assert.equal(pc.run(create, { ownerText: 'Дай задачу', runId: 'pc-start' }).ok, true);
+  const mistake = '200 см = 20 м';
+  assert.equal(pc.run({
+    action: 'review', attempt: mistake, outcome: 'incorrect',
+    feedback: 'Неверный коэффициент перевода', hint: 'В метре 100 сантиметров.',
+  }, { ownerText: mistake, runId: 'pc-attempt' }).ok, true);
+
+  let modelCalls = 0;
+  const brain = { async chat({ messages, tools }) {
+    modelCalls += 1;
+    assert.deepEqual(tools.map((tool) => tool.function.name), ['study_session']);
+    const last = messages.at(-1);
+    const call = (args, id) => ({ content: '', toolCalls: [{ id, args, name: 'study_session' }] });
+    if (last.role === 'user') return call({ action: 'status' }, 'status');
+    const result = JSON.parse(last.content);
+    if (last.tool_call_id !== 'status') {
+      assert.equal(result.verified, 'confirmed');
+      return { content: 'Запись проверена.', toolCalls: [] };
+    }
+    assert.equal(result.data.reviewFocus.feedback, 'Неверный коэффициент перевода');
+    assert.equal(result.data.current.topic, 'Перевод единиц');
+    if (messages.findLast((m) => m.role === 'user').content.includes('Мой ответ')) {
+      return call({ action: 'review', attempt: '450 см / 100 = 4,5 м', outcome: 'correct', feedback: 'Перевод выполнен верно.' }, 'review');
+    }
+    return call({ action: 'start', exercise: 'Переведи 450 см в метры' }, 'short');
+  } };
+  const options = {
+    locations: () => [{ id: 'other', file: other }, { id: 'physics', file: physics }],
+    pinFile, brain, policy: require('../src/policy/modes'), journal: { append() {} },
+  };
+  const turn = createTelegramStudy(options);
+  const preview = await turn('Продолжим вчерашнее занятие');
+  assert.match(preview.text, /Переведи 200 см/);
+  assert.equal(fs.existsSync(pinFile), false, 'до подтверждённой отправки ответ к задаче не привязывается');
+  const fake = fakeTelegram({ updates: [[
+    { update_id: 41, message: { chat: { id: 666 }, text: 'Продолжим занятие' } },
+    { update_id: 42, message: { chat: { id: 555 }, text: 'У меня десять минут' } },
+    { update_id: 43, message: { chat: { id: 555 }, text: 'У меня десять минут' } },
+  ]] });
+  assert.equal(await bridgeWith(fake, { handle: turn }).pollOnce(), 2);
+  const reply = fake.sent.map((entry) => entry.body.text);
+  assert.match(reply[0], /Короткая проверка по теме «Перевод единиц»/);
+  assert.match(reply[0], /Переведи 450 см в метры/);
+  assert.match(reply[0], /Лекция 2\.pdf, с\. 7/);
+  assert.equal(reply[1], reply[0], 'повтор просьбы открывает ту же попытку');
+  assert.equal(modelCalls, 3);
+  assert.equal(await turn('Поставь таймер на десять минут'), null);
+
+  const restarted = createTelegramStudy(options);
+  assert.match(await restarted('Мой ответ: 450 см / 100 = 4,5 м'), /^Верно\./);
+  const status = { action: 'status' };
+  const context = { ownerText: 'Продолжим занятие', runId: 'pc-return' };
+  const current = pc.run(status, context).data.current;
+  assert.equal(current.exercise, 'Переведи 450 см в метры');
+  assert.equal(current.attempts.at(-1).outcome, 'correct');
+  assert.equal(pc.run({ ...create, exercise: 'Переведи 120 см в метры' }, context).ok, true);
+  assert.match(await restarted('Мой ответ: 450 см / 100 = 4,5 м'), /открылась другая задача/);
+});
 
 test('голосовое: скачивается, передаётся расшифровка, файл лежит во временной папке', async (t) => {
   const mediaDir = tempMedia(t);

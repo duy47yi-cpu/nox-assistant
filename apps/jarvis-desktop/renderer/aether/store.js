@@ -82,7 +82,7 @@
     'app_install', 'windows_close_all', 'window_close_active',
     'forget', 'deal_clear', 'cancel_reminder',
   ]);
-  const CMD_FORBIDDEN_PREFIXES = ['mission_', 'command_'];
+  const CMD_FORBIDDEN_PREFIXES = ['mission_', 'command_', 'study_'];
   const CMD_READ_ONLY_TOOLS = new Set([
     'ui_windows', 'ui_elements', 'desktop_observe', 'windows_list',
     'screen_look', 'screen_region_look', 'image_look', 'image_read_text',

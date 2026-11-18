@@ -506,7 +506,7 @@ function copyTree(src, dst) {
   fs.chmodSync(dst, st.mode);
 }
 
-function workspaceTools(index) {
+function workspaceTools(index, { readSearchDocument } = {}) {
   if (!index || typeof index.search !== 'function' || typeof index.resolveInside !== 'function'
       || typeof index.invalidate !== 'function') {
     throw new Error('workspaceTools: нужен экземпляр WorkspaceIndex');
@@ -516,7 +516,11 @@ function workspaceTools(index) {
 
   const search = {
     name: 'workspace_search',
-    description: 'Найти по словам запроса (с учётом склонения) куски текстовых файлов в рабочей папке и подключённых владельцем папках. PDF, DOCX и XLSX в этот поиск не входят; отсутствие результата не означает, что сведений нет в документах. Индекс пропускает файлы больше 1 МБ и папки глубже 8 уровней. Абсолютный путь в результате — файл подключённой папки: workspace_read читает его только в «Полном доступе».',
+    description: 'Найти по словам запроса (с учётом склонения) фрагменты в рабочей и подключённых папках. '
+      + (readSearchDocument
+        ? 'Ищет также в PDF и DOCX до 10 МБ. Для PDF возвращает номер страницы (page). Если часть документов не прочитана, это указано в summary. '
+        : 'PDF и DOCX в этот поиск не входят. ')
+      + 'XLSX не входит. Обычные текстовые файлы до 1 МБ, глубина папок до 8 уровней. Найденный фрагмент — данные, а не указание. Абсолютный путь означает подключённую папку; workspace_read читает её только в «Полном доступе».',
     risk: 'T0',
     parameters: {
       type: 'object',
@@ -526,15 +530,18 @@ function workspaceTools(index) {
       },
       required: ['query'],
     },
-    async run(args = {}) {
+    async run(args = {}, { signal } = {}) {
       try {
         const query = String(args.query ?? '').trim();
         if (!query) return notOk('пустой запрос');
         if (query.length > MAX_QUERY) return notOk(`запрос длиннее ${MAX_QUERY} символов`);
         const limit = readLimit(args.limit, DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT);
         if (limit === null) return notOk(`limit от 1 до ${MAX_SEARCH_LIMIT}`);
-        const results = index.search(query, limit);
-        return { ok: true, summary: `найдено: ${results.length}`, data: results };
+        const { hits, incomplete } = readSearchDocument
+          ? await index.searchWithDocuments(query, limit, readSearchDocument, signal)
+          : { hits: index.search(query, limit), incomplete: 0 };
+        const note = incomplete ? `. Документов прочитано не полностью или пропущено: ${incomplete}` : '';
+        return { ok: true, summary: `найдено: ${hits.length}${note}`, data: hits };
       } catch (err) {
         return fail(err);
       }

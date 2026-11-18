@@ -10,7 +10,7 @@
 // это исполнение чужого кода, а владельца рядом в фоне нет. Поэтому он тоже выключен в автономных
 // задачах; в чате project_run работает по обычной политике риска T2 (см. policy/modes.js).
 const AUTONOMY_EXCLUDED = ['shell_run', 'library_run', 'project_run'];
-const CHAT_ONLY_EXTENSION_TOOLS = new Set(['browser_tab_read', 'presentation_open']);
+const CHAT_ONLY_EXTENSION_TOOLS = new Set(['browser_tab_read', 'presentation_open', 'study_session']);
 const AUTONOMY_EXCLUDED_PREFIXES = ['lib_'];
 
 function excludedFromAutonomy(name) {
@@ -37,11 +37,12 @@ function withOwnWorkspace(list, ownWorkspaceTools) {
 function taskRegistryFor(shared, ownWorkspaceTools, taskCodeTools) {
   return {
     get(name) {
-      if (name === 'presentation_open') return null;
+      if (name === 'presentation_open' || name === 'study_session') return null;
       const own = [...ownWorkspaceTools, ...taskCodeTools].find((tool) => tool.name === name);
       return own || (FILE_TOOL.test(String(name)) ? null : shared.get(name)) || null;
     },
-    list: () => [...withOwnWorkspace(shared.list(), ownWorkspaceTools), ...taskCodeTools].filter((tool) => tool.name !== 'presentation_open'),
+    list: () => [...withOwnWorkspace(shared.list(), ownWorkspaceTools), ...taskCodeTools]
+      .filter((tool) => !['presentation_open', 'study_session'].includes(tool.name)),
   };
 }
 

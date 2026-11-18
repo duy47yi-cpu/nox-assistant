@@ -9,7 +9,8 @@ const { Agent, repairToolHistory } = require('../agent/loop');
 const { ToolRegistry } = require('../tools/registry');
 const { workspaceTools } = require('../tools/workspace');
 const { projectTools } = require('../tools/project');
-const { documentTools } = require('../tools/documents');
+const { documentTools, documentSearchReader } = require('../tools/documents');
+const { studyTool, STUDY_PROMPT } = require('../tools/study');
 const { memoryTools } = require('../tools/memory');
 const { imageTools } = require('../tools/ocr');
 const { waitTools } = require('../tools/wait');
@@ -89,7 +90,8 @@ function saveChats(file, chats) {
 function toolsFor(space, commonTools, renderPdf, scopedTools, skills, ocrPdf) {
   const registry = new ToolRegistry();
   for (const tool of [
-    ...workspaceTools(space.index), ...projectTools(space.index), ...documentTools(space.index, { renderPdf, ocrPdf }),
+    ...workspaceTools(space.index, { readSearchDocument: documentSearchReader(ocrPdf) }),
+    ...projectTools(space.index), ...documentTools(space.index, { renderPdf, ocrPdf }),
     ...memoryTools(space.memory), ...goalTools(space.goals), ...imageTools({ workspace: space.root }),
     ...waitTools({ resolveFile: (p) => space.index.resolveInside(p) }),
     ...chatCodeTools({ root: space.root, denyDirs: space.index.denyWrite, index: space.index }),
@@ -97,6 +99,7 @@ function toolsFor(space, commonTools, renderPdf, scopedTools, skills, ocrPdf) {
   for (const tool of commonTools) if (tool && COMMON.has(tool.name)) registry.register(tool);
   for (const tool of typeof scopedTools === 'function' ? scopedTools(space) : []) registry.register(tool);
   for (const tool of skillsTools(skills)) registry.register(tool);
+  registry.register(studyTool(path.join(path.dirname(space.memory.filePath), 'study.json')));
   return registry;
 }
 
@@ -120,7 +123,7 @@ class WorkspaceChat {
     const registry = toolsFor(space, this.options.commonTools, this.options.renderPdf, this.options.scopedTools, skills, this.options.ocrPdf);
     const prompt = () => {
       const base = typeof this.options.systemPrompt === 'function' ? this.options.systemPrompt(space) : this.options.systemPrompt;
-      return [base, profileNote(space.memory), goalsBrief(space.goals)].filter(Boolean).join('\n');
+      return [base, STUDY_PROMPT, profileNote(space.memory), goalsBrief(space.goals)].filter(Boolean).join('\n');
     };
     const agent = new Agent({
       brain: this.options.brain, tools: registry, policy: this.options.policy, approvals: this.options.approvals,

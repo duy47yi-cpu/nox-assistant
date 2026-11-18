@@ -305,27 +305,28 @@ function matchBatchText(body, parsedQuery, maxChars) {
 
 // Файл чужой: шрифты и код из него не исполняем, берём только текст.
 // Если текстового слоя нет или текста меньше чем на 15% страниц — при наличии ocrPdf пробуем OCR скана.
-async function readPdf(buf, { absPath = '', ocrPdf = null, maxOcrPages = 15, signal } = {}) {
+async function readPdf(buf, { absPath = '', ocrPdf = null, maxOcrPages = 15, signal, maxPages = Infinity, maxText = MAX_TEXT } = {}) {
+  signal?.throwIfAborted();
   const { getDocument, VerbosityLevel } = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const task = getDocument({ data: new Uint8Array(buf), isEvalSupported: false, disableFontFace: true, useSystemFonts: false, verbosity: VerbosityLevel.ERRORS });
-  let doc;
   try {
-    doc = await task.promise;
-  } catch (err) {
-    if (err && err.name === 'PasswordException') throw new Error('PDF защищён паролем');
-    throw new Error('файл PDF повреждён или не читается', { cause: err });
-  }
-  try {
+    const doc = await task.promise.catch((err) => {
+      if (err && err.name === 'PasswordException') throw new Error('PDF защищён паролем');
+      throw new Error('файл PDF повреждён или не читается', { cause: err });
+    });
     const pagesTotal = doc.numPages;
     const pageTexts = new Map();
     const emptyPages = [];
     let textPages = 0;
     let size = 0;
-    for (let n = 1; n <= pagesTotal && size <= MAX_TEXT; n += 1) {
+    let scannedPages = 0;
+    for (let n = 1; n <= Math.min(pagesTotal, maxPages) && size <= maxText; n += 1) {
+      signal?.throwIfAborted();
       const page = await doc.getPage(n);
       const content = await page.getTextContent();
       const text = content.items.map((it) => (it.str || '') + (it.hasEOL ? '\n' : ' ')).join('').replace(/[ \t]+\n/g, '\n').trim();
       page.cleanup();
+      scannedPages = n;
       if (text) {
         textPages += 1;
         pageTexts.set(n, text);
@@ -374,15 +375,13 @@ async function readPdf(buf, { absPath = '', ocrPdf = null, maxOcrPages = 15, sig
       }
     }
 
-    const parts = [];
-    for (let n = 1; n <= pagesTotal; n += 1) {
-      if (pageTexts.has(n)) {
-        const t = pageTexts.get(n);
-        parts.push(pagesTotal > 1 ? `[страница ${n}]\n${t}` : t);
-      } else if (ocrTexts.has(n)) {
-        parts.push(`[страница ${n} · OCR]\n${ocrTexts.get(n)}`);
-      }
-    }
+    const sections = [...pageTexts, ...ocrTexts]
+      .sort(([a], [b]) => a - b)
+      .map(([page, text]) => ({ page, text }));
+    const parts = sections.map(({ page, text }) => {
+      if (ocrTexts.has(page)) return `[страница ${page} · OCR]\n${text}`;
+      return pagesTotal > 1 ? `[страница ${page}]\n${text}` : text;
+    });
 
     let pdfKind = 'text';
     if (textPages === 0 && ocrPages > 0) pdfKind = 'scan_ocr';
@@ -396,10 +395,23 @@ async function readPdf(buf, { absPath = '', ocrPdf = null, maxOcrPages = 15, sig
       pagesTotal,
       textPages,
       ocrPages,
+      sections,
+      incomplete: scannedPages < pagesTotal || emptyPages.length > ocrTexts.size,
     };
   } finally {
     await task.destroy();
   }
+}
+
+function documentSearchReader(ocrPdf) {
+  return async (file, signal) => {
+    const buf = await fs.promises.readFile(file, { signal });
+    if (path.extname(file).toLowerCase() === '.docx') {
+      const text = readDocx(buf);
+      return { sections: text.trim() ? [{ text }] : [], incomplete: !text.trim() };
+    }
+    return readPdf(buf, { absPath: file, ocrPdf, signal, maxPages: 250, maxText: 250000 });
+  };
 }
 
 function documentTools(index, { renderPdf, ocrPdf = null } = {}) {
@@ -974,4 +986,4 @@ function presentationOpenTool(index, { openPath, probeOpen }) {
   };
 }
 
-module.exports = { documentTools, presentationOpenTool, parseCsv, readPdf };
+module.exports = { documentTools, documentSearchReader, presentationOpenTool, parseCsv, readPdf };

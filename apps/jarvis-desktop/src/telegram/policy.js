@@ -5,7 +5,7 @@
 // Ввод в окна (ui_*), удаление, отправка и оболочка PowerShell — тоже только с ПК.
 
 const RISK_OK = new Set(['T0', 'T1']);
-const BLOCKED = /^(command_|mission_|task_|library_|lib_|ui_|screen_|shell_run$|code_|skill_|browser_|mouse_)|(^|_)(send|delete|remove|publish|post|upload|push|pay|transfer)(_|$)/i;
+const BLOCKED = /^(command_|mission_|task_|library_|lib_|ui_|screen_|shell_run$|code_|skill_|study_|browser_|mouse_)|(^|_)(send|delete|remove|publish|post|upload|push|pay|transfer)(_|$)/i;
 
 // true, если инструмент можно выполнить по команде из Telegram.
 function remoteAllowed(tool) {

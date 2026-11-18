@@ -16,6 +16,9 @@ const CLOSED_DIRS = new Set(['data', 'node_modules', 'dist']);
 // Папка без доступа или исчезнувшая во время обхода: пропускаем, а не роняем весь поиск.
 const SKIP_CODES = new Set(['ENOENT', 'EACCES', 'EPERM', 'EBUSY']);
 const MAX_FILE_BYTES = 1024 * 1024;
+const DOCUMENT_EXTENSIONS = ['.pdf', '.docx'];
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+const MAX_CACHED_DOCUMENTS = 80;
 const MAX_DEPTH = 8;
 const MAX_CHUNK = 800;
 const MIN_SENTENCE = 12; // короче — приклеиваем к соседнему предложению, а не делаем отдельный кусок
@@ -266,7 +269,7 @@ function scoreChunk(chunk, stems) {
   while (at + 1 < starts.length && starts[at + 1] <= first) at += 1;
   const from = Math.max(0, at - Math.floor(MAX_SNIPPET / 2));
   const snippet = cps.slice(from, from + MAX_SNIPPET).join('').replace(/\s+/g, ' ').trim();
-  return { path: chunk.path, snippet, score };
+  return { path: chunk.path, snippet, score, ...(chunk.page ? { page: chunk.page } : {}) };
 }
 
 class WorkspaceIndex {
@@ -279,6 +282,7 @@ class WorkspaceIndex {
     this.indexFile = path.join(this.indexDir, INDEX_FILE);
     this._cache = null;
     this._dirty = false;
+    this._documents = new Map();
     // Полный доступ (решение владельца 31.10.2026): файловые инструменты работают с любыми папками, как в Codex.
     // Включается и выключается из main.js вместе с режимом доступа.
     this.unrestricted = false;
@@ -293,6 +297,7 @@ class WorkspaceIndex {
 
   // Новый список подключённых папок; индекс перестроится при следующем поиске.
   setFolders(list) {
+    this._documents.clear();
     this.folders = (Array.isArray(list) ? list : [])
       .filter((p) => typeof p === 'string' && path.isAbsolute(p))
       .map((p) => path.resolve(p));
@@ -398,6 +403,52 @@ class WorkspaceIndex {
     return hits.slice(0, toLimit(limit));
   }
 
+  // PDF читается асинхронно. Текстовый индекс сохраняет прежний синхронный интерфейс.
+  async searchWithDocuments(query, limit, readDocument, signal) {
+    const hits = this.search(query, limit);
+    const stems = [...new Set(queryWords(query).map(stem))];
+    if (!stems.length) return { hits, incomplete: 0 };
+    const folders = this.folders;
+    let incomplete = 0;
+    for (const abs of this._allFiles(DOCUMENT_EXTENSIONS)) {
+      signal?.throwIfAborted();
+      try {
+        const st = await fs.promises.lstat(abs);
+        if (!st.isFile() || st.size > MAX_DOCUMENT_BYTES) {
+          incomplete += 1;
+          continue;
+        }
+        let entry = this._documents.get(abs);
+        if (!entry || entry.mtimeMs !== st.mtimeMs || entry.size !== st.size) {
+          const result = await readDocument(abs, signal);
+          const display = this._display(abs);
+          const chunks = result.sections.flatMap(({ page, text }) => (
+            splitChunks(text).filter((chunk) => !looksSecret(chunk))
+              .map((chunk) => ({ path: display, text: chunk, page, stems: stemsOf(chunk) }))
+          ));
+          entry = { mtimeMs: st.mtimeMs, size: st.size, incomplete: result.incomplete, chunks };
+          if (!entry.incomplete && folders === this.folders) {
+            this._documents.delete(abs);
+            this._documents.set(abs, entry);
+            if (this._documents.size > MAX_CACHED_DOCUMENTS) this._documents.delete(this._documents.keys().next().value);
+          }
+        }
+        if (entry.incomplete) incomplete += 1;
+        for (const chunk of entry.chunks) {
+          const hit = scoreChunk(chunk, stems);
+          if (hit) hits.push(hit);
+        }
+      } catch {
+        signal?.throwIfAborted();
+        incomplete += 1;
+      }
+    }
+    signal?.throwIfAborted();
+    if (folders !== this.folders) throw new Error('подключённые папки изменились, повторите поиск');
+    hits.sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    return { hits: hits.slice(0, toLimit(limit)), incomplete };
+  }
+
   // Абсолютный путь внутри rootDir; для любого другого пути — ошибка.
   // Сначала лексическая проверка, потом настоящий путь: симлинк или junction внутри папки не должен вести наружу.
   // Новый файл ещё не существует, поэтому настоящий путь берём у самого глубокого существующего предка.
@@ -457,12 +508,20 @@ class WorkspaceIndex {
   }
 
   // Файлы рабочей папки, затем подключённых, без повторов. Подключённая папка внутри закрытой (data, точечной) пропускается.
-  _allFiles() {
+  _allFiles(extensions = TEXT_EXTENSIONS) {
     const seen = new Set();
     const out = [];
     for (const root of [this.rootDir, ...this.folders]) {
       if (root !== this.rootDir && root.split(path.sep).some((part) => closedName(part, true))) continue;
-      for (const abs of this._collectFiles(root, 0, [])) {
+      if (root !== this.rootDir) {
+        try {
+          if (!fs.lstatSync(root).isDirectory()) continue;
+        } catch (err) {
+          if (SKIP_CODES.has(err.code)) continue;
+          throw err;
+        }
+      }
+      for (const abs of this._collectFiles(root, 0, [], extensions)) {
         if (seen.has(pathKey(abs))) continue;
         seen.add(pathKey(abs));
         out.push(abs);
@@ -478,7 +537,7 @@ class WorkspaceIndex {
 
   // Рекурсивный обход. depth — число уровней папок от корня: корень 0, его подпапки 1 и т. д.
   // Папки глубже MAX_DEPTH не заходим. Симлинки, закрытые имена и папку самого индекса пропускаем.
-  _collectFiles(dir, depth, out) {
+  _collectFiles(dir, depth, out, extensions) {
     let entries;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -490,8 +549,8 @@ class WorkspaceIndex {
       if (entry.isSymbolicLink() || closedName(entry.name, entry.isDirectory())) continue;
       const abs = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (depth < MAX_DEPTH && pathKey(abs) !== pathKey(this.indexDir)) this._collectFiles(abs, depth + 1, out);
-      } else if (entry.isFile() && TEXT_EXTENSIONS.includes(path.extname(entry.name).toLowerCase())) {
+        if (depth < MAX_DEPTH && pathKey(abs) !== pathKey(this.indexDir)) this._collectFiles(abs, depth + 1, out, extensions);
+      } else if (entry.isFile() && extensions.includes(path.extname(entry.name).toLowerCase())) {
         out.push(abs);
       }
     }
