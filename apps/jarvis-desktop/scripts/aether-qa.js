@@ -1630,13 +1630,13 @@ async function runQa(win) {
   await settle(win, 220);
   const workshopInfo = await js(win, `(() => {
     const cards = [...document.querySelectorAll('#aeSettingsView .ae-orb-choice')].map((el) => el.id);
-    const hasBothSystems = ['aeOrbCard_nox_nox', 'aeOrbCard_nox_wire', 'aeOrbCard_nox_shutter', 'aeOrbCard_jarvis_core', 'aeOrbCard_jarvis_sphere', 'aeOrbCard_jarvis_iris'].every((id) => cards.includes(id));
-    return { cards, hasBothSystems };
+    const hasBothNox = ['aeOrbCard_nox_nox', 'aeOrbCard_nox_wire'].every((id) => cards.includes(id));
+    return { cards, hasBothNox };
   })()`);
   shots.push(await shot(win, '08-workshop-1200x720.png'));
 
   // Переключимся на Jarvis Ядро и проверим, что слайдер не пересоздаёт сам себя при drag и параметры сфер независимы
-  await js(win, `document.querySelector('#aeOrbCard_jarvis_core').click()`);
+  await js(win, `document.querySelector('#aeOrbCard_nox_wire').click()`);
   await settle(win, 180);
   const sliderPreserve = await js(win, `(() => {
     const range = document.querySelector('#aeSettingsView .ae-orb-controls-col input[type="range"]');
@@ -1645,18 +1645,18 @@ async function runQa(win) {
     range.value = String(Number(range.max || 1));
     range.dispatchEvent(new Event('input', { bubbles: true }));
     const sameDom = window.__qaSliderRef === document.querySelector('#aeSettingsView .ae-orb-controls-col input[type="range"]');
-    const coreScale = window.NoxOrbLibrary.getSettings('jarvis:core');
-    return { found: true, sameDom, active: window.NoxOrbLibrary.getSnapshot().activeId, coreScale };
+    const wireSettings = window.NoxOrbLibrary.getSettings('nox:wire');
+    return { found: true, sameDom, active: window.NoxOrbLibrary.getSnapshot().activeId, wireSettings };
   })()`);
   // Проверка пресета и сброса для активной сферы + шрифта подписи The Nox
   const presetAndFont = await js(win, `(() => {
     const presets = [...document.querySelectorAll('#aeSettingsView .ae-preset-row .ae-subtab')];
     const nonDefaultBtn = presets[presets.length - 1] || presets[0];
     if (nonDefaultBtn) nonDefaultBtn.click();
-    const afterPreset = window.NoxOrbLibrary.getSettings('jarvis:core');
+    const afterPreset = window.NoxOrbLibrary.getSettings('nox:wire');
     const resetBtn = [...document.querySelectorAll('#aeSettingsView button')].find((b) => /Сбросить эту сферу/i.test(b.textContent));
     if (resetBtn) resetBtn.click();
-    const afterReset = window.NoxOrbLibrary.getSettings('jarvis:core');
+    const afterReset = window.NoxOrbLibrary.getSettings('nox:wire');
     if (nonDefaultBtn) nonDefaultBtn.click();
     document.querySelector('#aeSettingsView [data-section="window"]').click();
     const sel = [...document.querySelectorAll('#aeSettingsView select')].find((s) => [...s.options].some((o) => o.value === 'times'));
@@ -1773,16 +1773,16 @@ async function runQa(win) {
     select.value = ${JSON.stringify(saved)};
     select.dispatchEvent(new Event('change'));
   })()`);
-  // Возврат в Чат с активной сферой Jarvis Ядро -> проверить сцену и шрифт подписи
+  // Возврат в Чат с активной сеткой Nox -> проверить сцену
   await js(win, `document.querySelector('#aeNav_chat').click()`);
   await settle(win, 220);
-  const jarvisActiveOnChat = await js(win, `({
+  const orbActiveOnChat = await js(win, `({
     orbId: document.querySelector('#aeOrbStage')?.dataset.orbId,
     sigFont: getComputedStyle(document.querySelector('.ae-orb-signature')).fontFamily,
   })`);
-  shots.push(await shot(win, '09-orb-jarvis-core-1200x720.png'));
+  shots.push(await shot(win, '09-orb-nox-wire-1200x720.png'));
 
-  // Возврат на Nox Classic ('nox:nox') + проверка сохранения настроек jarvis:core + уменьшения анимаций
+  // Возврат на сферу Nox ('nox:nox') + проверка сохранения настроек сетки и уменьшения анимаций
   await js(win, `window.NoxOrbLibrary.setActive('nox:nox')`);
   await settle(win, 180);
   await js(win, `window.__noxAether.store.setSetting('motion', false)`);
@@ -1793,25 +1793,24 @@ async function runQa(win) {
   const bothPreserved = await js(win, `({
     nowActive: window.NoxOrbLibrary.getSnapshot().activeId,
     noxStageId: document.querySelector('#aeOrbStage')?.dataset.orbId,
-    jarvisCoreStillCustom: window.NoxOrbLibrary.getSettings('jarvis:core'),
+    noxWireStillCustom: window.NoxOrbLibrary.getSettings('nox:wire'),
   })`);
-  push('orb-library-both-systems-and-slider-stability', Boolean(
-    workshopInfo.hasBothSystems
+  push('orb-library-two-nox-orbs-and-slider-stability', Boolean(
+    workshopInfo.hasBothNox
     && sliderPreserve.sameDom
     && presetAndFont.presetCount >= 2
     && Boolean(presetAndFont.presetIdAfterClick)
     && presetAndFont.presetIdAfterClick !== 'default'
     && presetAndFont.presetIdAfterReset === 'default'
-    && bothPreserved.jarvisCoreStillCustom.presetId === presetAndFont.presetIdAfterClick
-    && /Times/i.test(jarvisActiveOnChat.sigFont)
-    && jarvisActiveOnChat.orbId === 'jarvis:core'
+    && bothPreserved.noxWireStillCustom.presetId === presetAndFont.presetIdAfterClick
+    && orbActiveOnChat.orbId === 'nox:wire'
     && bothPreserved.noxStageId === 'nox:nox'
     && reducedOff === 'off'
     && dictCheck.btnVisible
     && dictCheck.btnRecording
     && dictCheck.chipVisible
     && dictCheck.stageState === 'listening'
-  ), { workshopInfo, sliderPreserve, presetAndFont, jarvisActiveOnChat, bothPreserved, reducedOff, dictCheck });
+  ), { workshopInfo, sliderPreserve, presetAndFont, orbActiveOnChat, bothPreserved, reducedOff, dictCheck });
 
   // ── 10. Остальные разделы: Готовые команды, MCP-подключения, Личное пространство (1200x720) ──
   await js(win, `document.querySelector('#aeNav_commands').click()`);
