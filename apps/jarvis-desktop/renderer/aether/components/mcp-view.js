@@ -237,8 +237,8 @@
       box.style.color = 'var(--lx-text, var(--text))';
       const brand = brandIcon(id);
       if (brand && brand.path) {
-        box.style.background = 'rgba(37, 89, 232, 0.20)';
-        box.style.boxShadow = 'inset 0 0 0 1px rgba(80, 112, 221, 0.30)';
+        box.style.background = 'color-mix(in srgb, var(--accent) 12%, var(--surface-2))';
+        box.style.boxShadow = 'inset 0 0 0 1px color-mix(in srgb, var(--border) 60%, transparent)';
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('viewBox', '0 0 24 24');
         svg.setAttribute('width', String(Math.round(size * 0.58)));
@@ -271,7 +271,7 @@
         box.append(glyph);
         return box;
       }
-      box.style.background = 'rgba(37, 89, 232, 0.20)';
+      box.style.background = 'color-mix(in srgb, var(--accent) 12%, var(--surface-2))';
       box.append(icon('mcp', ''));
       return box;
     }
@@ -770,7 +770,7 @@
         details.hidden = true;
         details.style.marginTop = '8px';
         details.style.paddingTop = '8px';
-        details.style.borderTop = '1px solid rgba(255, 255, 255, 0.10)';
+        details.style.borderTop = '1px solid color-mix(in srgb, var(--border) 55%, transparent)';
         details.style.display = 'none';
         details.style.flexDirection = 'column';
         details.style.gap = '5px';

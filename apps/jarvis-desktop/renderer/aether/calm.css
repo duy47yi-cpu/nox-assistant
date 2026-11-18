@@ -1,150 +1,594 @@
-/* Спокойный проход Aether (calm pass) — 19.11.2026.
- * Ориентир — сдержанный премиальный вид по материалам конкурента (Luxify):
- * почти чёрный фон, тонкие границы, много воздуха, крупный спокойный текст,
- * тихие чипы и большая сцена с подписью под сферой.
- * Только токены темы: --bg, --surface, --border, --text, --text-2/3, --accent.
- * Подключается последним слоем и не меняет разметку и поведение. */
+/* Спокойный дизайн-слой Nox Aether (Calm Pass 2) — 19.11.2026.
+ * Ориентир: тишина, воздух, тонкие границы, один акцент, крупный спокойный текст
+ * и единый язык карточек во всех 36 темах (тёмных и светлых).
+ * Все цвета — строго из токенов темы (--bg, --surface, --surface-2, --surface-3,
+ * --border, --text, --text-2, --text-3, --accent, --hue, --ok, --warn, --err).
+ * Подключается последним слоем без изменения разметки и контрактов QA-стендов. */
 
-/* ── Шапка: тише, активный раздел — подчёркивание, а не заливка ── */
-.ae-topbar {
-  height: 46px;
-  padding: 0 14px;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  border-bottom-color: color-mix(in srgb, var(--border) 38%, transparent);
+/* ── 1. Токены ритма, микротипографики и колец фокуса ─────────── */
+html[data-aether] {
+  --ae-sp-1: 4px;
+  --ae-sp-2: 8px;
+  --ae-sp-3: 12px;
+  --ae-sp-4: 16px;
+  --ae-sp-5: 24px;
+  --ae-r-sm: 8px;
+  --ae-r-md: 10px;
+  --ae-r-card: 12px;
+  --ae-r-panel: 14px;
+  --ae-r-pill: 999px;
+  --ae-fs-cap: 11px;
+  --ae-fs-meta: 12.5px;
+  --ae-fs-ui: 13.5px;
+  --ae-fs-read: var(--fs-read, 15px);
+  --ae-fs-sub: 17px;
+  --ae-fs-title: 24px;
+  --ae-fs-hero: 32px;
+  --ae-line-thin: color-mix(in srgb, var(--border) 48%, transparent);
+  --ae-line-soft: color-mix(in srgb, var(--border) 34%, transparent);
+  --ae-card-bg: color-mix(in srgb, var(--surface) 64%, transparent);
+  --ae-card-bg-2: color-mix(in srgb, var(--surface-2) 56%, transparent);
+  --ae-chip-bg: color-mix(in srgb, var(--surface-2) 52%, transparent);
+  --ae-chip-hover: color-mix(in srgb, var(--surface-3) 68%, transparent);
+  --ae-focus-ring: color-mix(in srgb, var(--hue, var(--accent, #5070DD)) 72%, #FFFFFF);
 }
-.ae-topbar .ae-nav { gap: 2px; }
-.ae-topbar .ae-nav-btn {
-  height: 30px; padding: 0 10px;
-  border: 0; border-radius: 8px;
+
+html[data-aether][data-theme="dark"] {
+  --ae-focus-ring: color-mix(in srgb, var(--lx-accent-glow, #5070DD) 55%, #FFFFFF);
+}
+
+html[data-aether]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"],
+  [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"],
+  [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"],
+  [data-theme="snow"]) {
+  --ae-focus-ring: var(--focus, var(--hue, var(--accent)));
+  --ae-line-thin: color-mix(in srgb, var(--border) 55%, transparent);
+  --ae-line-soft: color-mix(in srgb, var(--border) 40%, transparent);
+  --ae-card-bg: color-mix(in srgb, var(--surface) 76%, transparent);
+  --ae-card-bg-2: color-mix(in srgb, var(--surface-2) 54%, transparent);
+  --ae-chip-bg: color-mix(in srgb, var(--surface-2) 60%, transparent);
+  --ae-chip-hover: color-mix(in srgb, var(--surface-3) 76%, transparent);
+}
+
+/* Единое видимое кольцо фокуса 2 px на всех клавиатурно-доступных элементах (без двойной рамки на контейнерах с tabindex="-1") */
+html[data-aether][data-theme] .ae-body :is(button, input:not(.ae-textarea), select, textarea:not(.ae-textarea), a, summary, [tabindex]:not([tabindex="-1"])):not(.ae-approval-card):focus-visible {
+  outline: 2px solid var(--ae-focus-ring);
+  outline-offset: 2px;
+}
+
+/* В рейке своё проверенное кольцо --rlx-focus и пилюли */
+html[data-aether][data-theme] .ae-utility-rail :is(.ae-rail-button, .ae-limits-trigger, .ae-account-trigger):focus-visible {
+  outline: 2px solid var(--rlx-focus, var(--ae-focus-ring));
+  outline-offset: 2px;
+}
+
+/* Тонкие спокойные скроллбары на всех 36 темах */
+html[data-aether][data-theme] *::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+html[data-aether][data-theme] *::-webkit-scrollbar-thumb,
+html[data-aether][data-theme] .lx-cmd-tree-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+html[data-aether][data-theme] *::-webkit-scrollbar-thumb:hover,
+html[data-aether][data-theme] .lx-cmd-tree-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text) 24%, transparent);
+}
+html[data-aether][data-theme] .lx-cmd-tree-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── 2. Каркас и шапка: синхронизация строки сетки 46 px, подчёркивание на всех 36 темах ── */
+html[data-aether][data-theme] .ae-shell {
+  grid-template-rows: 46px minmax(0, 1fr);
+}
+
+html[data-aether][data-theme] .ae-topbar {
+  height: 46px;
+  min-height: 46px;
+  padding: 0 14px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  border-bottom: 1px solid var(--ae-line-soft);
+}
+
+html[data-aether][data-theme] .ae-topbar .ae-nav { gap: 2px; }
+
+html[data-aether][data-theme] .ae-topbar .ae-nav-btn {
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--ae-r-sm);
   background: transparent;
   color: var(--text-2);
-  font-size: 12.5px; font-weight: 500;
-  letter-spacing: .01em;
+  font-size: var(--ae-fs-meta);
+  font-weight: 500;
+  letter-spacing: 0.01em;
   transition: background-color .16s ease, color .16s ease;
 }
-.ae-topbar .ae-nav-btn:hover {
+
+html[data-aether][data-theme] .ae-topbar .ae-nav-btn .ae-nav-ico {
+  width: 15px;
+  height: 15px;
+  flex-basis: 15px;
+  color: var(--text-3);
+}
+
+html[data-aether][data-theme] .ae-topbar .ae-nav-btn:hover:not(.is-active):not([aria-selected="true"]) {
   background: color-mix(in srgb, var(--surface-2) 55%, transparent);
   color: var(--text);
 }
-.ae-topbar .ae-nav-btn.is-active,
-.ae-topbar .ae-nav-btn[aria-selected="true"] {
+
+html[data-aether][data-theme] .ae-topbar .ae-nav-btn:hover:not(.is-active):not([aria-selected="true"]) .ae-nav-ico {
+  color: var(--text-2);
+}
+
+html[data-aether][data-theme] .ae-topbar .ae-nav-btn.is-active,
+html[data-aether][data-theme] .ae-topbar .ae-nav-btn[aria-selected="true"] {
+  height: 30px;
+  padding: 0 10px;
   background: transparent;
-  border: 0; border-radius: 0;
+  border: 0;
+  border-radius: 0;
   color: var(--text);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
-.ae-topbar .ae-nav-btn.is-active .ae-nav-ico,
-.ae-topbar .ae-nav-btn[aria-selected="true"] .ae-nav-ico { color: var(--accent); }
 
-/* ── Рейка: воздушнее, без плотной подложки ── */
-.ae-utility-rail {
-  background: color-mix(in srgb, var(--surface) 42%, transparent);
-  border-color: color-mix(in srgb, var(--border) 40%, transparent);
+html[data-aether][data-theme] .ae-topbar .ae-nav-btn.is-active .ae-nav-ico,
+html[data-aether][data-theme] .ae-topbar .ae-nav-btn[aria-selected="true"] .ae-nav-ico {
+  color: var(--accent);
 }
 
-/* ── История: крупнее строки, тише группы, мягкий активный пункт ── */
-.ae-sidebar-head { padding: 12px 14px 10px; }
-.ae-ws-block { padding: 6px 14px 12px; border-bottom: 0; }
+html[data-aether][data-theme] .ae-topbar .ae-icon-btn {
+  width: 30px;
+  height: 30px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border: 1px solid var(--ae-line-soft);
+  color: var(--text-2);
+}
+html[data-aether][data-theme] .ae-topbar .ae-icon-btn:hover {
+  background: var(--ae-chip-hover);
+  color: var(--text);
+}
+
+html[data-aether][data-theme] .ae-mode-pill {
+  height: 28px;
+  padding: 0 10px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border: 1px solid var(--ae-line-thin);
+  color: var(--text-2);
+  font-size: var(--ae-fs-meta);
+}
+html[data-aether][data-theme] .ae-mode-pill:hover {
+  background: var(--ae-chip-hover);
+  color: var(--text);
+}
+
+html[data-aether][data-theme] .ae-win-btn {
+  color: var(--text-2);
+}
+html[data-aether][data-theme] .ae-win-btn:hover {
+  background: var(--ae-chip-hover);
+  color: var(--text);
+}
+
+html[data-aether][data-theme] .ae-menu-pop {
+  background: color-mix(in srgb, var(--surface) 96%, var(--bg));
+  border: 1px solid var(--ae-line-thin);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--text) 10%, rgba(0, 0, 0, 0.24));
+}
+
+/* Спокойные модальные диалоги поверх всех тем */
+html[data-aether][data-theme] .lx-modal-backdrop {
+  backdrop-filter: blur(8px);
+}
+html[data-aether][data-theme] .lx-modal {
+  border-radius: var(--ae-r-panel);
+  border: 1px solid var(--ae-line-thin);
+  background: color-mix(in srgb, var(--surface) 96%, var(--bg));
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--text) 10%, rgba(0, 0, 0, 0.28));
+}
+html[data-aether][data-theme] :is(.lx-modal-head, .lx-modal-sec) {
+  border-bottom-color: var(--ae-line-soft);
+}
+html[data-aether][data-theme] .lx-modal-foot {
+  border-top-color: var(--ae-line-soft);
+}
+
+/* ── 3. Светлые темы и рейка: воздух и мягкие тени ─────────────── */
+.ae-utility-rail {
+  background: color-mix(in srgb, var(--surface) 44%, transparent);
+  border-color: var(--ae-line-thin);
+}
+
+html[data-aether]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"],
+  [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"],
+  [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"],
+  [data-theme="snow"]) .ae-rail-v2 {
+  --rlx-shadow: 0 4px 16px color-mix(in srgb, var(--text) 5%, transparent);
+  --rlx-line: color-mix(in srgb, var(--border) 62%, transparent);
+  --rlx-pill-bg: color-mix(in srgb, var(--surface) 95%, var(--bg));
+  --rlx-pill-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent),
+    0 8px 20px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+html[data-aether]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"],
+  [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"],
+  [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"],
+  [data-theme="snow"]) .ae-utility-rail {
+  background: color-mix(in srgb, var(--surface) 74%, var(--bg));
+}
+
+/* ── 4. История чатов и пустое состояние списка ───────────────── */
+html[data-aether][data-theme] .ae-sidebar,
+html[data-aether][data-theme] .ae-sidebar.ae-history-drawer {
+  background: color-mix(in srgb, var(--surface) 60%, var(--bg));
+  border-radius: var(--ae-r-panel);
+}
+html[data-aether][data-theme] .ae-sidebar-wrap.is-open .ae-sidebar {
+  border-right: 1px solid var(--ae-line-thin);
+}
+.ae-sidebar-head { padding: 12px 14px 8px; }
+.ae-ws-block { padding: 4px 14px 10px; border-bottom: 0; }
+.ae-sidebar-actions { padding: 2px 14px 8px; }
+
 .ae-btn-new-chat {
   height: 34px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-  background: transparent;
+  border-radius: var(--ae-r-md);
+  border: 1px solid var(--ae-line-thin);
+  background: color-mix(in srgb, var(--surface-2) 38%, transparent);
   color: var(--text-2);
+  font-size: var(--ae-fs-meta);
   font-weight: 500;
   transition: background-color .16s ease, color .16s ease, border-color .16s ease;
 }
 .ae-btn-new-chat:hover {
-  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+  background: var(--ae-chip-hover);
   color: var(--text);
 }
-.ae-chat-list { padding: 4px 8px 18px; gap: 2px; }
+
+.ae-ws-select,
+.ae-sidebar-search .ae-search-input {
+  height: 32px;
+  border-radius: var(--ae-r-md);
+  border: 1px solid var(--ae-line-thin);
+  background: color-mix(in srgb, var(--surface-2) 42%, transparent);
+  color: var(--text);
+  font-size: var(--ae-fs-meta);
+}
+
+.ae-chat-list { padding: 4px 8px 18px; gap: 4px; }
 .ae-chat-group-title {
-  padding: 16px 10px 6px;
-  font-size: 10px; font-weight: 600;
-  letter-spacing: .14em;
+  padding: 14px 10px 6px;
+  font-size: var(--ae-fs-cap);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--text-3);
 }
-.ae-chat-row { border-radius: 10px; }
-.ae-chat-open { padding: 9px 10px; font-size: 13.5px; }
-.ae-chat-row:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.ae-chat-row {
+  position: relative;
+  border-radius: var(--ae-r-md);
+}
+.ae-chat-open { padding: 8px 10px; font-size: var(--ae-fs-ui); }
+.ae-chat-time {
+  font-size: var(--ae-fs-cap);
+  font-variant-numeric: tabular-nums;
+}
+.ae-chat-row:hover { background: color-mix(in srgb, var(--surface-2) 56%, transparent); }
 .ae-chat-row.is-active {
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: none;
+}
+.ae-chat-row.is-active::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 2.5px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
 }
 .ae-chat-row.is-active .ae-chat-open { color: var(--text); font-weight: 500; }
 
-/* ── Чат: воздух, спокойное чтение, меньше рамок ── */
+.ae-sidebar-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 14px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: var(--ae-fs-meta);
+}
+.ae-sidebar-empty::before {
+  content: "";
+  width: 22px;
+  height: 2px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text-3) 38%, transparent);
+}
+
+/* ── 5. Чат, приветствие и единый язык карточек ───────────────── */
 .ae-chat-view {
-  border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
-  border-radius: 14px;
+  border: 1px solid var(--ae-line-soft);
+  border-radius: var(--ae-r-panel);
   background: color-mix(in srgb, var(--surface) 30%, transparent);
 }
-.ae-feed { padding: 28px 6px 20px; gap: 22px; }
+
+html[data-aether]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"],
+  [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"],
+  [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"],
+  [data-theme="snow"]) .ae-chat-view {
+  background: color-mix(in srgb, var(--surface) 62%, transparent);
+  border-color: var(--ae-line-thin);
+}
+
+.ae-empty-hero {
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 4%, transparent) 0%, transparent 56%);
+}
+.ae-empty-title {
+  font-size: clamp(24px, 2.5vw, var(--ae-fs-hero));
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.ae-feed { padding: 24px 6px 20px; gap: 20px; }
 .ae-msg.is-user { margin-top: 2px; }
-.ae-user-bubble {
+
+/* Перебиваем html[data-aether] .ae-chat-view .ae-user-bubble из aether.css */
+html[data-aether] .ae-chat-view .ae-user-bubble {
   max-width: min(78%, 560px);
-  padding: 11px 15px;
+  padding: 10px 15px;
   border-radius: 18px 18px 6px 18px;
-  background: color-mix(in srgb, var(--surface-2) 78%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-  font-size: var(--fs-read, 15px);
+  background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+  border: 1px solid var(--ae-line-thin);
+  font-size: var(--ae-fs-read);
   line-height: 1.55;
 }
-.ae-reply { gap: 7px; }
+
+.ae-reply { gap: 8px; }
 .ae-reply-author {
-  font-size: 10.5px; font-weight: 650;
-  letter-spacing: .12em;
+  font-size: var(--ae-fs-cap);
+  font-weight: 650;
+  letter-spacing: 0.1em;
   color: var(--text-3);
 }
-.ae-msg-time { font-size: 10.5px; letter-spacing: .02em; }
+.ae-msg-time {
+  font-size: var(--ae-fs-cap);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
 .ae-reply-content { max-width: 68ch; }
-.ae-assistant-body { font-size: var(--fs-read, 15px); line-height: 1.62; }
-.ae-assistant-body p { margin-block: .5em; }
+.ae-assistant-body { font-size: var(--ae-fs-read); line-height: 1.62; }
+.ae-assistant-body p { margin-block: 0.5em; }
 
-/* ── Поле ввода: плавающая тихая пилюля ── */
+/* Спойлер «Подробности», артефакты, частичный результат, ошибки, подтверждение — единая сетка */
+.ae-details-toggle {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--ae-r-pill);
+  border: 1px solid var(--ae-line-thin);
+  background: var(--ae-chip-bg);
+  color: var(--text-2);
+  font-size: var(--ae-fs-meta);
+  font-weight: 500;
+}
+.ae-details-toggle:hover,
+.ae-details-toggle[aria-expanded="true"] {
+  background: var(--ae-chip-hover);
+  border-color: var(--ae-line-thin);
+  color: var(--text);
+}
+
+.ae-details-panel,
+.ae-artifact-card {
+  padding: 12px 14px;
+  border-radius: var(--ae-r-card);
+  background: var(--ae-card-bg);
+  border: 1px solid var(--ae-line-thin);
+  gap: 10px;
+}
+.ae-details-actions,
+.ae-details-sources {
+  gap: 6px;
+}
+
+.ae-artifact-icon.ae-ico {
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+}
+.ae-artifact-name {
+  font-size: var(--ae-fs-ui);
+  font-weight: 600;
+  color: var(--text);
+}
+.ae-artifact-meta {
+  font-size: var(--ae-fs-meta);
+  color: var(--text-2);
+}
+.ae-artifact-path {
+  font-size: var(--ae-fs-cap);
+  color: var(--text-3);
+}
+
+.ae-chat-view .ae-error-card,
+.ae-partial-card {
+  padding: 12px 14px;
+  border-radius: var(--ae-r-card);
+  border: 1px solid color-mix(in srgb, var(--outcome-color) 28%, var(--ae-line-thin));
+  border-inline-start: 3px solid var(--outcome-color);
+  background: color-mix(in srgb, var(--outcome-color) 6%, var(--ae-card-bg));
+  font-size: var(--ae-fs-ui);
+  line-height: 1.5;
+  gap: 8px;
+}
+.ae-partial-state {
+  font-size: var(--ae-fs-meta);
+  font-weight: 600;
+}
+.ae-partial-reason,
+.ae-error-text {
+  font-size: var(--ae-fs-meta);
+  line-height: 1.48;
+  color: var(--text-2);
+}
+
+.ae-approval-card {
+  padding: 12px 14px;
+  border-radius: var(--ae-r-card);
+  background: color-mix(in srgb, var(--surface) 92%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--warn) 42%, var(--ae-line-thin));
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 6%, rgba(0, 0, 0, 0.16));
+  gap: 8px;
+}
+.ae-approval-card.is-high-risk {
+  border-color: color-mix(in srgb, var(--err) 48%, var(--ae-line-thin));
+}
+.ae-approval-title { font-size: var(--ae-fs-ui); font-weight: 600; }
+.ae-approval-summary { font-size: var(--ae-fs-meta); line-height: 1.48; color: var(--text-2); }
+.ae-approval-meta,
+.ae-approval-countdown {
+  font-size: var(--ae-fs-cap);
+  font-variant-numeric: tabular-nums;
+}
+.ae-badge {
+  border-radius: var(--ae-r-pill);
+  font-size: var(--ae-fs-cap);
+  font-weight: 600;
+  padding: 2px 8px;
+}
+.ae-approval-preview {
+  padding: 8px 12px;
+  border-radius: var(--ae-r-sm);
+  background: color-mix(in srgb, var(--bg) 70%, var(--surface));
+  border: 1px solid var(--ae-line-thin);
+  font-size: var(--ae-fs-cap);
+  line-height: 1.45;
+}
+.ae-approval-actions {
+  gap: 8px;
+}
+
+/* Единые спокойные кнопки и чипы под ответом (уточнения, артефакт, источники, подтверждение, сохранить команду) */
+:is(.ae-clarification .ae-btn,
+    .ae-artifact-actions .ae-btn,
+    .ae-error-actions .ae-btn,
+    .ae-approval-actions .ae-btn,
+    .ae-save-cmd-btn,
+    .ae-save-cmd-open,
+    .ae-sources-trigger) {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: var(--ae-r-pill);
+  border: 1px solid var(--ae-line-thin);
+  background: var(--ae-chip-bg);
+  color: var(--text-2);
+  font-size: var(--ae-fs-meta);
+  font-weight: 500;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+
+:is(.ae-clarification .ae-btn,
+    .ae-artifact-actions .ae-btn,
+    .ae-error-actions .ae-btn,
+    .ae-approval-actions .ae-btn:not(.ae-btn-primary):not(.ae-btn-danger),
+    .ae-save-cmd-btn,
+    .ae-save-cmd-open,
+    .ae-sources-trigger):hover:not(:disabled) {
+  background: var(--ae-chip-hover);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--text);
+}
+.ae-approval-actions .ae-btn-primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+.ae-approval-actions .ae-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.ae-approval-actions .ae-btn-danger {
+  background: color-mix(in srgb, var(--err) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--err) 46%, var(--border));
+  color: var(--err);
+}
+.ae-approval-actions .ae-btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--err) 22%, var(--surface));
+  border-color: var(--err);
+}
+
+.ae-action-outcome {
+  padding: 6px 0 2px;
+  border-top-color: var(--ae-line-soft);
+  font-size: var(--ae-fs-meta);
+}
+
+.ae-sources-popover {
+  padding: 4px;
+  border-radius: var(--ae-r-card);
+  border: 1px solid var(--ae-line-thin);
+  background: color-mix(in srgb, var(--surface) 94%, var(--bg));
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--text) 10%, rgba(0, 0, 0, 0.22));
+}
+.ae-source-link { border-radius: var(--ae-r-sm); }
+
+/* ── 6. Поле ввода: специфичность (0,1,0) для сохранения data-glass="off" ── */
 .ae-composer-dock { padding: 10px 0 20px; }
 .ae-composer {
   border-radius: 24px;
   padding: 12px 14px 10px;
   background: color-mix(in srgb, var(--surface) 44%, transparent);
   border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--text) 7%, rgba(0, 0, 0, 0.14));
 }
-.ae-composer:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
-}
-.ae-textarea { font-size: var(--fs-read, 15px); }
-.ae-composer-footer { margin-top: 8px; }
 
-/* ── Сцена: подпись как у референса, тихие чипы и карточки ── */
+html[data-aether]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"],
+  [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"],
+  [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"],
+  [data-theme="snow"]):not([data-glass="off"]) .ae-composer {
+  background: color-mix(in srgb, var(--surface) 64%, transparent);
+  border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.ae-composer:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+}
+.ae-textarea { font-size: var(--ae-fs-read); }
+.ae-composer-footer { margin-top: 8px; }
+.ae-agent-toggle,
+.ae-pick-trigger {
+  font-size: var(--ae-fs-meta);
+}
+
+/* ── 7. Сцена сферы и тихие часы (164 px обычная / 64 px компакт) ── */
 .ae-orb-stage {
-  border-color: color-mix(in srgb, var(--border) 30%, transparent);
+  border-color: var(--ae-line-soft);
   background: transparent;
 }
 .ae-orb-caption { gap: 4px; }
-.ae-orb-signature { font-size: 17px; letter-spacing: .02em; color: var(--text-2); }
+.ae-orb-signature {
+  font-size: var(--ae-fs-sub);
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+}
 .ae-orb-status {
   background: transparent;
-  border-color: color-mix(in srgb, var(--border) 45%, transparent);
-  font-size: 11px;
-  letter-spacing: .04em;
+  border-color: var(--ae-line-thin);
+  font-size: var(--ae-fs-cap);
+  letter-spacing: 0.04em;
 }
-.ae-orb-hint { letter-spacing: .02em; }
-.ae-day-widgets {
-  background: transparent;
-  border-color: color-mix(in srgb, var(--border) 35%, transparent);
-  box-shadow: none;
-}
+.ae-orb-hint { font-size: var(--ae-fs-cap); letter-spacing: 0.02em; }
 
-/* ── Плавность ── */
-.ae-nav-btn, .ae-chat-row, .ae-btn-new-chat, .ae-composer, .ae-user-bubble {
-  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
-}
-
-/* ── Второй проход: тихие часы и музыка, чтобы сцена дышала ── */
+/* Специфичность (0,1,0), чтобы html[data-glass="off"] .ae-day-widgets в aether.css работал */
 .ae-day-widgets {
-  /* Высота закреплена проверкой стенда: 164 обычная, 64 компакт; вид при этом тихий. */
   min-height: 164px;
   padding: 0 4px;
   gap: 2px;
@@ -152,29 +596,631 @@
   border-radius: 0;
   background: transparent;
   backdrop-filter: none;
+  box-shadow: none;
   animation: none;
 }
 .ae-day-widgets:not(.is-compact):has(.ae-day-reminder:not([hidden])) { min-height: 164px; }
 .ae-day-time {
-  font-size: 24px;
+  font-size: var(--ae-fs-title);
   line-height: 28px;
   font-weight: 500;
   color: var(--text-2);
-  letter-spacing: -.01em;
+  letter-spacing: -0.01em;
 }
-.ae-day-date, .ae-day-reminder { font-size: 11px; line-height: 15px; color: var(--text-3); }
+.ae-day-date, .ae-day-reminder { font-size: var(--ae-fs-cap); line-height: 15px; color: var(--text-3); }
 .ae-day-state { font-size: 10.5px; line-height: 13px; color: var(--text-3); margin-block-start: 3px; }
 .ae-day-state::before { width: 5px; height: 5px; }
 .ae-day-music {
   padding-top: 7px;
   margin-top: 2px;
-  border-top-color: color-mix(in srgb, var(--border) 40%, transparent);
+  border-top-color: var(--ae-line-soft);
 }
-.ae-day-cover { width: 34px; height: 34px; border-radius: 7px; opacity: .92; }
-.ae-day-title { font-size: 12px; font-weight: 500; color: var(--text-2); }
+.ae-day-cover { width: 34px; height: 34px; border-radius: 7px; opacity: 0.92; }
+.ae-day-title { font-size: var(--ae-fs-meta); font-weight: 500; color: var(--text-2); }
 .ae-day-detail { font-size: 10.5px; line-height: 14px; color: var(--text-3); }
 .ae-day-action::before {
-  border-color: color-mix(in srgb, var(--border) 45%, transparent);
+  border-color: var(--ae-line-thin);
   background: transparent;
 }
-.ae-day-action:hover::before { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.ae-day-action:hover::before { background: var(--ae-chip-hover); }
+
+/* ── 8. Единый ритм вторичных разделов и Настроек Aether ────────── */
+.ae-page {
+  padding: 20px 26px 28px;
+  gap: 16px;
+}
+.ae-page-head {
+  padding-bottom: 12px;
+  border-bottom-color: var(--ae-line-soft);
+}
+.ae-page-title {
+  font-size: var(--ae-fs-title);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+.ae-page-sub { font-size: var(--ae-fs-meta); color: var(--text-2); }
+.ae-section-heading { font-size: var(--ae-fs-sub); font-weight: 600; }
+
+/* Настройки Aether */
+.ae-settings-layout {
+  grid-template-columns: 184px minmax(0, 1fr);
+  gap: 20px;
+}
+.ae-settings-nav {
+  background: transparent;
+  gap: 2px;
+  padding: 0;
+}
+.ae-settings-nav .ae-page-search > input {
+  height: 32px;
+  border-radius: var(--ae-r-md);
+  border: 1px solid var(--ae-line-thin);
+  background: color-mix(in srgb, var(--surface-2) 42%, transparent);
+  font-size: var(--ae-fs-meta);
+}
+.ae-settings-nav-btn {
+  position: relative;
+  min-height: 34px;
+  padding: 6px 10px 6px 12px;
+  border: 0;
+  border-radius: var(--ae-r-md);
+  font-size: var(--ae-fs-ui);
+  color: var(--text-2);
+  transition: background-color .16s ease, color .16s ease;
+}
+.ae-settings-nav-btn:hover {
+  background: color-mix(in srgb, var(--surface-2) 56%, transparent);
+  color: var(--text);
+}
+.ae-settings-nav-btn.is-active {
+  border: 0;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: none;
+  color: var(--text);
+  font-weight: 560;
+}
+.ae-settings-nav-btn.is-active::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 2.5px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.ae-settings-body { gap: 16px; }
+html[data-aether][data-theme] .ae-settings-page .ae-settings-group {
+  background: var(--ae-card-bg);
+  border: 1px solid var(--ae-line-thin);
+  border-radius: var(--ae-r-panel);
+  padding: 18px 20px;
+  gap: 12px;
+  color: var(--text);
+}
+.ae-settings-group > h2 {
+  font-size: var(--ae-fs-sub);
+  font-weight: 600;
+}
+.ae-settings-group > .ae-set-row {
+  padding: 8px 0;
+}
+.ae-settings-group > .ae-set-row + .ae-set-row {
+  border-top: 1px solid var(--ae-line-soft);
+}
+.ae-set-text strong { font-size: var(--ae-fs-ui); font-weight: 500; }
+.ae-set-text .ae-item-meta { font-size: var(--ae-fs-meta); color: var(--text-3); }
+
+.ae-settings-page :is(.ae-input, .ae-select),
+html[data-aether][data-theme] :is(.lx-input, .lx-select) {
+  border-radius: var(--ae-r-md);
+  border: 1px solid var(--ae-line-thin);
+  background: var(--ae-card-bg-2);
+  color: var(--text);
+  font-size: var(--ae-fs-ui);
+}
+
+.ae-orb-preview-card {
+  padding: 14px;
+  border-radius: var(--ae-r-card);
+  background: color-mix(in srgb, var(--bg) 55%, var(--surface));
+  border: 1px solid var(--ae-line-thin);
+}
+.ae-orb-choice {
+  padding: 10px 12px;
+  border-radius: var(--ae-r-md);
+  border: 1px solid var(--ae-line-thin);
+  background: var(--ae-card-bg-2);
+}
+.ae-orb-choice:hover {
+  background: var(--ae-chip-hover);
+}
+.ae-orb-choice.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 11%, var(--surface));
+}
+.ae-orb-choice-desc { font-size: var(--ae-fs-cap); color: var(--text-2); line-height: 1.38; }
+
+.ae-theme-gallery { gap: 8px; }
+.ae-theme-card {
+  border-radius: var(--ae-r-md);
+  border: 1px solid var(--ae-line-thin);
+  background: var(--ae-card-bg-2);
+  padding: 5px 5px 7px;
+}
+.ae-theme-card:hover { background: var(--ae-chip-hover); }
+.ae-theme-card[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.ae-theme-sample { border-color: var(--ae-line-thin); border-radius: 6px; }
+.ae-theme-card-name { font-size: var(--ae-fs-cap); }
+
+.ae-type-sample {
+  padding: 12px 14px;
+  border-radius: var(--ae-r-md);
+  background: var(--ae-card-bg-2);
+  border: 1px solid var(--ae-line-soft);
+  border-inline-start: 2px solid var(--accent);
+}
+.ae-orb-fields { border-top-color: var(--ae-line-soft); gap: 12px 16px; }
+.ae-group-label {
+  font-size: var(--ae-fs-cap);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.ae-subtab {
+  border-radius: var(--ae-r-pill);
+  border: 1px solid var(--ae-line-thin);
+  background: var(--ae-chip-bg);
+  color: var(--text-2);
+  font-size: var(--ae-fs-meta);
+}
+.ae-subtab.is-active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--text);
+}
+
+/* Главная (#aePersonalView) */
+html[data-aether][data-theme] .lx-card {
+  background: var(--ae-card-bg);
+  border: 1px solid var(--ae-line-thin);
+  border-radius: var(--ae-r-panel);
+  padding: 18px 20px;
+}
+html[data-aether][data-theme] .lx-card-title {
+  font-size: var(--ae-fs-sub);
+  font-weight: 600;
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-ctrl-row {
+  border-bottom-color: var(--ae-line-soft);
+}
+html[data-aether][data-theme] .lx-ctrl-label {
+  font-size: var(--ae-fs-ui);
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-slider-val {
+  font-size: var(--ae-fs-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+html[data-aether][data-theme] .lx-history-row {
+  border-left-color: var(--ae-line-thin);
+  color: var(--text-2);
+  font-size: var(--ae-fs-ui);
+}
+html[data-aether][data-theme] .lx-history-row.is-accent {
+  border-left-color: var(--accent);
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-extra-stat {
+  background: var(--ae-card-bg-2);
+  border: 1px solid var(--ae-line-soft);
+  border-radius: var(--ae-r-md);
+}
+html[data-aether][data-theme] .lx-bg-ring {
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+html[data-aether][data-theme] .lx-bg-ring-1 {
+  border-color: color-mix(in srgb, var(--accent) 44%, transparent);
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent) 0%, color-mix(in srgb, var(--accent) 6%, transparent) 60%, transparent 100%);
+  box-shadow: 0 0 36px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+html[data-aether][data-theme] .lx-bg-ring-2 {
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  background: radial-gradient(circle, transparent 60%, color-mix(in srgb, var(--accent) 5%, transparent) 100%);
+}
+html[data-aether][data-theme] .lx-bg-ring-3 { border-color: color-mix(in srgb, var(--border) 62%, transparent); background: none; }
+html[data-aether][data-theme] .lx-bg-ring-4 { border-color: color-mix(in srgb, var(--border) 38%, transparent); }
+
+/* Команды (#aeCommandsView) */
+html[data-aether][data-theme] .lx-cmd-seg {
+  background: var(--ae-chip-bg);
+  border: 1px solid var(--ae-line-thin);
+  border-radius: var(--ae-r-md);
+}
+html[data-aether][data-theme] .lx-cmd-seg-btn {
+  color: var(--text-2);
+  font-size: var(--ae-fs-meta);
+  font-weight: 500;
+}
+html[data-aether][data-theme] .lx-cmd-seg-btn:hover { color: var(--text); }
+html[data-aether][data-theme] .lx-cmd-seg-btn.is-active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 48%, transparent);
+}
+html[data-aether][data-theme] .lx-cmd-search-input {
+  background: var(--ae-card-bg-2);
+  border: 1px solid var(--ae-line-thin);
+  border-radius: var(--ae-r-md);
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-cmd-search-input:focus {
+  background: var(--ae-card-bg);
+  border-color: var(--accent);
+}
+html[data-aether][data-theme] .lx-cmd-ico-btn,
+html[data-aether][data-theme] .lx-cmd-save-btn,
+html[data-aether][data-theme] .lx-cmd-mini-btn {
+  background: var(--ae-chip-bg);
+  border: 1px solid var(--ae-line-thin);
+  color: var(--text-2);
+  border-radius: var(--ae-r-sm);
+}
+html[data-aether][data-theme] .lx-cmd-ico-btn:hover,
+html[data-aether][data-theme] .lx-cmd-mini-btn:hover:not(:disabled),
+html[data-aether][data-theme] .lx-cmd-save-btn:hover:not(:disabled) {
+  background: var(--ae-chip-hover);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-cmd-ico-btn.is-active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-cmd-save-btn.is-dirty,
+html[data-aether][data-theme] .lx-cmd-save-btn.is-primary,
+html[data-aether][data-theme] .lx-cmd-mini-btn.is-primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+  box-shadow: none;
+}
+html[data-aether][data-theme] .lx-tree-guide-line { background: var(--ae-line-soft); }
+html[data-aether][data-theme] .lx-tree-row {
+  position: relative;
+  height: 38px;
+  min-height: 38px;
+  background: var(--ae-card-bg);
+  border: 1px solid var(--ae-line-thin);
+  border-radius: var(--ae-r-md);
+  color: var(--text-2);
+  font-size: var(--ae-fs-ui);
+}
+html[data-aether][data-theme] .lx-tree-row:hover {
+  background: var(--ae-chip-hover);
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-tree-row:hover :is(.lx-tree-row-ico, .lx-tree-row-chev) {
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-tree-row.is-selected {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border));
+  color: var(--text);
+  box-shadow: none;
+}
+html[data-aether][data-theme] .lx-tree-row.is-selected::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 2.5px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+html[data-aether][data-theme] .lx-tree-row.is-selected :is(.lx-tree-row-ico, .lx-tree-row-chev) {
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-tree-row.is-selected .lx-tree-row-meta { color: var(--text-2); }
+html[data-aether][data-theme] .lx-tree-act-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--ae-r-sm);
+  background: var(--ae-chip-bg);
+  border: 1px solid var(--ae-line-thin);
+  color: var(--text-2);
+  box-shadow: none;
+}
+html[data-aether][data-theme] .lx-tree-act-btn:hover {
+  background: var(--ae-chip-hover);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--text);
+  filter: none;
+}
+html[data-aether][data-theme] .lx-cmd-inspector,
+html[data-aether][data-theme] .lx-cmd-pack-card,
+html[data-aether][data-theme] .lx-ai-card,
+html[data-aether][data-theme] .lx-launch-row {
+  background: var(--ae-card-bg);
+  border: 1px solid var(--ae-line-thin);
+  border-radius: var(--ae-r-card);
+}
+html[data-aether][data-theme] .lx-ai-step-row {
+  background: var(--ae-card-bg-2);
+  border: 1px solid var(--ae-line-soft);
+  border-radius: var(--ae-r-md);
+}
+html[data-aether][data-theme] .lx-new-tabs {
+  background: var(--ae-card-bg-2);
+  border: 1px solid var(--ae-line-thin);
+}
+html[data-aether][data-theme] .lx-new-tab.is-active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 44%, transparent);
+}
+html[data-aether][data-theme] .lx-stepper-pill {
+  background: var(--ae-card-bg-2);
+  border: 1px solid var(--ae-line-thin);
+  color: var(--text-2);
+}
+html[data-aether][data-theme] .lx-stepper-pill.is-active {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+html[data-aether][data-theme] .lx-cmd-insp-footer {
+  border-top-color: var(--ae-line-soft);
+}
+html[data-aether][data-theme] :is(.lx-cmd-input, .lx-cmd-select, .lx-cmd-textarea) {
+  background: var(--ae-card-bg-2);
+  border: 1px solid var(--ae-line-thin);
+  border-radius: var(--ae-r-md);
+  color: var(--text);
+}
+html[data-aether][data-theme] :is(.lx-cmd-input, .lx-cmd-select, .lx-cmd-textarea):focus {
+  border-color: var(--accent);
+}
+html[data-aether][data-theme] .lx-missing-box {
+  background: color-mix(in srgb, var(--warn) 8%, var(--ae-card-bg));
+  border-color: color-mix(in srgb, var(--warn) 48%, var(--ae-line-thin));
+  color: var(--text);
+  border-radius: var(--ae-r-card);
+}
+html[data-aether][data-theme] .lx-error-box {
+  background: color-mix(in srgb, var(--err) 8%, var(--ae-card-bg));
+  border-color: color-mix(in srgb, var(--err) 48%, var(--ae-line-thin));
+  color: var(--err);
+  border-radius: var(--ae-r-card);
+}
+
+/* Дополнения (#aeMcpView) */
+html[data-aether][data-theme] .lx-pill-tab {
+  height: 32px;
+  padding: 0 14px;
+  background: var(--ae-chip-bg);
+  border: 1px solid var(--ae-line-thin);
+  color: var(--text-2);
+  font-size: var(--ae-fs-meta);
+}
+html[data-aether][data-theme] .lx-pill-tab:hover { background: var(--ae-chip-hover); color: var(--text); }
+html[data-aether][data-theme] .lx-pill-tab.is-active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-search-input {
+  height: 34px;
+  border-radius: var(--ae-r-md);
+  background: var(--ae-card-bg-2);
+  border: 1px solid var(--ae-line-thin);
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-search-input:focus {
+  box-shadow: none;
+  border-color: var(--accent);
+}
+html[data-aether][data-theme] .ae-grid-card,
+html[data-aether][data-theme] .lx-addon-card,
+html[data-aether][data-theme] .lx-voice-card,
+html[data-aether][data-theme] .lx-voice-banner {
+  background: var(--ae-card-bg);
+  border: 1px solid var(--ae-line-thin);
+  border-radius: var(--ae-r-card);
+}
+html[data-aether][data-theme] .ae-grid-card:hover,
+html[data-aether][data-theme] .lx-addon-card:hover,
+html[data-aether][data-theme] .lx-voice-card:hover {
+  background: var(--ae-card-bg-2);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+}
+html[data-aether][data-theme] .lx-addon-ico-box {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-addon-card[data-installed="true"] .lx-addon-ico-box {
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+html[data-aether][data-theme] .lx-voice-banner-ico {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-circle-play {
+  background: var(--ae-chip-bg);
+  border: 1px solid var(--ae-line-thin);
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-circle-play:hover {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+html[data-aether][data-theme] .lx-cat-col {
+  background: var(--ae-card-bg);
+  border: 1px solid var(--ae-line-thin);
+  border-radius: var(--ae-r-card);
+}
+html[data-aether][data-theme] .lx-cat-btn.is-active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 44%, transparent);
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-pill-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+html[data-aether][data-theme] .lx-pill-secondary,
+html[data-aether][data-theme] .lx-pill-ghost,
+html[data-aether][data-theme] .lx-voice-banner-acts .lx-pill-secondary {
+  background: var(--ae-chip-bg);
+  border: 1px solid var(--ae-line-thin);
+  color: var(--text-2);
+}
+html[data-aether][data-theme] .lx-pill-secondary:hover,
+html[data-aether][data-theme] .lx-pill-ghost:hover,
+html[data-aether][data-theme] .lx-voice-banner-acts .lx-pill-secondary:hover {
+  background: var(--ae-chip-hover);
+  color: var(--text);
+}
+html[data-aether][data-theme] .lx-fav-switch {
+  border-top-color: var(--ae-line-soft);
+}
+
+/* Пустые панели разделов — тихо и по-фирменному */
+html[data-aether][data-theme] :is(.lx-empty-box, .ae-empty-pane) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px 20px;
+  border-radius: var(--ae-r-card);
+  border: 1px solid var(--ae-line-soft);
+  background: color-mix(in srgb, var(--surface) 42%, transparent);
+  color: var(--text-3);
+  font-size: var(--ae-fs-ui);
+  text-align: center;
+}
+html[data-aether][data-theme] :is(.lx-empty-box, .ae-empty-pane)::before {
+  content: "";
+  width: 24px;
+  height: 2px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text-3) 38%, transparent);
+}
+
+/* ── 9. Компактный режим 864×520: без обрезаний и горизонтального скролла ── */
+@media (max-width: 960px), (max-height: 580px) {
+  html[data-aether][data-theme] .ae-shell {
+    grid-template-rows: 44px minmax(0, 1fr);
+  }
+  html[data-aether][data-theme] .ae-topbar {
+    height: 44px;
+    min-height: 44px;
+    padding: 0 10px;
+    gap: 4px;
+  }
+  html[data-aether][data-theme] .ae-topbar .ae-nav-btn,
+  html[data-aether][data-theme] .ae-topbar .ae-nav-btn.is-active,
+  html[data-aether][data-theme] .ae-topbar .ae-nav-btn[aria-selected="true"] {
+    width: auto;
+    height: 30px;
+    padding: 0 8px;
+    gap: 5px;
+  }
+  html[data-aether][data-theme] .ae-topbar .ae-nav-btn > span,
+  html[data-aether][data-theme] .ae-topbar .ae-nav-btn.is-active > span,
+  html[data-aether][data-theme] .ae-topbar .ae-nav-btn[aria-selected="true"] > span {
+    display: inline;
+  }
+  html[data-aether][data-theme] .ae-topbar .ae-nav-btn .ae-nav-ico {
+    width: 15px;
+    height: 15px;
+    flex-basis: 15px;
+  }
+  .ae-feed { padding: 16px 4px 12px; gap: 16px; }
+  .ae-composer-dock { padding: 6px 0 14px; }
+  .ae-composer-footer :is(.ae-agent-toggle, .ae-pick-trigger, .ae-mic-btn) {
+    padding-inline: 8px;
+  }
+  .ae-artifact-card {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .ae-artifact-actions {
+    flex: 1 0 100%;
+    margin-top: 2px;
+  }
+  .ae-page { padding: 14px 16px 20px; gap: 12px; }
+  .ae-settings-layout {
+    grid-template-columns: 152px minmax(0, 1fr);
+    gap: 12px;
+  }
+  html[data-aether][data-theme] .ae-settings-page .ae-settings-group {
+    padding: 14px 16px;
+  }
+  .ae-orb-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ae-settings-group .ae-workshop-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 780px) {
+  html[data-aether][data-theme] .ae-topbar .ae-nav-btn > span { display: none; }
+  html[data-aether][data-theme] .ae-topbar .ae-nav-btn { width: 32px; padding: 0; justify-content: center; }
+}
+
+/* ── 10. Плавность и микроанимации (с уважением к уменьшению движения) ── */
+.ae-nav-btn, .ae-chat-row, .ae-btn-new-chat, .ae-composer, .ae-user-bubble,
+.ae-settings-nav-btn, .ae-theme-card, .ae-orb-choice, .ae-grid-card, .lx-tree-row {
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+
+@keyframes aeCalmCardIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes aeCalmDotPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-animations="off"]):not([data-motion="off"]) :is(.ae-artifact-card, .ae-partial-card, .ae-error-card, .ae-approval-card) {
+    animation: aeCalmCardIn 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  html:not([data-animations="off"]):not([data-motion="off"]) .ae-step-line[data-state="running"] .ae-step-dot {
+    animation: aeCalmDotPulse 1.6s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ae-nav-btn, .ae-chat-row, .ae-btn-new-chat, .ae-composer, .ae-user-bubble,
+  .ae-settings-nav-btn, .ae-theme-card, .ae-orb-choice, .ae-grid-card, .lx-tree-row,
+  .ae-artifact-card, .ae-partial-card, .ae-error-card, .ae-approval-card, .ae-step-dot {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+html[data-animations="off"] *,
+html[data-motion="off"] * {
+  animation: none !important;
+  transition: none !important;
+}
