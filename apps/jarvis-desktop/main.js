@@ -65,7 +65,7 @@ const { diskTools } = require('./src/tools/disk');
 const { memoryTools } = require('./src/tools/memory');
 const { GoalStore, goalsBrief } = require('./src/goals/store');
 const { goalTools } = require('./src/goals/tools');
-const { TurnPlans } = require('./src/agent/plan');
+const { TurnPlans, PlanStore } = require('./src/agent/plan');
 const { planTools } = require('./src/tools/plan');
 const { studyTool, STUDY_PROMPT } = require('./src/tools/study');
 const { createTelegramStudy } = require('./src/telegram/study');
@@ -499,8 +499,10 @@ const TURNS_LOG = cfg('NOX_TURNS_LOG').toLowerCase() === 'off' ? null : path.joi
 
 const memory = new MemoryStore(path.join(DATA_DIR, 'memory.json'));
 const goals = new GoalStore(path.join(DATA_DIR, 'goals.json'));
-// План хода: шаги модели в одном ходе и их закрытие. Память процесса, на диск не пишется.
-const turnPlans = new TurnPlans();
+// План хода: шаги модели и их закрытие. Черновик незакрытого плана сохраняется на диск по чату
+// и пространству (plans.json), чтобы «продолжай» поднимал тот же план после перезапуска.
+const planStore = new PlanStore(path.join(DATA_DIR, 'plans.json'));
+const turnPlans = new TurnPlans({ store: planStore });
 const reminders = new ReminderStore(path.join(DATA_DIR, 'reminders.json'));
 const missions = new MissionStore(path.join(DATA_DIR, 'missions.json'));
 const commands = new CommandStore(path.join(DATA_DIR, 'commands.json'));
@@ -1743,6 +1745,9 @@ const agent = new Agent({
   stream: true,
   chatReplies: true,
   plans: turnPlans,
+  // Активный чат и пространство: по ним сохраняется план хода (функция — чат можно сменить).
+  chatId: () => chats.list().activeId,
+  workspaceId: 'default',
   backgroundOffer: true,
   context: (text) => [memoryContext(memory, text), skillHintForTurn(skills, text)].filter(Boolean).join('\n'),
   // Подбор инструментов под задачу: выключен, пока замер на настоящей модели не покажет, что выбор не страдает.
@@ -2619,6 +2624,8 @@ async function runChatTurn(event, text, files, opts = {}, voiceCommand = '') {
       try {
         const item = longTasks.start({ goal: backgroundGoal, hours: 1, useDesktop: false });
         agent.forgetPlan();
+        // План ушёл в поручение: с диска убираем, иначе «продолжай» поднял бы его заново.
+        agent.dropSavedPlan();
         backgroundReply = `Продолжаю в фоне, не дольше часа. Итог будет в файле ${item.report}. Остановить — скажите «останови поручение».`;
       } catch (err) {
         backgroundReply = `Не получилось продолжить в фоне: ${err.message}`;
@@ -2784,6 +2791,7 @@ ipcMain.handle('chat:clear', (event) => {
     try { workspaceHub.chat().clearChat(); return { ok: true }; } catch (err) { return { ok: false, error: err.message }; }
   }
   agent.history.length = 0;
+  agent.dropSavedPlan(); // очищенный разговор не продолжает старый план
   saveConversation();
   return { ok: true };
 });

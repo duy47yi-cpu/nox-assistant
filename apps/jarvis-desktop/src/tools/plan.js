@@ -37,7 +37,7 @@ function planTools(plans) {
       name: 'plan_done',
       risk: 'T0',
       source: 'plan',
-      description: 'Закрыть шаг плана, когда он действительно сделан. evidence — чем подтверждено: имя файла, ответ инструмента, что видно на экране. Шаг без доказательства не закрывается.',
+      description: 'Закрыть шаг плана, когда он действительно сделан. evidence — чем подтверждено: имя файла, ответ инструмента, что видно на экране. Шаг без доказательства не закрывается; шаг с наблюдаемым результатом (создать, записать, сохранить, скачать, отправить, файл, документ, конспект) требует подтверждённого инструмента этого хода или существующего непустого файла.',
       parameters: {
         type: 'object',
         properties: {
@@ -48,7 +48,8 @@ function planTools(plans) {
       },
       run(args, ctx) {
         try {
-          const plan = plans.done(ctx && ctx.runId, args && args.step, args && args.evidence);
+          // Рабочая папка хода: по ней проверяется, что названный в доказательстве путь действительно есть.
+          const plan = plans.done(ctx && ctx.runId, args && args.step, args && args.evidence, { root: (ctx && ctx.workspace) || '' });
           const left = plan.steps.filter((s) => s.status !== 'done').length;
           return {
             ok: true,

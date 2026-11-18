@@ -5,7 +5,7 @@ const path = require('path');
 const { decide: defaultDecide, allowKey, isOneShot, BROWSER_TAINT_WRITES } = require('../policy/modes');
 const { isTaintSource, isForeignTextSource, isHandsAction, isEgress } = require('../policy/taint');
 const { TurnLog } = require('./turnlog');
-const { planNote, planBrief, STOP_WORDS } = require('./plan');
+const { planNote, planBrief, planResumeNote, planResumeAnswer, isResumePhrase, STOP_WORDS } = require('./plan');
 const { checkEffect } = require('./effects');
 const { makeToolContext } = require('./tool-context');
 const { uniqueSearchMatch } = require('../tools/install');
@@ -288,6 +288,10 @@ class Agent {
     stepDeadlineMs = 0,
     toolView = null,
     plans = null,
+    // Разговор, которому принадлежит план: активный чат и пространство. Строка или функция:
+    // чат можно сменить, а агент остаётся тем же. Без них план живёт только в памяти хода.
+    chatId = '',
+    workspaceId = '',
     // Чат владельца: при лимите с незакрытым планом предложить доделать в фоне.
     backgroundOffer = false,
     chatReplies = false,
@@ -299,7 +303,10 @@ class Agent {
     this.toolView = typeof toolView === 'function' ? toolView : null;
     // План хода (TurnPlans): шаги модели и их закрытие. Без хранилища агент работает как раньше.
     this.plans = plans && typeof plans.get === 'function' ? plans : null;
+    this.chatId = chatId; // чат и пространство: по ним план сохраняется на диск
+    this.workspaceId = workspaceId;
     this._lastPlan = null; // план прошлого хода: по «продолжай» он поднимается в новый ход
+    this._planResume = null; // план, поднятый с диска: ответ обязан назвать сделанное
     this.stopGraceMs = Number.isFinite(stopGraceMs) && stopGraceMs >= 0 ? stopGraceMs : STOP_GRACE_MS;
     this.brain = brain;
     // После перезапуска неизвестно, что стало с окнами: действия запрещены, пока не сделан снимок экрана.
@@ -402,6 +409,30 @@ class Agent {
   // Переключились на другой разговор: «продолжай» не должен поднимать план из прежнего.
   forgetPlan() {
     this._lastPlan = null;
+    this._planResume = null;
+  }
+
+  // «Продолжай в фоне»: план уходит в долгое поручение. Его надо убрать и из памяти, и с диска,
+  // иначе следующий «продолжай» поднимет тот же план заново. Смену разговора делает forgetPlan.
+  dropSavedPlan() {
+    if (!this.plans || typeof this.plans.drop !== 'function') return false;
+    try {
+      return this.plans.drop(this._planScope());
+    } catch {
+      return false;
+    }
+  }
+
+  // Ключ сохранённого плана: один план на активный чат в пространстве.
+  _planScope() {
+    const read = (value) => {
+      try {
+        return typeof value === 'function' ? String(value() ?? '').trim() : String(value ?? '').trim();
+      } catch {
+        return '';
+      }
+    };
+    return { chatId: read(this.chatId), workspaceId: read(this.workspaceId) || 'default', root: this.workspace };
   }
 
   // Цель для долгого поручения: просьба владельца и план с отметками сделанного.
@@ -473,17 +504,42 @@ class Agent {
     if (note) {
       this._turnContext = [this._turnContext, note].filter(Boolean).join('\n\n');
     }
-    // «Продолжай» поднимает незакрытый план прошлого хода: модель видит, что уже сделано.
-    // Границу слова здесь не используем: в JS она считается только по латинице.
-    const resumes = Boolean(this.plans && this._lastPlan && /^\s*(продолжай|continue)/i.test(text));
-    if (!resumes) { this._planRequest = String(text); this._planHands = false; }
-    if (resumes) {
+    // «Продолжай» поднимает незакрытый план этого разговора. Сначала — сохранённый на диск
+    // (переживает перезапуск), затем — из памяти прошлого хода. Модель видит, что уже сделано.
+    this._planResume = null;
+    if (this.plans) {
       try {
-        const seeded = this.plans.seed(this._runId, this._lastPlan);
-        this._turnContext = [this._turnContext, planBrief(seeded)].filter(Boolean).join('\n');
-      } catch {
-        // план не поднялся: ход идёт как обычно, без памятки
+        const saved = this.plans.start(this._runId, { ...this._planScope(), request: text });
+        const unfinished = (plan) => Boolean(plan && Array.isArray(plan.steps) && plan.steps.some((s) => s.status !== 'done'));
+        let raised = false;
+        if (isResumePhrase(text)) {
+          const fromDisk = unfinished(saved) ? saved : null;
+          const fromMemory = unfinished(this._lastPlan) ? this._lastPlan : null;
+          const candidate = fromDisk || fromMemory;
+          if (candidate) {
+            const seeded = this.plans.seed(this._runId, candidate);
+            if (fromDisk) {
+              // Заметка прямо называет сделанное, файлы и следующий шаг: после перезапуска модель
+              // не должна начинать заново и не должна решать, что было сделано, по своей памяти.
+              this._planResume = candidate;
+              this._turnContext = [this._turnContext, planResumeNote(candidate)].filter(Boolean).join('\n');
+            } else {
+              this._turnContext = [this._turnContext, planBrief(seeded)].filter(Boolean).join('\n');
+            }
+            this._planRequest = String(candidate.request || this._planRequest || text);
+            raised = true;
+          }
+        }
+        if (!raised) { this._planRequest = String(text); this._planHands = false; }
+      } catch (err) {
+        // Сбой хранилища не должен рвать чат: ход идёт как обычно, без памятки.
+        console.warn(`план хода не поднят: ${errText(err)}`);
+        this._planRequest = String(text);
+        this._planHands = false;
       }
+    } else {
+      this._planRequest = String(text);
+      this._planHands = false;
     }
     let finalOutcome = null;
     this.lastError = null; // текст ошибки хода для дел: итог run() остаётся {ok, outcome}
@@ -505,10 +561,16 @@ class Agent {
       if (controller.signal.aborted && !this._turn.outcome) this._turn.outcome = 'stopped';
       finalOutcome = this._turn.outcome;
       if (offStop) offStop();
-      // План хода остаётся в памяти агента: по «продолжай» он вернётся в следующий ход.
+      // План хода остаётся в памяти агента и сохраняется на диск: по «продолжай» он вернётся
+      // в следующий ход (или после перезапуска), а закрытый план с диска убирается.
       if (this.plans) {
         const plan = this.plans.get(this._runId);
         if (plan) this._lastPlan = plan;
+        try {
+          this.plans.finish(this._runId);
+        } catch (err) {
+          console.warn(`план хода не сохранён: ${errText(err)}`);
+        }
       }
       this._logTurn();
       this._installEvidence = null;
@@ -621,7 +683,9 @@ class Agent {
         if (text && !this._streamedChars) this._emit({ type: 'text', delta: text, ...(this._runId ? { runId: this._runId } : {}) });
         this._turn.answerChars = text.length;
         this._turn.outcome = answerOnly ? 'loop' : 'answer';
-        // Сверка плана: незакрытое код дописывает сам, а ответ с незакрытым планом — «не уверен».
+        // Сверка плана: после «продолжай» код сам называет сделанное, а незакрытое дописывает ниже;
+        // ответ с незакрытым планом — «не уверен».
+        this._closeResumeNote();
         this._closePlanNote();
         return this._endTurn();
       }
@@ -959,6 +1023,21 @@ class Agent {
     if (!afterStop && this.chatReplies && callStatus === 'succeeded' && typeof tool?.verify === 'function') {
       const artifact = artifactFrom(this.workspace, call.name, result);
       if (artifact) this._turn.artifacts.set(artifact.path, artifact);
+    }
+    // План хода: наблюдение за завершённым инструментом. Шаг плана закрывается по подтверждённому
+    // действию этого хода или по настоящему непустому файлу — словам модели не верим.
+    if (this.plans) {
+      try {
+        this.plans.observe(this._runId, {
+          name: call.name,
+          verified: result.verified === 'confirmed' ? 'confirmed' : result.verified === 'failed' ? 'failed' : 'unknown',
+          summary: result.summary,
+          path: result.data && typeof result.data.path === 'string' ? result.data.path : null,
+          artifacts: this._turn && this._turn.artifacts ? [...this._turn.artifacts.values()].map((item) => item.path) : [],
+        });
+      } catch (err) {
+        console.warn(`наблюдение плана не записано: ${errText(err)}`);
+      }
     }
 
     // Журнал владельца: итог вызова вместе с проверкой результата. callId связывает запись со стартом в turnLog,
@@ -1358,6 +1437,23 @@ class Agent {
   _withPlanNote(text) {
     const note = this._planNoteText();
     return note ? `${text}\n\n${note}` : text;
+  }
+
+  // Ход после «продолжай»: код сам называет сделанное, файлы и следующий шаг — не на слово модели.
+  // Дописываем только то, чего в ответе нет: обычный ответ модели не переписываем.
+  _closeResumeNote() {
+    if (!this._planResume) return;
+    this._planResume = null;
+    if (!this.plans) return;
+    const plan = this.plans.get(this._runId);
+    if (!plan) return;
+    const last = this.history[this.history.length - 1];
+    if (!last || last.role !== 'assistant' || typeof last.content !== 'string' || !last.content.trim()) return;
+    const note = planResumeAnswer(plan, last.content);
+    if (!note) return;
+    last.content = `${last.content}\n\n${note}`.trim();
+    this._turn.answerChars = (this._turn.answerChars || 0) + note.length + 2;
+    this._emit({ type: 'text', delta: `\n\n${note}`, ...(this._runId ? { runId: this._runId } : {}) });
   }
 
   // Ответ модели уже в истории: дописываем к нему незакрытое и меняем итог на «не уверен».

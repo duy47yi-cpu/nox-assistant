@@ -132,6 +132,9 @@ class WorkspaceChat {
       workspace: space.root, history: chats.active().history, systemPrompt: prompt,
       clock: this.options.clock, turnsLog: this.options.turnsLog, maxSteps: 24, stream: true, turnDeadlineMs: this.options.turnDeadlineMs || 0,
       plans: this.options.plans, chatReplies: true,
+      // План пространства: активный чат этой сессии и само пространство. Чат может смениться — берём текущий.
+      chatId: () => this.session.chats.list().activeId,
+      workspaceId: space.id,
       context: (text) => [memoryContext(space.memory, text), skillHintForTurn(skills, text)].filter(Boolean).join('\n'),
     });
     return { space, conversation, chats, registry, agent, skills, skillsDir };

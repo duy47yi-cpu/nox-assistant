@@ -1,26 +1,291 @@
 'use strict';
 
 // План хода: шаги, которые модель назвала сама, и их закрытие с доказательством.
-// План живёт в памяти процесса по ключу хода (runId) и не пишется на диск: это часть одного
-// разговора, а не обещание на будущее (для долгих целей есть src/goals/store.js).
+// В памяти процесса план живёт по ключу хода (runId). На диск (plans.json в папке данных) сохраняется
+// черновик для разговора — чат и пространство вместе: один план на активный разговор, чтобы «продолжай»
+// поднимал именно его и после перезапуска. Это не долгие цели (src/goals/store.js): у плана один
+// разговор, а шаг закрывается только проверкой, а не словами модели.
+const fs = require('fs');
+const path = require('path');
+const { writeFileAtomic } = require('../config/atomic');
+
 const MAX_STEPS = 20;
 const MAX_TEXT = 300;
 const MAX_EVIDENCE = 500;
-const MAX_PLANS = 20;
+const MAX_PLANS = 20; // планов в памяти процесса (по числу одновременных ходов)
+const MAX_PLAN_ITEMS = 40; // планов на диске
+const MAX_PLAN_AGE_MS = 30 * 24 * 60 * 60 * 1000; // старше 30 дней план с диска убирается
+const MAX_REQUEST = 600;
+const MAX_FILES = 10;
+const MAX_PATH_TEXT = 300;
+const MAX_OBSERVATIONS = 40;
+const PLAN_VERSION = 1;
 // Слова трёх честных остановок: их показывает и инструмент, и сам агент.
 const STOP_WORDS = { impossible: 'Невозможно', needs_human: 'Нужен человек', unsure: 'Не уверен в результате' };
 
-function cleanText(value, max, label) {
+function cleanText(value, max, label, { required = true } = {}) {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim();
-  if (!text) throw new Error(`${label}: пусто`);
+  if (required && !text) throw new Error(`${label}: пусто`);
   if (text.length > max) throw new Error(`${label}: не больше ${max} символов`);
   return text;
 }
 
+// Пути в доказательстве и артефактах: только строки, без повторов, не больше MAX_FILES.
+function cleanFiles(value) {
+  const list = Array.isArray(value) ? value : [];
+  const out = [];
+  for (const item of list) {
+    const file = String(item ?? '').trim();
+    if (!file || file.length > MAX_PATH_TEXT || out.includes(file)) continue;
+    out.push(file);
+    if (out.length >= MAX_FILES) break;
+  }
+  return out;
+}
+
+function cleanStep(item, i, { keepStatus = false } = {}) {
+  const raw = typeof item === 'string' ? item : item && item.text;
+  const status = keepStatus && item && item.status === 'done' ? 'done' : 'pending';
+  return {
+    id: `s${i + 1}`,
+    text: cleanText(raw, MAX_TEXT, `шаг ${i + 1}`),
+    status,
+    evidence: status === 'done' && item && item.evidence ? String(item.evidence).slice(0, MAX_EVIDENCE) : null,
+    doneAt: status === 'done' && item && typeof item.doneAt === 'string' ? item.doneAt : null,
+    files: cleanFiles(item && item.files),
+  };
+}
+
+function copyPlan(plan) {
+  return {
+    ...plan,
+    steps: plan.steps.map((s) => ({ ...s, files: Array.isArray(s.files) ? s.files.slice() : [] })),
+    ...(Array.isArray(plan.artifacts) ? { artifacts: plan.artifacts.slice() } : {}),
+  };
+}
+
+// ── Шаг с наблюдаемым результатом ──────────────────────────────────────────
+// Такой шаг нельзя закрыть одними словами: нужен подтверждённый инструмент этого хода
+// или существующий непустой файл (путь из доказательства или из результата инструмента).
+const RESULT_VERB = /(созда|запиш|записать|записыва|сохран|скача|скачай|сформир|сгенерир|напиш|перепиш|выгруз|экспортир|отправ|отосл|опублик|закача|загруз|распечата|скопир|перенес|перемест)/i;
+const FILE_WORD = /(файл|документ|конспект|отчёт|отчет|таблиц|презентац|архив|изображени|картинк|скриншот|pdf|docx|xlsx|pptx|csv|\btxt\b|\bmd\b)/i;
+// Чтение, поиск и обдумывание сами по себе результата не создают — их закрывает текст.
+const LOOK_VERB = /(найти|найди|найдём|найдем|прочит|прочти|читать|посмотр|посмотри|провер|открыть|открой|покаж|искать|глян|сверь|сверить|изуч|проанализир|обдумать|решить|спланир)/i;
+
+function observableResult(text) {
+  const value = String(text || '').toLowerCase();
+  const file = FILE_WORD.test(value);
+  if (RESULT_VERB.test(value)) return { needed: true, file };
+  if (file && !LOOK_VERB.test(value)) return { needed: true, file: true };
+  return { needed: false, file: false };
+}
+
+// ── Пути из доказательства ────────────────────────────────────────────────
+function cleanCandidate(value) {
+  return String(value || '').trim().replace(/[.,;:!?]+$/u, '').replace(/^[«»"'`]+|[«»"'`]+$/gu, '').trim();
+}
+
+function looksLikePath(value) {
+  if (!value || value.length > MAX_PATH_TEXT) return false;
+  if (/[<>|?*\u0000]/u.test(value)) return false;
+  if (/[\\/]/.test(value)) return true;
+  return /\.[A-Za-z0-9]{1,8}$/u.test(value);
+}
+
+function pathCandidates(text) {
+  const raw = String(text || '');
+  const out = [];
+  const push = (value) => {
+    const clean = cleanCandidate(value);
+    if (looksLikePath(clean) && !out.includes(clean)) out.push(clean);
+  };
+  for (const match of raw.matchAll(/[«"'`]([^«»"'`\n]{1,300})[»"'`]/g)) push(match[1]);
+  for (const match of raw.matchAll(/[^\s,;()[\]{}<>"«»`']+/g)) push(match[0]);
+  return out;
+}
+
+function isInside(rootAbs, target) {
+  const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const base = fold(rootAbs);
+  const full = fold(path.resolve(target));
+  return full === base || full.startsWith(base.endsWith(path.sep) ? base : base + path.sep);
+}
+
+// Существующий непустой файл (или папка) по пути. Ссылки не принимаем: путь должен быть настоящим.
+function pathInfo(candidate, root, { insideOnly = false } = {}) {
+  const value = cleanCandidate(candidate);
+  if (!value || value.length > MAX_PATH_TEXT) return null;
+  if (/[<>|?*"\u0000]/u.test(value)) return null;
+  let abs;
+  if (path.isAbsolute(value)) abs = value;
+  else if (root) abs = path.resolve(root, value);
+  else return null;
+  let stat;
+  try {
+    stat = fs.lstatSync(abs);
+  } catch {
+    return null;
+  }
+  if (stat.isSymbolicLink()) return null;
+  const directory = stat.isDirectory();
+  if (!directory && (!stat.isFile() || stat.size <= 0)) return null;
+  const rootAbs = root ? path.resolve(root) : '';
+  const inside = rootAbs ? isInside(rootAbs, abs) : false;
+  if (insideOnly && rootAbs && !inside) return null;
+  return {
+    path: abs,
+    directory,
+    display: inside ? path.relative(rootAbs, abs).split(path.sep).join('/') : abs,
+  };
+}
+
+// Пути из слов доказательства: относительные считаются от рабочей папки и обязаны быть внутри неё.
+function evidenceFiles(text, root) {
+  const out = [];
+  for (const candidate of pathCandidates(text)) {
+    const info = pathInfo(candidate, root, { insideOnly: Boolean(root) });
+    if (info && !out.some((item) => item.path === info.path)) out.push(info);
+  }
+  return out;
+}
+
+// ── Хранилище планов на диске ─────────────────────────────────────────────
+// Ключ — пространство и чат. Один план на активный разговор; старые планы убираются по возрасту
+// и по числу. Запись атомарная: сбой посреди записи оставляет прежний файл целым.
+function scopeKey(chatId, workspaceId) {
+  const chat = String(chatId ?? '').trim();
+  const space = String(workspaceId ?? '').trim() || 'default';
+  if (!chat || chat.length > 200 || space.length > 200) return null;
+  return { chatId: chat, workspaceId: space, key: `${space}\u0000${chat}` };
+}
+
+function planFromItem(item) {
+  const steps = (Array.isArray(item.steps) ? item.steps : []).slice(0, MAX_STEPS).map((step, i) => cleanStep(step, i, { keepStatus: true }));
+  if (!steps.length) return null;
+  return {
+    chatId: String(item.chatId || ''),
+    workspaceId: String(item.workspaceId || ''),
+    request: String(item.request || ''),
+    steps,
+    artifacts: cleanFiles(item.artifacts),
+    createdAt: item.createdAt || null,
+    updatedAt: item.updatedAt || null,
+  };
+}
+
+class PlanStore {
+  constructor(file, { now = () => new Date(), maxItems = MAX_PLAN_ITEMS, maxAgeMs = MAX_PLAN_AGE_MS } = {}) {
+    this.file = file;
+    this.now = typeof now === 'function' ? now : () => new Date();
+    this.maxItems = Math.max(1, Number(maxItems) || MAX_PLAN_ITEMS);
+    this.maxAgeMs = Math.max(0, Number(maxAgeMs) || MAX_PLAN_AGE_MS);
+  }
+
+  _load() {
+    let raw;
+    try {
+      raw = fs.readFileSync(this.file, 'utf8');
+    } catch (err) {
+      if (err && err.code === 'ENOENT') return { version: PLAN_VERSION, items: [] };
+      throw new Error(`файл планов не прочитан: ${this.file}`);
+    }
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new Error(`файл планов повреждён: ${this.file}`);
+    }
+    if (!data || !Array.isArray(data.items)) throw new Error(`файл планов повреждён: ${this.file}`);
+    return data;
+  }
+
+  _save(data) {
+    const now = this.now().getTime();
+    data.version = PLAN_VERSION;
+    data.items = data.items
+      .filter((item) => {
+        const at = Number(item && item.updatedAt);
+        return Number.isFinite(at) && now - at <= this.maxAgeMs;
+      })
+      .slice(0, this.maxItems);
+    fs.mkdirSync(path.dirname(this.file), { recursive: true });
+    writeFileAtomic(this.file, JSON.stringify(data, null, 2));
+  }
+
+  get({ chatId, workspaceId } = {}) {
+    const scope = scopeKey(chatId, workspaceId);
+    if (!scope) return null;
+    const data = this._load();
+    const item = data.items.find((x) => {
+      const own = scopeKey(x && x.chatId, x && x.workspaceId);
+      return own && own.key === scope.key;
+    });
+    return item ? planFromItem(item) : null;
+  }
+
+  put({ chatId, workspaceId, request = '', steps = [], artifacts = [] } = {}) {
+    const scope = scopeKey(chatId, workspaceId);
+    if (!scope) throw new Error('план: нужен чат и пространство');
+    if (!Array.isArray(steps) || !steps.length) throw new Error('план: нужен хотя бы один шаг');
+    if (steps.length > MAX_STEPS) throw new Error(`план: не больше ${MAX_STEPS} шагов`);
+    const cleanSteps = steps.map((item, i) => cleanStep(item, i, { keepStatus: true }));
+    const data = this._load();
+    const previous = data.items.find((x) => {
+      const own = scopeKey(x && x.chatId, x && x.workspaceId);
+      return own && own.key === scope.key;
+    });
+    const at = this.now().getTime();
+    const item = {
+      chatId: scope.chatId,
+      workspaceId: scope.workspaceId,
+      request: cleanText(request, MAX_REQUEST, 'просьба', { required: false }),
+      steps: cleanSteps,
+      artifacts: cleanFiles(artifacts),
+      createdAt: previous && previous.createdAt ? previous.createdAt : at,
+      updatedAt: at,
+    };
+    data.items = data.items.filter((x) => {
+      const own = scopeKey(x && x.chatId, x && x.workspaceId);
+      return !own || own.key !== scope.key;
+    });
+    data.items.unshift(item);
+    this._save(data);
+    return planFromItem(item);
+  }
+
+  remove({ chatId, workspaceId } = {}) {
+    const scope = scopeKey(chatId, workspaceId);
+    if (!scope) return false;
+    const data = this._load();
+    const before = data.items.length;
+    data.items = data.items.filter((x) => {
+      const own = scopeKey(x && x.chatId, x && x.workspaceId);
+      return !own || own.key !== scope.key;
+    });
+    if (data.items.length === before) return false;
+    this._save(data);
+    return true;
+  }
+
+  list({ workspaceId = null, limit = 20 } = {}) {
+    const data = this._load();
+    const space = workspaceId == null ? null : String(workspaceId || 'default');
+    return data.items
+      .filter((item) => !space || String(item.workspaceId || 'default') === space)
+      .slice(0, Math.max(1, Math.min(100, Number(limit) || 20)))
+      .map(planFromItem)
+      .filter(Boolean);
+  }
+}
+
+// ── Планы хода ────────────────────────────────────────────────────────────
 class TurnPlans {
-  constructor({ maxPlans = MAX_PLANS } = {}) {
+  constructor({ maxPlans = MAX_PLANS, store = null, now = () => new Date() } = {}) {
     this.maxPlans = Math.max(1, Number(maxPlans) || MAX_PLANS);
+    this.store = store && typeof store.get === 'function' ? store : null;
+    this.now = typeof now === 'function' ? now : () => new Date();
     this.byRun = new Map();
+    this.lastError = ''; // последняя причина, по которой план не прочитан или не сохранён
   }
 
   _key(runId) {
@@ -29,18 +294,56 @@ class TurnPlans {
     return key;
   }
 
+  _record(runId) {
+    const key = this._key(runId);
+    let record = this.byRun.get(key);
+    if (!record) {
+      record = { runId: key, chatId: '', workspaceId: '', request: '', root: '', plan: null, observations: [] };
+      this.byRun.set(key, record);
+      while (this.byRun.size > this.maxPlans) this.byRun.delete(this.byRun.keys().next().value);
+    }
+    return record;
+  }
+
+  // Начало хода: запомнить разговор и вернуть сохранённый план этого разговора (или null).
+  // План не поднимается сам: это делает агент по «продолжай» и показывает модели заметку.
+  start(runId, { chatId = '', workspaceId = '', request = '', root = '' } = {}) {
+    const record = this._record(runId);
+    record.chatId = String(chatId ?? '').trim();
+    record.workspaceId = String(workspaceId ?? '').trim();
+    record.request = String(request ?? '').slice(0, MAX_REQUEST);
+    record.root = String(root ?? '');
+    record.plan = null;
+    record.observations = [];
+    return this.load({ chatId: record.chatId, workspaceId: record.workspaceId });
+  }
+
+  load({ chatId, workspaceId } = {}) {
+    if (!this.store) return null;
+    try {
+      const plan = this.store.get({ chatId, workspaceId });
+      this.lastError = '';
+      return plan;
+    } catch (err) {
+      this.lastError = err && err.message ? err.message : String(err);
+      return null;
+    }
+  }
+
   set(runId, steps) {
     const list = Array.isArray(steps) ? steps : [];
     if (!list.length) throw new Error('план: нужен хотя бы один шаг');
     if (list.length > MAX_STEPS) throw new Error(`план: не больше ${MAX_STEPS} шагов`);
-    const clean = list.map((item, i) => {
-      const raw = typeof item === 'string' ? item : item && item.text;
-      return { id: `s${i + 1}`, text: cleanText(raw, MAX_TEXT, `шаг ${i + 1}`), status: 'pending', evidence: null, doneAt: null };
-    });
-    const key = this._key(runId);
-    const plan = { runId: key, steps: clean, createdAt: new Date().toISOString() };
-    this.byRun.set(key, plan);
-    while (this.byRun.size > this.maxPlans) this.byRun.delete(this.byRun.keys().next().value);
+    const record = this._record(runId);
+    const plan = {
+      runId: record.runId,
+      request: record.request,
+      steps: list.map((item, i) => cleanStep(item, i)),
+      artifacts: [],
+      createdAt: this.now().toISOString(),
+    };
+    record.plan = plan;
+    this._persist(record);
     return copyPlan(plan);
   }
 
@@ -48,42 +351,167 @@ class TurnPlans {
   seed(runId, previous) {
     const source = previous && Array.isArray(previous.steps) ? previous.steps : [];
     if (!source.length) throw new Error('план: нужен хотя бы один шаг');
-    const key = this._key(runId);
+    const record = this._record(runId);
     const plan = {
-      runId: key,
-      steps: source.map((s, i) => ({
-        id: `s${i + 1}`,
-        text: String(s.text || '').slice(0, MAX_TEXT),
-        status: s.status === 'done' ? 'done' : 'pending',
-        evidence: s.status === 'done' ? s.evidence || null : null,
-        doneAt: s.status === 'done' ? s.doneAt || null : null,
-      })),
-      createdAt: new Date().toISOString(),
+      runId: record.runId,
+      request: String((previous && previous.request) || record.request || '').slice(0, MAX_REQUEST),
+      steps: source.slice(0, MAX_STEPS).map((item, i) => cleanStep(item, i, { keepStatus: true })),
+      artifacts: cleanFiles(previous && previous.artifacts),
+      createdAt: (previous && previous.createdAt) || this.now().toISOString(),
     };
-    this.byRun.set(key, plan);
-    while (this.byRun.size > this.maxPlans) this.byRun.delete(this.byRun.keys().next().value);
+    record.plan = plan;
+    if (plan.request) record.request = plan.request;
+    this._persist(record);
     return copyPlan(plan);
   }
 
-  done(runId, step, evidence) {
-    const key = this._key(runId);
-    const plan = this.byRun.get(key);
+  // Шаг закрывается только с доказательством. Если у шага есть наблюдаемый результат,
+  // слов мало: нужен подтверждённый инструмент этого хода или настоящий непустой файл.
+  done(runId, step, evidence, { root = '' } = {}) {
+    const record = this._record(runId);
+    const plan = record.plan;
     if (!plan) throw new Error('план не задан: сначала plan_set');
     const index = Number(step);
     if (!Number.isInteger(index) || index < 1 || index > plan.steps.length) {
       throw new Error(`шага ${step} нет: всего ${plan.steps.length}`);
     }
     const clean = cleanText(evidence, MAX_EVIDENCE, 'доказательство');
+    if (root) record.root = String(root);
     const target = plan.steps[index - 1];
+    const need = observableResult(target.text);
+    if (need.needed) {
+      const proofs = this._proofs(record, clean);
+      const files = proofs.filter((item) => !item.directory);
+      const confirmed = record.observations.find((item) => item.verified === 'confirmed');
+      if (need.file) {
+        if (!files.length) {
+          throw new Error(`шаг ${index} подразумевает файл: в доказательстве нет существующего непустого файла и подтверждённой записи в этом ходе не было. Выполни шаг и укажи настоящий путь`);
+        }
+        target.files = files.slice(0, MAX_FILES).map((item) => item.display);
+      } else if (!proofs.length && !confirmed) {
+        throw new Error(`шаг ${index} подразумевает проверяемый результат: нужна подтверждённая проверка инструмента (verified: confirmed) или существующий непустой файл. Слова «${clean.slice(0, 80)}» доказательством не считаются`);
+      } else if (proofs.length) {
+        target.files = proofs.slice(0, MAX_FILES).map((item) => item.display);
+      }
+    }
     target.status = 'done';
     target.evidence = clean;
-    target.doneAt = new Date().toISOString();
+    target.doneAt = this.now().toISOString();
+    this._persist(record);
     return copyPlan(plan);
   }
 
+  // Наблюдение за завершённым инструментом: им шаг подтверждается, а не текстом модели.
+  observe(runId, observation) {
+    if (!observation || typeof observation !== 'object') return;
+    const name = String(observation.name || '').slice(0, 60);
+    if (!name) return;
+    const record = this._record(runId);
+    const verified = ['confirmed', 'failed', 'unknown'].includes(observation.verified) ? observation.verified : 'unknown';
+    record.observations.push({
+      name,
+      verified,
+      summary: String(observation.summary || '').replace(/\s+/g, ' ').slice(0, 200),
+      path: typeof observation.path === 'string' ? observation.path.slice(0, MAX_PATH_TEXT) : null,
+      artifacts: cleanFiles(observation.artifacts),
+    });
+    if (record.observations.length > MAX_OBSERVATIONS) {
+      record.observations.splice(0, record.observations.length - MAX_OBSERVATIONS);
+    }
+  }
+
+  // Подтверждённые пути этого хода и пути из доказательства — только те, что реально есть на диске.
+  _proofs(record, evidence) {
+    const out = [];
+    const add = (info) => {
+      if (info && !out.some((item) => item.path === info.path)) out.push(info);
+    };
+    for (const info of evidenceFiles(evidence, record.root)) add(info);
+    for (const observation of record.observations) {
+      if (observation.verified !== 'confirmed') continue;
+      for (const candidate of [observation.path, ...(observation.artifacts || [])]) {
+        if (!candidate) continue;
+        add(pathInfo(candidate, record.root, { insideOnly: false }));
+      }
+    }
+    return out;
+  }
+
+  _files(record) {
+    const out = [];
+    const add = (info) => {
+      if (info && !out.includes(info.display)) out.push(info.display);
+    };
+    for (const step of record.plan ? record.plan.steps : []) {
+      for (const file of step.files || []) add(pathInfo(file, record.root, { insideOnly: false }));
+    }
+    for (const observation of record.observations) {
+      if (observation.verified !== 'confirmed') continue;
+      for (const candidate of [observation.path, ...(observation.artifacts || [])]) {
+        if (!candidate) continue;
+        add(pathInfo(candidate, record.root, { insideOnly: false }));
+      }
+    }
+    return out.slice(0, MAX_FILES);
+  }
+
+  _persist(record) {
+    if (!this.store || !record || !record.plan) return false;
+    const scope = scopeKey(record.chatId, record.workspaceId);
+    if (!scope) return false;
+    try {
+      const unfinished = record.plan.steps.some((step) => step.status !== 'done');
+      if (!unfinished) {
+        // План закрыт: «продолжай» не должен поднимать его снова.
+        this.store.remove({ chatId: scope.chatId, workspaceId: scope.workspaceId });
+        this.lastError = '';
+        return true;
+      }
+      const artifacts = this._files(record);
+      record.plan.artifacts = artifacts;
+      this.store.put({
+        chatId: scope.chatId,
+        workspaceId: scope.workspaceId,
+        request: record.plan.request,
+        steps: record.plan.steps,
+        artifacts,
+      });
+      this.lastError = '';
+      return true;
+    } catch (err) {
+      this.lastError = err && err.message ? err.message : String(err);
+      console.warn(`план не сохранён: ${this.lastError}`);
+      return false;
+    }
+  }
+
+  // Конец хода: черновик с незакрытыми шагами остаётся на диске, закрытый план убирается.
+  finish(runId) {
+    const record = this.byRun.get(String(runId || ''));
+    if (!record || !record.plan) return null;
+    this._persist(record);
+    return copyPlan(record.plan);
+  }
+
+  // План отдан в фон: убираем и из памяти, и с диска, чтобы «продолжай» не начал его заново.
+  drop({ chatId, workspaceId } = {}) {
+    const scope = scopeKey(chatId, workspaceId);
+    if (!scope) return false;
+    for (const [key, record] of this.byRun) {
+      const own = scopeKey(record.chatId, record.workspaceId);
+      if (own && own.key === scope.key) this.byRun.delete(key);
+    }
+    if (!this.store) return false;
+    try {
+      return this.store.remove({ chatId: scope.chatId, workspaceId: scope.workspaceId });
+    } catch {
+      return false;
+    }
+  }
+
   get(runId) {
-    const plan = this.byRun.get(String(runId || ''));
-    return plan ? copyPlan(plan) : null;
+    const record = this.byRun.get(String(runId || ''));
+    return record && record.plan ? copyPlan(record.plan) : null;
   }
 
   // Сколько шагов закрыто и какие остались. Осталось — то, что ещё не сделано.
@@ -97,10 +525,6 @@ class TurnPlans {
       left: steps.map((s, i) => ({ step: i + 1, status: s.status, text: s.text })).filter((s) => s.status !== 'done'),
     };
   }
-}
-
-function copyPlan(plan) {
-  return { ...plan, steps: plan.steps.map((s) => ({ ...s })) };
 }
 
 // Строка для ответа: что осталось. Код дописывает её сам, чтобы «готово» не прятало незакрытое.
@@ -123,4 +547,84 @@ function planBrief(plan, { maxItems = 10, maxText = 120 } = {}) {
   return ['План прошлого хода, продолжай с незакрытого:', ...lines].join('\n');
 }
 
-module.exports = { TurnPlans, planNote, planBrief, STOP_WORDS, MAX_STEPS, MAX_TEXT, MAX_EVIDENCE };
+function planFilesOf(plan) {
+  const steps = plan && Array.isArray(plan.steps) ? plan.steps : [];
+  const out = [];
+  for (const step of steps) {
+    for (const file of Array.isArray(step.files) ? step.files : []) {
+      if (!out.includes(file)) out.push(file);
+    }
+  }
+  for (const file of plan && Array.isArray(plan.artifacts) ? plan.artifacts : []) {
+    if (!out.includes(file)) out.push(file);
+  }
+  return out.slice(0, MAX_FILES);
+}
+
+// Заметка модели после перезапуска: что сделано, какие файлы получились и какой шаг следующий.
+function planResumeNote(plan, { maxItems = 10, maxText = 120 } = {}) {
+  const steps = plan && Array.isArray(plan.steps) ? plan.steps : [];
+  if (!steps.length) return '';
+  const done = [];
+  for (let i = 0; i < steps.length; i += 1) {
+    if (steps[i].status !== 'done') continue;
+    const files = Array.isArray(steps[i].files) && steps[i].files.length
+      ? `, файл: ${steps[i].files.slice(0, 3).join(', ')}` : '';
+    done.push(`${i + 1}) ${String(steps[i].text).slice(0, maxText)}${files}`);
+  }
+  const files = planFilesOf(plan);
+  const nextIndex = steps.findIndex((step) => step.status !== 'done');
+  return [
+    'Продолжаем прошлый план этого разговора: он сохранён на диск и пережил перезапуск.',
+    done.length ? `Сделано: ${done.slice(0, maxItems).join('; ')}` : 'Сделано: пока ничего',
+    files.length ? `Файлы: ${files.join(', ')}` : '',
+    nextIndex >= 0 ? `Следующий шаг: ${nextIndex + 1}) ${String(steps[nextIndex].text).slice(0, maxText)}` : '',
+    'Не начинай заново. В ответе назови: что уже сделано, какие файлы получились и какой шаг следующий.',
+  ].filter(Boolean).join('\n');
+}
+
+function planWord(value) {
+  return String(value || '').toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ').trim();
+}
+
+// Дописываемая строка к ответу после «продолжай»: только то, чего в ответе модели нет.
+// Так владелец видит сделанное, файл и следующий шаг, даже если модель ответила общими словами.
+function planResumeAnswer(plan, answerText = '', { maxText = 100 } = {}) {
+  const steps = plan && Array.isArray(plan.steps) ? plan.steps : [];
+  if (!steps.length) return '';
+  const answer = planWord(answerText);
+  const mentions = (value) => {
+    const key = planWord(value).slice(0, 24);
+    return Boolean(key) && answer.includes(key);
+  };
+  const done = [];
+  for (let i = 0; i < steps.length; i += 1) {
+    if (steps[i].status === 'done') done.push({ index: i + 1, text: steps[i].text });
+  }
+  const files = planFilesOf(plan).filter((file) => !answer.includes(planWord(file)));
+  const nextIndex = steps.findIndex((step) => step.status !== 'done');
+  const parts = [];
+  if (done.length && !done.some((item) => mentions(item.text))) {
+    parts.push(`сделано — ${done.map((item) => `${item.index}) ${String(item.text).slice(0, maxText)}`).join('; ')}`);
+  }
+  if (files.length) parts.push(`файл: ${files.join(', ')}`);
+  if (nextIndex >= 0 && !mentions(steps[nextIndex].text)) {
+    parts.push(`следующий шаг — ${nextIndex + 1}) ${String(steps[nextIndex].text).slice(0, maxText)}`);
+  }
+  return parts.length ? `Продолжаем: ${parts.join('; ')}.` : '';
+}
+
+// «Продолжай/продолжим/где остановились/вернёмся» — просьба вернуться к сохранённому плану.
+const RESUME_PHRASE = /(?:^|[^\p{L}\p{N}])(?:продолжай|продолжим|продолжаем|продолжите|продолжить|continue|где\s+(?:мы\s+)?остановились|верн[её]мся)(?=$|[^\p{L}\p{N}])/iu;
+
+function isResumePhrase(text) {
+  const value = String(text ?? '').replace(/\s+/g, ' ').trim();
+  if (!value) return false;
+  return RESUME_PHRASE.test(value.slice(0, 200));
+}
+
+module.exports = {
+  TurnPlans, PlanStore, planNote, planBrief, planResumeNote, planResumeAnswer, planFilesOf,
+  isResumePhrase, observableResult, STOP_WORDS,
+  MAX_STEPS, MAX_TEXT, MAX_EVIDENCE, MAX_PLANS, MAX_PLAN_ITEMS, MAX_PLAN_AGE_MS, MAX_REQUEST,
+};
