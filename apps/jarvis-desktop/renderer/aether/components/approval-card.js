@@ -6,7 +6,7 @@
 (() => {
   'use strict';
 
-  function createApprovalCard({ store }) {
+  function createApprovalCard({ store, getReturnFocus }) {
     const ui = window.JarvisUI || {};
     const { icon } = window.NoxAetherIcons;
     const scrub = typeof ui.scrub === 'function' ? ui.scrub : (s) => String(s || '');
@@ -36,8 +36,8 @@
     }
 
     function focusComposer() {
-      const input = document.getElementById('chatInput');
-      if (input && typeof input.focus === 'function') input.focus({ preventScroll: true });
+      const target = getReturnFocus?.() || document.getElementById('chatInput');
+      if (target && typeof target.focus === 'function') target.focus({ preventScroll: true });
     }
 
     function focusSnapshot() {

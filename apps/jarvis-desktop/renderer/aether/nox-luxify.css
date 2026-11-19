@@ -570,28 +570,25 @@ html[data-aether] *::-webkit-scrollbar-thumb:hover {
 
 /* ── ГЛАВНАЯ ─────────────────────────────────────────────────── */
 .lx-main-page {
-  position: relative;
-  min-height: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .lx-main-stage {
-  position: relative;
   display: grid;
-  grid-template-columns: minmax(560px, 1fr) 34%;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) clamp(268px, 35%, 390px);
+  gap: clamp(12px, 2vw, 24px);
   align-items: start;
-  min-height: calc(100vh - 96px);
 }
 
 .lx-main-col {
-  position: relative;
-  z-index: 2;
-  width: 100%;
-  max-width: 720px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+@media (max-width: 680px) {
+  .lx-main-stage { grid-template-columns: minmax(0, 1fr); }
 }
 
 .lx-history-feed {
@@ -721,56 +718,6 @@ html[data-aether] *::-webkit-scrollbar-thumb:hover {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--lx-text);
-}
-
-/* Концентрические синие кольца на фоне справа */
-.lx-bg-rings {
-  position: relative;
-  width: 100%;
-  min-height: calc(100vh - 116px);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.lx-bg-ring {
-  position: absolute;
-  left: 60%;
-  top: 48%;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  border: 1.5px solid rgba(80, 112, 221, 0.45);
-}
-
-.lx-bg-ring-1 {
-  width: 176px;
-  height: 176px;
-  border-width: 2px;
-  border-color: rgba(112, 148, 255, 0.78);
-  background: radial-gradient(circle, rgba(52, 108, 219, 0.48) 0%, rgba(37, 89, 232, 0.28) 58%, rgba(15, 36, 98, 0.14) 100%);
-  box-shadow: 0 0 46px rgba(52, 108, 219, 0.42), inset 0 0 26px rgba(112, 148, 255, 0.34);
-}
-
-.lx-bg-ring-2 {
-  width: 274px;
-  height: 274px;
-  border-width: 1.5px;
-  border-color: rgba(80, 112, 221, 0.56);
-  background: radial-gradient(circle, transparent 58%, rgba(37, 89, 232, 0.14) 100%);
-}
-
-.lx-bg-ring-3 {
-  width: 378px;
-  height: 378px;
-  border-width: 1.5px;
-  border-color: rgba(80, 112, 221, 0.38);
-  background: radial-gradient(circle, transparent 62%, rgba(35, 90, 233, 0.08) 100%);
-}
-
-.lx-bg-ring-4 {
-  width: 488px;
-  height: 488px;
-  border-width: 1.5px;
-  border-color: rgba(80, 112, 221, 0.24);
 }
 
 /* ── МОДАЛКА НАСТРОЕК NOX AI (540px) ──────────────────────────── */
@@ -1743,23 +1690,12 @@ html[data-ae-width="narrow"] .ae-chat-view .ae-chat-column { --ae-max-w: 620px; 
     padding: 12px 16px 16px;
   }
 
-  .lx-main-stage {
-    grid-template-columns: minmax(0, 1fr);
-    min-height: auto;
-  }
-
   .lx-main-col {
-    width: 100%;
-    max-width: none;
     gap: 12px;
   }
 
   .lx-card {
     padding: 14px 16px;
-  }
-
-  .lx-bg-rings {
-    display: none;
   }
 
   .lx-voice-banner-acts {
@@ -2123,11 +2059,6 @@ html[data-aether]:is([data-theme="cobalt"], [data-theme="neon-noir"], [data-them
 html[data-aether]:is([data-theme="cobalt"], [data-theme="neon-noir"], [data-theme="neon"], [data-theme="moonlight"]) .lx-subtle-link { color: var(--text-3); }
 html[data-aether]:is([data-theme="cobalt"], [data-theme="neon-noir"], [data-theme="neon"], [data-theme="moonlight"]) .lx-extra-stat { background: var(--surface-2); }
 html[data-aether]:is([data-theme="cobalt"], [data-theme="neon-noir"], [data-theme="neon"], [data-theme="moonlight"]) .lx-extra-stat-title { color: var(--text); }
-html[data-aether]:is([data-theme="cobalt"], [data-theme="neon-noir"], [data-theme="neon"], [data-theme="moonlight"]) .lx-bg-ring { border-color: color-mix(in srgb, var(--hue) 32%, transparent); }
-html[data-aether]:is([data-theme="cobalt"], [data-theme="neon-noir"], [data-theme="neon"], [data-theme="moonlight"]) .lx-bg-ring-1 { border-color: color-mix(in srgb, var(--hue) 78%, transparent); background: radial-gradient(circle, color-mix(in srgb, var(--hue) 42%, transparent) 0%, color-mix(in srgb, var(--hue) 20%, transparent) 58%, transparent 100%); box-shadow: 0 0 46px color-mix(in srgb, var(--hue) 34%, transparent), inset 0 0 26px color-mix(in srgb, var(--hue) 26%, transparent); }
-html[data-aether]:is([data-theme="cobalt"], [data-theme="neon-noir"], [data-theme="neon"], [data-theme="moonlight"]) .lx-bg-ring-2 { border-color: color-mix(in srgb, var(--hue) 50%, transparent); background: radial-gradient(circle, transparent 58%, color-mix(in srgb, var(--hue) 12%, transparent) 100%); }
-html[data-aether]:is([data-theme="cobalt"], [data-theme="neon-noir"], [data-theme="neon"], [data-theme="moonlight"]) .lx-bg-ring-3 { border-color: color-mix(in srgb, var(--hue) 32%, transparent); background: radial-gradient(circle, transparent 62%, color-mix(in srgb, var(--hue) 7%, transparent) 100%); }
-html[data-aether]:is([data-theme="cobalt"], [data-theme="neon-noir"], [data-theme="neon"], [data-theme="moonlight"]) .lx-bg-ring-4 { border-color: color-mix(in srgb, var(--hue) 20%, transparent); }
 
 /* Дополнения (MCP). */
 html[data-aether]:is([data-theme="cobalt"], [data-theme="neon-noir"], [data-theme="neon"], [data-theme="moonlight"]) .lx-pill-tab { background: var(--surface-2); color: var(--text-2); }

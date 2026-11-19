@@ -94,7 +94,8 @@
 
     function getGlobalMotionOn() {
       const { aeOrbPos, animations, motion } = document.documentElement.dataset;
-      return !stage.hidden && aeOrbPos !== 'hidden' && animations !== 'off' && motion !== 'off';
+      const visible = !stage.hidden && (store.state.route === 'personal' || aeOrbPos !== 'hidden');
+      return visible && animations !== 'off' && motion !== 'off';
     }
 
     function applyWrapperLook(cfg) {
@@ -130,6 +131,9 @@
       } else if (st.settings && st.settings.dictation) {
         hintEl.textContent = 'Нажмите на сферу, чтобы говорить';
         canvasWrap.setAttribute('aria-label', 'Включить голосовой ввод');
+      } else if (st.route === 'personal') {
+        hintEl.textContent = 'Микрофон выключен в настройках';
+        canvasWrap.setAttribute('aria-label', hintEl.textContent);
       } else {
         hintEl.textContent = 'Нажмите для отклика';
         canvasWrap.setAttribute('aria-label', 'Сфера Nox: нажмите для отклика');
@@ -144,7 +148,7 @@
         await store.stopRun();
         return;
       }
-      if (st.settings?.dictation) await store.toggleDictation();
+      if (st.route === 'personal' || st.settings?.dictation) await store.toggleDictation();
     }
 
     canvasWrap.addEventListener('click', handleOrbActivate);

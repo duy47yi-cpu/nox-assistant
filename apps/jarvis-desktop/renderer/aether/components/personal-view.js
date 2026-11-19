@@ -1,12 +1,10 @@
-/* Раздел «Главная» (в маршруте personal):
- * - Карточка «История команд» с синими и приглушёнными вертикальными маркерами;
- * - Карточка «Панель управления»: 4 тумблера (34x18) и слайдер громкости с процентом;
- * - Ненавязчивый переход к рабочим столам, памяти и журналу, чтобы ничего не терялось. */
+/* «Главная»: сессия, голосовая сцена, диалог и быстрые настройки. */
 (() => {
   'use strict';
 
-  function createPersonalView({ store, bridge }) {
+  function createPersonalView({ store, bridge, openConversation }) {
     const { icon } = window.NoxAetherIcons;
+    const { scrub } = window.JarvisUI;
 
     const root = document.createElement('section');
     root.id = 'aePersonalView';
@@ -17,30 +15,44 @@
     const stage = document.createElement('div');
     stage.className = 'lx-main-stage';
 
-    const col = document.createElement('div');
+    const layout = document.createElement('div');
+    layout.className = 'lx-home-layout';
+
+    const col = document.createElement('section');
     col.className = 'lx-main-col';
 
-    // ── 1. Карточка «История команд» ─────────────────────────────
-    const histCard = document.createElement('div');
-    histCard.className = 'lx-card';
+    const sessionTitle = document.createElement('h2');
+    sessionTitle.className = 'lx-home-label';
+    sessionTitle.append(icon('clock'), document.createTextNode('Сессия'));
+
+    const sessionTime = document.createElement('div');
+    sessionTime.className = 'lx-home-timer';
+    sessionTime.setAttribute('role', 'timer');
+    sessionTime.setAttribute('aria-label', 'Время сессии');
+    const sessionStart = Date.now();
+    let sessionTicker = null;
+    function updateSessionTime() {
+      const seconds = Math.max(0, Math.floor((Date.now() - sessionStart) / 1000));
+      sessionTime.textContent = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+        .map((part) => String(part).padStart(2, '0')).join(':');
+    }
 
     const histTitle = document.createElement('h2');
-    histTitle.className = 'lx-card-title';
-    histTitle.textContent = 'История команд';
+    histTitle.className = 'lx-home-label';
+    histTitle.append(icon('history'), document.createTextNode('История команд'));
 
     const histFeed = document.createElement('div');
     histFeed.id = 'lxCommandHistoryFeed';
     histFeed.className = 'lx-history-feed';
 
-    histCard.append(histTitle, histFeed);
+    col.append(sessionTitle, sessionTime, histTitle, histFeed);
 
-    // ── 2. Карточка «Панель управления» ──────────────────────────
-    const ctrlCard = document.createElement('div');
-    ctrlCard.className = 'lx-card';
+    const ctrlCard = document.createElement('details');
+    ctrlCard.className = 'lx-home-controls';
 
-    const ctrlTitle = document.createElement('h2');
-    ctrlTitle.className = 'lx-card-title';
-    ctrlTitle.textContent = 'Панель управления';
+    const ctrlTitle = document.createElement('summary');
+    ctrlTitle.className = 'lx-subtle-link';
+    ctrlTitle.append(icon('sliders'), document.createTextNode('Управление'));
 
     const ctrlList = document.createElement('div');
     ctrlList.className = 'lx-ctrl-list';
@@ -163,11 +175,14 @@
     const extraToggleBtn = document.createElement('button');
     extraToggleBtn.type = 'button';
     extraToggleBtn.className = 'lx-subtle-link';
+    extraToggleBtn.setAttribute('aria-expanded', 'false');
     extraToggleBtn.append(icon('layers'), document.createTextNode('Столы, память и журнал'));
 
     const extraDrawer = document.createElement('div');
     extraDrawer.className = 'lx-card lx-extra-drawer';
+    extraDrawer.id = 'lxHomeWorkspace';
     extraDrawer.hidden = true;
+    extraToggleBtn.setAttribute('aria-controls', extraDrawer.id);
 
     const extraHead = document.createElement('div');
     extraHead.className = 'lx-extra-head';
@@ -185,40 +200,69 @@
 
     extraToggleBtn.addEventListener('click', () => {
       extraDrawer.hidden = !extraDrawer.hidden;
+      extraToggleBtn.setAttribute('aria-expanded', String(!extraDrawer.hidden));
       if (!extraDrawer.hidden) load();
     });
 
-    col.append(histCard, ctrlCard, extraToggleBtn, extraDrawer);
+    const footer = document.createElement('footer');
+    footer.className = 'lx-home-footer';
+    footer.append(ctrlCard, extraToggleBtn);
 
-    // Декоративные концентрические кольца на правой стороне
-    const rings = document.createElement('div');
-    rings.className = 'lx-bg-rings';
-    rings.setAttribute('aria-hidden', 'true');
-    for (let i = 0; i < 4; i += 1) {
-      const circle = document.createElement('span');
-      circle.className = `lx-bg-ring lx-bg-ring-${i + 1}`;
-      rings.append(circle);
-    }
+    const approvalHost = document.createElement('div');
+    approvalHost.className = 'lx-home-approval';
 
-    stage.append(col, rings);
+    const orbHost = document.createElement('div');
+    orbHost.className = 'lx-home-orb';
+
+    const exchange = document.createElement('section');
+    exchange.className = 'lx-home-exchange';
+    const exchangeTitle = document.createElement('h2');
+    exchangeTitle.className = 'lx-home-label';
+    exchangeTitle.append(icon('chat'), document.createTextNode('Диалог'));
+    const prompt = document.createElement('p');
+    prompt.className = 'lx-home-prompt';
+    const reply = document.createElement('p');
+    reply.className = 'lx-home-reply';
+    reply.setAttribute('role', 'status');
+
+    const openChat = document.createElement('button');
+    openChat.type = 'button';
+    openChat.className = 'lx-subtle-link lx-home-open-chat';
+    openChat.textContent = 'Открыть чат';
+    openChat.addEventListener('click', openConversation);
+
+    exchange.append(exchangeTitle, prompt, reply, openChat);
+    layout.append(col, orbHost, exchange);
+    stage.append(layout, approvalHost, footer, extraDrawer);
     root.append(stage);
 
+    function renderExchange(st) {
+      // Берём результат только после последней реплики владельца.
+      const lastUser = st.historyLoading ? -1 : st.feedItems.findLastIndex((item) => item.kind === 'user');
+      const question = lastUser === -1 ? '' : scrub(st.feedItems[lastUser].text || '').trim();
+      const result = lastUser === -1 ? null : st.feedItems.slice(lastUser + 1)
+        .findLast((item) => item.kind === 'assistant' || item.kind === 'error');
+      let summary;
+      if (st.approvals.queue.length) summary = 'Ждёт разрешения';
+      else if (st.activeTurn && (st.trackerBusy || st.sendingLock)) summary = store.getLiveWorkText() || 'Обрабатываю запрос…';
+      else if (result?.cancelled) summary = 'Остановлено';
+      else if (result) summary = result.text || result.artifacts?.[0]?.title || 'Открыть результат можно в чате.';
+      else if (st.historyLoading) summary = 'Загружаю историю…';
+      else summary = question ? 'Ответ пока не получен' : 'Здесь появятся ваша реплика и ответ Nox.';
+
+      const text = scrub(summary).trim();
+      prompt.hidden = !question;
+      if (prompt.textContent !== question) prompt.textContent = question;
+      if (reply.textContent !== text) reply.textContent = text;
+    }
+
     function renderHistory(entries) {
-      const items = [
-        { text: 'Добро пожаловать в Nox Assistant!', accent: true },
-      ];
-      if (Array.isArray(entries) && entries.length) {
-        for (const item of entries.slice(0, 4)) {
-          const line = item.summary || item.text || item.tool || '';
-          if (line) items.push({ text: String(line), accent: false });
-        }
-      } else {
-        items.push({ text: 'Команды ещё не выполнялись', accent: false });
-      }
-      histFeed.replaceChildren(...items.map((row) => {
+      const items = entries.map((item) => scrub(item.summary || item.text || '').trim()).filter(Boolean).slice(0, 3);
+      if (!items.length) items.push('Команд пока нет');
+      histFeed.replaceChildren(...items.map((text) => {
         const div = document.createElement('div');
-        div.className = row.accent ? 'lx-history-row is-accent' : 'lx-history-row';
-        div.textContent = row.text;
+        div.className = 'lx-history-row';
+        div.textContent = text;
         return div;
       }));
     }
@@ -284,12 +328,22 @@
         motionToggle.input.checked = st.motion;
         motionToggle.input.setAttribute('aria-checked', String(st.motion));
       }
-      if (active && !wasActive) load();
+      if (active && !wasActive) {
+        updateSessionTime();
+        sessionTicker = setInterval(updateSessionTime, 1000);
+        load();
+      } else if (!active && wasActive) {
+        clearInterval(sessionTicker);
+        sessionTicker = null;
+      }
+      if (active) renderExchange(st);
       wasActive = active;
     }
 
     return {
       el: root,
+      orbHost,
+      approvalHost,
       load,
       render,
     };

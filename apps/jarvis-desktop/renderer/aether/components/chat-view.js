@@ -172,7 +172,10 @@
     feedWrap.append(feed, toBottomBtn);
 
     // Слот подтверждения (показывается над полем ввода, фокусируя внимание без шума)
-    const approvalCard = window.NoxAetherApprovalCard.createApprovalCard({ store });
+    const approvalCard = window.NoxAetherApprovalCard.createApprovalCard({
+      store,
+      getReturnFocus: () => store.state.route === 'personal' && orbStage?.el.querySelector('.ae-orb-canvas-wrap'),
+    });
 
     // Одно поле ввода внизу пустого и открытого чата.
     let stickBottom = true;
@@ -1058,6 +1061,11 @@
         composer.focus();
       },
       widgetDock: dockWrap,
+      placeApproval(host, st) {
+        const target = host || dockWrap;
+        if (approvalCard.el.parentNode !== target) target.prepend(approvalCard.el);
+        if (host) approvalCard.render(st);
+      },
       render,
       destroy: () => {
         if (liveElapsedTimer) clearInterval(liveElapsedTimer);

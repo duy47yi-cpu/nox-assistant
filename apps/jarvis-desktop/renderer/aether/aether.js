@@ -18,11 +18,16 @@
     const orbStage = window.NoxAetherOrbStage.createOrbStage({ store });
     const commandsView = window.NoxAetherCommandsView.createCommandsView({ store, bridge });
     const mcpView = window.NoxAetherMcpView.createMcpView({ store, bridge });
-    const personalView = window.NoxAetherPersonalView.createPersonalView({ store, bridge });
     const settingsView = window.NoxAetherSettingsView.createSettingsView({ store, bridge });
     const aiModal = window.NoxAetherAiModal.createAiModal({ store, bridge });
     const chatView = window.NoxAetherChatView.createChatView({
       store, bridge, orbStage,
+    });
+    const personalView = window.NoxAetherPersonalView.createPersonalView({
+      store, bridge, openConversation: () => {
+        store.setRoute('chat');
+        chatView.focusComposer();
+      },
     });
     const dayWidgets = window.NoxAetherDayWidgets.createDayWidgets({
       bridge, choose: chatView.insertStarter, reportError: (text) => store.toast(text, 'error'),
@@ -165,9 +170,12 @@
     // Главный цикл рендера состояния
     function syncAll(st) {
       const isChat = st.route === 'chat';
+      const isHome = st.route === 'personal';
       chatStageShell.hidden = !isChat;
       if (!isChat) chatStageShell.querySelector('.ae-sources-popover:popover-open')?.hidePopover();
-      orbStage.el.hidden = !isChat || stageCollapsed;
+      const sphereHost = isHome ? personalView.orbHost : chatStageShell;
+      if (orbStage.el.parentNode !== sphereHost) sphereHost.append(orbStage.el);
+      orbStage.el.hidden = !isHome && (!isChat || stageCollapsed);
       const { aeOrbPos, aeDayWidgets } = document.documentElement.dataset;
       const stageVisible = isChat && !stageCollapsed && aeOrbPos !== 'hidden';
       const docked = !stageVisible || aeOrbPos === 'top';
@@ -196,11 +204,12 @@
       topbar.render(st);
       accountPanel.render(st);
       historyDrawer.render(st);
+      personalView.render(st);
+      chatView.placeApproval(isHome ? personalView.approvalHost : null, st);
       if (isChat) chatView.render(st);
       orbStage.render(st);
       commandsView.render(st);
       mcpView.render(st);
-      personalView.render(st);
       settingsView.render(st);
       aiModal.update(st);
       renderToasts(st);

@@ -809,20 +809,180 @@ html[data-aether][data-theme] .lx-extra-stat {
   border: 1px solid var(--ae-line-soft);
   border-radius: var(--ae-r-md);
 }
-html[data-aether][data-theme] .lx-bg-ring {
-  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+#aePersonalView {
+  --home-edge: color-mix(in srgb, var(--hue, var(--accent)) 24%, var(--ae-line-thin));
+  --home-orbit: color-mix(in srgb, var(--hue, var(--accent)) 19%, transparent);
+  padding: 8px 10px 10px;
 }
-html[data-aether][data-theme] .lx-bg-ring-1 {
-  border-color: color-mix(in srgb, var(--accent) 44%, transparent);
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent) 0%, color-mix(in srgb, var(--accent) 6%, transparent) 60%, transparent 100%);
-  box-shadow: 0 0 36px color-mix(in srgb, var(--accent) 14%, transparent);
+
+#aePersonalView .lx-main-stage {
+  position: relative;
+  isolation: isolate;
+  flex: 1 0 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: clamp(18px, 4vw, 52px) clamp(20px, 4vw, 60px) 12px;
+  border: 1px solid var(--home-edge);
+  border-radius: var(--ae-r-panel);
+  background:
+    radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--hue, var(--accent)) 14%, transparent), transparent 62%),
+    color-mix(in srgb, var(--bg) 91%, var(--surface));
 }
-html[data-aether][data-theme] .lx-bg-ring-2 {
-  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
-  background: radial-gradient(circle, transparent 60%, color-mix(in srgb, var(--accent) 5%, transparent) 100%);
+
+#aePersonalView .lx-main-stage::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 44%, transparent 31%, var(--home-orbit) 31.2%, transparent 31.5%, transparent 40%,
+      var(--home-orbit) 40.2%, transparent 40.5%, transparent 53%, var(--home-orbit) 53.2%, transparent 53.5%),
+    radial-gradient(ellipse at 64% 38%, transparent 43%, var(--home-orbit) 43.2%, transparent 43.5%);
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 78%);
 }
-html[data-aether][data-theme] .lx-bg-ring-3 { border-color: color-mix(in srgb, var(--border) 62%, transparent); background: none; }
-html[data-aether][data-theme] .lx-bg-ring-4 { border-color: color-mix(in srgb, var(--border) 38%, transparent); }
+
+.lx-home-layout {
+  display: grid;
+  flex: 1 0 auto;
+  grid-template-columns: minmax(0, 1fr) minmax(168px, .95fr) minmax(0, 1fr);
+  align-items: start;
+  align-content: center;
+  gap: clamp(16px, 4vw, 54px);
+  padding-block: 16px 26px;
+}
+
+#aePersonalView .lx-main-col { gap: 12px; }
+
+.lx-home-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--ae-fs-meta);
+  font-weight: 550;
+}
+
+.lx-home-label .ae-ico { width: 15px; height: 15px; }
+
+.lx-home-timer {
+  margin-block: 0 14px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(24px, 3.2vw, 40px);
+  font-weight: 550;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+#aePersonalView .lx-history-feed { gap: 6px; }
+
+#aePersonalView .lx-history-row {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-left-width: 1px;
+  padding-block: 1px;
+  font-size: var(--ae-fs-meta);
+}
+
+.lx-home-orb { align-self: center; min-width: 0; }
+
+.lx-home-orb .ae-orb-stage {
+  width: 100%;
+  padding: 8px 4px;
+  border: 0;
+  overflow: visible;
+  text-align: center;
+}
+
+.lx-home-orb :is(.ae-orb-resizer, .ae-orb-signature) { display: none; }
+
+.lx-home-orb .ae-orb-inner { gap: 8px; }
+
+.lx-home-orb .ae-orb-canvas-wrap {
+  width: min(168px, 85%);
+  height: auto;
+}
+
+.lx-home-exchange {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  gap: 10px;
+  font-size: var(--ae-fs-ui);
+}
+
+.lx-home-exchange .lx-home-label { margin-bottom: 5px; }
+
+.lx-home-exchange p {
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.lx-home-exchange p[hidden] { display: none; }
+
+.lx-home-exchange .lx-home-prompt {
+  color: var(--text);
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+  -webkit-line-clamp: 2;
+}
+
+.lx-home-reply {
+  color: color-mix(in srgb, var(--text) 70%, var(--hue, var(--accent)));
+}
+
+.lx-home-open-chat { justify-self: start; }
+
+.lx-home-approval {
+  width: min(100%, 550px);
+  align-self: center;
+  margin-bottom: 12px;
+}
+
+.lx-home-approval:not(:has(> .ae-approval-dock:not([hidden]))) { display: none; }
+
+.lx-home-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: start;
+  gap: 8px 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--home-edge);
+}
+
+.lx-home-controls { width: min(100%, 320px); }
+.lx-home-controls:not([open]) { width: auto; }
+.lx-home-controls > summary { list-style: none; cursor: pointer; }
+.lx-home-controls > summary::-webkit-details-marker { display: none; }
+.lx-home-controls[open] > summary { color: var(--text); }
+.lx-home-controls .lx-ctrl-list { padding-inline: 4px; }
+#aePersonalView .lx-extra-drawer { margin-top: 10px; }
+
+@media (max-width: 960px), (max-height: 580px) {
+  .lx-home-orb .ae-orb-canvas-wrap { width: min(128px, 76%); }
+}
+
+@media (max-width: 680px) {
+  .lx-home-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .lx-home-orb { grid-column: 1 / -1; grid-row: 1; }
+}
+
+@media (max-width: 460px) {
+  .lx-home-layout { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* Команды (#aeCommandsView) */
 html[data-aether][data-theme] .lx-cmd-seg {

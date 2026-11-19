@@ -917,11 +917,11 @@ async function runChatRedesignQa(win) {
   };
   await setViewport(win, 1200, 720);
   const railWide = await railProbe();
-  check('Рейка v2 на 1200×720: панель 56, 7 кнопок с брендом 28, группы, без скролла',
-    railWide.ids.join('|') === 'aeRailHomeBtn|lxAiModalBtn|aeStageToggle|aeHistoryToggle|lxMuteBtn|aeLimitsTrigger|aeAccountTrigger'
+  check('Рейка v2 на 1200×720: панель 56, 6 кнопок с брендом 28, группы, без скролла',
+    railWide.ids.join('|') === 'aeRailHomeBtn|lxAiModalBtn|aeStageToggle|aeHistoryToggle|aeLimitsTrigger|aeAccountTrigger'
     && railWide.labels && railWide.brandIcon === 28 && railWide.panel.width === 56
     && railWide.panel.x === 8 && railWide.radius === '16px'
-    && railWide.groups.join('|') === 'Nox AI|История|Озвучка и аккаунт' && !railWide.overflow
+    && railWide.groups.join('|') === 'Nox AI|История|Аккаунт' && !railWide.overflow
     && railWide.tabs.join(' · ') === 'Главная · Команды · Дополнения · Nox AI · Настройки', railWide);
   const brandHome = await js(win, `(() => {
     const brand = document.querySelector('#aeRailHomeBtn');
@@ -991,7 +991,7 @@ async function runChatRedesignQa(win) {
   await setViewport(win, 864, 520);
   const railCompact = await railProbe();
   check('Рейка v2 на 864×520: компактная панель 48, бренд 24, без скролла',
-    railCompact.ids.length === 7 && railCompact.labels && railCompact.brandIcon === 24
+    railCompact.ids.length === 6 && railCompact.labels && railCompact.brandIcon === 24
     && railCompact.panel.width === 48 && railCompact.panel.x === 8 && railCompact.radius === '16px'
     && !railCompact.overflow, railCompact);
   const limitsPill = await hoverPill('#aeLimitsTrigger');
@@ -1166,7 +1166,14 @@ async function runChatRedesignQa(win) {
   })()`);
   check('Длинный ответ разворачивается с таблицей, кодом и формулой', Object.values(folding).every(Boolean), folding);
 
-  await js(win, "document.querySelector('#lxMuteBtn').click()");
+  // Озвучка переехала с рейки в Настройки -> «Голосовой ввод».
+  await js(win, `(() => {
+    document.querySelector('#aeNav_settings').click();
+    const btn = [...document.querySelectorAll('#aeSettingsView button')].find((b) => b.textContent.trim() === 'Озвучка');
+    btn?.click();
+    return Boolean(btn);
+  })()`);
+  await settle(win, 260);
   const voice = await queryText('#aeSettingsView');
   await captureBoth('08-озвучка');
   check('Настройки озвучки', /Выключена \(по умолчанию\)/.test(voice) && /Облачная/.test(voice) &&
