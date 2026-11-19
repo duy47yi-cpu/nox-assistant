@@ -106,7 +106,8 @@ const STEP_TITLES = {
   disk_cleanup_suggest: 'Предложить уборку',
   weather_now: 'Погода',
   currency_rate: 'Курс валют',
-  youtube_play: 'Включить видео',
+  youtube_play: 'Включить музыку / YouTube',
+  ram_trim: 'Очистить оперативную память',
 };
 
 // Поле аргумента, которое лучше всего описывает шаг в предпросмотре.
@@ -163,6 +164,7 @@ const STEP_DETAIL_FIELDS = {
   weather_now: 'city',
   currency_rate: 'currency',
   youtube_play: 'query',
+  ram_trim: '',
 };
 
 const clip = (text, max) => {
@@ -526,9 +528,10 @@ function buildPrompt(text, source, { maxSteps = MAX_STEPS_DRAFT } = {}) {
     'Формат ответа:',
     '{"name":"краткое имя","phrases":["фраза запуска"],"steps":[{"tool":"имя_инструмента","args":{}}]}',
     '',
-    `Правила: фраз от 1 до ${MAX_PHRASES_DRAFT}; шагов от 1 до ${limit}; имя до 80 символов;`,
+    'Правила: фраз от 1 до ' + MAX_PHRASES_DRAFT + '; шагов от 1 до ' + limit + '; имя до 80 символов;',
     'инструменты — только из списка ниже, новые имена придумывать нельзя;',
-    'опасные действия (удаление, отправка, оплата, установка, выключение, закрытие окон) запрещены;',
+    'подсказки по частым задачам: сайт или вкладка браузера — url_open {url}; очистка оперативной памяти/ОЗУ — ram_trim {}; музыка или видео — youtube_play {query}; плеер — media_control {action}; программа — app_open {name}; клавиши — ui_keys {keys}; громкость — volume_set {percent}; пауза — wait {ms};',
+    'опасные действия (удаление файлов, отправка писем, оплата, установка, выключение, закрытие окон) запрещены;',
     'аргументы — только числа, строки и true/false, без лишних полей;',
     'если описание неясное — верни {"questions":["вопрос владельцу"]} без шагов;',
     'если нужного действия нет в списке — верни {"missing":["чего не хватает в каталоге"]} без шагов и пустышек.',
@@ -696,6 +699,33 @@ const OFFLINE_URL_ALIASES = Object.freeze({
   vk: 'https://vk.com',
 });
 
+function stripCommandPreamble(text) {
+  return String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(?:(?:джарвис|nox|нокс)[,:\s]+)?(?:мол[,:\s]+)?(?:я\s+пишу\s+.*?(?:мол|типо|пример)[:\s]+)?(?:хочу|сделай|создай|добавь|настрой|собери)(?:\s+(?:мне|новую))?\s+(?:команду|сценарий|автоматизацию)(?:\s+(?:типа|вроде|пример|условно|чтобы))?\s*[:\-–—]?\s*/iu, '')
+    .replace(/^[«"'`]+|[»"'`]+$/g, '')
+    .trim();
+}
+
+function normalizeOfflineUrlTarget(rawTarget) {
+  const clean = String(rawTarget || '').trim().replace(/^[«"'`]+|[»"'`.,;:!?]+$/g, '').trim();
+  if (!clean || /^(?:новую|новая|пустую|пустая|браузер[ае]?)$/i.test(clean)) {
+    return { url: 'https://www.google.com', title: 'новая вкладка' };
+  }
+  const low = clean.toLowerCase().replace(/ё/g, 'е');
+  if (OFFLINE_URL_ALIASES[low]) {
+    return { url: OFFLINE_URL_ALIASES[low], title: clean };
+  }
+  if (/^https?:\/\/\S+$/i.test(clean)) {
+    return { url: clean, title: clean };
+  }
+  if (/^[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+(?:\/\S*)?$/i.test(clean)) {
+    return { url: `https://${clean}`, title: clean };
+  }
+  return null;
+}
+
 function parseClauseToCatalogStep(clause, source) {
   const { names } = source;
   const clean = String(clause || '').trim().replace(/^[.,;:\-\s]+|[.,;:\-\s]+$/g, '');
@@ -716,6 +746,12 @@ function parseClauseToCatalogStep(clause, source) {
     return { missing: 'произвольные команды оболочки (shell_run запрещён в сохранённых командах)' };
   }
 
+  // Безопасная очистка оперативной памяти (ОЗУ)
+  if (/(?:(?:очист[а-яё]*|очищен[а-яё]*|освобод[а-яё]*|сброс[а-яё]*|почист[а-яё]*)\s+(?:оперативн[а-яё]*\s+памят[ьи]|опер[а-яё]*\s+памят[ьи]|памят[ьи]|озу|ram)|оперативн[а-яё]*\s+памят[ьи]\s+(?:очист[а-яё]*|освобод[а-яё]*|почист[а-яё]*))/i.test(low)) {
+    if (!names.has('ram_trim')) return { missing: 'очистка оперативной памяти (инструмент ram_trim недоступен)' };
+    return { step: { tool: 'ram_trim', args: {}, label: 'Очистить оперативную память' } };
+  }
+
   // Громкость
   let m = low.match(/(?:громкост[ьи]|звук)\s*(?:на)?\s*(\d{1,3})\s*%?/i);
   if (m) {
@@ -729,7 +765,7 @@ function parseClauseToCatalogStep(clause, source) {
   }
 
   // Пауза / ожидание
-  m = low.match(/(?:подожд[иь]|пауз[ау]|ожидан(?:ие|ия)|жди)\s+(\d+)\s*(?:(мс|миллисекунд\w*)|(с|сек|секунд\w*)|(м|мин|минут\w*))?/i);
+  m = low.match(/(?:подожд[иь]|пауз[ау]|ожидан(?:ие|ия)|жди)\s+(\d+)\s*(?:(мс|миллисекунд[а-яё]*)|(с|сек|секунд[а-яё]*)|(м|мин|минут[а-яё]*))?/i);
   if (m) {
     if (!names.has('wait')) return { missing: 'пауза/ожидание (нет в текущем каталоге действий)' };
     const n = Number(m[1]);
@@ -752,6 +788,16 @@ function parseClauseToCatalogStep(clause, source) {
     return { step: { tool: 'ui_type', args: { text: m[1].trim() }, label: `Ввести текст: ${m[1].trim()}` } };
   }
 
+  // Управление плеером / медиаклавиши
+  if (/(?:пауза\s+музык|play\s*\/?\s*pause|плей\s*пауз|постав[ь]\s+на\s+пауз|следующ[а-яё]*\s+трек|предыдущ[а-яё]*\s+трек)/i.test(low)) {
+    if (names.has('media_control')) {
+      const action = /следующ/i.test(low) ? 'next' : /предыдущ/i.test(low) ? 'previous' : /постав\S*\s+на\s+пауз/i.test(low) ? 'pause' : 'toggle';
+      return { step: { tool: 'media_control', args: { action }, label: action === 'next' ? 'Следующий трек' : action === 'previous' ? 'Предыдущий трек' : 'Плеер: пауза/играть' } };
+    }
+    if (!names.has('ui_keys')) return { missing: 'медиаклавиши (нет в текущем каталоге действий)' };
+    return { step: { tool: 'ui_keys', args: { keys: 'media_playpause' }, label: 'Play / Pause' } };
+  }
+
   // Горячие клавиши
   m = clean.match(/(?:нажм[иь](?:\s+клавиш[иу])?|сочетани[ея]\s+клавиш|клавиш[иу])\s+([a-z0-9_+ ]+)/i);
   if (m) {
@@ -759,29 +805,54 @@ function parseClauseToCatalogStep(clause, source) {
     const keys = m[1].trim().toLowerCase().replace(/\s*\+\s*/g, '+');
     return { step: { tool: 'ui_keys', args: { keys }, label: `Клавиши: ${keys}` } };
   }
-  if (/(?:пауза\s+музык|play\s*\/?\s*pause|плей\s*пауз)/i.test(low)) {
-    if (!names.has('ui_keys')) return { missing: 'медиаклавиши (нет в текущем каталоге действий)' };
-    return { step: { tool: 'ui_keys', args: { keys: 'media_playpause' }, label: 'Play / Pause' } };
+
+  // Музыка / песня / трек на YouTube
+  m = clean.match(/^(?:(?:включ[а-яё]*|постав[а-яё]*|запуст[а-яё]*|сыгра[а-яё]*|найди\s+и\s+включ[а-яё]*)\s+)?(?:музык[уаеи]|песн[юяи]|трек[а]?|клип|аудио)(?:\s+(?:на\s+)?(?:youtube|ютуб[е]?))?(?:\s+(.+))?$/i);
+  if (m) {
+    const rawQ = String(m[1] || '').trim().replace(/^[«"'`:\-]+|[»"'`.,;:!?]+$/g, '').trim();
+    if (names.has('youtube_play')) {
+      if (rawQ) return { step: { tool: 'youtube_play', args: { query: rawQ }, label: `Включить музыку: ${rawQ}` } };
+      return { step: { tool: 'youtube_play', args: { query: 'спокойная музыка', mood: true }, label: 'Включить музыку' } };
+    }
+    if (rawQ && names.has('url_open')) {
+      const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(rawQ)}`;
+      return { step: { tool: 'url_open', args: { url: ytUrl }, label: `Найти музыку: ${rawQ}` } };
+    }
+    return { missing: 'включение музыки (youtube_play недоступен)' };
   }
 
-  // Сайт / URL
-  m = clean.match(/(?:открой|открыть|запусти|перейди\s+(?:на|в))\s+(https?:\/\/\S+)/i);
-  if (m) {
-    if (!names.has('url_open')) return { missing: 'открытие ссылок (нет в текущем каталоге действий)' };
-    return { step: { tool: 'url_open', args: { url: m[1].trim() }, label: `Открыть: ${m[1].trim()}` } };
+  // Вкладка браузера / сайт / URL
+  m = clean.match(/^(?:откр[а-яё]*|запуст[а-яё]*|созда[а-яё]*|перейд[а-яё]*(?:\s+(?:на|в))?)\s+(?:(?:нов[а-яё]*\s+)?вкладк[уиа](?:\s+(?:с|на|в))?\s*|сайт[а]?\s+|страниц[уы]\s+|ссылк[уи]\s+)?(.*)$/i);
+  const isTabRequest = /^(?:нов[а-яё]*\s+)?вкладк[уиа]/i.test(low)
+    || /^(?:откр[а-яё]*|созда[а-яё]*)\s+(?:нов[а-яё]*\s+)?вкладк[уиа]/i.test(low);
+  if (isTabRequest) {
+    if (!names.has('url_open')) return { missing: 'открытие вкладки (url_open недоступен)' };
+    const afterTab = clean.replace(/^(?:(?:откр[а-яё]*|созда[а-яё]*)\s+)?(?:нов[а-яё]*\s+)?вкладк[уиа](?:\s+(?:с|на|в))?\s*/i, '').trim();
+    const normUrl = normalizeOfflineUrlTarget(afterTab) || { url: 'https://www.google.com', title: afterTab || 'новая вкладка' };
+    return { step: { tool: 'url_open', args: { url: normUrl.url }, label: `Открыть вкладку: ${normUrl.title}` } };
+  }
+
+  // Явный URL или доменное имя после «открой / перейди на»
+  if (m && m[1]) {
+    const rest = m[1].trim();
+    const urlInfo = normalizeOfflineUrlTarget(rest);
+    if (urlInfo && /^(?:https?:\/\/|\S+\.[a-z]{2,})/i.test(rest.replace(/[«»"']/g, ''))) {
+      if (!names.has('url_open')) return { missing: 'открытие ссылок (нет в текущем каталоге действий)' };
+      return { step: { tool: 'url_open', args: { url: urlInfo.url }, label: `Открыть: ${urlInfo.title}` } };
+    }
   }
 
   // Запуск программы или известного сайта по слову
-  m = clean.match(/^(?:открой|открыть|запусти|запустить|включи|включить|старт)\s+(.+)$/i);
+  m = clean.match(/^(?:открой|открыть|открытие|запусти|запустить|включи|включить|старт)\s+(.+)$/i);
   if (m) {
     const targetRaw = m[1].trim().replace(/[«»"']/g, '');
-    const targetLow = targetRaw.toLowerCase().replace(/ё/g, 'е');
-    if (OFFLINE_URL_ALIASES[targetLow]) {
+    const urlInfo = normalizeOfflineUrlTarget(targetRaw);
+    if (urlInfo && (OFFLINE_URL_ALIASES[targetRaw.toLowerCase().replace(/ё/g, 'е')] || /^[a-z0-9-]+\.[a-z]{2,}/i.test(targetRaw))) {
       if (!names.has('url_open')) return { missing: 'открытие сайтов (нет в текущем каталоге действий)' };
-      const url = OFFLINE_URL_ALIASES[targetLow];
-      return { step: { tool: 'url_open', args: { url }, label: `Открыть: ${targetRaw}` } };
+      return { step: { tool: 'url_open', args: { url: urlInfo.url }, label: `Открыть: ${urlInfo.title}` } };
     }
     if (!names.has('app_open')) return { missing: 'запуск программ (нет в текущем каталоге действий)' };
+    const targetLow = targetRaw.toLowerCase().replace(/ё/g, 'е');
     const appName = OFFLINE_APP_ALIASES[targetLow] || targetRaw;
     return { step: { tool: 'app_open', args: { name: appName }, label: `Запустить: ${appName}` } };
   }
@@ -794,8 +865,9 @@ function parseDescriptionOffline(input = {}, maybeOpts = {}) {
     ? { ...(maybeOpts && typeof maybeOpts === 'object' ? maybeOpts : {}), text: input }
     : (input && typeof input === 'object' ? input : {});
   const { text, tools, existingCommands = [], maxSteps = MAX_STEPS_DRAFT } = opts;
-  const ownerText = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
-  if (!ownerText) {
+  const rawText = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
+  const ownerText = stripCommandPreamble(rawText);
+  if (!rawText || !ownerText) {
     return {
       ok: false,
       command: null,
@@ -806,7 +878,7 @@ function parseDescriptionOffline(input = {}, maybeOpts = {}) {
   }
   const source = toolSourceOf(tools);
   const clauses = ownerText
-    .split(/(?:[,;\n]+|\s+(?:а\s+затем|а\s+потом|после\s+этого|затем|потом|и)\s+)/i)
+    .split(/(?:[,;\n…]+|\.\.\.+|\s+(?:а\s+затем|а\s+потом|после\s+этого|затем|потом|и)\s+)/i)
     .map((c) => c.trim())
     .filter(Boolean);
 
@@ -1106,7 +1178,10 @@ function buildHumanCommandName(rawPhrase, firstStep, existingCommands) {
   }
   const chars = Array.from(candidate);
   candidate = `${chars[0].toUpperCase()}${chars.slice(1).join('')}`;
-  candidate = clipWords(candidate, Math.min(64, MAX_NAME - 8));
+  candidate = clipWords(candidate, Math.min(64, MAX_NAME - 8))
+    .replace(/\s+(?:и|в|на|с|по|к|из|от|для)$/iu, '')
+    .replace(/[\s,.;:!?-]+$/u, '')
+    .trim();
   if (!candidate) candidate = STEP_TITLES[firstStep.tool] || 'Быстрая команда';
 
   const used = new Set();

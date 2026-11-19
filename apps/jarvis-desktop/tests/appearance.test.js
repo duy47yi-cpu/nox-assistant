@@ -116,10 +116,10 @@ test('битое сохранённое значение падает на бе�
   assert.equal(clean.glow, true);
 });
 
-test('неизвестная тема — «Затвор», «Как в системе» следует системной схеме', () => {
+test('неизвестная тема — «Тёмная (Nox)», «Как в системе» следует системной схеме', () => {
   const { T, root } = boot();
   T.apply('нет-такой');
-  assert.equal(root.dataset.theme, 'signal');
+  assert.equal(root.dataset.theme, 'dark');
   const light = boot({}, { systemLight: true });
   light.T.apply('system');
   assert.equal(light.root.dataset.theme, 'light');
@@ -169,11 +169,11 @@ test('свой акцент читается на каждой теме: тек�
   }
 });
 
-test('убранная тема (archive, tablet, acrylic) тихо открывает «Затвор»', () => {
-  for (const id of ['archive', 'archiveday', 'tablet', 'tabletday', 'acrylic', 'acrylicday']) {
+test('убранная тема (signal, porcelain, dawn, glass, archive, tablet, acrylic) тихо открывает «Тёмную (Nox)»', () => {
+  for (const id of ['signal', 'porcelain', 'dawn', 'glass', 'archive', 'archiveday', 'tablet', 'tabletday', 'acrylic', 'acrylicday']) {
     const { T, root } = boot({ 'jarvis.theme': JSON.stringify(id) });
-    assert.equal(root.dataset.theme, 'signal', id);
-    assert.ok(!T.IDS.includes(id), id);
+    assert.equal(root.dataset.theme, 'dark', id);
+    assert.ok(!T.IDS.includes(id) && !T.AETHER_IDS.includes(id), id);
   }
 });
 
@@ -232,12 +232,12 @@ test('свой цвет сохраняется, а мусор в хранили�
 });
 
 test('«Сбросить к теме» очищает ручки и свой акцент, тема остаётся', () => {
-  const { T, root, store, props } = boot({ 'jarvis.theme': JSON.stringify('lime') });
+  const { T, root, store, props } = boot({ 'jarvis.theme': JSON.stringify('snow') });
   T.setLook({ size: 'xl', panel: 'xl', blur: 'l', bg: 'solid', round: 's' });
   T.setAccent('#FF0000');
   assert.equal(root.dataset.accent, 'custom');
   T.resetToTheme();
-  assert.equal(root.dataset.theme, 'lime', 'тема не меняется');
+  assert.equal(root.dataset.theme, 'snow', 'тема не меняется');
   assert.equal(store.has('jarvis.look'), false);
   assert.equal(JSON.parse(store.get('jarvis.accent')), 'theme');
   assert.equal(root.dataset.accent, undefined);

@@ -9,6 +9,7 @@ const { loadPlans, WINDOW_MS } = require('./plans');
 const { THINKING_WEIGHT } = require('./models');
 const { createProxyResolver } = require('./proxy');
 const { createLinkService } = require('./link-relay');
+const { createStudyInbox } = require('./study-inbox');
 
 const MAX_BODY = 12 * 1024 * 1024; // снимок экрана в base64 плюс история
 const MAX_AUTH_BODY = 4096;
@@ -237,7 +238,7 @@ function createServer(config) {
     registerPerDay = 5, loginPer15Min = 10, loginIpPer15Min = LOGIN_IP_PER_15MIN, adminPer15Min = ADMIN_PER_15MIN,
     sessionTtlMs = SESSION_TTL_MS, upstreamTimeoutMs = 120000, bodyTimeoutMs = DEFAULT_BODY_TIMEOUT_MS,
     fetchImpl = globalThis.fetch, now = () => Date.now(), trustProxy = false, trustedProxies,
-    link = false,
+    link = false, studyInbox = null,
   } = config;
   if (!models || !models.fast) throw new Error('нужна настройка моделей');
   const effectiveBodyTimeoutMs = Number.isInteger(bodyTimeoutMs) && bodyTimeoutMs >= 0 ? bodyTimeoutMs : DEFAULT_BODY_TIMEOUT_MS;
@@ -250,6 +251,7 @@ function createServer(config) {
   const readBodyJson = (req, max) => readJson(req, max, effectiveBodyTimeoutMs, closeAbortController.signal);
   const plans = loadPlans(plansFile);
   const proxy = createProxyResolver({ trustProxy, trustedProxies });
+  const inbox = studyInbox ? createStudyInbox(studyInbox) : null;
   const linkService = link
     ? createLinkService({
         ...(typeof link === 'object' ? link : {}),
@@ -584,6 +586,7 @@ function createServer(config) {
       sendJson(res, 503, { error: { code: 'server_closing', message: 'сервер завершает работу' } }, { Connection: 'close' });
       return;
     }
+    if (inbox?.matches(req)) return inbox.handle(req, res, sendJson);
     if (linkService && linkService.matchesHttp(req)) {
       linkService.handleHttp(req, res);
       return;
@@ -648,9 +651,11 @@ function createServer(config) {
   server.requestTimeout = 60 * 1000;
   server.headersTimeout = 30 * 1000;
   const origClose = server.close.bind(server);
+  server.once('listening', () => { if (inbox && studyInbox.poll !== false) inbox.start(); });
   server.close = (cb) => {
     closing = true;
     closeAbortController.abort();
+    inbox?.stop();
     if (linkService) linkService.close();
     for (const s of [...activeStreams]) s.abort();
     for (const r of [...activeHttpRequests]) r.abort();
@@ -665,7 +670,7 @@ function createServer(config) {
     if (linkService) linkService.close();
     store.close();
   });
-  return { server, store, plans, WINDOW_MS, link: linkService };
+  return { server, store, plans, WINDOW_MS, link: linkService, studyInbox: inbox };
 }
 
 module.exports = { createServer, redact };

@@ -18,11 +18,11 @@
 // Важно: запуск ни одного сервера на этой машине не проверялся, пакеты не ставились.
 // verified:true означает «запись достоверна», а не «сервер проверен в работе».
 //
-// Каталог намеренно ограничен 80 записями: окно показывает их в «Дополнениях», а тест
+// Каталог намеренно ограничен 75 записями: окно показывает их в «Дополнениях», а тест
 // tests/mcp-catalog.test.js следит за размером, уникальностью и отсутствием значений секретов.
 
 const CATEGORIES = Object.freeze([
-  { id: 'files', title: 'Файлы и терминал' },
+  { id: 'files', title: 'Облачные файлы' },
   { id: 'git', title: 'Git и код' },
   { id: 'dev', title: 'Разработка' },
   { id: 'browser', title: 'Браузер' },
@@ -42,29 +42,7 @@ const CATEGORY_TITLES = new Map(CATEGORIES.map((category) => [category.id, categ
 // Сырые записи без значений секретов. Аргументы только простые: без кавычек и знаков оболочки,
 // иначе клиент MCP (см. validateArgs в client.js) откажется их запускать.
 const RAW = [
-  // ── files: файлы и терминал ─────────────────────────────────────
-  {
-    id: 'filesystem',
-    title: 'Файлы',
-    description: 'Чтение, запись и поиск файлов в разрешённой папке (официальный сервер MCP).',
-    category: 'files',
-    transport: 'stdio',
-    command: 'npx.cmd',
-    args: ['-y', '@modelcontextprotocol/server-filesystem', '.'],
-    docs: 'https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem',
-    verified: true,
-  },
-  {
-    id: 'desktop-commander',
-    title: 'Командная строка',
-    description: 'Терминал и файлы на компьютере: команды, чтение и правка (сторонний сервер Desktop Commander).',
-    category: 'files',
-    transport: 'stdio',
-    command: 'npx.cmd',
-    args: ['-y', '@wonderwhy-er/desktop-commander@latest'],
-    docs: 'https://www.npmjs.com/package/@wonderwhy-er/desktop-commander',
-    verified: true,
-  },
+  // ── files: облачные файлы ───────────────────────────────────────
   {
     id: 'gdrive',
     title: 'Google Диск',
@@ -73,27 +51,6 @@ const RAW = [
     transport: 'stdio',
     command: 'npx.cmd',
     args: ['-y', '@modelcontextprotocol/server-gdrive'],
-    verified: true,
-  },
-  {
-    id: 'commands',
-    title: 'Команды терминала',
-    description: 'Обычные команды терминала на компьютере с ограничением по папкам (сторонний сервер).',
-    category: 'files',
-    transport: 'stdio',
-    command: 'npx.cmd',
-    args: ['-y', 'mcp-server-commands'],
-    docs: 'https://github.com/g0t4/mcp-server-commands',
-    verified: true,
-  },
-  {
-    id: 'windows-cli',
-    title: 'Команды Windows',
-    description: 'Команды cmd и PowerShell с белым списком программ и рабочими папками.',
-    category: 'files',
-    transport: 'stdio',
-    command: 'npx.cmd',
-    args: ['-y', '@simonb97/server-win-cli'],
     verified: true,
   },
 
@@ -145,17 +102,6 @@ const RAW = [
   },
 
   // ── dev: разработка ─────────────────────────────────────────────
-  {
-    id: 'evidence-check',
-    title: 'Проверочный сервер',
-    description: 'Учебный сервер MCP со всеми типами возможностей: проверка подключения и инструментов (официальный).',
-    category: 'dev',
-    transport: 'stdio',
-    command: 'npx.cmd',
-    args: ['-y', '@modelcontextprotocol/server-everything'],
-    docs: 'https://github.com/modelcontextprotocol/servers/tree/main/src/everything',
-    verified: true,
-  },
   {
     id: 'time',
     title: 'Время',
@@ -936,7 +882,7 @@ const CONTROL_RE = /[\u0000-\u001f\u007f]/;
 // Те же запреты, что у клиента MCP: иначе команда с аргументом не запустится.
 const SHELL_META_RE = /[&|<>;`$%"'\r\n]/;
 const TRANSPORTS = new Set(['stdio', 'http']);
-const MAX_ENTRIES = 80;
+const MAX_ENTRIES = 75;
 
 function check(condition, message) {
   if (!condition) throw new Error(`каталог MCP: ${message}`);

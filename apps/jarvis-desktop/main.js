@@ -62,13 +62,16 @@ const { createFieldDictation, hintNeedsShow } = require('./src/voice/field-dicta
 const { parseWakeWords } = require('./src/voice/wake');
 const voiceModes = require('./src/voice/modes');
 const { diskTools } = require('./src/tools/disk');
+const { ramTools } = require('./src/tools/ram');
 const { memoryTools } = require('./src/tools/memory');
 const { GoalStore, goalsBrief } = require('./src/goals/store');
 const { goalTools } = require('./src/goals/tools');
-const { TurnPlans, PlanStore } = require('./src/agent/plan');
+const { TurnPlans, PlanStore, isResumePhrase } = require('./src/agent/plan');
 const { planTools } = require('./src/tools/plan');
 const { studyTool, STUDY_PROMPT } = require('./src/tools/study');
+const { studyExamTool, examReminderText } = require('./src/tools/study-exam');
 const { createTelegramStudy } = require('./src/telegram/study');
+const { createStudyInboxClient } = require('./src/telegram/study-inbox');
 const { MemoryStore, memoryContext, profileNote, backgroundBrief } = require('./src/memory/store');
 const { learnFromTurn } = require('./src/memory/learn');
 const { ReminderStore } = require('./src/schedule/store');
@@ -280,7 +283,7 @@ const SYSTEM_PROMPT = [
   '- шаблон Word (диплом, справка) с ключами вида {{ФИО}} — document_fill: template, path, values. Значения сначала узнай у владельца, если их нет; без значения ключ остаётся и его назови;',
   '- презентация (.pptx) — document_write с format «pptx», title, subtitle и slides [{title, bullets, layout}]. Для содержания используй agenda, для двух или трёх параллельных идей — cards («Заголовок: текст»), для остальных — list. Если путь не указан, выбери понятное имя файла в рабочей папке. Если пользователь говорит «об этом», возьми тему и материал из последнего подходящего ответа. Если просит открыть, вызови presentation_open с путём из результата записи и сообщи, подтвердилось ли открытие;',
   '- погода — weather_now {city?}: без аргумента город берётся из настроек; погоду узнавай через weather_now, не через поиск;',
-  '- яркость — screen_brightness {percent} или {change: 20 / -20}; закрыть окно сверху — window_close_active; все окна — windows_close_all; прочитать вслух — read_clipboard_aloud: буфер по умолчанию, source "selection" — выделенное, source "file" и path — документ (txt, md, html, docx); пауза/продолжить/стоп — action "pause"/"resume"/"stop", «пауза» и «продолжай» работают и без модели; перевод того, что на экране — screen_look, переводи сам, не ищи в интернете;',
+  '- яркость — screen_brightness {percent} или {change: 20 / -20}; очистка оперативной памяти — ram_trim; закрыть окно сверху — window_close_active; все окна — windows_close_all; прочитать вслух — read_clipboard_aloud: буфер по умолчанию, source "selection" — выделенное, source "file" и path — документ (txt, md, html, docx); пауза/продолжить/стоп — action "pause"/"resume"/"stop", «пауза» и «продолжай» работают и без модели; перевод того, что на экране — screen_look, переводи сам, не ищи в интернете;',
   '- курс валют — currency_rate {codes?}: один быстрый запрос к ЦБ, без браузера и поиска. «Какой курс доллара», «сколько стоит евро» — этот инструмент; не открывай сайт ради курса;',
   '- календарь и встречи — calendar_upcoming и calendar_briefing (утренняя сводка на сегодня): если источник не подключён, честно скажи об этом и не придумывай встречи;',
   '- программы — app_open; окна — windows_list, windows_focus; разложить окна на экране (рядом, сеткой, каскадом) — windows_arrange; прикрепить одно окно к половине экрана, развернуть или свернуть — windows_snap, только с названием окна (title); если есть ui_*, нажатия и ввод делай ими; ждать окно, файл или процесс — wait_for, а не wait; ждать элемент в окне — ui_wait; флажок или переключатель — ui_set_toggle;',
@@ -438,12 +441,12 @@ function loadChats() {
 
 const chats = loadChats();
 
-function saveConversation() {
+function saveConversation({ touch = false } = {}) {
   if (!agent) return false;
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    // Время последней работы с чатом: экран Nox делит список на «Сегодня» и «Ранее».
-    chats.touch();
+    // Время чата обновляется только при новой реплике/ходе, но не при простом переключении или закрытии окна.
+    if (touch) chats.touch();
     // Картинки (поле image) в файл разговора не пишем: они большие и устаревают.
     const data = JSON.stringify(chats.toJSON((h) => maskHistory(trimHistory(h).map(({ image, ...m }) => m))), null, 2);
     // Через временный файл: в этом файле теперь все чаты, сбой записи не должен их потерять.
@@ -668,6 +671,7 @@ const baseTools = guardDesktopTools([
   ...systemTools,
   ...windowsTools(),
   ...diskTools(),
+  ...ramTools(),
   ...memoryTools(memory),
   ...goalTools(goals),
   ...planTools(turnPlans),
@@ -750,6 +754,7 @@ for (const tool of [...baseTools.map((item) => item.name === searchStudyFiles.na
 })]) tools.register(tool);
 for (const tool of chatCodeTools({ root: WORKSPACE, denyDirs: [DATA_DIR], index: workspaceIndex })) tools.register(tool);
 tools.register(studyTool(path.join(DATA_DIR, 'study.json')));
+tools.register(studyExamTool({ store: reminders, file: path.join(DATA_DIR, 'study.json') }));
 // Почта и серверы MCP — только в окне: в фон, Telegram и команды не попадают. Учётные данные Google — в .env.
 const gmail = new GmailAccount({ file: path.join(DATA_DIR, 'gmail.bin'), clientId: cfg('NOX_GMAIL_CLIENT_ID'), clientSecret: cfg('NOX_GMAIL_CLIENT_SECRET') });
 const mailDrafts = new MailDraftStore(path.join(DATA_DIR, 'mail-drafts.json'));
@@ -1282,6 +1287,13 @@ function buildCalendarSourceConfig() {
 const scheduler = new Scheduler({
   store: reminders,
   notify: async (item) => {
+    if (item.studyExam) {
+      const spaceId = item.workspaceId || 'default';
+      const dir = spaceId === 'default' ? DATA_DIR : path.dirname(workspaceHub.book.open(spaceId).memory.filePath);
+      const text = examReminderText(item, path.join(dir, 'study.json'));
+      if (!text) return;
+      item = { ...item, text };
+    }
     const delivered = await deliverReminder(item, {
       quiet: () => readSettings().quiet === true,
       record: (entry) => journal.append({ tool: 'reminder', risk: 'T0', decision: 'allow', ok: true, summary: `Напоминание: ${entry.text}`, ...(entry.workspaceId ? { workspaceId: entry.workspaceId } : {}) }),
@@ -1290,7 +1302,8 @@ const scheduler = new Scheduler({
     });
     if (delivered === 'journal') return;
     const workspaceName = reminderWorkspaceName(item.workspaceId);
-    watch.add({ kind: 'reminder', key: `reminder:${item.id}:${Date.now()}`, detail: workspaceName ? `[${workspaceName}] ${item.text}` : item.text, channels: ['telegram'] });
+    watch.add({ kind: 'reminder', key: `reminder:${item.id}:${Date.now()}`, detail: workspaceName ? `[${workspaceName}] ${item.text}` : item.text,
+      channels: ['telegram'], expiresAt: item.studyExam ? Date.parse(item.studyExam.at) : null });
   },
   calendar: () => {
     const cfg = readCalendarSetting();
@@ -1416,6 +1429,16 @@ const longTasks = new LongTasks({
   notify: showMissionNote,
   mode: () => mode,
   memory,
+  resolvePlan: (workspaceId) => {
+    const index = workspaceId === 'default' ? new WorkspaceIndex(WORKSPACE) : workspaceHub?.book.open(workspaceId).index;
+    if (!index) throw new Error('рабочая папка плана недоступна');
+    index.denyWrite = [DATA_DIR];
+    index.setFolders(workspaceId === 'default' ? workspaceIndex.folders : workspaceHub.book.folders(workspaceId));
+    return { index, tools: [
+      ...workspaceTools(index, { readSearchDocument: documentSearchReader(ocrPdfFile) }),
+      ...documentTools(index, { renderPdf, ocrPdf: ocrPdfFile }), ...webTools(),
+    ] };
+  },
 });
 for (const tool of longTools(longTasks)) tools.register(tool);
 
@@ -1824,6 +1847,7 @@ function initWorkspaceHub() {
         const store = space.id === 'default' ? deals : workspaceDeals.store(space.id);
         const refresh = space.id === 'default' ? refreshDeals : () => workspaceDeals.refresh(space.id);
         return [
+          studyExamTool({ store: reminders, file: path.join(path.dirname(space.memory.filePath), 'study.json'), workspaceId: space.id }),
           presentationToolFor(space.index),
           ...runtime.scopedChatTools(space.id), ...dealTools(store, refresh),
           ...remindersTools(reminders, { workspaceId: space.id }), ...missionTools(missions, { workspaceId: space.id }), ...makeParallelAgentTools(space, emitScoped),
@@ -1848,7 +1872,7 @@ function initWorkspaceHub() {
         'Многошаговое дело поручай исполнителю: владелец подтверждает цель и разрешения до начала. Показывай только дела этого пространства и проверенные итоги. Напоминания, миссии и команды относятся к этому пространству.',
       ].join('\n'),
     });
-    workspaceHub = new WorkspaceHub({ book, makeChat, saveDefault: saveConversation, isBusy: () => busy });
+    workspaceHub = new WorkspaceHub({ book, makeChat, saveDefault: () => saveConversation(), isBusy: () => busy });
     workspaceError = '';
   } catch (err) {
     workspaceHub = null;
@@ -2486,10 +2510,52 @@ async function runOfflineNow(call, scope = {}) {
   return res.text;
 }
 
-function replyDirect(text, emit = emitToWindow) {
+function replyDirect(text, emit = emitToWindow, metadata) {
   emit({ type: 'text', delta: text });
-  emit({ type: 'done', status: 'succeeded' });
+  emit({ type: 'done', status: 'succeeded', ...metadata });
   return Promise.resolve();
+}
+
+function backgroundPlanReply(phrase, scoped) {
+  const sendToBackground = /^\s*продолжай в фоне[.!?\s]*$/iu.test(phrase);
+  const reviewed = /^\s*проверил(?:а)? файл,?\s+верни план в чат[.!?\s]*$/iu.test(phrase);
+  const bringBack = reviewed || /^\s*верни план в чат[.!?\s]*$/iu.test(phrase);
+  const stop = /^\s*останови (?:фоновый )?план[.!?\s]*$/iu.test(phrase);
+  if (!sendToBackground && !bringBack && !stop && !isResumePhrase(phrase)) return null;
+  const actor = scoped || agent;
+  const scope = actor.planScope();
+  const local = actor.backgroundPlan();
+  let item = longTasks.linkedPlan(scope);
+  const same = !local || item?.handoff.plan.createdAt === local.plan.createdAt;
+  if (item?.status !== 'running' && !same) item = null;
+  if (stop && item?.status === 'running' && longTasks.stop(item.id)) return { text: 'Останавливаю фоновый план. Проверенные шаги сохранены в отчёте.' };
+  if (bringBack && item && item.status !== 'running') {
+    if (item.handoff.pending && !reviewed) return { text: `Проверь файл ${item.handoff.pending.path}. После проверки скажи «Проверил файл, верни план в чат».` };
+    const plan = item.handoff.plan;
+    if (!plan.steps.some((step) => step.status !== 'done')) return { text: 'План уже выполнен.' };
+    const note = item.handoff.pending ? `Сначала сверь ${item.handoff.pending.path}: запись прервалась. Перед повторной записью уточни решение владельца.\n` : '';
+    planStore.put({ ...scope, request: (note + plan.request).slice(0, 600), steps: plan.steps, artifacts: plan.artifacts });
+    longTasks.detachPlan(item);
+    return { text: 'План возвращён в чат. Скажи «продолжай», чтобы взять следующий открытый шаг.' };
+  }
+  if ((!item || !same) && sendToBackground && local) {
+    item = longTasks.start({ goal: local.plan.request || local.plan.steps[0].text, hours: 1, handoff: local });
+    actor.dropSavedPlan();
+    if (!scoped) actor.forgetPlan();
+  }
+  if (!item) return null;
+  const root = scoped ? scoped.root() : WORKSPACE;
+  const file = path.relative(root, item.report).split(path.sep).join('/');
+  const report = artifactFile(root, file);
+  const steps = item.handoff.plan.steps;
+  const done = steps.filter((step) => step.status === 'done').length;
+  const next = steps.find((step) => step.status !== 'done');
+  const status = item.status === 'running' ? 'Работаю по этому плану в фоне.' :
+    item.status === 'done' ? 'План выполнен.' : `Работа приостановлена. ${item.why || 'Нужно решение владельца'}.`;
+  return {
+    text: `${status} Проверено шагов ${done} из ${steps.length}.${next ? ` Следующий шаг — ${next.text}.` : ''}`,
+    ...(report ? { metadata: { artifacts: [{ path: file, name: 'Отчёт по плану', size: report.size }] } } : {}),
+  };
 }
 
 // Реплика, пока идёт ход: ход не начинает, историю не трогает. См. busyRoute.
@@ -2564,12 +2630,23 @@ async function runChatTurn(event, text, files, opts = {}, voiceCommand = '') {
   let keepBusy = false; // ход модели сам сбросит busy по завершении
   try {
     const scoped = workspaceHub && workspaceHub.chat();
+    if (!files?.length) {
+      let linked;
+      try { linked = backgroundPlanReply(phrase, scoped); }
+      catch (err) { linked = { text: `Не удалось открыть план. ${err.message}.` }; }
+      if (linked) {
+        (scoped || agent).remember(phrase, linked.text, linked.metadata);
+        if (!scoped) saveConversation({ touch: true });
+        await replyDirect(linked.text, scoped ? emitScoped : emitToWindow, linked.metadata);
+        return { ok: true, command: 'план' };
+      }
+    }
     if (!files?.length && /^(?:джарвис[\s,]+)?(?:который час|сколько (?:сейчас )?времени|который сейчас час|покажи (?:текущее )?время|текущее время)[.!?]*$/iu.test(phrase)) {
       const reply = new Intl.DateTimeFormat('ru-RU', { timeStyle: 'short' }).format(new Date());
       if (scoped) scoped.remember(phrase, reply);
       else {
         agent.remember(phrase, reply);
-        saveConversation();
+        saveConversation({ touch: true });
       }
       await replyDirect(reply);
       return { ok: true, command: 'время' };
@@ -2621,44 +2698,26 @@ async function runChatTurn(event, text, files, opts = {}, voiceCommand = '') {
       }).finally(() => { screenAllowed = false; busy = false; });
       return { ok: true, command: null };
     }
-    // «Продолжай в фоне»: незакрытый план хода уходит в долгое поручение. Без плана фраза идёт модели.
-    const backgroundGoal = /^\s*продолжай в фоне/i.test(phrase) ? agent.backgroundGoal() : null;
-    if (backgroundGoal) {
-      let backgroundReply;
-      try {
-        const item = longTasks.start({ goal: backgroundGoal, hours: 1, useDesktop: false });
-        agent.forgetPlan();
-        // План ушёл в поручение: с диска убираем, иначе «продолжай» поднял бы его заново.
-        agent.dropSavedPlan();
-        backgroundReply = `Продолжаю в фоне, не дольше часа. Итог будет в файле ${item.report}. Остановить — скажите «останови поручение».`;
-      } catch (err) {
-        backgroundReply = `Не получилось продолжить в фоне: ${err.message}`;
-      }
-      agent.remember(phrase, backgroundReply);
-      saveConversation();
-      await replyDirect(backgroundReply);
-      return { ok: true, command: 'в фоне' };
-    }
     // «Что повисло» отвечает без модели: работает и без ключа, и при исчерпанном лимите.
     if (isHangingPhrase(phrase)) {
       refreshDeals();
       const hangingReply = hangingText(hanging(deals));
       agent.remember(phrase, hangingReply);
-      saveConversation();
+      saveConversation({ touch: true });
       await replyDirect(hangingReply);
       return { ok: true, command: 'дела' };
     }
     const appsText = await appsTurn(phrase);
     if (appsText !== null) {
       agent.remember(phrase, appsText);
-      saveConversation();
+      saveConversation({ touch: true });
       await replyDirect(appsText);
       return { ok: true, command: 'программы' };
     }
     const currencyText = await currencyTurn(phrase);
     if (currencyText !== null) {
       agent.remember(phrase, currencyText);
-      saveConversation();
+      saveConversation({ touch: true });
       await replyDirect(currencyText);
       return { ok: true, command: 'курс' };
     }
@@ -2673,13 +2732,13 @@ async function runChatTurn(event, text, files, opts = {}, voiceCommand = '') {
     if (localPlan) {
       if (localPlan.kind === 'reply') {
         agent.remember(phrase, localPlan.text);
-        saveConversation();
+        saveConversation({ touch: true });
         await replyDirect(localPlan.text);
         return { ok: true, command: localPlan.title || 'ответ' };
       }
       const seqOut = await runLocalSequence(localPlan, { store: commands, ownerText: phrase });
       agent.remember(phrase, seqOut.text, seqOut.metadata);
-      saveConversation();
+      saveConversation({ touch: true });
       return { ok: true, command: localPlan.title || localPlan.name || 'действие' };
     }
     // «Сделай на экране: …» — отдельный агент экрана: снимок, один шаг, проверка, до 40 шагов.
@@ -2702,7 +2761,7 @@ async function runChatTurn(event, text, files, opts = {}, voiceCommand = '') {
           learnAfterTurn(phrase, running.history);
           learnSkillAfterTurn(phrase, running.history, res.outcome);
           dealClose(screenRef, res.outcome, running.lastError);
-          saveConversation();
+          saveConversation({ touch: true });
         })
         .finally(() => {
           if (screenAgent === running) screenAgent = null;
@@ -2724,7 +2783,7 @@ async function runChatTurn(event, text, files, opts = {}, voiceCommand = '') {
         dealClose(dealRef, res.outcome, agent.lastError);
         learnAfterTurn(phrase, agent.history);
         learnSkillAfterTurn(phrase, agent.history, res.outcome);
-        saveConversation();
+        saveConversation({ touch: true });
       })
       .finally(() => {
         screenAllowed = false;
@@ -2732,7 +2791,7 @@ async function runChatTurn(event, text, files, opts = {}, voiceCommand = '') {
         busy = false;
       });
     // Реплика уже в истории (run кладёт её синхронно): сохраняем до ответа модели, чтобы сбой её не стёр (ZM-019).
-    saveConversation();
+    saveConversation({ touch: true });
     return { ok: true, command: null };
   } catch (err) {
     return { ok: false, error: err && err.message ? err.message : String(err) };
@@ -2850,7 +2909,8 @@ ipcMain.handle('workspaces:select', (event, id) => {
 });
 
 // Подключённые папки: владелец выбирает их сам в системном окне, по умолчанию их нет.
-function saveFolders(list) {
+function saveFolders(list, scoped) {
+  if (scoped) return { ok: true, folders: scoped.setFolders(list) };
   saveSettings({ connectedFolders: list });
   workspaceIndex.setFolders(list);
   return { ok: true, folders: list };
@@ -2858,19 +2918,26 @@ function saveFolders(list) {
 
 ipcMain.handle('folders:add', async (event) => {
   if (!fromWindow(event)) return { ok: false };
-  if (workspaceHub && workspaceHub.chat()) return { ok: false, error: 'подключённые папки доступны в общем пространстве' };
-  const res = await dialog.showOpenDialog(win, { title: 'Подключите папку для поиска', properties: ['openDirectory'] });
-  const list = workspaceIndex.folders;
-  if (res.canceled || !res.filePaths[0]) return { ok: true, folders: list };
-  const dir = path.resolve(res.filePaths[0]);
-  if (list.some((p) => p.toLowerCase() === dir.toLowerCase())) return { ok: true, folders: list };
-  return saveFolders([...list, dir]);
+  const scoped = workspaceHub?.chat();
+  const scopeId = scoped?.current().id || 'default';
+  try {
+    const res = await dialog.showOpenDialog(win, { title: 'Подключите папку для поиска', properties: ['openDirectory'] });
+    if ((workspaceHub?.current().id || 'default') !== scopeId) return { ok: false, error: 'пространство изменилось, выберите папку снова' };
+    const active = workspaceHub?.chat();
+    const list = active?.folders() || workspaceIndex.folders;
+    if (res.canceled || !res.filePaths[0]) return { ok: true, folders: list };
+    const dir = path.resolve(res.filePaths[0]);
+    if (list.some((p) => p.toLowerCase() === dir.toLowerCase())) return { ok: true, folders: list };
+    return saveFolders([...list, dir], active);
+  } catch (err) { return { ok: false, error: err.message }; }
 });
 
 ipcMain.handle('folders:remove', (event, dir) => {
   if (!fromWindow(event) || typeof dir !== 'string') return { ok: false };
-  if (workspaceHub && workspaceHub.chat()) return { ok: false, error: 'подключённые папки доступны в общем пространстве' };
-  return saveFolders(workspaceIndex.folders.filter((p) => p !== dir));
+  try {
+    const scoped = workspaceHub?.chat();
+    return saveFolders((scoped?.folders() || workspaceIndex.folders).filter((p) => p !== dir), scoped);
+  } catch (err) { return { ok: false, error: err.message }; }
 });
 
 // Библиотека готовых команд: список и запуск из окна.
@@ -3238,6 +3305,7 @@ let remoteTexts = [];
 let remoteAgent = null;
 let remoteBusy = false;
 let telegramBridge = null;
+let studyInboxClient = null;
 const telegramStudy = createTelegramStudy({
   locations: () => {
     const book = workspaceHub?.book;
@@ -3460,6 +3528,20 @@ function startTelegram() {
   }
 }
 
+function startStudyInbox() {
+  const url = cfg('NOX_STUDY_INBOX_URL');
+  const key = cfg('NOX_STUDY_INBOX_KEY');
+  if (!url || !key) return;
+  try {
+    studyInboxClient = createStudyInboxClient({
+      url, key, index: ownWorkspaceIndex,
+      importPhoto: (text, media) => busy || remoteBusy || stopSwitch.isStopped() ? { deferred: true } : telegramStudy(text, media),
+      log: (message) => console.warn(message),
+    });
+    studyInboxClient.start();
+  } catch (err) { console.warn(`Учебный приёмник не запущен: ${err.message}`); }
+}
+
 function registerCommandHotkeys() {
   for (const key of registeredCommandHotkeys) globalShortcut.unregister(key);
   registeredCommandHotkeys.clear();
@@ -3552,6 +3634,8 @@ const COMMAND_EDITOR_CATALOG_TOOLS = new Set([
   'ui_type',
   'url_open',
   'media_control',
+  'ram_trim',
+  'youtube_play',
 ]);
 ipcMain.handle('tools:catalog', (event) => {
   if (!fromWindow(event)) return [];
@@ -3685,7 +3769,7 @@ ipcMain.handle('settings:get', (event) => {
     uiShell: s.uiShell === 'legacy' ? 'legacy' : 'aether',
     musicService: SERVICES[s.musicService] ? s.musicService : null,
     workspace: workspaceHub && workspaceHub.chat() ? workspaceHub.chat().root() : WORKSPACE,
-    connectedFolders: workspaceHub && workspaceHub.chat() ? [] : workspaceIndex.folders,
+    connectedFolders: workspaceHub?.chat()?.folders() || workspaceIndex.folders,
     voiceVolume: voiceVolume(s),
     notificationVoice: readNotificationVoice(s.notificationVoice),
     calendar: sanitizeCalendarSettingForUi(s.calendar),
@@ -5191,6 +5275,7 @@ if (!app.requestSingleInstanceLock()) {
       .then(() => fireSystemEvent('app:startup', { source: 'app.whenReady', eventId: `startup:${APP_LAUNCH_ID}` }))
       .catch((err) => console.warn(`событие запуска команд: ${err && err.message ? err.message : err}`));
     startTelegram();
+    startStudyInbox();
     // До первого хода: старт без конца в журнале скорости значит, что вызов оборвал прошлый запуск.
     try {
       closeOrphanTurns(deals);
@@ -5225,6 +5310,7 @@ if (!app.requestSingleInstanceLock()) {
     replySpeech.stop();
     fishVoice.stop();
     if (telegramBridge) telegramBridge.stop();
+    studyInboxClient?.stop();
     browserBridge.close().catch(() => {});
     mcpManager.close();
     stopClipboardWatch();

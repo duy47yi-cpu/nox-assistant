@@ -17,6 +17,7 @@ const { WorkspaceIndex } = require('../src/rag/index');
 const { artifactFrom } = require('../src/agent/chat-reply');
 const { ReminderStore } = require('../src/schedule/store');
 const { remindersTools } = require('../src/tools/reminders');
+const { createStudyInboxClient } = require('../src/telegram/study-inbox');
 
 function jsonResponse(value) {
   return { ok: true, status: 200, json: async () => value, arrayBuffer: async () => Buffer.from('') };
@@ -69,6 +70,45 @@ function tempMedia(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
+
+test('очередь учебных материалов подтверждает запись на ПК и повторяет сбой подтверждения без дублей', async (t) => {
+  const dir = tempMedia(t);
+  const root = path.join(dir, 'workspace');
+  fs.mkdirSync(path.join(root, 'inbox'), { recursive: true });
+  const index = new WorkspaceIndex(root);
+  const file = path.join(dir, 'study.json');
+  const study = createTelegramStudy({
+    locations: () => [{ id: 'default', name: 'Общее', selected: true, file, index }],
+    readPhoto: async () => ({ ok: true, data: { text: 'Реши 2x = 8' } }),
+    pinFile: path.join(dir, 'pin.json'),
+  });
+  const items = [
+    { id: '2a4b1101-e42e-4964-8cda-7b317abe0000', text: 'Выучить закон Ома' },
+    { id: '2a4b1101-e42e-4964-8cda-7b317abe0001', text: 'На учёбу: Алгебра',
+      photo: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1xkAAAAASUVORK5CYII=' },
+  ];
+  let failAck = true;
+  const client = createStudyInboxClient({
+    url: 'http://127.0.0.1:1234', key: 'long-fixture-study-inbox-secret-key', index, importPhoto: study,
+    fetchImpl: async (url, options) => {
+      if (options.method === 'GET') return Response.json({ item: items[0] });
+      assert.equal(url.searchParams.get('id'), items[0].id);
+      if (failAck) { failAck = false; return new Response('temporary', { status: 503 }); }
+      items.shift();
+      return Response.json({ ok: true });
+    },
+  });
+  await client.tick();
+  assert.equal(items.length, 2);
+  await client.tick();
+  assert.equal(items.length, 0);
+  assert.equal(fs.readdirSync(path.join(root, 'inbox')).length, 1);
+  const state = studyTool(file).run({ action: 'status' }, { runId: 'read', ownerText: 'Прогресс' }).data;
+  assert.equal(state.current.exercise, 'Реши 2x = 8');
+  assert.equal(state.topics.length, 1);
+  assert.ok(fs.existsSync(path.join(root, state.current.photo)));
+  client.stop();
+});
 
 test('Telegram продолжает последнее занятие с ПК, сохраняет проверку и принимает ответ после перезапуска', async (t) => {
   const dir = tempMedia(t);

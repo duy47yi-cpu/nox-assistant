@@ -11,42 +11,11 @@
 
   const THEME_LABELS = {
     dark: 'Тёмная (Nox)',
-    signal: 'Ночь',
     light: 'Светлая',
-    graphite: 'Графит',
-    lime: 'Лайм',
-    paper: 'Тёплая бумага',
-    forest: 'Лес',
-    wine: 'Вино',
     cobalt: 'Кобальт',
-    aurora: 'Аврора',
-    ember: 'Угли',
-    dawn: 'Рассвет',
-    glass: 'Стекло',
-    liquid: 'Жидкая ночь',
-    liquidday: 'Жидкий день',
-    frost: 'Иней',
-    gradient: 'Градиент ночь',
-    gradientday: 'Градиент день',
-    midnight: 'Полночь',
     neon: 'Неон',
-    starry: 'Звёзды',
     moonlight: 'Лунный свет',
-    sunrise: 'Восход',
-    'blue-hour': 'Синий час',
-    eclipse: 'Затмение',
-    malachite: 'Малахит',
-    copper: 'Медь',
-    porcelain: 'Фарфор',
-    // Восемь новых палитр Nox. «Бумага» — новая светлая; старую тёплую бумагу зовём «Тёплая бумага»,
-    // чтобы подписи в списке не повторялись.
-    ocean: 'Океан',
-    terracotta: 'Терракота',
-    'paper-white': 'Бумага',
-    emerald: 'Изумруд',
     'neon-noir': 'Неон-нуар',
-    lavender: 'Лаванда',
-    coffee: 'Кофе',
     snow: 'Снег',
     system: 'Как в системе',
   };
@@ -160,9 +129,13 @@
       if (root.hidden || (!searchQuery && section !== 'workshop')) return;
       const activeInput = document.activeElement;
       const isSliderActive = Boolean(activeInput && root.contains(activeInput) && activeInput.tagName === 'INPUT' && activeInput.type === 'range');
+      const isOrbMotionActive = () => (
+        document.documentElement.dataset.animations !== 'off'
+        && document.documentElement.dataset.motion !== 'off'
+      );
       if (((previewHandle && previewOrbId === snap.activeId) || isSliderActive) && !snap.activeSettings.presetId) {
         if (previewHandle) {
-          previewHandle.applySettings(snap.activeSettings, document.documentElement.dataset.animations !== 'off');
+          previewHandle.applySettings(snap.activeSettings, isOrbMotionActive());
         }
         const cards = root.querySelectorAll('.ae-orb-choice');
         for (const c of cards) {
@@ -273,7 +246,8 @@
           destroyPreview();
           previewOrbId = snap.activeId;
           previewHandle = lib.mount(pCanvas, snap.activeId, {
-            globalAnimated: document.documentElement.dataset.animations !== 'off',
+            globalAnimated: document.documentElement.dataset.animations !== 'off'
+              && document.documentElement.dataset.motion !== 'off',
             state: 'idle',
             stageEl: pStage,
           });
@@ -550,14 +524,14 @@
           button.addEventListener('click', () => applyTheme(id));
           gallery.append(button);
         }
-        // «Сбросить оформление»: тема «Ночь», шрифты и акцент — как в теме, свой фон снят.
+        // «Сбросить оформление»: тема «Тёмная (Nox)», шрифты и акцент — как в теме, свой фон снят.
         const resetRow = document.createElement('div');
         resetRow.className = 'ae-head-actions ae-theme-reset-row';
         const resetAppearance = document.createElement('button');
         resetAppearance.type = 'button';
         resetAppearance.className = 'ae-btn ae-btn-secondary ae-btn-sm';
         resetAppearance.textContent = 'Сбросить оформление';
-        resetAppearance.title = 'Тема «Ночь», шрифты, эффекты и акцент — как в теме; своя картинка фона снимается';
+        resetAppearance.title = 'Тема «Тёмная (Nox)», шрифты, эффекты и акцент — как в теме; своя картинка фона снимается';
         resetAppearance.addEventListener('click', async () => {
           if (window.NoxBackdrop?.has()) {
             try { await window.NoxBackdrop.clear(); } catch { /* картинка могла быть уже снята */ }
@@ -566,7 +540,7 @@
           try {
             if (boot) localStorage.setItem(boot.THEME_CHOSEN_KEY, '1');
           } catch { /* без хранилища */ }
-          themeSelect.value = 'signal';
+          themeSelect.value = 'dark';
           store.toast('Оформление сброшено', 'ok');
           renderBody();
         });

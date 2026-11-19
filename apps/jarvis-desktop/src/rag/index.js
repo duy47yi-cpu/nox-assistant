@@ -1,7 +1,7 @@
 'use strict';
 
 // Индекс для поиска по словам: куски текста из рабочей папки и подключённых владельцем папок.
-// Без нейросетей и эмбеддингов: совпадение — общая основа слова запроса и слова куска («отчёты» находит «отчётом»).
+// Точные совпадения по основам слов выше близких терминов и переформулировок запроса.
 // Пути файлов рабочей папки — относительные, подключённых папок — абсолютные.
 // Не индексируются: папка индекса, точечные имена (.env, .git), data, node_modules, dist, куски с похожим на ключ текстом.
 const fs = require('fs');
@@ -41,6 +41,24 @@ function normalize(text) {
 function queryWords(query) {
   const words = normalize(query).split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 2);
   return [...new Set(words)];
+}
+
+const CONCEPTS = [
+  ['гравитация', 'сила тяжести', 'земное притяжение', 'падает', 'падают', 'падение тел', 'всемирное тяготение', 'gravity'],
+  ['производная', 'скорость изменения', 'derivative'],
+  ['первичный образ функции', 'первообразная', 'неопределенный интеграл', 'antiderivative'],
+  ['закон ома', 'напряжение ток сопротивление', 'ohm law'],
+  ['линейное уравнение', 'уравнение первой степени', 'linear equation'],
+  ['фотосинтез', 'световая энергия растений', 'photosynthesis'],
+  ['перевод единиц', 'преобразование единиц', 'unit conversion'],
+].map((group) => group.map((phrase) => queryWords(phrase).map(stem)));
+
+function searchTerms(query, alternatives = []) {
+  const exact = [...new Set(queryWords(query).map(stem))];
+  const rest = [...new Set(alternatives.flatMap(queryWords).map(stem))].filter((word) => !exact.includes(word));
+  const known = new Set([...exact, ...rest]);
+  const concepts = CONCEPTS.filter((group) => group.some((phrase) => phrase.every((word) => known.has(word))));
+  return { exact, rest, concepts };
 }
 
 function toLimit(value) {
@@ -247,10 +265,15 @@ function isInside(root, abs) {
 
 // Оценка куска: число разных основ запроса, которые есть среди основ его слов.
 // Сниппет — до MAX_SNIPPET символов вокруг первого совпадения (позиции считаются по кодовым точкам).
-function scoreChunk(chunk, stems) {
+function scoreChunk(chunk, terms) {
   const have = typeof chunk.stems === 'string' ? chunk.stems : '';
-  const score = stems.filter((s) => have.includes(` ${s} `)).length;
+  const inChunk = (word) => have.includes(` ${word} `);
+  const exact = terms.exact.filter(inChunk);
+  const alternative = terms.rest.filter(inChunk);
+  const similar = terms.concepts.map((group) => group.find((phrase) => phrase.every(inChunk))).filter(Boolean);
+  const score = exact.length + Math.min(0.75, alternative.length * 0.35 + similar.length * 0.6);
   if (score === 0) return null;
+  const stems = exact.length ? exact : [...alternative, ...similar.flat()];
   const cps = Array.from(chunk.text);
   const starts = [];
   let norm = '';
@@ -390,13 +413,13 @@ class WorkspaceIndex {
   }
 
   // Поиск по основам слов, не больше MAX_LIMIT результатов. Выше куски с большим числом совпавших слов; при равенстве — по пути.
-  search(query, limit = DEFAULT_LIMIT) {
-    const stems = [...new Set(queryWords(query).map(stem))];
-    if (stems.length === 0) return [];
+  search(query, limit = DEFAULT_LIMIT, alternatives = []) {
+    const terms = searchTerms(query, alternatives);
+    if (terms.exact.length === 0) return [];
     const index = this._fresh();
     const hits = [];
     for (const chunk of index.chunks) {
-      const hit = scoreChunk(chunk, stems);
+      const hit = scoreChunk(chunk, terms);
       if (hit) hits.push(hit);
     }
     hits.sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
@@ -404,10 +427,10 @@ class WorkspaceIndex {
   }
 
   // PDF читается асинхронно. Текстовый индекс сохраняет прежний синхронный интерфейс.
-  async searchWithDocuments(query, limit, readDocument, signal) {
-    const hits = this.search(query, limit);
-    const stems = [...new Set(queryWords(query).map(stem))];
-    if (!stems.length) return { hits, incomplete: 0 };
+  async searchWithDocuments(query, limit, readDocument, signal, alternatives = []) {
+    const hits = this.search(query, limit, alternatives);
+    const terms = searchTerms(query, alternatives);
+    if (!terms.exact.length) return { hits, incomplete: 0 };
     const folders = this.folders;
     let incomplete = 0;
     for (const abs of this._allFiles(DOCUMENT_EXTENSIONS)) {
@@ -435,7 +458,7 @@ class WorkspaceIndex {
         }
         if (entry.incomplete) incomplete += 1;
         for (const chunk of entry.chunks) {
-          const hit = scoreChunk(chunk, stems);
+          const hit = scoreChunk(chunk, terms);
           if (hit) hits.push(hit);
         }
       } catch {

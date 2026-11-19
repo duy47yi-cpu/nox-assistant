@@ -475,9 +475,21 @@ class Agent {
   // Цель для долгого поручения: просьба владельца и план с отметками сделанного.
   // null — продолжать в фоне нечего или нельзя (план закрыт либо работал руками).
   backgroundGoal() {
-    const plan = this._lastPlan;
-    if (!plan || this._planHands || !plan.steps.some((s) => s.status !== 'done')) return null;
-    return `${this._planRequest.slice(0, 600)}\n${planBrief(plan)}`.trim().slice(0, 2000);
+    const handoff = this.backgroundPlan();
+    if (!handoff) return null;
+    return `${handoff.plan.request || this._planRequest.slice(0, 600)}\n${planBrief(handoff.plan)}`.trim().slice(0, 2000);
+  }
+
+  planScope() {
+    const { chatId, workspaceId } = this._planScope();
+    return { chatId, workspaceId };
+  }
+
+  backgroundPlan() {
+    const scope = this.planScope();
+    const plan = this.plans?.load?.(scope) || this._lastPlan;
+    if (!plan || this._planHands || !plan.steps.some((step) => step.status !== 'done')) return null;
+    return { ...scope, plan };
   }
 
   _backgroundOffer() {
@@ -1061,16 +1073,14 @@ class Agent {
       const artifact = artifactFrom(this.workspace, call.name, result);
       if (artifact) this._turn.artifacts.set(artifact.path, artifact);
     }
-    // План хода: наблюдение за завершённым инструментом. Шаг плана закрывается по подтверждённому
-    // действию этого хода или по настоящему непустому файлу — словам модели не верим.
-    if (this.plans) {
+    // Доказательство от инструмента относится только к его собственному результату.
+    if (this.plans && !afterStop && result.ok && result.verified === 'confirmed') {
       try {
         this.plans.observe(this._runId, {
           name: call.name,
-          verified: result.verified === 'confirmed' ? 'confirmed' : result.verified === 'failed' ? 'failed' : 'unknown',
-          summary: result.summary,
-          path: result.data && typeof result.data.path === 'string' ? result.data.path : null,
-          artifacts: this._turn && this._turn.artifacts ? [...this._turn.artifacts.values()].map((item) => item.path) : [],
+          verified: result.verified,
+          path: result.data?.path || result.data?.to,
+          recipient: result.data?.recipient,
         });
       } catch (err) {
         console.warn(`наблюдение плана не записано: ${errText(err)}`);

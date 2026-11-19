@@ -506,3 +506,32 @@ test('бюджет кадра: все шесть сфер укладываютс
     assert.ok(out[variant] < 4, variant + ': ' + out[variant].toFixed(2) + ' мс на кадр (бюджет 4 мс)');
   }
 });
+
+test('авторские сферы: множитель speed меняет скорость фазы и вращения; при mount системное reduce-motion не морозит сферу', () => {
+  const env = makeEnv();
+  const slow = env.makeOrb('crystal', { state: 'idle', speed: 0.5, animated: true });
+  const fast = env.makeOrb('crystal', { state: 'idle', speed: 2.0, animated: true });
+  const startSlowP = slow.phase;
+  const startSlowA = slow.angle;
+  const startFastP = fast.phase;
+  const startFastA = fast.angle;
+  slow._update(0.2);
+  fast._update(0.2);
+  const dSlowP = slow.phase - startSlowP;
+  const dFastP = fast.phase - startFastP;
+  const dSlowA = slow.angle - startSlowA;
+  const dFastA = fast.angle - startFastA;
+  assert.ok(dSlowP > 0 && dSlowA > 0, 'на idle фаза и угол движутся');
+  assert.ok(Math.abs((dFastP / dSlowP) - 4) < 0.05, 'phase растёт пропорционально speed');
+  assert.ok(Math.abs((dFastA / dSlowA) - 4) < 0.05, 'angle растёт пропорционально speed');
+  slow.destroy();
+  fast.destroy();
+
+  const redEnv = makeEnv({ reduced: true });
+  const handle = redEnv.lib.mount(redEnv.canvas(), 'aether:flux', { globalAnimated: true, state: 'idle' });
+  assert.equal(handle.engine, 'custom');
+  assert.equal(handle.raw._still(), false, 'через библиотеку движок анимируется и при системном reduce-motion');
+  handle.applySettings({ animated: false });
+  assert.equal(handle.raw._still(), true, 'per-orb animated:false всё равно останавливает сферу');
+  handle.destroy();
+});

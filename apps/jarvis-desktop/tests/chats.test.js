@@ -91,3 +91,19 @@ test('прерванный ход: реплика без ответа получ
   assert.equal(markCutTurn(done).length, 2);
   assert.equal(markCutTurn([]).length, 0);
 });
+
+test('select() не переписывает updatedAt старого чата', () => {
+  const olderAt = Date.UTC(2026, 10, 14, 12, 0);
+  const newerAt = Date.UTC(2026, 10, 18, 9, 0);
+  const book = new ChatBook({
+    activeId: 'c2',
+    chats: [
+      { id: 'c1', title: 'Старый чат', history: [said('давно')], updatedAt: olderAt },
+      { id: 'c2', title: 'Свежий чат', history: [said('сегодня')], updatedAt: newerAt },
+    ],
+  });
+  book.select('c1');
+  assert.equal(book.activeId, 'c1');
+  const oldChat = book.chats.find((c) => c.id === 'c1');
+  assert.equal(oldChat.updatedAt, olderAt, 'просмотр старого чата не должен менять его дату');
+});

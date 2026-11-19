@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { writeFileAtomic } = require('../config/atomic');
+const { readDocx } = require('../tools/documents');
 
 const MAX_STEPS = 20;
 const MAX_TEXT = 300;
@@ -65,12 +66,16 @@ function copyPlan(plan) {
 }
 
 // ── Шаг с наблюдаемым результатом ──────────────────────────────────────────
-// Такой шаг нельзя закрыть одними словами: нужен подтверждённый инструмент этого хода
-// или существующий непустой файл (путь из доказательства или из результата инструмента).
-const RESULT_VERB = /(созда|запиш|записать|записыва|сохран|скача|скачай|сформир|сгенерир|напиш|перепиш|выгруз|экспортир|отправ|отосл|опублик|закача|загруз|распечата|скопир|перенес|перемест)/i;
+// Шаг с результатом закрывает подтверждённое действие с подходящим объектом.
+const RESULT_VERB = /(созда|запиш|записа|записыва|сохран|скача|сформир|сгенерир|напиш|дописа|допиш|перепиш|выгруз|экспортир|отправ|отосл|опублик|закача|загруз|распечата|скопир|перенес|перемест|запомн|напомн|установ|удал|восстанов)/i;
 const FILE_WORD = /(файл|документ|конспект|отчёт|отчет|таблиц|презентац|архив|изображени|картинк|скриншот|pdf|docx|xlsx|pptx|csv|\btxt\b|\bmd\b)/i;
 // Чтение, поиск и обдумывание сами по себе результата не создают — их закрывает текст.
 const LOOK_VERB = /(найти|найди|найдём|найдем|прочит|прочти|читать|посмотр|посмотри|провер|открыть|открой|покаж|искать|глян|сверь|сверить|изуч|проанализир|обдумать|решить|спланир)/i;
+const SEND = /отправ|отосл/i;
+const ADDRESS = /[\w.!#$%&'*+/=?^\x60{|}~-]+@[\w-]+(?:\.[\w-]+)+/gi;
+const REQUIRED_TEXT = /(?:с текстом|содержит)\s+[«"`]([^»"`]+)[»"`]/iu;
+const FILE_WRITERS = new Set(['workspace_write', 'workspace_copy', 'workspace_move', 'workspace_restore',
+  'document_write', 'document_fill', 'code_write', 'code_edit']);
 
 function observableResult(text) {
   const value = String(text || '').toLowerCase();
@@ -99,8 +104,7 @@ function pathCandidates(text) {
     const clean = cleanCandidate(value);
     if (looksLikePath(clean) && !out.includes(clean)) out.push(clean);
   };
-  for (const match of raw.matchAll(/[«"'`]([^«»"'`\n]{1,300})[»"'`]/g)) push(match[1]);
-  for (const match of raw.matchAll(/[^\s,;()[\]{}<>"«»`']+/g)) push(match[0]);
+  for (const match of raw.matchAll(/[«"'`]([^«»"'`\n]{1,300})[»"'`]|[^\s,;()[\]{}<>"«»`']+/g)) push(match[1] || match[0]);
   return out;
 }
 
@@ -122,7 +126,7 @@ function pathInfo(candidate, root, { insideOnly = false } = {}) {
   else return null;
   let stat;
   try {
-    stat = fs.lstatSync(abs);
+    stat = fs.lstatSync(abs, { bigint: true });
   } catch {
     return null;
   }
@@ -136,17 +140,77 @@ function pathInfo(candidate, root, { insideOnly = false } = {}) {
     path: abs,
     directory,
     display: inside ? path.relative(rootAbs, abs).split(path.sep).join('/') : abs,
+    stamp: [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(':'),
   };
 }
 
-// Пути из слов доказательства: относительные считаются от рабочей папки и обязаны быть внутри неё.
-function evidenceFiles(text, root) {
-  const out = [];
-  for (const candidate of pathCandidates(text)) {
-    const info = pathInfo(candidate, root, { insideOnly: Boolean(root) });
-    if (info && !out.some((item) => item.path === info.path)) out.push(info);
+function planPath(root, candidate) {
+  if (!root && !path.isAbsolute(candidate)) return '';
+  const abs = path.resolve(root || '.', candidate);
+  return process.platform === 'win32' ? abs.toLowerCase() : abs;
+}
+
+function fileTargets(text, root) {
+  const copy = /скопир|перенес|перемест/i.test(text);
+  const candidates = pathCandidates(text.replace(REQUIRED_TEXT, '').split(/\s+из\s+/iu)[0])
+    .filter((value) => !value.includes('@') && !/^https?:/i.test(value));
+  return [...new Set((copy ? candidates.slice(-1) : candidates).map((value) => planPath(root, value)).filter(Boolean))];
+}
+
+function containsRequiredText(info, snippet) {
+  if (!snippet) return true;
+  if (!/\.(?:txt|md|csv|json|html|log|docx)$/i.test(info.path)) return false;
+  try {
+    if (fs.statSync(info.path).size > 1024 * 1024) return false;
+    const bytes = fs.readFileSync(info.path);
+    const text = /\.docx$/i.test(info.path) ? readDocx(bytes) : bytes.toString('utf8');
+    return text.includes(snippet);
+  } catch {
+    return false;
   }
-  return out;
+}
+
+function resultProof(observations, target, request, root, evidence) {
+  const text = target.text;
+  const unused = observations.filter((item) => !item.used);
+  if (SEND.test(text)) {
+    const addresses = [...new Set((text.match(ADDRESS) || request.match(ADDRESS) || []).map((value) => value.toLowerCase()))];
+    const sent = unused.filter((item) => item.name === 'mail_send' && item.recipient);
+    const matches = addresses.length ? addresses.map((address) => sent.find((item) => item.recipient === address)) : sent.slice(0, 1);
+    if (!matches.length || matches.some((item) => !item)) throw new Error('нужна подтверждённая отправка письма нужному адресату');
+    return { used: matches, files: [] };
+  }
+  if (observableResult(text).file || fileTargets(text, root).length) {
+    const named = fileTargets(text, root);
+    const requested = fileTargets(request, root);
+    const expected = named.length ? named : requested.length === 1 ? requested : [];
+    const stated = fileTargets(evidence, root);
+    const snippet = REQUIRED_TEXT.exec(text)?.[1] ||
+      (expected.length === 1 && requested.length === 1 && expected[0] === requested[0] ? REQUIRED_TEXT.exec(request)?.[1] : '');
+    const operation = /скопир/i.test(text) ? 'workspace_copy'
+      : /перенес|перемест/i.test(text) ? 'workspace_move'
+        : /восстанов/i.test(text) ? 'workspace_restore' : '';
+    const files = unused.flatMap((item) => {
+      if (!item.file || (operation && item.name !== operation)) return [];
+      const info = pathInfo(item.file.path, root);
+      return info && !info.directory && info.stamp === item.file.stamp && containsRequiredText(info, snippet) ? [{ info, item }] : [];
+    });
+    const names = expected.length ? expected : stated;
+    const matches = names.length
+      ? names.map((name) => files.find(({ info }) => planPath(root, info.path) === name))
+      : files.length === 1 ? files : [];
+    if (!matches.length || matches.some((item) => !item) ||
+      (expected.length && stated.length && expected.some((name) => !stated.includes(name)))) {
+      throw new Error('нужна подтверждённая запись именно запрошенного файла с нужным содержимым');
+    }
+    return { used: matches.map(({ item }) => item), files: matches.map(({ info }) => info.display) };
+  }
+  const toolPattern = /памят|запомн/i.test(text) ? /^remember$/
+    : /напомн/i.test(text) ? /^remind_(?:in|at)$/
+      : /установ/i.test(text) ? /^app_install$/ : null;
+  const action = toolPattern && unused.find((item) => toolPattern.test(item.name));
+  if (!action) throw new Error('нужна подтверждённая проверка результата именно этого шага');
+  return { used: [action], files: [] };
 }
 
 // ── Хранилище планов на диске ─────────────────────────────────────────────
@@ -280,8 +344,9 @@ class PlanStore {
 
 // ── Планы хода ────────────────────────────────────────────────────────────
 class TurnPlans {
-  constructor({ maxPlans = MAX_PLANS, store = null, now = () => new Date() } = {}) {
+  constructor({ maxPlans = MAX_PLANS, store = null, now = () => new Date(), retainCompleted = false } = {}) {
     this.maxPlans = Math.max(1, Number(maxPlans) || MAX_PLANS);
+    this.retainCompleted = retainCompleted;
     this.store = store && typeof store.get === 'function' ? store : null;
     this.now = typeof now === 'function' ? now : () => new Date();
     this.byRun = new Map();
@@ -343,6 +408,7 @@ class TurnPlans {
       createdAt: this.now().toISOString(),
     };
     record.plan = plan;
+    record.observations = [];
     this._persist(record);
     return copyPlan(plan);
   }
@@ -365,8 +431,7 @@ class TurnPlans {
     return copyPlan(plan);
   }
 
-  // Шаг закрывается только с доказательством. Если у шага есть наблюдаемый результат,
-  // слов мало: нужен подтверждённый инструмент этого хода или настоящий непустой файл.
+  // Подтверждённое действие используется только для одного подходящего шага.
   done(runId, step, evidence, { root = '' } = {}) {
     const record = this._record(runId);
     const plan = record.plan;
@@ -378,21 +443,12 @@ class TurnPlans {
     const clean = cleanText(evidence, MAX_EVIDENCE, 'доказательство');
     if (root) record.root = String(root);
     const target = plan.steps[index - 1];
+    if (target.status === 'done') return copyPlan(plan);
     const need = observableResult(target.text);
     if (need.needed) {
-      const proofs = this._proofs(record, clean);
-      const files = proofs.filter((item) => !item.directory);
-      const confirmed = record.observations.find((item) => item.verified === 'confirmed');
-      if (need.file) {
-        if (!files.length) {
-          throw new Error(`шаг ${index} подразумевает файл: в доказательстве нет существующего непустого файла и подтверждённой записи в этом ходе не было. Выполни шаг и укажи настоящий путь`);
-        }
-        target.files = files.slice(0, MAX_FILES).map((item) => item.display);
-      } else if (!proofs.length && !confirmed) {
-        throw new Error(`шаг ${index} подразумевает проверяемый результат: нужна подтверждённая проверка инструмента (verified: confirmed) или существующий непустой файл. Слова «${clean.slice(0, 80)}» доказательством не считаются`);
-      } else if (proofs.length) {
-        target.files = proofs.slice(0, MAX_FILES).map((item) => item.display);
-      }
+      const proof = resultProof(record.observations, target, plan.request, record.root, clean);
+      for (const item of proof.used) item.used = true;
+      target.files = proof.files.slice(0, MAX_FILES);
     }
     target.status = 'done';
     target.evidence = clean;
@@ -405,36 +461,17 @@ class TurnPlans {
   observe(runId, observation) {
     if (!observation || typeof observation !== 'object') return;
     const name = String(observation.name || '').slice(0, 60);
-    if (!name) return;
+    if (!name || observation.verified !== 'confirmed') return;
     const record = this._record(runId);
-    const verified = ['confirmed', 'failed', 'unknown'].includes(observation.verified) ? observation.verified : 'unknown';
+    const file = FILE_WRITERS.has(name) && typeof observation.path === 'string' ? pathInfo(observation.path, record.root) : null;
     record.observations.push({
       name,
-      verified,
-      summary: String(observation.summary || '').replace(/\s+/g, ' ').slice(0, 200),
-      path: typeof observation.path === 'string' ? observation.path.slice(0, MAX_PATH_TEXT) : null,
-      artifacts: cleanFiles(observation.artifacts),
+      file,
+      recipient: typeof observation.recipient === 'string' ? observation.recipient.trim().toLowerCase() : '',
     });
     if (record.observations.length > MAX_OBSERVATIONS) {
       record.observations.splice(0, record.observations.length - MAX_OBSERVATIONS);
     }
-  }
-
-  // Подтверждённые пути этого хода и пути из доказательства — только те, что реально есть на диске.
-  _proofs(record, evidence) {
-    const out = [];
-    const add = (info) => {
-      if (info && !out.some((item) => item.path === info.path)) out.push(info);
-    };
-    for (const info of evidenceFiles(evidence, record.root)) add(info);
-    for (const observation of record.observations) {
-      if (observation.verified !== 'confirmed') continue;
-      for (const candidate of [observation.path, ...(observation.artifacts || [])]) {
-        if (!candidate) continue;
-        add(pathInfo(candidate, record.root, { insideOnly: false }));
-      }
-    }
-    return out;
   }
 
   _files(record) {
@@ -446,11 +483,7 @@ class TurnPlans {
       for (const file of step.files || []) add(pathInfo(file, record.root, { insideOnly: false }));
     }
     for (const observation of record.observations) {
-      if (observation.verified !== 'confirmed') continue;
-      for (const candidate of [observation.path, ...(observation.artifacts || [])]) {
-        if (!candidate) continue;
-        add(pathInfo(candidate, record.root, { insideOnly: false }));
-      }
+      if (observation.file) add(pathInfo(observation.file.path, record.root));
     }
     return out.slice(0, MAX_FILES);
   }
@@ -461,7 +494,7 @@ class TurnPlans {
     if (!scope) return false;
     try {
       const unfinished = record.plan.steps.some((step) => step.status !== 'done');
-      if (!unfinished) {
+      if (!unfinished && !this.retainCompleted) {
         // План закрыт: «продолжай» не должен поднимать его снова.
         this.store.remove({ chatId: scope.chatId, workspaceId: scope.workspaceId });
         this.lastError = '';
@@ -472,6 +505,7 @@ class TurnPlans {
       this.store.put({
         chatId: scope.chatId,
         workspaceId: scope.workspaceId,
+        createdAt: record.plan.createdAt,
         request: record.plan.request,
         steps: record.plan.steps,
         artifacts,

@@ -18,8 +18,8 @@ html[data-fx] body:is([data-view="nox"], [data-view="commands"], [data-view="jou
 body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-view="mcp"], [data-view="settings"], [data-view="account"], [data-view="deals"]) :is(.theme-bg, .theme-fx) { z-index: -1; }
 
 @media (prefers-reduced-transparency: no-preference) and (forced-colors: none) {
-  /* Внутренние поверхности плотнее. Для тем с одним эффектом сохраняем прежнюю плотность. */
-  html:is([data-fx], [data-bg="image"][data-own-bg], :is([data-theme="aurora"], [data-theme="ember"], [data-theme="dawn"], [data-theme="liquid"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradient"], [data-theme="gradientday"], [data-theme="midnight"], [data-theme="neon"], [data-theme="starry"], [data-theme="moonlight"], [data-theme="sunrise"], [data-theme="glass"]):not([data-bg])) body[data-view] {
+  /* Внутренние поверхности плотнее. Для тем с эффектом сохраняем мягкую прозрачность. */
+  html:is([data-fx], [data-bg="image"][data-own-bg], :is([data-theme="neon"], [data-theme="moonlight"]):not([data-bg])) body[data-view] {
     --nox-surface-1: color-mix(in srgb, var(--surface) 60%, transparent);
     --nox-surface-2: color-mix(in srgb, var(--surface) var(--nox-glass-fill, 60%), transparent);
     --nox-surface-3: color-mix(in srgb, var(--surface-2) 82%, transparent);
@@ -29,12 +29,12 @@ body:is([data-view="nox"], [data-view="commands"], [data-view="journal"], [data-
   }
 
   /* Самостоятельные эффекты поверх сплошного фона не требуют нового фильтра. */
-  html:is([data-bg="solid"], [data-theme="dark"], [data-theme="light"], [data-theme="graphite"], [data-theme="lime"], [data-theme="paper"], [data-theme="forest"], [data-theme="wine"], [data-theme="cobalt"]):not([data-bg="image"][data-own-bg]) body[data-view] {
+  html:is([data-bg="solid"], [data-theme="dark"], [data-theme="light"], [data-theme="cobalt"]):not([data-bg="image"][data-own-bg]) body[data-view] {
     --nox-panel-glass: none;
     --nox-glass-edge: var(--nox-border);
   }
 
-  html:is([data-theme="aurora"], [data-theme="frost"], [data-theme="gradient"], [data-theme="midnight"], [data-theme="moonlight"], [data-theme="glass"]):not([data-bg]) {
+  html[data-theme="moonlight"]:not([data-bg]) {
     --nox-glass-fill: 28%;
   }
 

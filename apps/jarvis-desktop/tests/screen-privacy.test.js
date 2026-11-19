@@ -151,7 +151,7 @@ describe('F-3: режим «по просьбе» и связка в main.js', (
     const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
     const idx = mainSrc.indexOf('const screenJob = screenTask(phrase);');
     assert.ok(idx > 0, 'ветка screenJob найдена в main.js');
-    const block = mainSrc.slice(idx, idx + 1200);
+    const block = mainSrc.slice(idx, idx + 2000);
     assert.match(block, /screenAllowed\s*=\s*true;/);
     assert.match(block, /look:\s*screenTools\(\{\s*allowed:\s*\(\)\s*=>\s*screenAllowed\s*\}\)\[0\]/);
     assert.match(block, /\.finally\(\(\)\s*=>\s*\{[\s\S]*?screenAllowed\s*=\s*false;/);

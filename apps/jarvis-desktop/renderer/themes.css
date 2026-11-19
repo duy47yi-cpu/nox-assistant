@@ -157,77 +157,7 @@ body, .theme-mini {
   --scrim: #10141A66; --shadow-pop: 0 8px 24px #1018281F; --shadow-dialog: 0 24px 64px #10182833;
 }
 
-/* ── Монохромные: цвет раздела выключен, янтарь единственное цветное пятно ── */
-[data-theme="signal"] {
-  color-scheme: dark;
-  --theme-font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
-  --bg: #0E0D0B; --surface: #151310; --surface-2: #1C1A16; --surface-3: #26231D; --border: #302C25;
-  --text: #EEE7D6; --text-2: #BDB4A3; --text-3: #9C9382;
-  --hue: #FF6A3D; --accent-ink: #17100C;
-  --contour: #1E1B16; --contour-index: #2E2A23;
-  --ok: #8FD694; --warn: #F0C24B; --err: #FF6B88; --on-stop: #17100C;
-}
-[data-theme="graphite"] {
-  color-scheme: dark;
-  --theme-font: "Bahnschrift", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: "Bahnschrift", "Segoe UI Variable Text", system-ui, sans-serif;
-  --bg: #131313; --surface: #1D1D1D; --surface-2: #272727; --surface-3: #333333; --border: #3A3A3A;
-  --text: #F2F2F2; --text-2: #C2C2C2; --text-3: #A0A0A0;
-  --hue: #E8E8E8; --accent-ink: #131313;
-  --contour: #2C2C2C; --contour-index: #4A4A4A;
-  --ok: #C9E8D2; --warn: #FFB938; --err: #FF8A80; --on-stop: #131313;
-}
-
-[data-theme="lime"] {
-  color-scheme: light;
-  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: Georgia, "Times New Roman", serif;
-  --bg: #F4F4F1; --surface: #FFFFFF; --surface-2: #ECECE8; --surface-3: #DFDFDA; --border: #CFCFC9;
-  --text: #111111; --text-2: #404040; --text-3: #575757;
-  --hue: #111111; --accent-ink: #FFFFFF;
-  --contour: #DEDED9; --contour-index: #B4B4AE;
-  --ok: #1D6B3C; --warn: #9A5400; --err: #B3261E; --on-stop: #FFFFFF;
-  --scrim: #11111166; --shadow-pop: 0 8px 24px #1111111F; --shadow-dialog: 0 24px 64px #11111133;
-}
-
-/* ── Цветные: весь фон в цвете, а не только акцент ───────────── */
-[data-theme="paper"] {
-  color-scheme: light;
-  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: "Sitka Heading", "Sitka Text", Georgia, serif;
-  --bg: #F2EADA; --surface: #FBF6EA; --surface-2: #EEE5D2; --surface-3: #E3D8C0; --border: #D8CAAD;
-  --text: #241C12; --text-2: #54483A; --text-3: #655846;
-  --hue: #1F5A46; --accent-ink: #FBF6EA;
-  --hue-deals: #7A3B69; --hue-journal: #1F5A46; --hue-commands: #2A5A7A; --hue-settings: #8C2F5A;
-  --contour: #E0D5BC; --contour-index: #C4B595;
-  --ok: #1F6B3E; --warn: #8F4F00; --err: #A8301F; --on-stop: #FBF6EA;
-  --scrim: #241C1266; --shadow-pop: 0 8px 24px #241C1224; --shadow-dialog: 0 24px 64px #241C1238;
-}
-
-[data-theme="forest"] {
-  color-scheme: dark;
-  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: "Sitka Heading", "Sitka Text", Georgia, serif;
-  --bg: #12291F; --surface: #183427; --surface-2: #204233; --surface-3: #2B5241; --border: #33604C;
-  --text: #F2EDDD; --text-2: #CFD4BF; --text-3: #B2BCA4;
-  --hue: #C7E08A; --accent-ink: #12291F;
-  --hue-deals: #E6CC92; --hue-journal: #C7E08A; --hue-commands: #9FD8C4; --hue-settings: #EDBFA6;
-  --contour: #234737; --contour-index: #3F6E58;
-  --ok: #A6E6B4; --warn: #FFBE4D; --err: #FF9A8A; --on-stop: #12291F;
-}
-
-[data-theme="wine"] {
-  color-scheme: dark;
-  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: Georgia, "Times New Roman", serif;
-  --bg: #2A0C16; --surface: #38111E; --surface-2: #481828; --surface-3: #5A2134; --border: #6E2C41;
-  --text: #FBEFE6; --text-2: #E4CCC4; --text-3: #CFB0A9;
-  --hue: #F2B7A0; --accent-ink: #2A0C16;
-  --contour: #471A29; --contour-index: #76344A;
-  --ok: #A9E4B8; --warn: #FFC84A; --err: #FF9C94; --on-stop: #2A0C16;
-}
-
+/* ── Цветные, светлые и атмосферные палитры Nox ────────────────── */
 [data-theme="cobalt"] {
   color-scheme: dark;
   --theme-font: "Bahnschrift", "Segoe UI Variable Text", system-ui, sans-serif;
@@ -237,125 +167,6 @@ body, .theme-mini {
   --hue: #FFFFFF; --accent-ink: #0E2A9A;
   --contour: #2848C8; --contour-index: #5B78E6;
   --ok: #A5F0C4; --warn: #FFC93D; --err: #FFBDB5; --on-stop: #0E2A9A;
-}
-
-[data-theme="blue-hour"] {
-  color-scheme: dark;
-  --theme-font: "Inter", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: "IBM Plex Serif", Georgia, serif;
-  --ok: #8DDBB0; --warn: #FFCC83; --err: #FFACA4;
-  --accent-ink: #0B1423; --on-stop: #191018;
-  --bg: #101725; --surface: #141E30; --surface-2: #1A2941; --surface-3: #233651; --border: #3B5173;
-  --text: #EAF1FF; --text-2: #BECDE4; --text-3: #99ADCC;
-  --hue: #8AB8FF; --contour: #203554; --contour-index: #3A5F95;
-}
-[data-theme="eclipse"] {
-  color-scheme: dark;
-  --theme-font: "Inter", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: "IBM Plex Serif", Georgia, serif;
-  --ok: #8DDBB0; --warn: #FFCC83; --err: #FFACA4;
-  --accent-ink: #0B1423; --on-stop: #191018;
-  --bg: #101116; --surface: #181920; --surface-2: #20222C; --surface-3: #292D39; --border: #434957;
-  --text: #F1F2F7; --text-2: #CBCEDB; --text-3: #A3ABBC;
-  --hue: #B8C9F1; --contour: #232633; --contour-index: #555E74;
-}
-
-[data-theme="malachite"] {
-  color-scheme: dark;
-  --theme-font: "Inter", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "IBM Plex Serif", Georgia, serif;
-  --bg: #101815; --surface: #15201C; --surface-2: #1B2B25; --surface-3: #253831; --border: #3B5549;
-  --text: #E9F4ED; --text-2: #BECFC6; --text-3: #A0B7AA;
-  --hue: #89DAB1; --accent-ink: #10241A; --contour: #22372D; --contour-index: #4F7864;
-  --ok: #A3EAC2; --warn: #FFD18A; --err: #FFB0AA; --on-stop: #231718;
-}
-[data-theme="copper"] {
-  color-scheme: dark;
-  --theme-font: "Aptos", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "IBM Plex Serif", Georgia, serif;
-  --bg: #1B1513; --surface: #241B18; --surface-2: #2F221E; --surface-3: #3A2C26; --border: #60463D;
-  --text: #FFF2EA; --text-2: #DFCCC1; --text-3: #C5AA9E;
-  --hue: #F5AB83; --accent-ink: #321E16; --contour: #3B2822; --contour-index: #855644;
-  --ok: #A7E3B4; --warn: #FFE85A; --err: #FFACA8; --on-stop: #321B18;
-}
-[data-theme="porcelain"] {
-  color-scheme: light;
-  --theme-font: "Inter", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "IBM Plex Serif", Georgia, serif;
-  --bg: #EEEDE7; --surface: #FBFAF6; --surface-2: #F2F1EB; --surface-3: #E2E5DD; --border: #BEC7BD;
-  --text: #25312C; --text-2: #414F48; --text-3: #505D56;
-  --hue: #2F6455; --accent-ink: #FFFFFF; --contour: #D5DBD2; --contour-index: #A8BAAE;
-  --ok: #396641; --warn: #805413; --err: #9B3840; --on-stop: #FFFFFF;
-}
-
-/* ── Новые наборы Nox: восемь спокойных палитр с вложенными гарнитурами ──────
- * У каждой — полный набор токенов: фон и панели, три ступени текста, цвет раздела
- * и его оттенки для «Журнала», «Дел», «Команд» и «Настроек», состояния и тени.
- * Текст проверен от 4,5:1 на всех поверхностях (renderer/themes.test.js), поэтому
- * палитры плотные: светлые — с тёмным текстом, тёмные — со светлым.
- * Фон ровный (--bg-image: none): мягкий цвет живёт в самих панелях, а не в пятнах. */
-[data-theme="ocean"] {
-  color-scheme: light;
-  --theme-font: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --g1: #E9F1F4; --g2: #E9F1F4; --g3: #E9F1F4;
-  --bg: #E9F1F4; --bg-image: none;
-  --surface: #F9FCFD; --surface-2: #E1EBEF; --surface-3: #D0E0E6; --border: #B8CDD5;
-  --text: #0C2430; --text-2: #2C4754; --text-3: #3B5764;
-  --hue: #0D6572; --accent-ink: #FFFFFF;
-  --hue-deals: #6A3F8A; --hue-journal: #1D6338; --hue-commands: #1F4E8A; --hue-settings: #8C2F5A;
-  --contour: #C9DCE2; --contour-index: #93B7C2;
-  --ok: #1B6B3F; --warn: #7A4E00; --err: #AA2F2A; --on-stop: #FFFFFF;
-  --scrim: #0C243055; --shadow-pop: 0 8px 24px #0C24301F; --shadow-dialog: 0 24px 64px #0C243033;
-  --panel-pct: 4%; --glass-blur: 20px;
-}
-
-[data-theme="terracotta"] {
-  color-scheme: light;
-  --theme-font: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --g1: #F3E8E1; --g2: #F3E8E1; --g3: #F3E8E1;
-  --bg: #F3E8E1; --bg-image: none;
-  --surface: #FFFBF7; --surface-2: #EEE0D7; --surface-3: #E7D7CB; --border: #D0B7A8;
-  --text: #2B1A14; --text-2: #553E31; --text-3: #684C3B;
-  --hue: #A33A20; --accent-ink: #FFFFFF;
-  --hue-deals: #6A3F7A; --hue-journal: #1D5E3A; --hue-commands: #1F4E7A; --hue-settings: #8A2F4A;
-  --contour: #E2CEC0; --contour-index: #C09E89;
-  --ok: #1B6B3C; --warn: #5F5C00; --err: #A82E22; --on-stop: #FFFFFF;
-  --scrim: #2B1A1455; --shadow-pop: 0 8px 24px #2B1A1424; --shadow-dialog: 0 24px 64px #2B1A1438;
-  --panel-pct: 4%; --glass-blur: 20px;
-}
-
-[data-theme="paper-white"] {
-  color-scheme: light;
-  --theme-font: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --g1: #F7F5F0; --g2: #F7F5F0; --g3: #F7F5F0;
-  --bg: #F7F5F0; --bg-image: none;
-  --surface: #FFFFFF; --surface-2: #EFEBE3; --surface-3: #E3DDD1; --border: #CFC7B8;
-  --text: #1D1A14; --text-2: #474236; --text-3: #5A5446;
-  --hue: #1F4E79; --accent-ink: #FFFFFF;
-  --hue-deals: #6A3F7A; --hue-journal: #1D5E3A; --hue-commands: #0C5E6E; --hue-settings: #8A2F4A;
-  --contour: #E8E2D6; --contour-index: #C4B9A4;
-  --ok: #1B6B3C; --warn: #7A4E00; --err: #A82E22; --on-stop: #FFFFFF;
-  --scrim: #1D1A1455; --shadow-pop: 0 8px 24px #1D1A141F; --shadow-dialog: 0 24px 64px #1D1A1433;
-  --panel-pct: 5%; --glass-blur: 16px;
-}
-
-[data-theme="emerald"] {
-  color-scheme: dark;
-  --theme-font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --g1: #0A1D17; --g2: #0A1D17; --g3: #0A1D17;
-  --bg: #0A1D17; --bg-image: none;
-  --surface: #102820; --surface-2: #17352B; --surface-3: #204438; --border: #2E5A4A;
-  --text: #EAF6EF; --text-2: #BCD4C7; --text-3: #9CBCAB;
-  --hue: #5FE3A6; --accent-ink: #062018;
-  --hue-deals: #C9A6FF; --hue-journal: #5FE3A6; --hue-commands: #7FD8FF; --hue-settings: #FF9CCB;
-  --contour: #173D30; --contour-index: #3B7A61;
-  --ok: #7CE8AC; --warn: #FFCB5C; --err: #FF9A8C; --on-stop: #062018;
-  --scrim: #04130E80; --shadow-pop: 0 8px 24px #04130E66; --shadow-dialog: 0 24px 64px #04130E99;
-  --panel-pct: 4%; --glass-blur: 20px;
 }
 
 [data-theme="neon-noir"] {
@@ -374,38 +185,6 @@ body, .theme-mini {
   --panel-pct: 3%; --glass-blur: 24px;
 }
 
-[data-theme="lavender"] {
-  color-scheme: light;
-  --theme-font: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --g1: #F0ECF6; --g2: #F0ECF6; --g3: #F0ECF6;
-  --bg: #F0ECF6; --bg-image: none;
-  --surface: #FCFAFF; --surface-2: #EAE4F3; --surface-3: #DED6EC; --border: #CCC0DF;
-  --text: #211A2E; --text-2: #4A3E5F; --text-3: #5D5073;
-  --hue: #593C99; --accent-ink: #FFFFFF;
-  --hue-deals: #A33A66; --hue-journal: #1D5E3A; --hue-commands: #1F4E7A; --hue-settings: #6A3F8A;
-  --contour: #E1DAEE; --contour-index: #BCADD6;
-  --ok: #1B6B4A; --warn: #7C4E00; --err: #A82E3C; --on-stop: #FFFFFF;
-  --scrim: #211A2E55; --shadow-pop: 0 8px 24px #211A2E24; --shadow-dialog: 0 24px 64px #211A2E38;
-  --panel-pct: 4%; --glass-blur: 18px;
-}
-
-[data-theme="coffee"] {
-  color-scheme: dark;
-  --theme-font: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --g1: #1B1310; --g2: #1B1310; --g3: #1B1310;
-  --bg: #1B1310; --bg-image: none;
-  --surface: #241A15; --surface-2: #2E221B; --surface-3: #3C2C23; --border: #574135;
-  --text: #F7EDE2; --text-2: #D8C4B2; --text-3: #BEA48F;
-  --hue: #D99A5B; --accent-ink: #241407;
-  --hue-deals: #C9A6FF; --hue-journal: #A8E8B8; --hue-commands: #8FD8F5; --hue-settings: #FFB3C8;
-  --contour: #3A281F; --contour-index: #7A5541;
-  --ok: #A8E0B0; --warn: #FFE066; --err: #FF9E8A; --on-stop: #241407;
-  --scrim: #120C0980; --shadow-pop: 0 8px 24px #120C0966; --shadow-dialog: 0 24px 64px #120C0999;
-  --panel-pct: 4%; --glass-blur: 22px;
-}
-
 [data-theme="snow"] {
   color-scheme: light;
   --theme-font: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -420,148 +199,6 @@ body, .theme-mini {
   --ok: #1B6B44; --warn: #7C5200; --err: #A62E2E; --on-stop: #FFFFFF;
   --scrim: #101C2655; --shadow-pop: 0 8px 24px #101C261F; --shadow-dialog: 0 24px 64px #101C2633;
   --panel-pct: 6%; --glass-blur: 26px;
-}
-
-/* ── Градиентные: панели спокойные, цвет живёт в фоне ─────────── */
-[data-theme="aurora"] {
-  color-scheme: dark;
-  --theme-font: "Inter", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
-  --g1: #05262B; --g2: #0B4A45; --g3: #2A1C5C;
-  --bg: #0C2C36;
-  --bg-image: radial-gradient(90% 80% at 85% 5%, var(--g2), transparent 70%), radial-gradient(80% 90% at 5% 100%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
-  --surface: #0F2A33; --surface-2: #16363F; --surface-3: #20444D; --border: #2C5560;
-  --text: #E9F6F2; --text-2: #BBD8D2; --text-3: #9FC2BB;
-  --hue: #5CF0C0; --accent-ink: #04211B;
-  --hue-deals: #C4A6FF; --hue-journal: #5CF0C0; --hue-commands: #7FD8FF; --hue-settings: #FF9CCB;
-  --contour: #1C4D52; --contour-index: #36807E;
-  --ok: #8EF0B4; --warn: #FFC95C; --err: #FF9A90; --on-stop: #04211B;
-}
-
-[data-theme="ember"] {
-  color-scheme: dark;
-  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: Georgia, "Times New Roman", serif;
-  --g1: #260E25; --g2: #561B30; --g3: #93391F;
-  --bg: #3C1428;
-  --bg-image: radial-gradient(85% 85% at 100% 100%, var(--g3), transparent 72%), radial-gradient(70% 70% at 45% 55%, var(--g2), transparent 80%), linear-gradient(var(--g1), var(--g1));
-  --surface: #2C1124; --surface-2: #3A182C; --surface-3: #4B2134; --border: #68304A;
-  --text: #FFF5EC; --text-2: #FFE3D3; --text-3: #FFD7C2;
-  --hue: #FF9CA8; --accent-ink: #2A0F1C;
-  --hue-deals: #E7B0FF; --hue-journal: #A8E8B8; --hue-commands: #8ED8F0; --hue-settings: #FF9CA8;
-  --contour: #5A2238; --contour-index: #A04A44;
-  --ok: #A8E8B8; --warn: #FFDD45; --err: #FF8F80; --on-stop: #2A0F1C;
-}
-
-[data-theme="dawn"] {
-  color-scheme: light;
-  --theme-font: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: Georgia, "Times New Roman", serif;
-  --g1: #FFE3CF; --g2: #F8D5E4; --g3: #D8DCF8;
-  --bg: #F6DFE3;
-  --bg-image: radial-gradient(80% 90% at 100% 0%, var(--g3), transparent 72%), radial-gradient(70% 70% at 50% 60%, var(--g2), transparent 80%), linear-gradient(var(--g1), var(--g1));
-  --surface: #FFFBF8; --surface-2: #F9EEEB; --surface-3: #F0E0DE; --border: #E2CDCB;
-  --text: #2A1A2B; --text-2: #55404F; --text-3: #63495E;
-  --hue: #A0336F; --accent-ink: #FFFFFF;
-  --hue-deals: #6B3FBF; --hue-journal: #1B7355; --hue-commands: #1F6A9A; --hue-settings: #A0336F;
-  --contour: #EFCFD2; --contour-index: #D5A7B8;
-  --ok: #1B6E40; --warn: #8A4E00; --err: #AE2F2A; --on-stop: #FFFFFF;
-  --scrim: #2A1A2B55; --shadow-pop: 0 8px 24px #2A1A2B24; --shadow-dialog: 0 24px 64px #2A1A2B38;
-}
-
-/* ── Наборы по мотивам Luxify: цвета, фон, прозрачность и размытие одним выбором ──
- * Цвета свои. Эффекты фона (звёзды, волны, лунный свет, тёплый рассвет) — в разделе «Эффекты фона» ниже. */
-[data-theme="liquid"] {
-  color-scheme: dark;
-  --theme-font: "Inter", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
-  --g1: #070D1C; --g2: #0E2350; --g3: #0A1630;
-  --bg: #0A1428;
-  --bg-image: radial-gradient(70% 60% at 100% 100%, var(--g2), transparent 72%), linear-gradient(170deg, var(--g3), var(--g1) 60%);
-  --surface: #0F1A30; --surface-2: #15223B; --surface-3: #1F2E4A; --border: #2A3B5A;
-  --text: #EAF1FF; --text-2: #B9C7E3; --text-3: #9AABCB;
-  --hue: #7DB4FF; --accent-ink: #07101F;
-  --contour: #14244A; --contour-index: #3A5590;
-  --ok: #8EE8B2; --warn: #FFC24D; --err: #FF8C84; --on-stop: #07101F;
-  --panel-pct: 5%; --glass-blur: 30px;
-}
-
-[data-theme="liquidday"] {
-  color-scheme: light;
-  --theme-font: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "Cambria", Georgia, "Times New Roman", serif;
-  --g1: #E6EEFB; --g2: #CFE0FA; --g3: #EEF2FA;
-  --bg: #E4ECF8;
-  --bg-image: radial-gradient(70% 60% at 100% 100%, var(--g2), transparent 72%), linear-gradient(170deg, var(--g3), var(--g1) 60%);
-  --surface: #F8FBFF; --surface-2: #EDF2FA; --surface-3: #DCE5F2; --border: #C5D2E6;
-  --text: #0E1A2E; --text-2: #34445E; --text-3: #48586F;
-  --hue: #1F56C2; --accent-ink: #FFFFFF;
-  --contour: #D3DEEF; --contour-index: #A9BCDA;
-  --ok: #1B6E40; --warn: #8A5200; --err: #B0302A; --on-stop: #FFFFFF;
-  --scrim: #0E1A2E55; --shadow-pop: 0 8px 24px #0E1A2E24; --shadow-dialog: 0 24px 64px #0E1A2E38;
-  --panel-pct: 5%; --glass-blur: 30px;
-}
-
-[data-theme="frost"] {
-  color-scheme: light;
-  --theme-font: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  --theme-font-head: "Sitka Heading", "Sitka Text", Georgia, serif;
-  --g1: #DDE3EA; --g2: #EEF1F5; --g3: #D3DBE5;
-  --bg: #E2E7EE;
-  --bg-image: linear-gradient(150deg, var(--g2), var(--g1) 50%, var(--g3));
-  --surface: #F7F9FB; --surface-2: #ECEFF3; --surface-3: #DDE2E9; --border: #C9D1DB;
-  --text: #121820; --text-2: #3A4552; --text-3: #4E5967;
-  --hue: #2B5C9E; --accent-ink: #FFFFFF;
-  --contour: #D6DCE4; --contour-index: #B0BAC7;
-  --ok: #1D6B3C; --warn: #8F5000; --err: #AE2F2A; --on-stop: #FFFFFF;
-  --scrim: #12182055; --shadow-pop: 0 8px 24px #1218201F; --shadow-dialog: 0 24px 64px #12182033;
-  --panel-pct: 9%; --glass-blur: 40px;
-}
-
-[data-theme="gradient"] {
-  color-scheme: dark;
-  --theme-font: "Century Gothic", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
-  --g1: #140F2E; --g2: #3A1A5E; --g3: #0E3A5C;
-  --bg: #1F1640;
-  --bg-image: radial-gradient(80% 80% at 0% 0%, var(--g2), transparent 70%), radial-gradient(80% 90% at 100% 100%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
-  --surface: #1A1434; --surface-2: #231B42; --surface-3: #29214A; --border: #42386A;
-  --text: #F4F0FF; --text-2: #D3CBEC; --text-3: #B8AFD8;
-  --hue: #C3A2FF; --accent-ink: #160F2E;
-  --hue-deals: #FF9CD0; --hue-journal: #8EE8B2; --hue-commands: #8FD3FF; --hue-settings: #C3A2FF;
-  --contour: #2A2052; --contour-index: #5A4A94;
-  --ok: #8EE8B2; --warn: #FFC24D; --err: #FF9A90; --on-stop: #160F2E;
-}
-
-[data-theme="gradientday"] {
-  color-scheme: light;
-  --theme-font: "Century Gothic", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: Georgia, "Times New Roman", serif;
-  --g1: #F3E8FF; --g2: #FFE1EE; --g3: #DDEBFF;
-  --bg: #F1E7F8;
-  --bg-image: radial-gradient(80% 80% at 0% 0%, var(--g2), transparent 70%), radial-gradient(80% 90% at 100% 100%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
-  --surface: #FFFFFF; --surface-2: #F6F0FB; --surface-3: #EAE0F3; --border: #D8CAE6;
-  --text: #1E1530; --text-2: #4A3E5E; --text-3: #5A4D6E;
-  --hue: #6A3FC4; --accent-ink: #FFFFFF;
-  --hue-deals: #A8306E; --hue-journal: #1B6E4A; --hue-commands: #1F5F9A; --hue-settings: #6A3FC4;
-  --contour: #E8DCF3; --contour-index: #C8B4DE;
-  --ok: #1B6E40; --warn: #8A4E00; --err: #AE2F2A; --on-stop: #FFFFFF;
-  --scrim: #1E153055; --shadow-pop: 0 8px 24px #1E153024; --shadow-dialog: 0 24px 64px #1E153038;
-}
-
-[data-theme="midnight"] {
-  color-scheme: dark;
-  --theme-font: "Bahnschrift", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
-  --g1: #05070D; --g2: #0B1226; --g3: #05070D;
-  --bg: #070A14;
-  --bg-image: radial-gradient(90% 70% at 50% 0%, var(--g2), transparent 75%), linear-gradient(var(--g1), var(--g1));
-  --surface: #0D1220; --surface-2: #131A2B; --surface-3: #1C2438; --border: #273149;
-  --text: #E8ECF5; --text-2: #B3BCD0; --text-3: #95A0B8;
-  --hue: #8AA8FF; --accent-ink: #070A14;
-  --contour: #121A30; --contour-index: #2E3C64;
-  --ok: #8EE8B2; --warn: #FFC24D; --err: #FF8C84; --on-stop: #070A14;
-  --panel-pct: 3%;
 }
 
 [data-theme="neon"] {
@@ -579,20 +216,6 @@ body, .theme-mini {
   --ok: #7CFFB2; --warn: #FFD84A; --err: #FF7A8A; --on-stop: #12051A;
 }
 
-[data-theme="starry"] {
-  color-scheme: dark;
-  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: Georgia, "Times New Roman", serif;
-  --g1: #0A1030; --g2: #1B2C6B; --g3: #0D1A40;
-  --bg: #0E1638;
-  --bg-image: radial-gradient(60% 45% at 75% 20%, var(--g2), transparent 70%), radial-gradient(70% 60% at 10% 90%, var(--g3), transparent 72%), linear-gradient(var(--g1), var(--g1));
-  --surface: #111A3C; --surface-2: #18234A; --surface-3: #222F5A; --border: #2F3E6E;
-  --text: #F1F3FF; --text-2: #C8CFEC; --text-3: #AEB7DC;
-  --hue: #A9C4FF; --accent-ink: #0A1030;
-  --contour: #17245A; --contour-index: #3A4E96;
-  --ok: #8EE8B2; --warn: #FFC24D; --err: #FF9A90; --on-stop: #0A1030;
-}
-
 [data-theme="moonlight"] {
   color-scheme: dark;
   --theme-font: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -606,38 +229,6 @@ body, .theme-mini {
   --contour: #1A2333; --contour-index: #3E4C62;
   --ok: #8EE8B2; --warn: #FFC24D; --err: #FF8C84; --on-stop: #0F1520;
   --panel-pct: 5%; --glass-blur: 26px;
-}
-
-[data-theme="sunrise"] {
-  color-scheme: dark;
-  --theme-font: "Candara", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: Georgia, "Times New Roman", serif;
-  --g1: #1A1530; --g2: #4A2238; --g3: #7A3A22;
-  --bg: #2A1A30;
-  --bg-image: radial-gradient(90% 60% at 50% 110%, var(--g3), transparent 72%), radial-gradient(80% 60% at 50% 70%, var(--g2), transparent 80%), linear-gradient(var(--g1), var(--g1));
-  --surface: #22182C; --surface-2: #2C1F36; --surface-3: #3A2944; --border: #523A58;
-  --text: #FFF4EA; --text-2: #F6DFCF; --text-3: #EBCBB8;
-  --hue: #FF9F8C; --accent-ink: #22182C;
-  --contour: #3A2238; --contour-index: #7A4A4A;
-  --ok: #9EE6B4; --warn: #FFE066; --err: #FF8F86; --on-stop: #22182C;
-}
-
-/* Стекло: тот же характер, что «Ночь», но панели, рейка, поле ввода и диалоги — матовое стекло.
- * Набор целиком: цвета, ровный фон без пятен, прозрачность панелей и размытие. Ручки «Панели» и «Размытие» в Настройках
- * поверх темы его перебивают, «Как в теме» возвращает эти значения. */
-[data-theme="glass"] {
-  color-scheme: dark;
-  --theme-font: "Inter", "Segoe UI Variable Text", system-ui, sans-serif;
-  --theme-font-head: "IBM Plex Serif", Georgia, "Times New Roman", serif;
-  --g1: #0E1217; --g2: #141B24; --g3: #10161C;
-  --bg: #0E1217;
-  --bg-image: linear-gradient(160deg, var(--g2), var(--g1) 55%, var(--g3));
-  --surface: #151B23; --surface-2: #1B232D; --surface-3: #26313D; --border: #2E3A47;
-  --text: #EEF2F6; --text-2: #B7C2CE; --text-3: #98A5B3;
-  --hue: #8FC1F2; --accent-ink: #0E1217;
-  --contour: #1A222C; --contour-index: #3A4A5C;
-  --ok: #8EE8B2; --warn: #FFC24D; --err: #FF8C84; --on-stop: #0E1217;
-  --panel-pct: 6%; --glass-blur: 32px;
 }
 
 /* Фон окна: у градиентных тем цвет лежит на .app */
@@ -668,7 +259,7 @@ html[data-fx] .theme-fx { display: block; }
   --fx-moon-halo: color-mix(in srgb, var(--fx-moon-tint) 11%, transparent);
   --fx-moon-beam: color-mix(in srgb, var(--fx-moon-tint) 6%, transparent);
 }
-:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"], [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"], [data-theme="snow"]) {
+:is([data-theme="light"], [data-theme="snow"]) {
   --fx-star-1: color-mix(in srgb, var(--text) 90%, transparent);
   --fx-star-2: color-mix(in srgb, color-mix(in srgb, var(--warn) 65%, var(--text)) 88%, transparent);
   --fx-star-3: color-mix(in srgb, color-mix(in srgb, var(--hue) 75%, var(--text)) 85%, transparent);
@@ -714,7 +305,7 @@ html[data-fx="waves"] .theme-fx::after {
   background: var(--fx-wave-dark) repeat-x 0 100% / 1200px 100%;
   animation: fxWave 85s linear infinite;
 }
-html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"], [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"], [data-theme="snow"]) .theme-fx::before, html[data-fx="waves"]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"], [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"], [data-theme="snow"]) .theme-fx::after { background-image: var(--fx-wave-light); }
+html[data-fx="waves"]:is([data-theme="light"], [data-theme="snow"]) .theme-fx::before, html[data-fx="waves"]:is([data-theme="light"], [data-theme="snow"]) .theme-fx::after { background-image: var(--fx-wave-light); }
 @keyframes fxWave { to { background-position-x: -1200px; } }
 
 /* Лунный свет: мягкое пятно света сверху справа и редкий косой луч; свет медленно дышит. */
@@ -828,22 +419,13 @@ html[data-animations="off"] .theme-fx::after { animation: none !important; }
 
 /* ── Стекло панели чата ─ контур и фон видны сквозь матовую панель ─ */
 [data-theme] { --glass: 80%; --glass-edge: #FFFFFF24; }
-:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"], [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"], [data-theme="snow"]) { --glass: 86%; --glass-edge: #FFFFFF99; }
-:is([data-theme="glass"]) { --glass: 64%; --glass-edge: #FFFFFF1F; }
-/* Стеклянные наборы: жидкое — прозрачнее, матовое — плотнее и сильнее размыто. */
-:is([data-theme="liquid"], [data-theme="moonlight"]) { --glass: 62%; --glass-edge: #FFFFFF26; }
-:is([data-theme="liquidday"]) { --glass: 70%; --glass-edge: #FFFFFFB3; }
-:is([data-theme="frost"]) { --glass: 78%; --glass-edge: #FFFFFFCC; }
-html:is([data-theme="liquid"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="moonlight"]):not([data-glass="off"]) {
+:is([data-theme="light"], [data-theme="snow"]) { --glass: 86%; --glass-edge: #FFFFFF99; }
+:is([data-theme="moonlight"]) { --glass: 62%; --glass-edge: #FFFFFF26; }
+html:is([data-theme="moonlight"]):not([data-glass="off"]) {
   --glass-composer: blur(var(--glass-blur)) saturate(150%);
   --glass-panel: blur(var(--glass-blur)) saturate(150%);
   --glass-dialog: blur(var(--glass-blur)) saturate(150%); }
-html:is([data-theme="liquid"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="moonlight"]) .rail { backdrop-filter: var(--glass-panel, none); -webkit-backdrop-filter: var(--glass-panel, none); }
-html[data-theme="glass"]:not([data-glass="off"]) {
-  --glass-composer: blur(var(--glass-blur)) saturate(140%);
-  --glass-panel: blur(var(--glass-blur)) saturate(140%);
-  --glass-dialog: blur(var(--glass-blur)) saturate(140%); }
-html[data-theme="glass"] .rail { backdrop-filter: var(--glass-panel, none); -webkit-backdrop-filter: var(--glass-panel, none); }
+html:is([data-theme="moonlight"]) .rail { backdrop-filter: var(--glass-panel, none); -webkit-backdrop-filter: var(--glass-panel, none); }
 .convo {
   background: color-mix(in srgb, var(--surface) var(--glass), transparent);
   border-color: var(--glass-edge);

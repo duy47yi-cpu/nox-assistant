@@ -50,13 +50,13 @@
 
   // Параметры состояния: скорость формы, амплитуда деформации, яркость, вращение, ореол, ядро.
   const MOTION = {
-    idle: { speed: 1.0, amp: 0.55, bright: 0.94, spin: 0.10, halo: 0.16, core: 0.92 },
-    listening: { speed: 1.3, amp: 0.85, bright: 1.14, spin: 0.05, halo: 0.23, core: 1.05 },
-    thinking: { speed: 1.65, amp: 1.0, bright: 1.3, spin: 0.26, halo: 0.27, core: 1.18 },
-    speaking: { speed: 1.22, amp: 0.8, bright: 1.18, spin: 0.07, halo: 0.23, core: 1.12 },
-    waiting_approval: { speed: 0.45, amp: 0.3, bright: 0.84, spin: 0.02, halo: 0.14, core: 0.76 },
-    success: { speed: 1.0, amp: 0.66, bright: 1.36, spin: 0.12, halo: 0.3, core: 1.24 },
-    error: { speed: 1.35, amp: 0.42, bright: 1.04, spin: 0.0, halo: 0.17, core: 0.82 },
+    idle: { speed: 1.25, amp: 0.65, bright: 0.96, spin: 0.34, halo: 0.18, core: 0.94 },
+    listening: { speed: 1.4, amp: 0.88, bright: 1.14, spin: 0.18, halo: 0.23, core: 1.05 },
+    thinking: { speed: 1.75, amp: 1.05, bright: 1.3, spin: 0.48, halo: 0.27, core: 1.18 },
+    speaking: { speed: 1.32, amp: 0.84, bright: 1.18, spin: 0.22, halo: 0.23, core: 1.12 },
+    waiting_approval: { speed: 0.55, amp: 0.34, bright: 0.84, spin: 0.08, halo: 0.14, core: 0.76 },
+    success: { speed: 1.15, amp: 0.72, bright: 1.36, spin: 0.28, halo: 0.3, core: 1.24 },
+    error: { speed: 1.35, amp: 0.42, bright: 1.04, spin: 0.06, halo: 0.17, core: 0.82 },
   };
   const MIX_KEYS = ['speed', 'amp', 'bright', 'spin', 'halo', 'core'];
 
@@ -412,7 +412,7 @@
         const data = doc.documentElement.dataset;
         if (data.motion === 'off' || data.animations === 'off') return true;
       }
-      if (this._reduceQuery && this._reduceQuery.matches) return true;
+      if (!ExtraOrb.ignoreSystemMotion && this._reduceQuery && this._reduceQuery.matches) return true;
       return false;
     }
 
@@ -553,8 +553,9 @@
       const palTarget = this._pal[this.state];
       for (let i = 0; i < 3; i++) this.col[i] = mix(this.col[i], palTarget[i], k);
 
-      this.phase += dt * this.mix.speed * (1 + this._voiceOut() * 0.65);
-      this.angle += dt * this.mix.spin;
+      const spd = clamp(Number(this.cfg.speed) || 1, 0.2, 3);
+      this.phase += dt * this.mix.speed * spd * (1 + this._voiceOut() * 0.65);
+      this.angle += dt * this.mix.spin * spd;
       this.breath = Math.sin(this.phase);
 
       // Голос: быстрый подъём, мягкий спад; без внешнего уровня «дышит» только речь.
@@ -981,10 +982,11 @@
       }
 
       if (geo.kind === 'crystal') {
-        const pulse = 1 + voice * 0.03 + this.flash * 0.035 + (cam.quiet ? 0 : breath * 0.008);
+        const pulse = 1 + voice * 0.04 + this.flash * 0.04 + (cam.quiet ? 0 : breath * 0.024);
+        const wobble = cam.quiet ? 0 : Math.sin(cam.phase * 0.8) * 0.03 * amp;
         for (let i = 0; i < n; i++) {
           const x = px[i] * pulse;
-          const y = py[i] * pulse;
+          const y = (py[i] + wobble * Math.sin(py[i] * 2 + cam.phase)) * pulse;
           const z = pz[i] * pulse;
           const rx = x * ca - z * sa;
           const rz = x * sa + z * ca;
@@ -1000,10 +1002,11 @@
       }
 
       if (geo.kind === 'comb') {
+        const pulse = 1 + voice * 0.03 + this.flash * 0.035 + (cam.quiet ? 0 : breath * 0.018);
         for (let i = 0; i < n; i++) {
-          const x = px[i];
-          const y = py[i];
-          const z = pz[i];
+          const x = px[i] * pulse;
+          const y = py[i] * pulse;
+          const z = pz[i] * pulse;
           const rx = x * ca - z * sa;
           const rz = x * sa + z * ca;
           const ry = y * COS_TILT - rz * SIN_TILT;
@@ -1492,6 +1495,8 @@
       this._drawCore(ctx, cx, cy, R, bright, 0.055, 0.85);
     }
   }
+
+  ExtraOrb.ignoreSystemMotion = false;
 
   // ── Реестр библиотеки: метаданные и регистрация ─────────────────────
 

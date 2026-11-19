@@ -306,3 +306,15 @@ test('Оболочка: time.js подключён до store.js, колонка
   const shell = fs.readFileSync(path.join(AETHER_DIR, 'aether.js'), 'utf8');
   assert.match(shell, /store\.syncHistoryViewport\(\)/);
 });
+
+test('splitChats сортирует «Сегодня» и «Ранее» от новых к старым по updatedAt', () => {
+  const now = dayAt(0, 14, 0);
+  const res = time.splitChats([
+    { id: 'old-1', updatedAt: dayAt(-5, 9, 0) },
+    { id: 'today-early', updatedAt: dayAt(0, 8, 0) },
+    { id: 'old-newer', updatedAt: dayAt(-1, 20, 0) },
+    { id: 'today-late', updatedAt: dayAt(0, 13, 30) },
+  ], now);
+  assert.deepEqual(res.today.map((c) => c.id), ['today-late', 'today-early']);
+  assert.deepEqual(res.earlier.map((c) => c.id), ['old-newer', 'old-1']);
+});

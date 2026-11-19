@@ -36,7 +36,8 @@ function mailTools(gmail, { knownRecipients = () => [], draftStore = null, enabl
       if (!ADDRESS.test(to)) return { ok: false, summary: 'неверный адрес получателя: нужен один адрес вида name@example.com' };
       const r = await gmail.send({ to, subject: String(args.subject || ''), text: String(args.body || '') });
       if (!r.ok) return { ok: false, summary: r.error };
-      return { ok: true, summary: r.id ? `отправлено, id=${r.id}` : 'отправлено, но Gmail не вернул номер письма', id: r.id };
+      return { ok: true, summary: r.id ? `отправлено, id=${r.id}` : 'отправлено, но Gmail не вернул номер письма',
+        id: r.id, data: { recipient: to } };
     },
     // Подтверждение — номер письма из ответа Gmail; без него «не проверено».
     async verify(_args, result) {

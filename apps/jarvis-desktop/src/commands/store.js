@@ -58,9 +58,12 @@ const EVENT_CATALOG = Object.freeze([
 const SYSTEM_EVENT_TYPES = new Set(EVENT_CATALOG.map((e) => e.type));
 const RUN_STATUSES = new Set(['started', 'succeeded', 'partial', 'skipped', 'failed', 'cancelled', 'blocked', 'interrupted']);
 const TRIGGER_KINDS = new Set(['hotkey', 'schedule', 'event', 'manual', 'phrase']);
-const STEP_TYPES = new Set(['app_start', 'hotkey', 'click', 'volume', 'type_text', 'wait', 'ai', 'shell']);
+const STEP_TYPES = new Set([
+  'app_start', 'url_open', 'hotkey', 'click', 'volume', 'type_text', 'wait', 'ai', 'shell', 'ram_trim', 'youtube', 'media',
+]);
 const TYPE_TO_TOOL = Object.freeze({
   app_start: 'app_open',
+  url_open: 'url_open',
   hotkey: 'ui_keys',
   click: 'ui_click',
   volume: 'volume_set',
@@ -68,9 +71,13 @@ const TYPE_TO_TOOL = Object.freeze({
   wait: 'wait',
   ai: 'ai',
   shell: 'shell_run',
+  ram_trim: 'ram_trim',
+  youtube: 'youtube_play',
+  media: 'media_control',
 });
 const TOOL_TO_TYPE = Object.freeze({
   app_open: 'app_start',
+  url_open: 'url_open',
   ui_keys: 'hotkey',
   ui_click: 'click',
   desktop_click: 'click',
@@ -81,6 +88,9 @@ const TOOL_TO_TYPE = Object.freeze({
   wait: 'wait',
   ai: 'ai',
   shell_run: 'shell',
+  ram_trim: 'ram_trim',
+  youtube_play: 'youtube',
+  media_control: 'media',
 });
 const MAX_STEP_ID = 80;
 const MAX_PROGRAM = 200;

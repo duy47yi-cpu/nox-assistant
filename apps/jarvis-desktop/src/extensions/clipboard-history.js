@@ -11,6 +11,9 @@
 const nodeFs = require('fs');
 const nodePath = require('path');
 const crypto = require('crypto');
+// Метки, коды и ключи — общий детектор проекта (src/memory/secrets.js): одно правило для буфера, памяти и журнала.
+// Берём строгий вариант с кодами и тайной в адресе: одноразовый код и ссылка с токеном тоже не хранятся.
+const { looksSecretEgress } = require('../memory/secrets');
 
 const VERSION = 1;
 const MAX_ITEMS = 200;
@@ -21,13 +24,6 @@ const MAX_TOTAL_CHARS = 100000;
 const DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
-// Явная метка секрета со значением: «пароль: …», «token=…», «api key — …».
-// Голое слово без значения не считается секретом: в истории может быть слово «пароль» в тексте статьи.
-const SECRET_LABEL = /(парол\p{L}*|password|passwd|pwd|passphrase|токен\p{L}*|token|секрет\p{L}*|secret|api[\s_-]?key|private[\s_-]?key|client[\s_-]?secret|otp|totp|one[\s-]?time[\s-]?code|cvv|cvc|пин[\s-]?код|pin[\s-]?code)\s*(?:[:=—–-]|это|is)\s*\S{3,}/iu;
-// Код подтверждения: слово «код»/code и рядом 3–8 цифр.
-const CODE_LABEL = /(?<![\p{L}])(?:код|code|otp|пароль|password)\p{L}*[^\d\n]{0,24}\d{3,8}(?!\d)/iu;
-// Ключи известных сервисов и приватные ключи.
-const SECRET_KEY = /\b(?:sk|pk|ghp|xox[abp])[-_][\w-]{12,}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
 // Номер карты: 13–19 цифр, обычно группами. Проверяем по Луну или по явной разбивке на 4.
 const CARD_GROUPS = /\b\d{4}[ -]\d{4}[ -]\d{4}(?:[ -]\d{1,4})?\b/;
 const CARD_DIGITS = /(?<![\d])\d{13,19}(?![\d])/g;
@@ -61,10 +57,7 @@ function looksLikeCard(text) {
 // Экспортируется, чтобы интегратор мог спросить заранее и показать предупреждение.
 function isPrivateText(text) {
   const value = String(text ?? '');
-  return SECRET_LABEL.test(value)
-    || CODE_LABEL.test(value)
-    || SECRET_KEY.test(value)
-    || looksLikeCard(value);
+  return looksSecretEgress(value) || looksLikeCard(value);
 }
 
 // Обрезка по кодовым точкам: emoji не рвётся.

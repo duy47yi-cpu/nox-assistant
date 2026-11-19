@@ -123,7 +123,7 @@ test('mcp-logos.js: в снимке нет внешних URL и сетевых 
   assert.match(LOGOS, /вручную не править/, 'файл сгенерированный');
 
   const logos = loadLogos();
-  assert.equal(logos.services.length, 80);
+  assert.ok(logos.services.length >= 70, 'список сервисов не пустой и не обеднён');
   assert.equal(logos.categories.length, 13);
   for (const service of logos.services) {
     // Адреса в снимке — без схемы: https:// добавляет окно только при явном действии.

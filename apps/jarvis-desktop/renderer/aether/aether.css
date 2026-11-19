@@ -2315,19 +2315,13 @@ html[data-aether][data-glass="off"] :is(.ae-chat-view, .ae-orb-stage) { backdrop
 /* Разделы Aether на светлых и новых темах: страница и настройки берут фон своей палитры,
  * а не тёмно-синюю подложку облика из nox-luxify.css. Старые тёмные темы сохраняют
  * привычный градиент; «Своя картинка» и прозрачность окна остаются главными. */
-html[data-aether]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"],
-  [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"],
-  [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"],
-  [data-theme="snow"], [data-theme="emerald"], [data-theme="neon-noir"], [data-theme="coffee"]):not([data-win-alpha]):not([data-own-bg]) body.ae-body {
+html[data-aether]:is([data-theme="light"], [data-theme="snow"], [data-theme="neon-noir"]):not([data-win-alpha]):not([data-own-bg]) body.ae-body {
   background-color: var(--bg);
   background-image: var(--bg-image, none);
 }
 /* Панели Настроек в этих темах — из токенов темы, а не тёмно-синие из nox-luxify.css:
  * иначе на светлой палитре подписи поля тёмные на тёмном. */
-html[data-aether]:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"],
-  [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"], [data-theme="porcelain"],
-  [data-theme="ocean"], [data-theme="terracotta"], [data-theme="paper-white"], [data-theme="lavender"],
-  [data-theme="snow"], [data-theme="emerald"], [data-theme="neon-noir"], [data-theme="coffee"]) .ae-settings-page .ae-settings-group {
+html[data-aether]:is([data-theme="light"], [data-theme="snow"], [data-theme="neon-noir"]) .ae-settings-page .ae-settings-group {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);

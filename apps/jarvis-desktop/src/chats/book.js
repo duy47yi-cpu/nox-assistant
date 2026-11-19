@@ -55,7 +55,6 @@ class ChatBook {
   select(id) {
     if (!this.chats.some((c) => c.id === id)) return false;
     this.activeId = id;
-    this.touch(id);
     return true;
   }
 

@@ -57,7 +57,8 @@ test('Разделы остаются в шапке, служебные кноп
   const luxCss = fs.readFileSync(path.join(AETHER_DIR, 'nox-luxify.css'), 'utf8');
 
   assert.match(aetherJs, /ae-utility-rail/);
-  assert.match(aetherJs, /rail\.append\(aiModalBtn, muteBtn, historyDrawer\.trigger, stageBtn, accountPanel\.el\)/);
+  assert.match(aetherJs, /rail\.append\(aiModalBtn, historyDrawer\.trigger, stageBtn, accountPanel\.el\)/);
+  assert.doesNotMatch(aetherJs, /lxMuteBtn/);
   assert.match(topbarJs, /lx-topbar-brand/);
   assert.match(topbarJs, /Nox Assistant/);
   assert.match(topbarJs, /role', 'tablist'/);

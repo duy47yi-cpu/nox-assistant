@@ -9,6 +9,8 @@ const { LongTasks, longPolicy, DONE_MARK } = require('../src/missions/long');
 const { ToolRegistry } = require('../src/tools/registry');
 const { mouseTools, SCRIPT } = require('../src/tools/mouse');
 const { guardDesktopTools, DesktopLock } = require('../src/control/desktop-lock');
+const { WorkspaceIndex } = require('../src/rag/index');
+const { workspaceTools } = require('../src/tools/workspace');
 
 function setup(t, brain, { now } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jarvis-long-'));
@@ -18,6 +20,45 @@ function setup(t, brain, { now } = {}) {
   return { dir, tasks, notes };
 }
 const say = (content) => ({ content, toolCalls: [] });
+
+test('переданный из чата план продолжает тот же отчёт и при перезапуске не повторяет сомнительную запись', async (t) => {
+  const script = [
+    { name: 'workspace_write', args: { path: 'new.txt', content: 'проверяемый итог' } },
+    { name: 'plan_done', args: { step: 2, evidence: 'файл new.txt' } },
+  ];
+  let calls = 0;
+  const { dir, tasks } = setup(t, { async chat({ messages }) {
+    assert.match(messages.find((item) => item.role === 'user').content, /old.txt/);
+    const reply = script[calls++];
+    return reply ? { content: '', toolCalls: [{ id: 'handoff-' + calls, ...reply }] } : say('Готово');
+  } });
+  const index = new WorkspaceIndex(dir);
+  tasks.resolvePlan = () => ({ index, tools: workspaceTools(index) });
+  fs.writeFileSync(path.join(dir, 'old.txt'), 'исходный итог');
+  const scope = { workspaceId: 'default', chatId: 'chat-1' };
+  const plan = { request: 'Собери материалы', createdAt: new Date().toISOString(), steps: [
+    { text: 'создать файл old.txt', status: 'done', files: ['old.txt'] },
+    { text: 'создать файл new.txt', status: 'pending' },
+  ] };
+  const running = tasks.start({ goal: plan.request, hours: 1, handoff: { ...scope, plan } });
+  await tasks.done;
+  const finished = tasks.linkedPlan(scope);
+  assert.equal(finished.id, running.id);
+  assert.equal(finished.status, 'done');
+  assert.deepEqual(finished.handoff.plan.steps.map((step) => step.status), ['done', 'done']);
+  assert.match(fs.readFileSync(running.report, 'utf8'), /Готово.+new\.txt/);
+  assert.equal(fs.readFileSync(path.join(dir, 'old.txt'), 'utf8'), 'исходный итог');
+
+  const interrupted = { ...finished, id: 'interrupted', status: 'running',
+    handoff: { ...scope, plan, pending: { path: 'new.txt', before: false } } };
+  fs.writeFileSync(tasks.file, JSON.stringify({ items: [finished, interrupted] }));
+  const before = calls;
+  tasks.resume();
+  await tasks.done;
+  assert.equal(tasks.linkedPlan(scope).status, 'needs_human');
+  assert.match(tasks.linkedPlan(scope).why, /new\.txt/);
+  assert.equal(calls, before);
+});
 
 test('работает блоками, записки переходят в следующий блок, ГОТОВО завершает', async (t) => {
   const seen = [];

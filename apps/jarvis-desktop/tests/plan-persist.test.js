@@ -151,7 +151,7 @@ test('аудит: «создать файл» без действий и без 
     await agent.run('сделай отчёт');
     const plan = plans.get(agent._runId);
     assert.equal(plan.steps[0].status, 'pending', evidence);
-    const refusal = brain.seen.find((item) => item && typeof item.summary === 'string' && item.summary.includes('подразумевает'));
+    const refusal = brain.seen.find((item) => item && item.ok === false && /подтверждённая запись/.test(item.summary));
     assert.ok(refusal, `нет отказа на «${evidence}»: ${JSON.stringify(brain.seen)}`);
     assert.match(refusal.summary, /файл/);
   }
@@ -196,18 +196,36 @@ test('шаг без наблюдаемого результата закрыва
   assert.equal(observableResult('найти файл').needed, false);
 });
 
-test('пустой файл доказательством не считается, а существующий непустой — считается', () => {
+test('старый или неверный файл и повторное использование доказательства не закрывают шаг', () => {
   const root = tempRoot();
   fs.writeFileSync(path.join(root, 'empty.txt'), '', 'utf8');
   fs.writeFileSync(path.join(root, 'full.txt'), 'данные', 'utf8');
   const plans = new TurnPlans();
   plans.start('r1', { chatId: '', workspaceId: '', root });
-  plans.set('r1', ['создать файл empty.txt']);
-  assert.throws(() => plans.done('r1', 1, 'файл empty.txt', { root }), /существующего непустого файла/);
-  plans.set('r2', ['создать файл full.txt']);
-  const plan = plans.done('r2', 1, 'файл full.txt', { root });
+  plans.set('r1', ['создать файл result.txt с текстом «отчёт готов»', 'дописать в файл result.txt']);
+  assert.throws(() => plans.done('r1', 1, 'файл full.txt', { root }), /подтверждённая запись/);
+  plans.observe('r1', { name: 'workspace_write', verified: 'confirmed', path: 'full.txt' });
+  assert.throws(() => plans.done('r1', 1, 'файл result.txt', { root }), /подтверждённая запись/);
+  fs.writeFileSync(path.join(root, 'result.txt'), 'не тот текст', 'utf8');
+  plans.observe('r1', { name: 'workspace_write', verified: 'confirmed', path: 'result.txt' });
+  assert.throws(() => plans.done('r1', 1, 'файл result.txt', { root }), /с нужным содержимым/);
+  fs.writeFileSync(path.join(root, 'result.txt'), 'отчёт готов', 'utf8');
+  assert.throws(() => plans.done('r1', 1, 'файл result.txt', { root }), /подтверждённая запись/);
+  plans.observe('r1', { name: 'workspace_write', verified: 'confirmed', path: 'result.txt' });
+  const plan = plans.done('r1', 1, 'файл result.txt', { root });
   assert.equal(plan.steps[0].status, 'done');
-  assert.ok(plan.steps[0].files.some((p) => p.endsWith('full.txt')));
+  assert.deepEqual(plan.steps[0].files, ['result.txt']);
+  assert.throws(() => plans.done('r1', 2, 'файл result.txt', { root }), /подтверждённая запись/);
+});
+
+test('отправку закрывает подтверждённое письмо только нужному адресату', () => {
+  const plans = new TurnPlans();
+  plans.set('mail', ['отправить отчёт на study@example.test']);
+  plans.observe('mail', { name: 'remember', verified: 'confirmed' });
+  plans.observe('mail', { name: 'mail_send', verified: 'confirmed', recipient: 'other@example.test' });
+  assert.throws(() => plans.done('mail', 1, 'отправлено на study@example.test'), /нужному адресату/);
+  plans.observe('mail', { name: 'mail_send', verified: 'confirmed', recipient: 'study@example.test' });
+  assert.equal(plans.done('mail', 1, 'отправлено на study@example.test').steps[0].status, 'done');
 });
 
 test('PlansStore: ключ — чат и пространство, старые планы убираются, план закрытого дела снимается', () => {

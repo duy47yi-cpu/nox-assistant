@@ -33,6 +33,7 @@
   }
 
   // Чат без сохранённой отметки времени уходит в «Ранее» и остаётся без подписи: не выдумываем.
+  // Внутри каждой группы сортируем по свежести сверху вниз, чтобы старые чаты не прыгали и не путались.
   function splitChats(chats, nowMs = Date.now()) {
     const today = [];
     const earlier = [];
@@ -42,6 +43,9 @@
       if (Number.isFinite(ts) && ts >= todayStart) today.push(chat);
       else earlier.push(chat);
     }
+    const byRecent = (a, b) => (Number(b && b.updatedAt) || 0) - (Number(a && a.updatedAt) || 0);
+    today.sort(byRecent);
+    earlier.sort(byRecent);
     return { today, earlier };
   }
 

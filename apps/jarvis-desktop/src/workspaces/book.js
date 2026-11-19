@@ -13,6 +13,13 @@ const DEFAULT = Object.freeze({ id: 'default', name: 'Общее' });
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const MAX_SPACES = 100;
 
+function folderList(value) {
+  if (!Array.isArray(value) || value.some((folder) => typeof folder !== 'string' || !path.isAbsolute(folder))) {
+    throw new Error('нужны абсолютные пути подключённых папок');
+  }
+  return [...new Set(value.map((folder) => path.resolve(folder)))];
+}
+
 function inside(root, candidate) {
   const rel = path.relative(path.resolve(root), path.resolve(candidate));
   return rel === '' || (!path.isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${path.sep}`));
@@ -93,6 +100,7 @@ class WorkspaceBook {
       let name;
       try { name = nameOf(item && item.name); } catch { throw new Error('реестр пространств повреждён'); }
       if (!item || !ID.test(item.id) || name !== item.name || ids.has(item.id) || names.has(name.toLocaleLowerCase())) throw new Error('реестр пространств повреждён');
+      if (item.connectedFolders !== undefined) folderList(item.connectedFolders);
       ids.add(item.id); names.add(name.toLocaleLowerCase());
     }
     if (!ids.has(data.selected)) throw new Error('реестр пространств повреждён');
@@ -116,6 +124,22 @@ class WorkspaceBook {
   current() {
     const list = this.list();
     return list.spaces.find((item) => item.id === list.selected);
+  }
+
+  folders(id) {
+    const space = this._load().spaces.find((item) => item.id === id);
+    if (!space) throw new Error('пространство не найдено');
+    return folderList(space.connectedFolders || []);
+  }
+
+  setFolders(id, folders) {
+    const data = this._load();
+    const space = data.spaces.find((item) => item.id === id);
+    if (!space) throw new Error('пространство не найдено');
+    const list = folderList(folders);
+    space.connectedFolders = list;
+    this._save(data);
+    return list;
   }
 
   create(value) {

@@ -8,6 +8,8 @@ const path = require('path');
 const { WorkspaceBook } = require('../src/workspaces/book');
 const { WorkspaceChat } = require('../src/workspaces/chat');
 const { studyTool } = require('../src/tools/study');
+const { ReminderStore } = require('../src/schedule/store');
+const { studyExamTool, examReminderText } = require('../src/tools/study-exam');
 
 function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nox-space-chat-'));
@@ -16,6 +18,50 @@ function setup(t) {
   fs.mkdirSync(opts.defaultRoot); fs.mkdirSync(opts.dataDir);
   return { opts, book: new WorkspaceBook(opts) };
 }
+
+test('поиск по материалам пространства переживает перезапуск, находит близкие термины и не видит папки соседа', async (t) => {
+  const { book, opts } = setup(t);
+  const physics = book.create('Физика');
+  const other = book.create('Геометрия');
+  const lectures = path.join(path.dirname(opts.dataDir), 'lectures');
+  fs.mkdirSync(lectures);
+  fs.writeFileSync(path.join(lectures, 'Лекция.txt'), 'Сила тяжести притягивает тела к Земле.');
+  const options = { brain: { async chat() { return { content: '', toolCalls: [] }; } } };
+  const first = new WorkspaceChat({ ...options, book });
+  first.select(physics.id);
+  first.setFolders([lectures]);
+  const second = new WorkspaceChat({ ...options, book: new WorkspaceBook(opts) });
+  assert.deepEqual(second.folders(), [lectures]);
+  const search = () => second.tools().get('workspace_search');
+  const found = await search().run({ query: 'гравитация' });
+  assert.equal(found.data[0].path, path.join(lectures, 'Лекция.txt'));
+  assert.match(found.data[0].snippet, /Сила тяжести/);
+  assert.equal((await search().run({ query: 'какие силы действуют', alternatives: ['сила тяжести'] })).data.length, 1);
+  second.select(other.id);
+  assert.deepEqual((await search().run({ query: 'гравитация' })).data, []);
+  assert.deepEqual(book.open(physics.id).index.folders, [], 'фон получает отдельный индекс');
+});
+
+test('проверка перед контрольной планируется один раз и смотрит текущую трудность при доставке', (t) => {
+  const { opts } = setup(t);
+  const file = path.join(opts.dataDir, 'study.json');
+  const store = new ReminderStore(path.join(opts.dataDir, 'reminders.json'));
+  const time = new Date(2026, 10, 20, 10).getTime();
+  const tool = studyExamTool({ file, store, now: () => time });
+  const args = { topic: 'Алгебра', at: '2026-11-25T10:00' };
+  const context = { ownerText: 'Контрольная по алгебре 25 ноября в 10:00' };
+  assert.equal(tool.run(args, { ownerText: 'Что такое контрольная?' }).ok, false);
+  const result = tool.run(args, context);
+  assert.equal(result.ok, true);
+  assert.equal(tool.verify(args, result).status, 'confirmed');
+  assert.equal(tool.run(args, context).data.id, result.data.id);
+  const [reminder] = store.list();
+  assert.equal(new Date(reminder.dueAt).getDate(), 24);
+  fs.writeFileSync(file, JSON.stringify([{ id: 'a', topic: 'Алгебра', exercise: '2x = 8',
+    attempts: [{ outcome: 'incorrect', feedback: 'Раздели обе части уравнения' }] }]));
+  assert.match(examReminderText(reminder, file, time), /Раздели обе части уравнения/);
+  assert.equal(examReminderText(reminder, file, Date.parse(reminder.studyExam.at)), '');
+});
 
 test('учебный прогресс по темам различает помощь, закрывает ошибку независимой проверкой и предлагает усложнение', (t) => {
   const { opts } = setup(t);
@@ -57,6 +103,45 @@ test('учебный прогресс по темам различает пом�
   assert.equal(geometry.topics.length, 2);
   turn({ action: 'select', topic: 'ПЕРЕВОД ЕДИНИЦ' });
   assert.equal(turn({ action: 'status' }).current.id, extra.id);
+});
+
+test('давняя тема сохраняет итог, число проверяется по всему ответу, повторение требует паузы', (t) => {
+  const { opts } = setup(t);
+  const file = path.join(opts.dataDir, 'study.json');
+  let time = Date.parse('2026-11-19T12:00:00Z');
+  let run = 0;
+  const call = (action, args = {}, ownerText = 'Занятие') =>
+    studyTool(file, { now: () => time }).run({ action, ...args }, { runId: String(++run), ownerText });
+  const start = (topic, exercise, options = {}) => call('start', { topic, exercise, newExercise: true, ...options });
+  const grade = (id, attempt, proposed, ownerText = attempt) =>
+    call('review', { exerciseId: id, attempt, outcome: proposed, feedback: 'Предварительная оценка', hint: 'Проверь подстановкой.' }, ownerText);
+  const first = start('Алгебра', 'Реши 2x + 5 = 17').data;
+  const wrong = grade(first.id, '6', 'correct', 'Ответ: 6,5');
+  assert.equal(wrong.data.latest.outcome, 'incorrect');
+  assert.equal(wrong.data.latest.assessment, 'calculation');
+  assert.equal(wrong.data.latest.attempt, 'Ответ: 6,5');
+  assert.equal(grade(first.id, 'x = 6', 'incorrect').data.latest.outcome, 'correct');
+  const obsolete = start('Алгебра', 'Вычисли (2 + 3) * 4').data;
+  assert.equal(grade(obsolete.id, '20', 'correct').data.latest.assessment, 'calculation');
+  assert.equal(start('Алгебра', 'Реши 3x = 21', { spacedReview: true }).ok, false);
+  assert.equal(call('status').data.progress.review.demonstratedAt, null);
+
+  for (let i = 0; i < 55; i += 1) assert.equal(start('Геометрия', `Построй фигуру ${i}`).ok, true);
+  const old = call('status').data.topics.find((topic) => topic.topic === 'Алгебра');
+  assert.equal(old.solved, 2);
+  assert.equal(old.firstTry, 1);
+  assert.equal(call('select', { topic: 'Алгебра' }).ok, true);
+  time += 24 * 60 * 60 * 1000;
+  const due = call('status').data.progress;
+  assert.equal(due.next, 'spaced_review');
+  assert.equal(due.focus.id, first.id);
+  const repeat = start('Алгебра', 'Реши 3x = 21', { spacedReview: true, reviewOf: first.id }).data;
+  assert.equal(start('Алгебра', 'Реши 4x = 28', { spacedReview: true }).data.id, repeat.id);
+  assert.equal(grade(repeat.id, 'x = 7', 'correct').data.latest.assessment, 'calculation');
+  const retained = call('status').data.progress;
+  assert.equal(retained.review.demonstratedAt, '2026-11-20T12:00:00.000Z');
+  assert.equal(retained.review.dueAt, '2026-11-23T12:00:00.000Z');
+  assert.equal(retained.focus, null);
 });
 
 test('учебный чат ждёт попытку, проверяет её запись и открывает её после перезапуска', async (t) => {

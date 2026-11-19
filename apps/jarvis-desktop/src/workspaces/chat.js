@@ -114,6 +114,8 @@ class WorkspaceChat {
 
   _open(id) {
     const space = this.book.open(id);
+    const folders = id === 'default' ? null : this.book.folders?.(id);
+    if (folders) space.index.setFolders(folders);
     // Индекс принадлежит этой сессии чата; фоновые задачи создают отдельные индексы.
     space.index.unrestricted = this.options.mode === 'full';
     const conversation = path.join(path.dirname(space.memory.filePath), 'conversation.json');
@@ -141,16 +143,30 @@ class WorkspaceChat {
   }
 
   current() { return { id: this.session.space.id, name: this.session.space.name }; }
+  folders() { return this.session.space.index.folders.slice(); }
+  setFolders(folders) {
+    this.session.space.index.setFolders(this.book.setFolders(this.current().id, folders));
+    return this.folders();
+  }
   root() { return this.session.space.root; }
   history() { return this.session.agent.history.slice(); }
   remember(text, reply, metadata) {
     if (this.busy || this.session.agent._controller) throw new Error('Джарвис занят');
     this.session.agent.remember(text, reply, metadata);
+    this.session.chats.touch();
     saveChats(this.session.conversation, this.session.chats);
   }
   tools() { return this.session.registry; }
   chatList() { return this.session.chats.list(); }
   stop() { this.session.agent.stop(); }
+  planScope() { return this.session.agent.planScope(); }
+  backgroundPlan() { return this.session.agent.backgroundPlan(); }
+  dropSavedPlan() {
+    const agent = this.session.agent;
+    const dropped = agent.dropSavedPlan();
+    agent.forgetPlan();
+    return dropped;
+  }
 
   setMode(mode) {
     this.options.mode = mode;
@@ -201,7 +217,10 @@ class WorkspaceChat {
       return result;
     }
     finally {
-      try { saveChats(this.session.conversation, this.session.chats); }
+      try {
+        this.session.chats.touch();
+        saveChats(this.session.conversation, this.session.chats);
+      }
       finally { this.busy = false; }
     }
   }

@@ -7,6 +7,8 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+// Детектор секретов один на проект: та же проверка нужна журналу, буферу и правилам доступа.
+const { looksSecret, looksSecretEgress } = require('./secrets');
 
 const MAX_TEXT = 500;
 const MAX_ITEMS = 2000;
@@ -22,39 +24,6 @@ const MAX_QUOTE = 500;
 const SHA256 = /^[0-9a-f]{64}$/;
 // Вопрос владельца: знак «?» или вопросительное слово.
 const QUESTION = /\?|(?:^|[\s,.!:;])(?:что|какой|какая|какое|какие|какого|сколько|когда|где|кто)(?![\p{L}])/iu;
-// Пароль с явным значением («пароль: …») и строка, похожая на ключ: 20+ символов с буквами и цифрами или префикс sk-/ghp_.
-const SECRET_LABEL = /(парол\p{L}*|password|passwd|api[\s_-]?key|токен\p{L}*|token|секрет\p{L}*|secret)\s*(?:[:=—–-]|это|is)\s*\S{4,}/iu;
-const SECRET_LIKE = /\b(?=[\w-]*\d)(?=[\w-]*[a-z])[\w-]{20,}\b|\b(?:sk|pk|ghp|gho|ghu|ghs|xox[abp]|glpat)[-_][\w-]{12,}|\b(?:AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})\b/i;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const PASCAL_ID_RE = /^[A-Za-z]+\d{0,4}_(?:[A-Z][a-z]{2,})+$/;
-const KEBAB_WORDS_RE = /^(?:[a-z]{2,}-){2,}[a-z0-9]{2,}$/;
-
-function shannonEntropy(str) {
-  const counts = new Map();
-  for (const ch of str) counts.set(ch, (counts.get(ch) || 0) + 1);
-  let ent = 0;
-  for (const n of counts.values()) {
-    const p = n / str.length;
-    ent -= p * Math.log2(p);
-  }
-  return ent;
-}
-
-function hasBareTokenSecret(text) {
-  const matches = String(text ?? '').match(/\b[A-Za-z0-9_+/=-]{16,}\b/g);
-  if (!matches) return false;
-  for (const raw of matches) {
-    const tok = raw.replace(/=+$/, '');
-    if (tok.length < 16) continue;
-    if (UUID_RE.test(tok) || PASCAL_ID_RE.test(tok) || KEBAB_WORDS_RE.test(tok)) continue;
-    const hasDigit = /\d/.test(tok);
-    const hasLower = /[a-z]/.test(tok);
-    const hasUpper = /[A-Z]/.test(tok);
-    if (hasDigit && hasLower && hasUpper && shannonEntropy(tok) >= 3.3) return true;
-  }
-  return false;
-}
-
 // Чувствительное: здоровье, документы, деньги, коды и отправка. Авто-память такие факты не пишет
 // (см. learn.js), а явная запись страхуется пометкой sensitive, даже если вызывающий забыл флаг.
 const SENSITIVE_TEXT = /(паспорт|диагноз|болезн|боле[юй]|здоров|аллерг|диабет|астм|лечен|таблетк|анализ кров|парол|явк|адрес прожив|номер карт|карт[аы]\b|зарплат|долг|кредит|инн|снилс|плат[её]ж|оплат|перев[оеё][дс]|одноразов|код подтверждения|смс[- ]?код|cvv|cvc|пин[- ]?код|отправ)/iu;
@@ -218,33 +187,6 @@ function visible(item, { includeExpired = false, includeSensitive = false, inclu
     && (includeSensitive || !item.sensitive)
     && (includeSuperseded || !item.supersededBy)
     && (includeForgotten || !item.forgottenAt);
-}
-
-const SECRET_JWT = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]{4,})?/;
-const SECRET_BEARER = /\bBearer\s+[A-Za-z0-9._+/=-]{12,}/i;
-const SECRET_URL_USERINFO = /\bhttps?:\/\/[^/\s:@"'`]+:[^/\s@"'`]+@/i;
-const SECRET_URL_PARAM = /[?&](?:api[_-]?key|token|access[_-]?token|refresh[_-]?token|secret|password|passwd|auth|key)=[^&#\s"'`]{4,}/i;
-const SECRET_KEY_PREFIX = /\b(?:sk|pk|ghp|gho|ghu|ghs|xox[abp]|glpat)[-_][\w-]{12,}\b|\b(?:AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})\b/i;
-
-// Простая проверка, не защита: страховка от случайной записи пароля или ключа.
-function looksSecret(text) {
-  const s = String(text ?? '');
-  if (SECRET_LABEL.test(s) || SECRET_JWT.test(s) || SECRET_BEARER.test(s) || SECRET_KEY_PREFIX.test(s) || hasBareTokenSecret(s)) {
-    return true;
-  }
-  const matches = s.match(/\b(?=[\w-]*\d)(?=[\w-]*[a-z])[\w-]{20,}\b/gi);
-  return Boolean(matches && matches.some((m) => !UUID_RE.test(m) && !PASCAL_ID_RE.test(m) && !KEBAB_WORDS_RE.test(m)));
-}
-
-// Для исходящих действий: явные метки секрета, ключи, секреты в URL и высокоэнтропийные токены;
-// технические идентификаторы вроде Get-CimInstance Win32_OperatingSystem не тормозят работу.
-const SECRET_KEY_BLOCK = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
-function looksSecretEgress(text) {
-  const raw = String(text ?? '');
-  if (SECRET_URL_USERINFO.test(raw) || SECRET_URL_PARAM.test(raw) || SECRET_BEARER.test(raw) || SECRET_JWT.test(raw)) return true;
-  // В JSON вокруг имени поля стоят кавычки: «password":"…». Для проверки заменяем их пробелом.
-  const value = raw.replace(/["']/g, ' ');
-  return SECRET_LABEL.test(value) || SECRET_KEY_PREFIX.test(value) || SECRET_KEY_BLOCK.test(value) || hasBareTokenSecret(value);
 }
 
 class MemoryStore {

@@ -17,32 +17,29 @@ const lum = (h) => {
 };
 const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
 
-test('есть все темы из theme-boot.js: старые и восемь новых', () => {
+test('есть ровно 7 тем из theme-boot.js: 5 основных и 2 палитры Aether', () => {
   const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
   const ids = [...boot.match(/IDS = \[([^\]]+)\]/)[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]).filter((i) => i !== 'system');
   const aether = [...boot.match(/AETHER_IDS = \[([^\]]+)\]/)[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]);
   assert.deepStrictEqual(Object.keys(themes).sort(), [...ids, ...aether].sort());
-  assert.ok(ids.length >= 8);
-  assert.equal(aether.length, 8, 'восемь новых тем Nox');
-  assert.equal(new Set([...ids, ...aether]).size, ids.length + aether.length, 'id не повторяются');
+  assert.equal(ids.length, 5);
+  assert.equal(aether.length, 2, 'две палитры Aether: neon-noir и snow');
+  assert.equal(new Set([...ids, ...aether]).size, 7, 'ровно 7 тем без дублей');
 });
 
-// Наборы по мотивам Luxify: каждый есть в IDS, в themes.css и кнопкой с подписью.
-const LUX = {
-  'blue-hour': 'Синий час', eclipse: 'Затмение',
-  liquid: 'Жидкое стекло', liquidday: 'Жидкое стекло, день', frost: 'Матовое стекло', gradient: 'Градиент',
-  gradientday: 'Градиент, день', midnight: 'Полночь', neon: 'Неон', starry: 'Звёздная ночь', moonlight: 'Лунный свет', sunrise: 'Рассвет',
+// Основные темы: каждая есть в IDS, в themes.css и кнопкой с подписью.
+const CORE_LABELS = {
+  dark: 'Тёмная', light: 'Светлая', cobalt: 'Кобальт', neon: 'Неон', moonlight: 'Лунный свет',
 };
-test('наборы по мотивам Luxify: в IDS, в темах и кнопкой', () => {
+test('основные темы: в IDS, в themes.css и кнопкой', () => {
   const boot = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   const ids = [...boot.match(/IDS = \[([^\]]+)\]/)[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]);
-  for (const [id, name] of Object.entries(LUX)) {
+  for (const [id, name] of Object.entries(CORE_LABELS)) {
     assert.ok(ids.includes(id), `${id} в IDS`);
     assert.ok(themes[id], `${id} в themes.css`);
     assert.match(html, new RegExp(`data-theme-opt="${id}"[^\\n]*</span>${name}</button>`), `кнопка ${id} «${name}»`);
   }
-  // Подписи не повторяются: прежний «Рассвет» (dawn) теперь «Пастель».
   const labels = [...html.matchAll(/data-theme-opt="[a-z-]+"[^\n]*<\/span>([^<]+)<\/button>/g)].map((m) => m[1]);
   assert.equal(new Set(labels).size, labels.length, labels.join(', '));
   assert.match(html, /<div class="theme-fx" aria-hidden="true"><\/div>/);
@@ -167,18 +164,11 @@ test('у каждой темы есть выбор, а светлые темы �
   }
 });
 
-test('тема — набор целиком: «Стекло» задаёт свою прозрачность и размытие', () => {
+test('панели темы по умолчанию: параметры прописаны на [data-theme]', () => {
   const tok = (id) => css.match(new RegExp(`\\[data-theme${id ? `="${id}"` : ''}\\] \\{[^}]*--panel-pct: (\\d+)%; --glass-blur: (\\d+)px;`));
   assert.deepStrictEqual(tok('').slice(1), ['4', '20'], 'по умолчанию у всех тем');
-  const glass = tok('glass');
-  assert.ok(glass, 'у «Стекла» свои панели и размытие');
-  assert.ok(Number(glass[2]) > 20, 'размытие сильнее обычного');
-  assert.ok(themes.glass.bg && themes.glass.hue, 'токены «Стекла» на месте');
-  assert.match(css, /html\[data-theme="glass"\]:not\(\[data-glass="off"\]\) \{[^}]*--glass-panel: blur\(var\(--glass-blur\)\)/);
-  // Без свечений, пятен и градиентного текста.
-  const block = css.slice(css.indexOf('/* Стекло:'), css.indexOf('/* Фон окна'));
-  assert.ok(block.length > 100);
-  assert.ok(!/radial-gradient|text-shadow|background-clip:\s*text/.test(block));
+  assert.ok(tok('moonlight'), 'у «Лунного света» свои панели и размытие');
+  assert.match(css, /html:is\(\[data-theme="moonlight"\]\):not\(\[data-glass="off"\]\) \{[^}]*--glass-panel: blur\(var\(--glass-blur\)\)/);
 });
 
 test('все разделы Nox берут палитру и гарнитуры у активной темы', () => {
@@ -272,8 +262,8 @@ test('звёзды и лунный свет на светлых темах ра�
       assert.ok(ratio(t['text-2'], underBeam) >= 4.5, `${id}: text-2 под лунным лучом на ${bgKey}`);
     }
   }
-  assert.ok(moonTints.size >= 5, 'лунное свечение адаптируется к палитре каждой темы');
-  assert.ok(starAccents.size >= 5, 'цвет звёзд адаптируется к палитре каждой темы');
+  assert.equal(moonTints.size, lightIds.length, 'лунное свечение адаптируется к палитре каждой светлой темы');
+  assert.equal(starAccents.size, lightIds.length, 'цвет звёзд адаптируется к палитре каждой светлой темы');
 });
 
 test('уменьшение движения (Л5): гаснет движение всех девяти эффектов, рисунок остаётся', () => {
@@ -307,13 +297,7 @@ const settingsSource = fs.readFileSync(path.join(__dirname, 'aether', 'component
 const aetherCss = fs.readFileSync(path.join(__dirname, 'aether', 'aether.css'), 'utf8');
 const bootSource = fs.readFileSync(path.join(__dirname, 'theme-boot.js'), 'utf8');
 const NEW_THEMES = {
-  ocean: 'Океан',
-  terracotta: 'Терракота',
-  'paper-white': 'Бумага',
-  emerald: 'Изумруд',
   'neon-noir': 'Неон-нуар',
-  lavender: 'Лаванда',
-  coffee: 'Кофе',
   snow: 'Снег',
 };
 const themeLabels = (() => {
@@ -322,14 +306,14 @@ const themeLabels = (() => {
   return Object.fromEntries([...block[1].matchAll(/(?:'([a-z-]+)'|([a-z]+)): '([^']+)'/g)].map((m) => [m[1] || m[2], m[3]]));
 })();
 
-test('новые темы: восемь русских названий в Настройках без повторов', () => {
+test('палитры Aether: русские названия в Настройках без повторов', () => {
   const labels = Object.values(themeLabels);
   assert.equal(new Set(labels).size, labels.length, labels.join(', '));
   for (const [id, name] of Object.entries(NEW_THEMES)) {
     assert.equal(themeLabels[id], name, `подпись ${id}`);
     assert.ok(themes[id], `тема ${id} в themes.css`);
   }
-  assert.equal(Object.keys(NEW_THEMES).length, 8);
+  assert.equal(Object.keys(NEW_THEMES).length, 2);
 });
 
 test('новая тема — полный набор токенов: панели, три ступени текста, разделы, состояния и тени', () => {
@@ -463,10 +447,10 @@ test('тема, шрифты и сброс оформления работают
   };
   vm.runInNewContext(bootSource, sandbox);
   const T = sandbox.window.JarvisTheme;
-  // Восемь новых тем — в общем списке и открываются без перезагрузки.
+  // Палитры Aether — в общем списке и открываются без перезагрузки.
   for (const id of Object.keys(NEW_THEMES)) assert.ok(T.ALL_IDS.includes(id), id);
-  T.apply('paper-white');
-  assert.equal(root.dataset.theme, 'paper-white');
+  T.apply('snow');
+  assert.equal(root.dataset.theme, 'snow');
   T.apply('neon-noir');
   assert.equal(root.dataset.theme, 'neon-noir');
   // Выбор всех четырёх вложенных гарнитур: интерфейс, заголовки, ответы и код.
@@ -475,14 +459,14 @@ test('тема, шрифты и сброс оформления работают
   assert.match(props['--font-head'], /Source Serif 4/);
   assert.match(props['--font-reply'], /Source Serif 4/);
   assert.match(props['--mono'], /JetBrains Mono/);
-  // «Сбросить оформление» возвращает «Ночь», шрифты и акцент темы.
+  // «Сбросить оформление» возвращает «Тёмную (Nox)», шрифты и акцент темы.
   T.resetAppearance();
-  assert.equal(root.dataset.theme, 'signal');
+  assert.equal(root.dataset.theme, 'dark');
   assert.equal(props['--font'], undefined);
   assert.equal(props['--font-head'], undefined);
   assert.equal(props['--font-reply'], undefined);
   assert.equal(props['--mono'], undefined);
-  assert.equal(JSON.parse(store.get('jarvis.theme')), 'signal');
+  assert.equal(JSON.parse(store.get('jarvis.theme')), 'dark');
   assert.equal(JSON.parse(store.get('jarvis.accent')), 'theme');
   // Битое значение моноширинного шрифта не ломает окно.
   assert.equal(T.sanitizeLook({ mono: 'нет-такого' }).mono, 'theme');
@@ -504,7 +488,7 @@ test('светлый хром покрывает все светлые темы 
   assert.ok(block, 'блок «Светлый хром» в nox-luxify.css');
   const covered = [...block[2].matchAll(/data-theme="([a-z-]+)"/g)].map((m) => m[1]).sort();
   assert.deepStrictEqual(covered, lightIds, 'светлых тем ровно столько же, сколько в themes.css');
-  assert.ok(covered.length >= 13, 'все светлые палитры, включая новые');
+  assert.equal(covered.length, 2, 'светлые темы: light и snow');
   for (const id of covered) {
     assert.ok(themes[id], 'тема ' + id + ' есть в themes.css');
     assert.ok(lum(themes[id].bg) > 0.5, id + ': фон светлый');
@@ -579,7 +563,7 @@ test('правила светлого хрома: шапка, вкладки, р
 test('тёмные темы не попали в светлый хром', () => {
   const darkIds = [...css.matchAll(/\[data-theme="([a-z-]+)"\] \{\s*color-scheme: dark/g)].map((m) => m[1]);
   const block = luxify.match(/\/\* ── Светлый хром[\s\S]*?\n(html\[data-aether\]:is\(([^)]*)\) \{([\s\S]*?)\n\})/)[2];
-  assert.ok(darkIds.length >= 15);
+  assert.equal(darkIds.length, 5);
   for (const id of darkIds) {
     assert.ok(!block.includes('data-theme="' + id + '"'), 'тёмная тема ' + id + ' осталась как была');
   }

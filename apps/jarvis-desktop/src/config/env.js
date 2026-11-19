@@ -29,7 +29,10 @@ function loadEnvFile(file) {
 // Значение из переменной окружения важнее значения из файла.
 function makeConfig(rootDir) {
   const fileEnv = loadEnvFile(path.join(rootDir, '.env'));
-  return (key) => process.env[key] || fileEnv[key] || '';
+  // Общий файл для переезда ПК <-> ноутбук (решение владельца 19.11.2026).
+  // Личный .env и переменные процесса важнее: локальные настройки не перебиваются.
+  const sharedEnv = loadEnvFile(path.join(rootDir, '.env.shared'));
+  return (key) => process.env[key] || fileEnv[key] || sharedEnv[key] || '';
 }
 
 module.exports = { loadEnvFile, makeConfig };

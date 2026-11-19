@@ -137,8 +137,8 @@ class WatchNotifier {
   }
 
   // Повод извне. Попадает в ближайший проход; повтор с тем же key не выводится.
-  add({ kind, key, detail, channels = CHANNELS }) {
-    this._incoming.push({ kind, key, detail: clip(detail), channels });
+  add({ kind, key, detail, channels = CHANNELS, expiresAt = null }) {
+    this._incoming.push({ kind, key, detail: clip(detail), channels, expiresAt });
   }
 
   // Один проход: собрать поводы, поставить в очередь каналов, отправить с учётом тишины и лимита.
@@ -149,7 +149,7 @@ class WatchNotifier {
     try {
       this._checkRest(now);
       const { found: scanned, active } = await this._scan(now);
-      const incoming = this._incoming.splice(0).filter((c) => this._markSeen(c, now));
+      const incoming = this._incoming.splice(0).filter((c) => (!c.expiresAt || c.expiresAt > now.getTime()) && this._markSeen(c, now));
       const cfg = readConfig(this.settings());
       // Первый проход только запоминает уже существующее: при запуске старые поводы не объявляются.
       const fresh = this._primed ? [...scanned, ...incoming] : incoming;
@@ -245,6 +245,7 @@ class WatchNotifier {
     let sent = 0;
     const ts = now.getTime();
     for (const ch of CHANNELS) {
+      this._queue[ch] = this._queue[ch].filter((item) => !item.expiresAt || item.expiresAt > ts);
       if (!this._open(ch, cfg)) {
         this._queue[ch] = [];
         continue;

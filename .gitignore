@@ -19,6 +19,7 @@ apps/jarvis-desktop/build-info.json
 # База сервера Nox (аккаунты, хэши, токены)
 apps/nox-server/*.db
 apps/nox-server/*.db-*
+apps/nox-server/study-inbox.json*
 
 # Справочные материалы: видео и большие медиафайлы
 РЕФЕРЕНСЫ/

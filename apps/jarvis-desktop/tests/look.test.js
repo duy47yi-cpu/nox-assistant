@@ -117,12 +117,12 @@ test('пределы и мусор: вне списка — безопасный
 });
 
 test('сброс к теме возвращает прозрачность 0 % и прямые углы', () => {
-  const { T, root, store, props } = boot({ 'jarvis.theme': JSON.stringify('lime') });
+  const { T, root, store, props } = boot({ 'jarvis.theme': JSON.stringify('cobalt') });
   T.setLook({ winAlpha: '35', winRadius: '22' });
   assert.equal(props['--win-alpha'], '0.35');
   assert.equal(props['--win-radius'], '22px');
   T.resetToTheme();
-  assert.equal(root.dataset.theme, 'lime', 'тема не меняется');
+  assert.equal(root.dataset.theme, 'cobalt', 'тема не меняется');
   assert.equal(props['--win-alpha'], '0');
   assert.equal(props['--win-radius'], '0px');
   assert.equal(root.dataset.winAlpha, undefined);
@@ -144,9 +144,9 @@ test('CSS читает переменные: color-mix с transparent, скру�
 });
 
 test('эффект на фоне: «как в теме» берёт эффект темы, свой выбор виден на любой теме и фоне', () => {
-  const { T, root, store } = boot({ 'jarvis.theme': JSON.stringify('starry') });
+  const { T, root, store } = boot({ 'jarvis.theme': JSON.stringify('moonlight') });
   assert.equal(T.LOOK_DEFAULT.fx, 'theme');
-  assert.equal(root.dataset.fx, 'stars', 'звёздная ночь показывает звёзды');
+  assert.equal(root.dataset.fx, 'moon', 'лунная тема показывает лунный свет');
   T.setLook({ bg: 'solid' });
   assert.equal(root.dataset.fx, undefined, 'сплошной фон убирает эффект темы');
   T.setLook({ fx: 'rain' });
@@ -157,15 +157,15 @@ test('эффект на фоне: «как в теме» берёт эффект
   T.setLook({ fx: 'theme' });
   T.apply('dark');
   assert.equal(root.dataset.fx, undefined, 'у «Ночи» своего эффекта нет');
-  T.apply('liquid');
-  assert.equal(root.dataset.fx, 'waves', 'смена темы меняет эффект');
+  T.apply('neon');
+  assert.equal(root.dataset.fx, 'grid', 'смена темы меняет эффект');
   T.setLook({ fx: 'snow' });
   T.apply('light');
   assert.equal(root.dataset.fx, 'snow');
   for (const bad of ['fog', '', 5, null, {}]) assert.equal(T.sanitizeLook({ fx: bad }).fx, 'theme');
   for (const fx of Object.values(T.THEME_FX)) assert.ok(T.FXS[fx], `эффект темы ${fx} можно выбрать вручную`);
   T.resetToTheme();
-  assert.equal(root.dataset.fx, 'waves' === T.THEME_FX[root.dataset.theme] ? 'waves' : undefined);
+  assert.equal(root.dataset.fx, T.THEME_FX[root.dataset.theme] || undefined);
 });
 
 test('своя картинка: фон image, затемнение и размытие уходят в CSS-переменные', () => {

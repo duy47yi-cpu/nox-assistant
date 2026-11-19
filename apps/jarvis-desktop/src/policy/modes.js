@@ -121,6 +121,12 @@ function setBrowserHost(source) {
   browserHost = source;
 }
 
+// Заголовок переднего окна для снимков экрана (src/tools/screen.js). Нужен, чтобы решить вопрос по снимку до его отправки.
+let screenWindow = () => '';
+function setScreenWindowSource(fn) {
+  screenWindow = typeof fn === 'function' ? fn : () => '';
+}
+
 // Сцена рабочего стола: позволяет определить элемент под координатами mouse_click или по id для desktop_click.
 let sceneSource = () => null;
 function setSceneSource(source) {
@@ -177,6 +183,15 @@ function matchesUiElement(name, args, pattern, { skipType = false } = {}) {
   if (typeof args.name === 'string' && pattern.test(args.name)) return true;
   const hit = resolveSceneTarget(n, args);
   return Boolean(hit && hit.name && pattern.test(hit.name));
+}
+
+// Снимок всего экрана при открытом менеджере паролей: в кадр попадает его содержимое, поэтому спрашиваем
+// в любом режиме, включая «Полный доступ» (правило владельца об секрете в исходящем).
+// Снимок одного названного окна не спрашиваем: это осознанный выбор, меньше лишнего.
+function isSecretScreen({ name, args } = {}) {
+  if (String(name || '') !== 'screen_look') return false;
+  if (args && typeof args.window === 'string' && args.window.trim()) return false;
+  return CREDENTIAL_WINDOW_RE.test(String(screenWindow() || ''));
 }
 
 function isPayment({ name, args } = {}) {
@@ -473,6 +488,8 @@ function decide({ mode, name, risk, args, workspace, sessionAllow, hasPathParam 
   // Чужой текст и руки: клик или ввод после чужой страницы/файла могут выполнить чужое указание.
   // Прямая просьба владельца отправить («отправь», «ответь») это снимает.
   if (handsTainted && isHandsAction(name) && !ownerSends) return 'ask';
+  // Снимок экрана при менеджере паролей в кадре: спрашиваем даже в «Полном доступе».
+  if (isSecretScreen({ name, args })) return 'ask';
   // Секрет в исходящем аргументе — тоже вопрос в любом режиме.
   if (hasSecretEgress({ name, args, source })) return 'ask';
   // Намеренное ужесточение (03.11.2026): профиль и договорённость попадают в каждый промпт, поэтому их запись
@@ -521,4 +538,4 @@ const POLICY_PATTERNS = Object.freeze({
   HARD_BROWSER_HOST,
 });
 
-module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, setSceneSource, resolveSceneTarget, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe, POLICY_PATTERNS, BROWSER_TAINT_WRITES, CREDENTIAL_WINDOW_RE };
+module.exports = { decide, insideWorkspace, hardDeny, isSensitive, allowKey, isOneShot, setBrowserHost, setScreenWindowSource, isSecretScreen, setSceneSource, resolveSceneTarget, RISKS, isPayment, isDeletion, isInstall, isPowerOff, isShellDeletion, isShiftDelete, hasSecretEgress, describe, POLICY_PATTERNS, BROWSER_TAINT_WRITES, CREDENTIAL_WINDOW_RE };

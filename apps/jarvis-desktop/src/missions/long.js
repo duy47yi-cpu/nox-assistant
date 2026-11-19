@@ -13,6 +13,7 @@ const { withClock } = require('../agent/prompt');
 const { backgroundBrief } = require('../memory/store');
 const { BLOCKED_DESKTOP } = require('../control/desktop-lock');
 const { writeFileAtomic } = require('../config/atomic');
+const { planReport, runPlanHandoff } = require('./plan-handoff');
 
 const MAX_HOURS = 24;
 const BLOCK_STEPS = 30;
@@ -119,8 +120,8 @@ const waitMs = (ms, signal) => new Promise((resolve) => {
 });
 
 class LongTasks {
-  constructor({ file, reportsDir, brain, tools, journal, workspace, stop = null, notify = () => {}, now = () => new Date(), sleep = waitMs, deskWaitMs = DESK_WAIT_MS, mode = () => 'auto', memory = null }) {
-    Object.assign(this, { file, reportsDir, brain, tools, journal, workspace, stopSwitch: stop, notify, now, sleep, deskWaitMs, memory });
+  constructor({ file, reportsDir, brain, tools, journal, workspace, stop = null, notify = () => {}, now = () => new Date(), sleep = waitMs, deskWaitMs = DESK_WAIT_MS, mode = () => 'auto', memory = null, resolvePlan = null }) {
+    Object.assign(this, { file, reportsDir, brain, tools, journal, workspace, stopSwitch: stop, notify, now, sleep, deskWaitMs, memory, resolvePlan });
     // Режим владельца на каждый запуск: он может смениться, пока поручение идёт.
     this.mode = typeof mode === 'function' ? mode : () => mode;
     this.running = new Map();
@@ -154,17 +155,30 @@ class LongTasks {
     return this._load().items;
   }
 
-  start({ goal, hours, useDesktop = false }) {
+  linkedPlan({ chatId, workspaceId }) {
+    return this.list().findLast((item) => item.handoff && !item.handoff.returned &&
+      item.handoff.chatId === chatId && item.handoff.workspaceId === workspaceId) || null;
+  }
+
+  detachPlan(item) { this._patch(item.id, { handoff: { ...item.handoff, returned: true } }); }
+
+  start({ goal, hours, useDesktop = false, handoff = null }) {
     const text = String(goal || '').trim();
     if (!text || text.length > 2000) throw new Error('цель: от 1 до 2000 символов');
     if (!Number.isFinite(hours) || hours <= 0 || hours > MAX_HOURS) throw new Error(`часов: больше 0 и не больше ${MAX_HOURS}`);
     const started = this.now();
     const id = crypto.randomUUID();
-    fs.mkdirSync(this.reportsDir, { recursive: true });
-    const report = path.join(this.reportsDir, `${started.toISOString().replace(/[:.]/g, '-')}-long-${id.slice(0, 8)}.md`);
+    if (handoff && (!this.resolvePlan || !handoff.chatId || !handoff.plan?.steps?.length || useDesktop)) throw new Error('план нельзя передать в фон');
+    if (handoff && this.linkedPlan(handoff)?.status === 'running') throw new Error('план уже работает в фоне');
+    const reports = handoff ? this.resolvePlan(handoff.workspaceId).index.resolveInside('reports') : this.reportsDir;
+    fs.mkdirSync(reports, { recursive: true });
+    const report = path.join(reports, `${started.toISOString().replace(/[:.]/g, '-')}-long-${id.slice(0, 8)}.md`);
     fs.writeFileSync(report, `# ${text}\n\nНачало: ${started.toISOString()}\n`, 'utf8');
     const item = { id, goal: text, useDesktop: Boolean(useDesktop), status: 'running', startedAt: started.toISOString(), deadline: new Date(started.getTime() + hours * 3600000).toISOString(), blocks: 0, report, notes: report.replace(/\.md$/, '.notes.md') };
-    saveNotes(item, 'Сделано: пока ничего.\nОсталось: вся цель.\nСсылки: нет.');
+    if (handoff) {
+      item.handoff = { ...handoff, pending: null };
+      fs.writeFileSync(report, planReport(item), 'utf8');
+    } else saveNotes(item, 'Сделано: пока ничего.\nОсталось: вся цель.\nСсылки: нет.');
     const data = this._load();
     data.items.push(item);
     this._save(data);
@@ -220,6 +234,11 @@ class LongTasks {
     const { signal } = controller;
     const deadline = new Date(item.deadline).getTime();
     const journal = { append: (e) => this.journal.append({ ...e, source: 'long', long: item.id }) };
+    if (item.handoff) return runPlanHandoff({
+      item, signal, resolve: this.resolvePlan,
+      patch: (fields) => this._patch(item.id, fields), finish: (status, why) => this._finish(item, status, why),
+      brain: this.brain, stop: this.stopSwitch, journal, now: this.now, policy: longPolicy({ mode: 'auto', useDesktop: false }),
+    });
     let errors = 0;
     let blocks = item.blocks || 0;
     // Пока снимка нет, требование переходит в следующий блок: блок мог кончиться без него.

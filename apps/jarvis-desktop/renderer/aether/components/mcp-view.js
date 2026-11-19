@@ -224,54 +224,98 @@
       return LOGOS.brand(id);
     }
 
+    function brandSvgNode(paths, size) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('width', String(size));
+      svg.setAttribute('height', String(size));
+      svg.setAttribute('aria-hidden', 'true');
+      for (const layer of paths) {
+        const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p.setAttribute('d', layer.d);
+        p.setAttribute('fill', layer.fill || 'currentColor');
+        svg.append(p);
+      }
+      return svg;
+    }
+
+    function builtinIconBox(kind, size) {
+      if (kind === 'youtube') return iconBox('youtube', 'YouTube', size);
+      const box = document.createElement('span');
+      box.className = 'ae-builtin-ico';
+      box.setAttribute('aria-hidden', 'true');
+      box.style.width = size + 'px';
+      box.style.height = size + 'px';
+      box.style.flex = '0 0 ' + size + 'px';
+      box.style.borderRadius = Math.max(7, Math.round(size * 0.25)) + 'px';
+      box.style.display = 'grid';
+      box.style.placeItems = 'center';
+      const inner = Math.round(size * 0.62);
+      if (kind === 'explorer') {
+        box.style.background = '#FFFFFF';
+        box.style.boxShadow = 'inset 0 0 0 1px rgba(15, 23, 42, 0.12)';
+        box.append(brandSvgNode([
+          { d: 'M3 5.5A2.5 2.5 0 0 1 5.5 3h3.6c.7 0 1.4.3 1.8.8l1.2 1.2H18.5A2.5 2.5 0 0 1 21 7.5V9H3V5.5Z', fill: '#F59E0B' },
+          { d: 'M2 8.5A1.5 1.5 0 0 1 3.5 7h17A1.5 1.5 0 0 1 22 8.5v10a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 18.5v-10Z', fill: '#FBBF24' },
+          { d: 'M8 14h8v2H8v-2Z', fill: '#1D4ED8' },
+        ], inner));
+        return box;
+      }
+      if (kind === 'console') {
+        box.style.background = '#111827';
+        box.style.boxShadow = 'inset 0 0 0 1px rgba(255, 255, 255, 0.16)';
+        box.append(brandSvgNode([
+          { d: 'M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z', fill: '#1E293B' },
+          { d: 'M6.5 9.2 10 12l-3.5 2.8 1.2 1.4L12.5 12 7.7 7.8 6.5 9.2ZM12 14.5h5v1.8h-5v-1.8Z', fill: '#38BDF8' },
+        ], inner));
+        return box;
+      }
+      box.style.background = '#FFFFFF';
+      box.style.boxShadow = 'inset 0 0 0 1px rgba(15, 23, 42, 0.12)';
+      box.append(brandSvgNode([
+        { d: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 6h-3.1a14.4 14.4 0 0 0-1.4-3.7A8 8 0 0 1 18.9 8ZM12 4.1c.8 1.1 1.5 2.4 1.9 3.9h-3.8c.4-1.5 1.1-2.8 1.9-3.9ZM4.3 14a7.8 7.8 0 0 1 0-4h3.3c-.1.7-.1 1.3-.1 2s0 1.3.1 2H4.3Zm.8 2h3.1a14.4 14.4 0 0 0 1.4 3.7A8 8 0 0 1 5.1 16Zm3.1-8H5.1a8 8 0 0 1 4.5-3.7A14.4 14.4 0 0 0 8.2 8ZM12 19.9c-.8-1.1-1.5-2.4-1.9-3.9h3.8c-.4 1.5-1.1 2.8-1.9 3.9Zm2.3-5.9H9.7a12 12 0 0 1 0-4h4.6a12 12 0 0 1 0 4Zm.1 5.7a14.4 14.4 0 0 0 1.4-3.7h3.1a8 8 0 0 1-4.5 3.7Zm2-5.7c.1-.7.1-1.3.1-2s0-1.3-.1-2h3.3a7.8 7.8 0 0 1 0 4h-3.3Z', fill: '#2563EB' },
+      ], inner));
+      return box;
+    }
+
     function iconBox(id, title, size) {
       const box = document.createElement('span');
       box.setAttribute('aria-hidden', 'true');
       box.style.width = size + 'px';
       box.style.height = size + 'px';
       box.style.flex = '0 0 ' + size + 'px';
-      box.style.borderRadius = Math.max(8, Math.round(size * 0.22)) + 'px';
+      box.style.borderRadius = Math.max(7, Math.round(size * 0.25)) + 'px';
       box.style.display = 'grid';
       box.style.placeItems = 'center';
       box.style.position = 'relative';
       box.style.color = 'var(--lx-text, var(--text))';
       const brand = brandIcon(id);
-      if (brand && brand.path) {
-        box.style.background = 'color-mix(in srgb, var(--accent) 12%, var(--surface-2))';
-        box.style.boxShadow = 'inset 0 0 0 1px color-mix(in srgb, var(--border) 60%, transparent)';
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('viewBox', '0 0 24 24');
-        svg.setAttribute('width', String(Math.round(size * 0.58)));
-        svg.setAttribute('height', String(Math.round(size * 0.58)));
-        svg.setAttribute('fill', 'currentColor');
-        svg.setAttribute('aria-hidden', 'true');
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', brand.path);
-        svg.append(path);
-        box.append(svg);
+      if (brand && (Array.isArray(brand.layers) || brand.path)) {
+        const isDarkTile = brand.ring === 'dark';
+        box.style.background = brand.bg || '#FFFFFF';
+        box.style.boxShadow = isDarkTile
+          ? 'inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 1px 2px rgba(0, 0, 0, 0.25)'
+          : 'inset 0 0 0 1px rgba(15, 23, 42, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06)';
+        const svgSize = Math.round(size * 0.62);
+        const layers = Array.isArray(brand.layers) && brand.layers.length
+          ? brand.layers
+          : [{ d: brand.path, fill: brand.fg || '#18181B' }];
+        box.append(brandSvgNode(layers, svgSize));
         return box;
       }
       const mono = LOGOS && LOGOS.monogram(id);
       if (mono) {
-        box.style.background = hexToRgba(mono.color, 0.22);
-        box.style.boxShadow = 'inset 0 0 0 1px ' + hexToRgba(mono.color, 0.44);
-        const letter = document.createElement('span');
-        letter.textContent = mono.letter || '?';
-        letter.style.fontWeight = '700';
-        letter.style.fontSize = Math.round(size * 0.46) + 'px';
-        letter.style.lineHeight = '1';
-        box.append(letter);
+        box.style.background = hexToRgba(mono.color, 0.16);
+        box.style.boxShadow = 'inset 0 0 0 1px ' + hexToRgba(mono.color, 0.34);
+        box.style.color = mono.color;
         const glyph = icon(mono.glyph || 'mcp');
-        glyph.style.position = 'absolute';
-        glyph.style.right = Math.round(size * 0.08) + 'px';
-        glyph.style.bottom = Math.round(size * 0.08) + 'px';
-        glyph.style.width = Math.round(size * 0.32) + 'px';
-        glyph.style.height = Math.round(size * 0.32) + 'px';
-        glyph.style.opacity = '0.72';
+        glyph.style.width = Math.round(size * 0.52) + 'px';
+        glyph.style.height = Math.round(size * 0.52) + 'px';
         box.append(glyph);
         return box;
       }
       box.style.background = 'color-mix(in srgb, var(--accent) 12%, var(--surface-2))';
+      box.style.boxShadow = 'inset 0 0 0 1px color-mix(in srgb, var(--border) 60%, transparent)';
       box.append(icon('mcp', ''));
       return box;
     }
@@ -473,6 +517,51 @@
 
       if (showMcpForm) wrap.append(buildMcpForm());
 
+      // Встроенные модули системы: проводник, консоль, браузер и YouTube подключены по умолчанию
+      // и не являются внешними MCP-расширениями.
+      if (!onlyInstalled && !pluginQuery.trim()) {
+        const builtins = document.createElement('section');
+        builtins.className = 'ae-builtins-section';
+        const builtinsHead = document.createElement('div');
+        builtinsHead.style.display = 'flex';
+        builtinsHead.style.alignItems = 'baseline';
+        builtinsHead.style.justifyContent = 'space-between';
+        builtinsHead.append(sectionHeading('Встроено по умолчанию'));
+        const builtinsNote = document.createElement('span');
+        builtinsNote.style.fontSize = '12px';
+        builtinsNote.style.color = 'var(--lx-text-3, var(--text-3))';
+        builtinsNote.textContent = 'автоматически подключено в Nox';
+        builtinsHead.append(builtinsNote);
+        builtins.append(builtinsHead);
+
+        const bGrid = document.createElement('div');
+        bGrid.className = 'ae-builtins-grid';
+        for (const item of [
+          { kind: 'explorer', title: 'Проводник', sub: 'Файлы и папки' },
+          { kind: 'console', title: 'Консоль', sub: 'PowerShell и команды' },
+          { kind: 'browser', title: 'Браузер', sub: 'Вкладки и веб-поиск' },
+          { kind: 'youtube', title: 'YouTube', sub: 'Музыка и видео' },
+        ]) {
+          const card = document.createElement('div');
+          card.className = 'ae-builtin-card';
+          card.dataset.builtin = item.kind;
+          card.append(builtinIconBox(item.kind, 32));
+          const meta = document.createElement('div');
+          meta.className = 'ae-builtin-meta';
+          const t = document.createElement('span');
+          t.className = 'ae-builtin-title';
+          t.textContent = item.title;
+          const s = document.createElement('span');
+          s.className = 'ae-builtin-sub';
+          s.textContent = item.sub;
+          meta.append(t, s);
+          card.append(meta, badge('подключён', 'ok'));
+          bGrid.append(card);
+        }
+        builtins.append(bGrid);
+        wrap.append(builtins);
+      }
+
       // Внешние сервисы: короткие карточки с входом в аккаунт, data-service для проверок окна.
       if (featuredCatalog.length) {
         const featuredSection = document.createElement('section');
@@ -664,13 +753,42 @@
           });
         groupTitle.textContent = (pluginCategory === 'all' ? 'Каталог сервисов' : categoryTitle(pluginCategory)) + ' (' + list.length + ')';
         if (!services.length) {
+          cardsHost.classList.remove('is-grouped');
           cardsHost.replaceChildren(emptyBox('Каталог дополнений загружается…'));
           return;
         }
         if (!list.length) {
+          cardsHost.classList.remove('is-grouped');
           cardsHost.replaceChildren(emptyBox('По выбранным фильтрам ничего не найдено.'));
           return;
         }
+        const canGroup = pluginCategory === 'all' && !pluginQuery.trim() && !onlyInstalled && pluginSort === 'category';
+        if (canGroup) {
+          cardsHost.classList.add('is-grouped');
+          const blocks = [];
+          for (const category of categories) {
+            const items = list.filter((service) => service.category === category.id);
+            if (!items.length) continue;
+            const block = document.createElement('section');
+            block.className = 'ae-cat-block';
+            const head = document.createElement('div');
+            head.className = 'ae-cat-block-head';
+            const titleEl = document.createElement('span');
+            titleEl.textContent = category.title;
+            const cntEl = document.createElement('span');
+            cntEl.className = 'ae-cat-block-count';
+            cntEl.textContent = String(items.length);
+            head.append(titleEl, cntEl);
+            const subGrid = document.createElement('div');
+            subGrid.className = 'ae-cards-grid';
+            subGrid.replaceChildren(...items.map((service) => buildServiceCard(service)));
+            block.append(head, subGrid);
+            blocks.push(block);
+          }
+          cardsHost.replaceChildren(...blocks);
+          return;
+        }
+        cardsHost.classList.remove('is-grouped');
         cardsHost.replaceChildren(...list.map((service) => buildServiceCard(service)));
       }
 
@@ -723,10 +841,7 @@
         card.append(desc);
 
         const footer = document.createElement('div');
-        footer.style.display = 'flex';
-        footer.style.alignItems = 'center';
-        footer.style.gap = '8px';
-        footer.style.flexWrap = 'wrap';
+        footer.className = 'ae-grid-card-foot';
 
         if (installedNames.has(service.id)) {
           const done = document.createElement('span');

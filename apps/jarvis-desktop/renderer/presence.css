@@ -284,7 +284,7 @@ html[data-glass="l"] .account-card { backdrop-filter: var(--glass-dialog, none);
  * там, где стоит шар. Свет зависит от состояния: в покое неподвижен, «думает» — дышит, «выполняет» —
  * по верхнему краю бежит тонкая линия. «Свет за окном» выкл. или сплошной фон в «Виде» его убирают. */
 :root { --light-key: #E9B95C; --light-amt: 14%; --edge-hi: color-mix(in srgb, #fff 10%, transparent); }
-:root:is([data-theme="light"], [data-theme="lime"], [data-theme="paper"], [data-theme="dawn"], [data-theme="liquidday"], [data-theme="frost"], [data-theme="gradientday"]) { --light-key: #C9902E; --light-amt: 10%; --edge-hi: #FFFFFFD9; }
+:root:is([data-theme="light"], [data-theme="snow"]) { --light-key: #C9902E; --light-amt: 10%; --edge-hi: #FFFFFFD9; }
 body[data-view="dialog"] .main::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .8;
   background:
     linear-gradient(118deg, transparent 6%, color-mix(in srgb, var(--light-key) var(--light-amt), transparent) 20%, transparent 38%),

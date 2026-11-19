@@ -331,6 +331,7 @@
         : mapState(stateEngine, opts.state || 'idle');
       let instance = null;
       if (spec.engine === 'custom' && typeof spec.create === 'function') {
+        if (w.NoxOrbsExtra && w.NoxOrbsExtra.ExtraOrb) w.NoxOrbsExtra.ExtraOrb.ignoreSystemMotion = true;
         instance = spec.create(canvas, {
           ...cfg,
           variant: spec.variant,
@@ -405,8 +406,9 @@
               });
             }
             if (typeof instance.setAnimated === 'function') instance.setAnimated(Boolean(gAnim) && c.animated !== false);
-          } else if (typeof instance.updateSettings === 'function') {
-            instance.updateSettings(c);
+          } else {
+            if (typeof instance.updateSettings === 'function') instance.updateSettings(c);
+            if (typeof instance.setAnimated === 'function') instance.setAnimated(Boolean(gAnim) && c.animated !== false);
           }
         },
         setComposer(text) {

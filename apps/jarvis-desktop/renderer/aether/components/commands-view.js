@@ -7,13 +7,17 @@
   'use strict';
 
   const STEP_TYPES = [
+    { type: 'url_open', tool: 'url_open', label: 'Открыть вкладку / сайт', icon: 'globe', argKey: 'url', placeholder: 'https://youtube.com' },
+    { type: 'ram_trim', tool: 'ram_trim', label: 'Очистить оперативную память', icon: 'sparkles', argKey: '', placeholder: '' },
+    { type: 'youtube', tool: 'youtube_play', label: 'Включить музыку / YouTube', icon: 'music', argKey: 'query', placeholder: 'moonlight или название трека' },
+    { type: 'media', tool: 'media_control', label: 'Управление плеером', icon: 'play', argKey: 'action', placeholder: 'toggle' },
     { type: 'app_start', tool: 'app_open', label: 'Запуск программы', icon: 'terminal', argKey: 'name', placeholder: 'OBS Studio, chrome, notepad…' },
     { type: 'hotkey', tool: 'ui_keys', label: 'Сочетание клавиш', icon: 'keyboard', argKey: 'keys', placeholder: 'Ctrl+Shift+S, Alt+Tab…' },
-    { type: 'click', tool: 'ui_click', label: 'Клик по элементу', icon: 'mousePointer', argKey: 'target', placeholder: 'Кнопка «Отправить» или координаты' },
     { type: 'volume', tool: 'volume_set', label: 'Громкость звука', icon: 'volume', argKey: 'percent', placeholder: '0–100' },
     { type: 'type_text', tool: 'ui_type', label: 'Ввод текста', icon: 'pencil', argKey: 'text', placeholder: 'Текст для ввода' },
+    { type: 'click', tool: 'ui_click', label: 'Клик по элементу', icon: 'mousePointer', argKey: 'target', placeholder: 'Кнопка «Отправить» или координаты' },
     { type: 'wait', tool: 'wait', label: 'Пауза', icon: 'clock', argKey: 'ms', placeholder: 'Миллисекунд, например 1000' },
-    { type: 'ai', tool: 'speak', label: 'Сказать / Ответ', icon: 'sparkles', argKey: 'text', placeholder: 'Что сказать или выполнить' },
+    { type: 'ai', tool: 'speak', label: 'Сказать / Ответ', icon: 'chat', argKey: 'text', placeholder: 'Что сказать или выполнить' },
   ];
 
   const STEP_TYPE_META = Object.fromEntries(STEP_TYPES.map((t) => [t.type, t]));
@@ -46,14 +50,16 @@
     const argsBrief = typeof ui.argsBrief === 'function' ? ui.argsBrief : () => '';
     const rawCs = window.CmdSteps || {};
     const TOOL_TO_TYPE_FB = {
-      app_open: 'app_start', ui_keys: 'hotkey', ui_click: 'click', desktop_click: 'click',
+      app_open: 'app_start', url_open: 'url_open', ram_trim: 'ram_trim', youtube_play: 'youtube', media_control: 'media',
+      ui_keys: 'hotkey', ui_click: 'click', desktop_click: 'click',
       volume_set: 'volume', ui_type: 'type_text', desktop_type: 'type_text', wait: 'wait', speak: 'ai', shell_run: 'shell',
     };
     const TYPE_TO_TOOL_FB = Object.fromEntries(STEP_TYPES.map((s) => [s.type, s.tool]));
     const normTreeFb = (steps, depth = 0) => (Array.isArray(steps) ? steps : []).map((s, idx) => {
       if (!s || typeof s !== 'object') return null;
       const tool = s.tool || TYPE_TO_TOOL_FB[s.type] || 'wait';
-      const type = s.type || TOOL_TO_TYPE_FB[tool] || 'wait';
+      let type = s.type || TOOL_TO_TYPE_FB[tool] || 'wait';
+      if (tool === 'url_open' && type === 'app_start') type = 'url_open';
       const args = s.args && typeof s.args === 'object' ? { ...s.args } : { ...(s.params || {}) };
       const params = s.params && typeof s.params === 'object' ? { ...s.params } : { ...args };
       return {
@@ -97,7 +103,10 @@
         type === 'volume' ? { percent: 50 }
           : type === 'wait' ? { ms: 1000 }
             : type === 'hotkey' ? { keys: 'Ctrl+S' }
-              : { [argKey || 'text']: '' }
+              : type === 'url_open' ? { url: 'https://www.google.com' }
+                : type === 'ram_trim' ? {}
+                  : type === 'media' ? { action: 'toggle' }
+                    : { [argKey || 'text']: '' }
       )),
       migrateWaitParams: rawCs.migrateWaitParams || fbMigrateWaitParams,
       // Параметры паузы всегда в миллисекундах: params для редактора, args для runner.
@@ -153,7 +162,8 @@
     let selectedCommandId = null;
     let selectedFolderKey = null;
     let selectedStepPath = null; // number[]
-    let inspectorOpen = false;
+    let inspectorOpen = true;
+    let seededCollapse = false;
 
     const collapsedFolders = new Set();
     const collapsedCommands = new Set();
@@ -164,6 +174,8 @@
     let savedSnapshot = null;
     let dirty = false;
     let draftError = '';
+    let quickAiText = '';
+    let quickAiBusy = false;
 
     // Голосовая запись (строка или вкладка «Скажите»)
     let voiceTarget = null; // null | { mode: 'step', path } | { mode: 'say' }
@@ -319,6 +331,142 @@
     toolsRight.append(searchWrap, packsBtn, newFolderBtn, addStepBtn, launchesBtn, sepDot, saveBtn);
     toolbar.append(seg, toolsRight);
 
+    // ── Быстрый ИИ-конструктор команд наверху «Команд» ────────────
+    const aiBar = document.createElement('section');
+    aiBar.className = 'ae-cmd-ai-bar';
+    aiBar.setAttribute('aria-label', 'Создание команды через ИИ');
+
+    const aiBarHead = document.createElement('div');
+    aiBarHead.className = 'ae-cmd-ai-head';
+    const aiBarTitle = document.createElement('span');
+    aiBarTitle.className = 'ae-cmd-ai-title';
+    aiBarTitle.append(icon('sparkles'), spanText('Создать команду с Ноксом (ИИ)'));
+    const aiBarHint = document.createElement('span');
+    aiBarHint.className = 'ae-cmd-ai-hint';
+    aiBarHint.textContent = 'Напишите своими словами — Нокс разберёт на шаги и откроет в редакторе';
+    aiBarHead.append(aiBarTitle, aiBarHint);
+
+    const aiBarRow = document.createElement('form');
+    aiBarRow.className = 'ae-cmd-ai-row';
+    const quickAiInput = document.createElement('input');
+    quickAiInput.type = 'text';
+    quickAiInput.id = 'lxQuickAiInput';
+    quickAiInput.className = 'ae-cmd-ai-input';
+    quickAiInput.placeholder = 'Например: открытие вкладки youtube.com, очищение оперативной памяти и музыку moonlight';
+    quickAiInput.setAttribute('aria-label', 'Опишите команду словами для ИИ');
+    quickAiInput.value = quickAiText;
+    quickAiInput.addEventListener('input', () => { quickAiText = quickAiInput.value; });
+
+    const quickAiBtn = document.createElement('button');
+    quickAiBtn.type = 'submit';
+    quickAiBtn.id = 'lxQuickAiBtn';
+    quickAiBtn.className = 'lx-pill-btn lx-pill-primary';
+    quickAiBtn.append(icon('sparkles'), spanText('Создать команду'));
+
+    const quickManualBtn = document.createElement('button');
+    quickManualBtn.type = 'button';
+    quickManualBtn.id = 'lxQuickManualBtn';
+    quickManualBtn.className = 'lx-pill-btn lx-pill-secondary';
+    quickManualBtn.textContent = '+ Вручную';
+    quickManualBtn.addEventListener('click', () => openNewWriteCommand({}));
+
+    aiBarRow.append(quickAiInput, quickAiBtn, quickManualBtn);
+
+    const aiExamplesRow = document.createElement('div');
+    aiExamplesRow.className = 'ae-cmd-ai-chips';
+    const exLbl = document.createElement('span');
+    exLbl.className = 'ae-cmd-examples-lbl';
+    exLbl.textContent = 'Примеры:';
+    aiExamplesRow.append(exLbl);
+    for (const sample of [
+      'Открытие вкладки youtube.com, очищение оперативной памяти и музыку moonlight',
+      'Открой Блокнот и подожди 2 секунды',
+      'Очисти оперативную память и поставь громкость 40%',
+    ]) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'lx-cmd-mini-btn';
+      chip.textContent = sample;
+      chip.addEventListener('click', () => {
+        quickAiText = sample;
+        quickAiInput.value = sample;
+        runQuickAiAssemble(sample);
+      });
+      aiExamplesRow.append(chip);
+    }
+
+    async function runQuickAiAssemble(overrideText) {
+      const text = String(overrideText !== undefined ? overrideText : quickAiInput.value).trim();
+      quickAiText = text;
+      if (!text) {
+        voiceBannerIsError = true;
+        voiceBannerText = 'Опишите словами, что должна делать новая команда.';
+        syncVoiceBanner();
+        quickAiInput.focus();
+        return;
+      }
+      if (!bridge.has('buildCommandFromText')) {
+        voiceBannerIsError = true;
+        voiceBannerText = 'Конструктор команд в этой среде недоступен.';
+        syncVoiceBanner();
+        return;
+      }
+      quickAiBusy = true;
+      quickAiBtn.disabled = true;
+      quickAiBtn.replaceChildren(icon('sparkles'), spanText('Собираю…'));
+      voiceBannerText = '';
+      voiceBannerIsError = false;
+      syncVoiceBanner();
+      try {
+        const res = await bridge.call('buildCommandFromText', { text });
+        if (!res || res.ok === false || !res.command) {
+          const miss = Array.isArray(res && res.missing) && res.missing.length ? res.missing.join('; ') : '';
+          const qs = Array.isArray(res && res.questions) && res.questions.length ? res.questions.join(' ') : '';
+          voiceBannerIsError = true;
+          voiceBannerText = (res && res.error) || miss || qs || 'Не удалось собрать команду — попробуйте уточнить шаги.';
+          syncVoiceBanner();
+          return;
+        }
+        const cmd = res.command;
+        const builtDraft = normCmd({
+          ...cmd,
+          id: null,
+          enabled: true,
+          origin: 'ai',
+          folder: cmd.folder || '',
+          steps: Array.isArray(cmd.steps) ? cmd.steps : [],
+        });
+        selectedCommandId = null;
+        selectedKind = 'command';
+        selectedStepPath = builtDraft.steps.length ? [0] : null;
+        draft = builtDraft;
+        savedSnapshot = null;
+        dirty = true;
+        draftError = '';
+        inspectorOpen = true;
+        viewMode = 'tree';
+        voiceBannerIsError = false;
+        voiceBannerText = `Нокс собрал команду «${builtDraft.name}» (${builtDraft.steps.length} шагов). Проверьте и нажмите «Сохранить».`;
+        syncVoiceBanner();
+        renderView();
+      } catch (err) {
+        voiceBannerIsError = true;
+        voiceBannerText = bridge.errText(err);
+        syncVoiceBanner();
+      } finally {
+        quickAiBusy = false;
+        quickAiBtn.disabled = false;
+        quickAiBtn.replaceChildren(icon('sparkles'), spanText('Создать команду'));
+      }
+    }
+
+    aiBarRow.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!quickAiBusy) runQuickAiAssemble();
+    });
+
+    aiBar.append(aiBarHead, aiBarRow, aiExamplesRow);
+
     const voiceBanner = document.createElement('div');
     voiceBanner.className = 'lx-cmd-voice-banner';
     voiceBanner.hidden = true;
@@ -326,7 +474,7 @@
     const body = document.createElement('div');
     body.className = 'lx-cmd-workspace';
 
-    root.append(toolbar, voiceBanner, body);
+    root.append(toolbar, aiBar, voiceBanner, body);
 
     // ── Нормализация команды и шагов v3 ──────────────────────────
     function makeDefaultStep(type = 'app_start', overrideParams = null) {
@@ -344,9 +492,22 @@
       }])[0];
     }
 
+    function fixStepTypes(list) {
+      return (Array.isArray(list) ? list : []).map((s) => {
+        if (!s || typeof s !== 'object') return s;
+        const tool = s.tool || '';
+        const type = tool === 'url_open' ? 'url_open'
+          : tool === 'ram_trim' ? 'ram_trim'
+            : tool === 'youtube_play' ? 'youtube'
+              : tool === 'media_control' ? 'media'
+                : s.type;
+        return { ...s, type, children: fixStepTypes(s.children) };
+      });
+    }
+
     function normCmd(raw) {
       if (!raw || typeof raw !== 'object') return null;
-      const steps = cmdSteps.normalizeStepTree(Array.isArray(raw.steps) ? raw.steps : []);
+      const steps = fixStepTypes(cmdSteps.normalizeStepTree(Array.isArray(raw.steps) ? raw.steps : []));
       const triggers = cmdSteps.normalizeTriggersModel(raw.triggers, raw.hotkey);
       return {
         id: raw.id ?? null,
@@ -381,7 +542,19 @@
     }
 
     function cancelDraftChanges() {
-      if (!savedSnapshot) return;
+      if (!savedSnapshot) {
+        draft = null;
+        selectedCommandId = null;
+        selectedStepPath = null;
+        dirty = false;
+        draftError = '';
+        voiceBannerText = '';
+        voiceBannerIsError = false;
+        if (commandsList.length) selectCommandById(commandsList[0].id, true);
+        renderView();
+        store.toast('Черновик закрыт');
+        return;
+      }
       draft = cloneJson(savedSnapshot, null);
       selectedStepPath = null;
       selectedKind = draft ? 'command' : 'root';
@@ -426,6 +599,10 @@
         const r = await bridge.call('listCommands');
         const arr = Array.isArray(r) ? r : (r && Array.isArray(r.commands) ? r.commands : []);
         commandsList = arr.map(normCmd).filter(Boolean);
+        if (!seededCollapse && commandsList.length) {
+          seededCollapse = true;
+          for (const c of commandsList) collapsedCommands.add(c.id);
+        }
         if (selectedCommandId && !dirty) {
           const hit = commandsList.find((c) => c.id === selectedCommandId);
           if (hit) {
@@ -436,6 +613,8 @@
             draft = null;
             savedSnapshot = null;
           }
+        } else if (!selectedCommandId && !draft && commandsList.length) {
+          selectCommandById(commandsList[0].id, true);
         }
       } catch (err) {
         store.toast(`Команды не загрузились: ${bridge.errText(err)}`, 'error');
@@ -1377,9 +1556,60 @@
       typeField.append(typeLbl, typeSel);
       box.append(typeField);
 
-      // Поля параметров под конкретный тип шага
+      // Поля параметров под конкретный тип шага (общий редактор для карточек и дерева)
+      box.append(buildStepArgsEditor(node, (patch) => {
+        targetDraft.steps = cmdSteps.updateTreeNode(targetDraft.steps, stepPath, (prev) => ({
+          ...prev,
+          params: patch,
+          args: { ...patch },
+        }));
+        if (targetDraft === draft) markDirty();
+      }));
+
+      return box;
+    }
+
+    function buildStepArgsEditor(node, onPatch) {
+      const wrap = document.createElement('div');
       const meta = STEP_TYPE_META[node.type] || { argKey: Object.keys(node.params || {})[0] || 'text', placeholder: '' };
       const curParams = (node.params && Object.keys(node.params).length) ? node.params : (node.args || {});
+
+      if (node.type === 'ram_trim') {
+        const note = document.createElement('p');
+        note.className = 'ae-step-note';
+        note.style.margin = '0';
+        note.textContent = 'Безопасная очистка неиспользуемой оперативной памяти Windows (без закрытия программ).';
+        wrap.append(note);
+        return wrap;
+      }
+
+      if (node.type === 'media') {
+        const f = document.createElement('label');
+        f.className = 'lx-cmd-field';
+        const l = document.createElement('span');
+        l.className = 'lx-cmd-field-label';
+        l.textContent = 'Действие плеера';
+        const sel = document.createElement('select');
+        sel.className = 'lx-cmd-select';
+        const curAct = String(curParams.action || 'toggle');
+        for (const [val, label] of [
+          ['toggle', 'Воспроизвести / Пауза'],
+          ['play', 'Играть'],
+          ['pause', 'Пауза'],
+          ['next', 'Следующий трек'],
+          ['previous', 'Предыдущий трек'],
+        ]) {
+          const opt = document.createElement('option');
+          opt.value = val;
+          opt.textContent = label;
+          opt.selected = curAct === val;
+          sel.append(opt);
+        }
+        sel.addEventListener('change', () => onPatch({ action: sel.value }));
+        f.append(l, sel);
+        wrap.append(f);
+        return wrap;
+      }
 
       if (node.type === 'click') {
         const grid = document.createElement('div');
@@ -1409,13 +1639,7 @@
           if (targetIn.value.trim()) patch.target = targetIn.value.trim();
           if (xIn.value !== '') patch.x = Number(xIn.value);
           if (yIn.value !== '') patch.y = Number(yIn.value);
-          const nextTree = cmdSteps.updateTreeNode(targetDraft.steps, stepPath, (prev) => ({
-            ...prev,
-            params: patch,
-            args: { ...patch },
-          }));
-          targetDraft.steps = nextTree;
-          markDirty();
+          onPatch(patch);
         };
         targetIn.addEventListener('input', syncClick);
         xIn.addEventListener('input', syncClick);
@@ -1436,45 +1660,193 @@
         f2.append(l2, coordsWrap);
 
         grid.append(f1, f2);
-        box.append(grid);
-      } else {
-        const paramField = document.createElement('label');
-        paramField.className = 'lx-cmd-field';
-        const paramLbl = document.createElement('span');
-        paramLbl.className = 'lx-cmd-field-label';
-        paramLbl.textContent = node.type === 'app_start' ? 'Программа или ссылка'
-          : node.type === 'hotkey' ? 'Сочетание клавиш'
-            : node.type === 'volume' ? 'Громкость (%)'
-              : node.type === 'wait' ? `Пауза, мс (0–${cmdSteps.WAIT_MAX_MS})`
-                : 'Параметр';
-        const paramIn = document.createElement('input');
-        paramIn.className = 'lx-cmd-input';
-        paramIn.placeholder = meta.placeholder || '';
-        const primaryKey = node.type === 'app_start' && curParams.url !== undefined ? 'url' : meta.argKey;
-        const val = curParams[primaryKey] !== undefined ? curParams[primaryKey]
-          : (curParams.name ?? curParams.target ?? curParams.keys ?? curParams.percent ?? curParams.ms ?? curParams.text ?? '');
-        paramIn.type = (node.type === 'volume' || node.type === 'wait') ? 'number' : 'text';
-        if (node.type === 'wait') {
-          // Предел тот же, что у инструмента wait: 0…10000 мс.
-          paramIn.min = '0';
-          paramIn.max = String(cmdSteps.WAIT_MAX_MS);
-        }
-        paramIn.value = String(val);
-        paramIn.addEventListener('input', () => {
-          const parsed = paramIn.type === 'number' && paramIn.value !== '' ? Number(paramIn.value) : paramIn.value;
-          const nextTree = cmdSteps.updateTreeNode(targetDraft.steps, stepPath, (prev) => {
-            const p = { ...prev.params, [primaryKey]: parsed };
-            const a = { ...prev.args, [primaryKey]: parsed };
-            return { ...prev, params: p, args: a };
-          });
-          targetDraft.steps = nextTree;
-          markDirty();
-        });
-        paramField.append(paramLbl, paramIn);
-        box.append(paramField);
+        wrap.append(grid);
+        return wrap;
       }
 
-      return box;
+      const paramField = document.createElement('label');
+      paramField.className = 'lx-cmd-field';
+      const paramLbl = document.createElement('span');
+      paramLbl.className = 'lx-cmd-field-label';
+      paramLbl.textContent = node.type === 'url_open' ? 'Адрес сайта или вкладки (URL)'
+        : node.type === 'youtube' ? 'Название трека или видео'
+          : node.type === 'app_start' ? 'Программа'
+            : node.type === 'hotkey' ? 'Сочетание клавиш'
+              : node.type === 'volume' ? 'Громкость (%)'
+                : node.type === 'wait' ? `Пауза, мс (0–${cmdSteps.WAIT_MAX_MS})`
+                  : node.type === 'type_text' ? 'Текст для ввода'
+                    : node.type === 'ai' ? 'Что сказать вслух'
+                      : 'Параметр';
+      const paramIn = document.createElement('input');
+      paramIn.className = 'lx-cmd-input';
+      paramIn.placeholder = meta.placeholder || '';
+      const primaryKey = node.type === 'app_start' && curParams.url !== undefined ? 'url' : (meta.argKey || 'text');
+      const val = curParams[primaryKey] !== undefined ? curParams[primaryKey]
+        : (curParams.url ?? curParams.query ?? curParams.name ?? curParams.target ?? curParams.keys ?? curParams.percent ?? curParams.ms ?? curParams.text ?? '');
+      paramIn.type = (node.type === 'volume' || node.type === 'wait') ? 'number' : 'text';
+      if (node.type === 'wait') {
+        paramIn.min = '0';
+        paramIn.max = String(cmdSteps.WAIT_MAX_MS);
+      } else if (node.type === 'volume') {
+        paramIn.min = '0';
+        paramIn.max = '100';
+      }
+      paramIn.value = String(val);
+      paramIn.addEventListener('input', () => {
+        const parsed = paramIn.type === 'number' && paramIn.value !== '' ? Number(paramIn.value) : paramIn.value;
+        onPatch({ ...curParams, [primaryKey]: parsed });
+      });
+      paramField.append(paramLbl, paramIn);
+      wrap.append(paramField);
+      return wrap;
+    }
+
+    function renderEditableStepsPanel(targetDraft, { isMainDraft = true, onUpdate = null } = {}) {
+      const section = document.createElement('div');
+      section.className = 'lx-cmd-field';
+
+      const head = document.createElement('div');
+      head.className = 'lx-cmd-insp-head';
+      const lbl = document.createElement('span');
+      lbl.className = 'lx-cmd-field-label';
+      lbl.textContent = `Шаги команды (${cmdSteps.countTreeSteps(targetDraft.steps)})`;
+      head.append(lbl);
+      section.append(head);
+
+      const list = document.createElement('div');
+      list.className = 'ae-step-list';
+
+      const commit = (nextTree, refreshUi = false) => {
+        targetDraft.steps = nextTree;
+        if (isMainDraft) markDirty();
+        if (typeof onUpdate === 'function') onUpdate();
+        if (refreshUi) renderBody();
+      };
+
+      targetDraft.steps.forEach((step, idx) => {
+        const stepPath = [idx];
+        const card = document.createElement('div');
+        const isSel = isMainDraft && selectedKind === 'step' && Array.isArray(selectedStepPath) && selectedStepPath.join('.') === String(idx);
+        card.className = isSel ? 'ae-step-card is-selected' : 'ae-step-card';
+
+        const top = document.createElement('div');
+        top.className = 'ae-step-card-top';
+
+        const num = document.createElement('span');
+        num.className = 'ae-step-num';
+        num.textContent = String(idx + 1);
+
+        const typeSel = document.createElement('select');
+        typeSel.className = 'lx-cmd-select';
+        typeSel.setAttribute('aria-label', `Тип шага ${idx + 1}`);
+        for (const st of STEP_TYPES) {
+          const opt = document.createElement('option');
+          opt.value = st.type;
+          opt.textContent = st.label;
+          opt.selected = st.type === step.type;
+          typeSel.append(opt);
+        }
+        typeSel.addEventListener('change', () => {
+          const meta = STEP_TYPE_META[typeSel.value] || STEP_TYPE_META.wait;
+          const nextParams = cmdSteps.defaultStepParams(meta.type, meta.argKey);
+          const nextTree = cmdSteps.updateTreeNode(targetDraft.steps, stepPath, (prev) => ({
+            ...prev,
+            type: meta.type,
+            tool: meta.tool,
+            params: { ...nextParams },
+            args: { ...nextParams },
+          }));
+          commit(nextTree, true);
+        });
+
+        const nav = document.createElement('div');
+        nav.className = 'lx-cmd-step-nav';
+
+        const upB = document.createElement('button');
+        upB.type = 'button';
+        upB.className = 'lx-cmd-mini-btn';
+        upB.title = 'Переместить шаг выше';
+        upB.disabled = idx <= 0;
+        upB.append(icon('arrowUp'));
+        upB.addEventListener('click', () => {
+          const moved = cmdSteps.moveTreeNode(targetDraft.steps, stepPath, -1);
+          commit(moved.steps, true);
+        });
+
+        const downB = document.createElement('button');
+        downB.type = 'button';
+        downB.className = 'lx-cmd-mini-btn';
+        downB.title = 'Переместить шаг ниже';
+        downB.disabled = idx >= targetDraft.steps.length - 1;
+        downB.append(icon('arrowDown'));
+        downB.addEventListener('click', () => {
+          const moved = cmdSteps.moveTreeNode(targetDraft.steps, stepPath, 1);
+          commit(moved.steps, true);
+        });
+
+        const delB = document.createElement('button');
+        delB.type = 'button';
+        delB.className = 'lx-cmd-mini-btn';
+        delB.title = 'Удалить шаг';
+        delB.disabled = targetDraft.steps.length <= 1;
+        delB.append(icon('trash'));
+        delB.addEventListener('click', () => {
+          const nextTree = cmdSteps.deleteTreeNode(targetDraft.steps, stepPath);
+          if (isMainDraft && selectedStepPath && selectedStepPath[0] === idx) selectedStepPath = null;
+          commit(nextTree, true);
+        });
+
+        nav.append(upB, downB, delB);
+        top.append(num, typeSel, nav);
+        card.append(top);
+
+        card.append(buildStepArgsEditor(step, (patch) => {
+          const nextTree = cmdSteps.updateTreeNode(targetDraft.steps, stepPath, (prev) => ({
+            ...prev,
+            params: patch,
+            args: { ...patch },
+          }));
+          commit(nextTree, false);
+        }));
+
+        if (Array.isArray(step.children) && step.children.length) {
+          const childNote = document.createElement('div');
+          childNote.className = 'ae-step-note';
+          childNote.textContent = `Вложенных подшагов: ${step.children.length} (раскройте в дереве слева для тонкой правки)`;
+          card.append(childNote);
+        }
+
+        list.append(card);
+      });
+
+      const quickAdd = document.createElement('div');
+      quickAdd.className = 'ae-step-quick-add';
+      const addLabel = document.createElement('span');
+      addLabel.className = 'ae-cmd-examples-lbl';
+      addLabel.textContent = 'Добавить шаг:';
+      quickAdd.append(addLabel);
+      for (const [type, label] of [
+        ['url_open', '+ Вкладка / сайт'],
+        ['ram_trim', '+ Очистить ОЗУ'],
+        ['youtube', '+ Музыка'],
+        ['app_start', '+ Программа'],
+        ['hotkey', '+ Клавиши'],
+        ['wait', '+ Пауза'],
+      ]) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'lx-cmd-mini-btn';
+        b.textContent = label;
+        b.addEventListener('click', () => {
+          const nextStep = makeDefaultStep(type);
+          const nextTree = cmdSteps.insertTreeNode(targetDraft.steps, [], targetDraft.steps.length, nextStep);
+          commit(nextTree, true);
+        });
+        quickAdd.append(b);
+      }
+
+      section.append(list, quickAdd);
+      return section;
     }
 
     function renderInspectorPanel() {
@@ -1528,7 +1900,7 @@
         aside.append(errBox);
       }
 
-      // Название и программа
+      // Название и фраза запуска — сразу наверху, шаги идут следом без лишней прокрутки
       const gridTop = document.createElement('div');
       gridTop.className = 'lx-cmd-grid-2';
 
@@ -1547,23 +1919,37 @@
       });
       nameField.append(nameLbl, nameIn);
 
-      const progField = document.createElement('label');
-      progField.className = 'lx-cmd-field';
-      const progLbl = document.createElement('span');
-      progLbl.className = 'lx-cmd-field-label';
-      progLbl.textContent = 'Программа (необяз.)';
-      const progIn = document.createElement('input');
-      progIn.className = 'lx-cmd-input';
-      progIn.value = draft.program || '';
-      progIn.placeholder = 'Например: Chrome, OBS';
-      progIn.addEventListener('input', () => {
-        draft.program = progIn.value;
+      const mainPhraseField = document.createElement('label');
+      mainPhraseField.className = 'lx-cmd-field';
+      const mainPhraseLbl = document.createElement('span');
+      mainPhraseLbl.className = 'lx-cmd-field-label';
+      mainPhraseLbl.textContent = 'Фраза запуска';
+      const mainPhraseIn = document.createElement('input');
+      mainPhraseIn.className = 'lx-cmd-input';
+      mainPhraseIn.value = draft.phrases[0] || '';
+      mainPhraseIn.placeholder = 'Что сказать Ноксу';
+      mainPhraseIn.addEventListener('input', () => {
+        draft.phrases[0] = mainPhraseIn.value;
         markDirty();
       });
-      progField.append(progLbl, progIn);
+      mainPhraseField.append(mainPhraseLbl, mainPhraseIn);
 
-      gridTop.append(nameField, progField);
+      gridTop.append(nameField, mainPhraseField);
       aside.append(gridTop);
+
+      // Понятный список шагов прямо в редакторе команды (все шаги видны и редактируются сразу)
+      aside.append(renderEditableStepsPanel(draft, { isMainDraft: true }));
+
+      // Тонкая настройка вложенного шага, если владелец выбрал подшаг глубже 1-го уровня в дереве
+      if (selectedKind === 'step' && Array.isArray(selectedStepPath) && selectedStepPath.length > 1) {
+        const stepSec = buildStepEditorSection(draft, selectedStepPath, (nextTree, nextPath) => {
+          draft.steps = nextTree;
+          selectedStepPath = nextPath;
+          markDirty();
+          renderBody();
+        });
+        if (stepSec) aside.append(stepSec);
+      }
 
       // Папка и горячая клавиша
       const gridMid = document.createElement('div');
@@ -1602,6 +1988,78 @@
       gridMid.append(folderField, hkField);
       aside.append(gridMid);
 
+      // Программа и дополнительные фразы запуска
+      const gridExtra = document.createElement('div');
+      gridExtra.className = 'lx-cmd-grid-2';
+
+      const progField = document.createElement('label');
+      progField.className = 'lx-cmd-field';
+      const progLbl = document.createElement('span');
+      progLbl.className = 'lx-cmd-field-label';
+      progLbl.textContent = 'Программа (необяз.)';
+      const progIn = document.createElement('input');
+      progIn.className = 'lx-cmd-input';
+      progIn.value = draft.program || '';
+      progIn.placeholder = 'Chrome, OBS…';
+      progIn.addEventListener('input', () => {
+        draft.program = progIn.value;
+        markDirty();
+      });
+      progField.append(progLbl, progIn);
+
+      const phrasesBox = document.createElement('div');
+      phrasesBox.className = 'lx-cmd-field';
+      const phHead = document.createElement('div');
+      phHead.className = 'lx-cmd-insp-head';
+      const phLbl = document.createElement('span');
+      phLbl.className = 'lx-cmd-field-label';
+      phLbl.textContent = `Синонимы фраз (${Math.max(0, draft.phrases.length - 1)})`;
+      const addPhBtn = document.createElement('button');
+      addPhBtn.type = 'button';
+      addPhBtn.className = 'lx-cmd-mini-btn';
+      addPhBtn.textContent = '+ Фраза';
+      addPhBtn.addEventListener('click', () => {
+        draft.phrases.push('');
+        markDirty();
+        renderBody();
+      });
+      phHead.append(phLbl, addPhBtn);
+      phrasesBox.append(phHead);
+
+      if (draft.phrases.length > 1) {
+        const phList = document.createElement('div');
+        phList.className = 'lx-cmd-phrases-list';
+        draft.phrases.slice(1).forEach((p, relIdx) => {
+          const idx = relIdx + 1;
+          const row = document.createElement('div');
+          row.className = 'lx-cmd-phrase-row';
+          const pIn = document.createElement('input');
+          pIn.className = 'lx-cmd-input';
+          pIn.value = p;
+          pIn.placeholder = 'Дополнительная формулировка';
+          pIn.addEventListener('input', () => {
+            draft.phrases[idx] = pIn.value;
+            markDirty();
+          });
+          const remBtn = document.createElement('button');
+          remBtn.type = 'button';
+          remBtn.className = 'lx-cmd-mini-btn';
+          remBtn.title = 'Убрать фразу';
+          remBtn.append(icon('x'));
+          remBtn.addEventListener('click', () => {
+            draft.phrases.splice(idx, 1);
+            markDirty();
+            renderBody();
+          });
+          row.append(pIn, remBtn);
+          phList.append(row);
+        });
+        phrasesBox.append(phList);
+      }
+
+      gridExtra.append(progField, phrasesBox);
+      aside.append(gridExtra);
+
       // Флаги: включена / подтверждать
       const flagsRow = document.createElement('div');
       flagsRow.className = 'lx-cmd-check-row';
@@ -1620,83 +2078,6 @@
       }
       aside.append(flagsRow);
 
-      // Фразы активации (индивидуальные <input>, чтобы сохранялся точный value для каждой фразы)
-      const phrasesBox = document.createElement('div');
-      phrasesBox.className = 'lx-cmd-field';
-      const phHead = document.createElement('div');
-      phHead.className = 'lx-cmd-insp-head';
-      const phLbl = document.createElement('span');
-      phLbl.className = 'lx-cmd-field-label';
-      phLbl.textContent = 'Фразы для запуска';
-      const addPhBtn = document.createElement('button');
-      addPhBtn.type = 'button';
-      addPhBtn.className = 'lx-cmd-mini-btn';
-      addPhBtn.textContent = '+ Фраза';
-      addPhBtn.addEventListener('click', () => {
-        draft.phrases.push('');
-        markDirty();
-        renderBody();
-      });
-      phHead.append(phLbl, addPhBtn);
-
-      const phList = document.createElement('div');
-      phList.className = 'lx-cmd-phrases-list';
-      draft.phrases.forEach((p, idx) => {
-        const row = document.createElement('div');
-        row.className = 'lx-cmd-phrase-row';
-        const pIn = document.createElement('input');
-        pIn.className = 'lx-cmd-input';
-        pIn.value = p;
-        pIn.placeholder = idx === 0 ? 'Главная фраза запуска' : 'Дополнительная формулировка';
-        pIn.addEventListener('input', () => {
-          draft.phrases[idx] = pIn.value;
-          markDirty();
-        });
-        row.append(pIn);
-        if (draft.phrases.length > 1) {
-          const remBtn = document.createElement('button');
-          remBtn.type = 'button';
-          remBtn.className = 'lx-cmd-mini-btn';
-          remBtn.title = 'Убрать фразу';
-          remBtn.append(icon('x'));
-          remBtn.addEventListener('click', () => {
-            draft.phrases.splice(idx, 1);
-            markDirty();
-            renderBody();
-          });
-          row.append(remBtn);
-        }
-        phList.append(row);
-      });
-      phrasesBox.append(phHead, phList);
-      aside.append(phrasesBox);
-
-      // Редактор выбранного шага (если выбран шаг в дереве)
-      if (selectedKind === 'step' && Array.isArray(selectedStepPath)) {
-        const stepSec = buildStepEditorSection(draft, selectedStepPath, (nextTree, nextPath) => {
-          draft.steps = nextTree;
-          selectedStepPath = nextPath;
-          markDirty();
-          renderBody();
-        });
-        if (stepSec) aside.append(stepSec);
-      } else {
-        const addTopStep = document.createElement('button');
-        addTopStep.type = 'button';
-        addTopStep.className = 'lx-cmd-mini-btn';
-        addTopStep.textContent = '+ Добавить шаг в конец';
-        addTopStep.addEventListener('click', () => {
-          const next = makeDefaultStep('wait');
-          draft.steps = cmdSteps.insertTreeNode(draft.steps, [], draft.steps.length, next);
-          selectedStepPath = [draft.steps.length - 1];
-          selectedKind = 'step';
-          collapsedCommands.delete(draft.id);
-          markDirty();
-          renderBody();
-        });
-        aside.append(addTopStep);
-      }
-
       // Низ инспектора: Проверить по порядку / Отмена / Сохранить
       const foot = document.createElement('div');
       foot.className = 'lx-cmd-insp-footer';
@@ -1713,14 +2094,14 @@
       const cancelBtn = document.createElement('button');
       cancelBtn.type = 'button';
       cancelBtn.className = 'lx-cmd-mini-btn';
-      cancelBtn.textContent = 'Отмена';
-      cancelBtn.disabled = !dirty;
+      cancelBtn.textContent = !draft.id ? 'Закрыть черновик' : 'Отмена';
+      cancelBtn.disabled = !dirty && Boolean(draft.id);
       cancelBtn.addEventListener('click', cancelDraftChanges);
 
       const applySaveBtn = document.createElement('button');
       applySaveBtn.type = 'button';
       applySaveBtn.className = 'lx-cmd-mini-btn is-primary';
-      applySaveBtn.textContent = 'Сохранить';
+      applySaveBtn.textContent = !draft.id ? 'Сохранить команду' : 'Сохранить';
       applySaveBtn.addEventListener('click', saveActiveDraft);
 
       foot.append(previewBtn, cancelBtn, applySaveBtn);
@@ -1837,7 +2218,7 @@
         const ta = document.createElement('textarea');
         ta.id = 'lxDescribeInput';
         ta.className = 'lx-cmd-textarea';
-        ta.placeholder = 'Например: Открой Блокнот, подожди 2 секунды и напечатай Привет';
+        ta.placeholder = 'Например: Открытие вкладки youtube.com, очищение оперативной памяти и музыку moonlight';
         ta.value = aiDescription;
         ta.addEventListener('input', () => { aiDescription = ta.value; });
         f.append(lbl, ta);
@@ -1845,6 +2226,7 @@
         const examples = document.createElement('div');
         examples.className = 'lx-cmd-step-nav';
         for (const sample of [
+          'Открытие вкладки youtube.com, очищение оперативной памяти и музыку moonlight',
           'Открой Блокнот и подожди 2 секунды',
           'Открой Chrome и сделай громкость 40%',
         ]) {
@@ -2111,57 +2493,7 @@
       top.append(nField, pField);
       card.append(top);
 
-      const stepsHeader = document.createElement('div');
-      stepsHeader.className = 'lx-cmd-insp-head';
-      const stLbl = document.createElement('span');
-      stLbl.className = 'lx-cmd-field-label';
-      stLbl.textContent = `Шаги (${cmdSteps.countTreeSteps(writeDraft.steps)})`;
-      const addBtn = document.createElement('button');
-      addBtn.type = 'button';
-      addBtn.className = 'lx-cmd-mini-btn';
-      addBtn.textContent = '+ Добавить шаг';
-      addBtn.addEventListener('click', () => {
-        const next = makeDefaultStep('wait');
-        writeDraft.steps = cmdSteps.insertTreeNode(writeDraft.steps, [], writeDraft.steps.length, next);
-        writeSelectedPath = [writeDraft.steps.length - 1];
-        renderBody();
-      });
-      stepsHeader.append(stLbl, addBtn);
-      card.append(stepsHeader);
-
-      const flat = cmdSteps.flattenTreeForRender(writeDraft.steps);
-      for (const entry of flat) {
-        const vis = stepVisual(entry.node);
-        const sel = Array.isArray(writeSelectedPath) && writeSelectedPath.join('.') === entry.path.join('.');
-        const { wrap } = makeTreeRow({
-          depth: entry.depth,
-          iconName: vis.iconName,
-          label: `${entry.labelIndex}. ${vis.label}`,
-          selected: sel,
-          onSelect: () => { writeSelectedPath = entry.path.slice(); renderBody(); },
-          rowActions: [
-            {
-              icon: 'trash',
-              title: 'Удалить шаг',
-              onClick: () => {
-                writeDraft.steps = cmdSteps.deleteTreeNode(writeDraft.steps, entry.path);
-                writeSelectedPath = writeDraft.steps.length ? [0] : null;
-                renderBody();
-              },
-            },
-          ],
-        });
-        card.append(wrap);
-      }
-
-      if (writeSelectedPath && writeSelectedPath.length) {
-        const sec = buildStepEditorSection(writeDraft, writeSelectedPath, (nextTree, nextPath) => {
-          writeDraft.steps = nextTree;
-          writeSelectedPath = nextPath;
-          renderBody();
-        });
-        if (sec) card.append(sec);
-      }
+      card.append(renderEditableStepsPanel(writeDraft, { isMainDraft: false }));
 
       const foot = document.createElement('div');
       foot.className = 'lx-cmd-insp-footer';
@@ -2371,6 +2703,7 @@
 
     // ── Синхронизация шапки и тела ────────────────────────────────
     function syncToolbarState() {
+      aiBar.hidden = viewMode !== 'tree';
       segEditBtn.classList.toggle('is-active', viewMode === 'tree');
       segNewBtn.classList.toggle('is-active', viewMode === 'new');
       packsBtn.classList.toggle('is-active', viewMode === 'packs');

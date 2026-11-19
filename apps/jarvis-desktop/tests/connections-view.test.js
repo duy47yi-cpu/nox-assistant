@@ -658,13 +658,13 @@ test('популярные: показываются предложенные в
 
 test('популярные: инструкция открывается по нажатию, ошибка отображается', async () => {
   const opened = [];
-  const catalog = [{ id: 'filesystem', title: 'Файлы', verified: true, envKeys: [], category: 'files', docs: 'https://example.org/docs' }];
+  const catalog = [{ id: 'puppeteer', title: 'Браузер Puppeteer', verified: true, envKeys: [], category: 'browser', docs: 'https://example.org/docs' }];
   const { ids, toasts } = makeSandbox({
     mcpState: async () => ({ servers: [], catalog }),
     openSource: async (url) => { opened.push(url); return { ok: false }; },
   });
   await wait();
-  const row = findAll(ids.mcpPopularList, (n) => n.getAttribute('data-popular') === 'filesystem')[0];
+  const row = findAll(ids.mcpPopularList, (n) => n.getAttribute('data-popular') === 'puppeteer')[0];
   byTag(row, 'BUTTON')[0].fire('click');
   await wait();
   assert.deepEqual(opened, ['https://example.org/docs']);
@@ -765,8 +765,8 @@ const pillWord = (card) => textOf(byClass(card, 'mcp-pill')[0]).trim();
 
 test('четыре состояния: слова пилюль достоверны, сервис не выглядит подключённым без соединения', async () => {
   const catalog = [{
-    id: 'filesystem', title: 'Файлы', verified: true, envKeys: [], category: 'files', docs: 'https://example.org/docs',
-    description: 'чтение и запись файлов в выбранной папке',
+    id: 'puppeteer', title: 'Браузер Puppeteer', verified: true, envKeys: [], category: 'browser', docs: 'https://example.org/docs',
+    description: 'управление браузером и снимки страниц',
   }];
   const configured = { ...connected, name: 'waiting', status: 'idle', tools: [], toolCount: 0 };
   const off = { ...connected, name: 'off', status: 'disabled', disabled: true, tools: [], toolCount: 0 };
@@ -783,11 +783,11 @@ test('четыре состояния: слова пилюль достовер�
   assert.equal(cardOf(ids, 'broken').getAttribute('data-group'), 'error');
 
   // Запись каталога без сохранённого сервиса — «Предложено», а не подключённый сервис.
-  const row = findAll(ids.mcpPopularList, (n) => n.getAttribute('data-popular') === 'filesystem')[0];
+  const row = findAll(ids.mcpPopularList, (n) => n.getAttribute('data-popular') === 'puppeteer')[0];
   assert.ok(row, 'карточка каталога есть');
   assert.equal(row.getAttribute('data-group'), 'proposed');
   assert.equal(textOf(byClass(row, 'mcp-pill')[0]).trim(), 'Предложено');
-  assert.match(textOf(row), /чтение и запись файлов/);
+  assert.match(textOf(row), /управление браузером и снимки/);
 });
 
 test('права до включения видны, а список действий — только после соединения', async () => {

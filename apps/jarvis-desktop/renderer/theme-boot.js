@@ -4,23 +4,20 @@
 (() => {
   'use strict';
 
-  const IDS = ['signal', 'dark', 'light', 'graphite', 'lime', 'paper', 'forest', 'wine', 'cobalt', 'aurora', 'ember', 'dawn', 'glass',
-    'liquid', 'liquidday', 'frost', 'gradient', 'gradientday', 'midnight', 'neon', 'starry', 'moonlight', 'sunrise', 'blue-hour', 'eclipse', 'malachite', 'copper', 'porcelain', 'system'];
-  // Темы Nox Aether: восемь новых палитр. В классической оболочке (renderer/index.html)
-  // для них нет кнопок, поэтому отдельный список: выбор — сеткой в Настройках → Оформление.
-  const AETHER_IDS = ['ocean', 'terracotta', 'paper-white', 'emerald', 'neon-noir', 'lavender', 'coffee', 'snow'];
-  // Всё, что предлагают оба окна выбора: старые темы и «Как в системе», затем новые.
+  const IDS = ['dark', 'light', 'cobalt', 'neon', 'moonlight', 'system'];
+  // Палитры Nox Aether: выбор всех 7 тем идёт сеткой в Настройках → Оформление.
+  const AETHER_IDS = ['neon-noir', 'snow'];
+  // Всё, что предлагают оба окна выбора: основные темы и «Как в системе», затем палитры Aether.
   const ALL_IDS = [...IDS, ...AETHER_IDS];
   const resolve = (id) => {
-    // Убранные темы (archive, tablet, acrylic и их дневные) и мусор тихо открывают «Ночь».
-    if (id !== 'system') return IDS.includes(id) || AETHER_IDS.includes(id) ? id : 'signal';
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'signal';
+    // Неизвестные или удалённые темы тихо открывают «Тёмную (Nox)».
+    if (id !== 'system') return IDS.includes(id) || AETHER_IDS.includes(id) ? id : 'dark';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   };
   const apply = (id) => { document.documentElement.dataset.theme = resolve(id); applyAccent(); applyFx(); };
 
   // Цвета акцента: на тёмных темах светлее, на светлых темнее, чтобы текст и значки акцентом читались (от 4,5:1).
-  const LIGHT_THEMES = ['light', 'lime', 'paper', 'dawn', 'liquidday', 'frost', 'gradientday', 'porcelain',
-    'ocean', 'terracotta', 'paper-white', 'lavender', 'snow'];
+  const LIGHT_THEMES = ['light', 'snow'];
   const ACCENTS = [
     { id: 'theme', name: 'Как в теме' },
     { id: 'blue', name: 'Синий', dark: '#6AA6FF', light: '#2554C7' },
@@ -172,7 +169,7 @@
     theme: ['Как в теме'], off: ['Без эффекта'], stars: ['Звёзды'], waves: ['Волны'], snow: ['Снег'], rain: ['Дождь'],
     pattern: ['Узоры'], moon: ['Лунный свет'], dawn: ['Зарево'], drift: ['Перелив'], grid: ['Сетка'],
   };
-  const THEME_FX = { starry: 'stars', liquid: 'waves', liquidday: 'waves', moonlight: 'moon', sunrise: 'dawn', gradient: 'drift', gradientday: 'drift', neon: 'grid' };
+  const THEME_FX = { moonlight: 'moon', neon: 'grid' };
   // Прозрачность и радиус самого окна. Ключи — проценты и пиксели строкой: так их хранит jarvis.look
   // (как остальные id настроек). 0 % прозрачности и 0 px радиуса — как было до настройки.
   const WIN_ALPHAS = {
@@ -286,20 +283,20 @@
     resetLook();
     setAccent('theme');
   }
-  // «Сбросить оформление»: тема «Ночь», шрифты, эффекты и акцент — как в теме.
+  // «Сбросить оформление»: тема «Тёмная (Nox)», шрифты, эффекты и акцент — как в теме.
   // Своя картинка фона снимается в Настройках (NoxBackdrop), здесь — только оформление окна.
   function resetAppearance() {
     resetLook();
     setAccent('theme');
-    apply('signal');
-    try { localStorage.setItem('jarvis.theme', JSON.stringify('signal')); } catch { /* нет хранилища */ }
+    apply('dark');
+    try { localStorage.setItem('jarvis.theme', JSON.stringify('dark')); } catch { /* нет хранилища */ }
     document.dispatchEvent(new Event('jarvis:themechange'));
   }
   try { look = sanitizeLook(JSON.parse(localStorage.getItem('jarvis.look'))); } catch { look = { ...LOOK_DEFAULT }; }
   applyLook();
 
-  let saved = 'signal';
-  try { saved = JSON.parse(localStorage.getItem('jarvis.theme')) || 'signal'; } catch { /* нет хранилища или мусор */ }
+  let saved = 'dark';
+  try { saved = JSON.parse(localStorage.getItem('jarvis.theme')) || 'dark'; } catch { /* нет хранилища или мусор */ }
   try { accent = normAccent(JSON.parse(localStorage.getItem('jarvis.accent'))); } catch { /* нет хранилища или мусор */ }
   apply(saved);
   // Мини-окно и главное окно живут в одном хранилище: смена в Настройках доходит и сюда.
@@ -311,7 +308,7 @@
       return;
     }
     if (e.key !== 'jarvis.theme') return;
-    try { apply(JSON.parse(e.newValue)); } catch { apply('signal'); }
+    try { apply(JSON.parse(e.newValue)); } catch { apply('dark'); }
   });
 
   window.JarvisTheme = {

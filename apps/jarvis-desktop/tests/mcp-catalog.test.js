@@ -74,9 +74,9 @@ function baseEntry() {
   };
 }
 
-test('каталог: ровно 80 реальных записей, поля на месте, секретов в данных нет', () => {
-  assert.equal(CATALOG.length, 80, 'в каталоге должно быть ровно 80 записей');
-  assert.equal(MAX_ENTRIES, 80);
+test('каталог: ровно 75 реальных записей, поля на месте, секретов в данных нет', () => {
+  assert.equal(CATALOG.length, 75, 'в каталоге должно быть ровно 75 записей');
+  assert.equal(MAX_ENTRIES, 75);
   for (const entry of CATALOG) {
     for (const field of ['id', 'title', 'description', 'category', 'transport', 'verified']) {
       assert.ok(entry[field] !== undefined, (entry.id || '?') + ': нет поля ' + field);
@@ -105,8 +105,8 @@ test('каталог: ровно 80 реальных записей, поля н
   assertNoSecrets(JSON.stringify(CATALOG), 'каталог');
 });
 
-test('каталог: обещанные серверы есть (файлы, git, sqlite, github, playwright, fetch, memory, time, sequential-thinking)', () => {
-  for (const id of ['filesystem', 'git', 'sqlite', 'github', 'playwright', 'fetch', 'memory', 'time', 'sequential-thinking']) {
+test('каталог: обещанные серверы есть (git, sqlite, github, playwright, fetch, memory, time, sequential-thinking)', () => {
+  for (const id of ['git', 'sqlite', 'github', 'playwright', 'fetch', 'memory', 'time', 'sequential-thinking']) {
     assert.ok(getCatalogEntry(id), 'нет записи «' + id + '»');
   }
 });
@@ -158,8 +158,8 @@ test('фильтр: по тексту, категории и вместе; ре�
 });
 
 test('getCatalogEntry: известная запись неизменяема, неизвестная — null', () => {
-  const entry = getCatalogEntry('filesystem');
-  assert.equal(entry.id, 'filesystem');
+  const entry = getCatalogEntry('git');
+  assert.equal(entry.id, 'git');
   assert.equal(Object.isFrozen(entry), true);
   assert.equal(getCatalogEntry('нет-такой'), null);
   assert.equal(getCatalogEntry(null), null);
@@ -194,8 +194,8 @@ test('toServerConfig: конфиг проходит проверку клиен�
   assert.throws(() => toServerConfig('нет-такой'), /неизвестная запись/);
   // Посторонние поля и значения из объекта-клона не попадают в конфиг.
   assert.deepEqual(
-    toServerConfig({ id: 'filesystem', command: 'злая-команда', env: { SECRET: 'готовый-ключ' } }),
-    toServerConfig('filesystem'),
+    toServerConfig({ id: 'git', command: 'злая-команда', env: { SECRET: 'готовый-ключ' } }),
+    toServerConfig('git'),
   );
 });
 
@@ -353,7 +353,7 @@ test('окно «Популярные» сверено с каталогом: id
   assert.ok(source.includes('Популярные'), 'нет подписи раздела «Популярные»');
 });
 
-test('значки: mcp-logos.js — снимок всех 80 сервисов, лицензия CC0 и наши монограммы', () => {
+test('значки: mcp-logos.js — снимок всех 75 сервисов, лицензия CC0 и наши монограммы', () => {
   assert.match(LOGOS_TEXT, /Simple Icons/, 'нет упоминания Simple Icons');
   assert.match(LOGOS_TEXT, /CC0 1\.0/, 'нет лицензионной пометки CC0 1.0');
   assert.match(LOGOS_TEXT, /товарные знаки их владельцев/, 'нет пометки про авторские права и товарные знаки');

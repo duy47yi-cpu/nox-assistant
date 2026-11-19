@@ -33,6 +33,7 @@
   // ── Дерево шагов редактора (Phase 2) ─────────────────────────────
   const STEP_TYPE_TO_TOOL = {
     app_start: 'app_open',
+    url_open: 'url_open',
     hotkey: 'ui_keys',
     click: 'ui_click',
     volume: 'volume_set',
@@ -40,6 +41,9 @@
     wait: 'wait',
     ai: 'speak',
     shell: 'shell_run',
+    ram_trim: 'ram_trim',
+    youtube: 'youtube_play',
+    media: 'media_control',
   };
 
   const TOOL_TO_STEP_TYPE = {
@@ -53,8 +57,11 @@
     desktop_type: 'type_text',
     wait: 'wait',
     speak: 'ai',
-    url_open: 'app_start',
+    url_open: 'url_open',
     shell_run: 'shell',
+    ram_trim: 'ram_trim',
+    youtube_play: 'youtube',
+    media_control: 'media',
   };
 
   // ── Пауза: контракт инструмента wait — миллисекунды в ms (0…10000) ───────
@@ -84,6 +91,10 @@
     if (type === 'volume') return { percent: 50 };
     if (type === 'wait') return { ms: DEFAULT_WAIT_MS };
     if (type === 'hotkey') return { keys: 'Ctrl+S' };
+    if (type === 'url_open') return { url: 'https://www.google.com' };
+    if (type === 'ram_trim') return {};
+    if (type === 'youtube') return { query: '' };
+    if (type === 'media') return { action: 'toggle' };
     return { [argKey || 'text']: '' };
   }
 

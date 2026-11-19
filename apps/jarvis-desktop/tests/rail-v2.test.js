@@ -26,17 +26,18 @@ test('рейка — вставная панель с прежними id, гр�
   assert.match(src, /rail\.id = 'aeUtilityRail'/);
   assert.match(src, /rail\.setAttribute\('aria-label', 'Служебная рейка'\)/);
 
-  for (const id of ['lxAiModalBtn', 'lxMuteBtn', 'aeStageToggle']) {
+  for (const id of ['lxAiModalBtn', 'aeStageToggle']) {
     assert.match(src, new RegExp("railButton\\('" + id + "'"), 'Кнопка рейки ' + id + ' должна остаться');
   }
+  assert.doesNotMatch(src, /lxMuteBtn/, 'Значок озвучки убран с рейки в настройки');
   assert.match(src, /homeBtn\.id = 'aeRailHomeBtn'/);
   assert.match(src, /railGroup\('Nox AI', aiModalBtn, stageBtn\)/);
   assert.match(src, /railGroup\('История', historyDrawer\.trigger\)/);
-  assert.match(src, /railGroup\('Озвучка и аккаунт', muteBtn, accountPanel\.el\)/);
+  assert.match(src, /railGroup\('Аккаунт', accountPanel\.el\)/);
   assert.match(src, /\.className = 'ae-rail-group'/);
   assert.match(src, /\.className = 'ae-rail-sep'/);
   assert.match(src, /rail\.replaceChildren\(/);
-  assert.match(src, /rail\.append\(aiModalBtn, muteBtn, historyDrawer\.trigger, stageBtn, accountPanel\.el\)/);
+  assert.match(src, /rail\.append\(aiModalBtn, historyDrawer\.trigger, stageBtn, accountPanel\.el\)/);
 });
 
 test('все обработчики и aria прежних кнопок сохранены', () => {
@@ -44,8 +45,6 @@ test('все обработчики и aria прежних кнопок сохр
   assert.match(src, /aiModalBtn\.addEventListener\('click', \(\) => \{\s*aiModal\.open\(\);/);
   assert.match(src, /aiModalBtn\.setAttribute\('aria-haspopup', 'dialog'\)/);
   assert.match(src, /aiModalBtn\.setAttribute\('aria-controls', 'lxAiModal'\)/);
-  assert.match(src, /settingsView\.openVoiceSettings\('speech'\)/);
-  assert.match(src, /store\.setSetting\('quiet', !store\.state\.settings\.quiet\)/);
   assert.match(src, /stageBtn\.setAttribute\('aria-controls', orbStage\.el\.id\)/);
   assert.match(src, /stageBtn\.setAttribute\('aria-expanded', String\(stageVisible\)\)/);
 
@@ -76,12 +75,9 @@ test('у каждой кнопки рейки есть title, aria-label и по
 
   // Каждая кнопка, созданная фабрикой, получает подпись из своего же аргумента.
   const labels = [...src.matchAll(/railButton\('([\w]+)', '([^']+)'/g)].map((m) => ({ id: m[1], label: m[2] }));
-  assert.deepEqual(labels.map((x) => x.id), ['lxAiModalBtn', 'lxMuteBtn', 'aeStageToggle']);
+  assert.deepEqual(labels.map((x) => x.id), ['lxAiModalBtn', 'aeStageToggle']);
   assert.ok(labels.every((x) => x.label.trim().length > 2), 'подписи не должны быть пустыми');
-  assert.deepEqual(labels.map((x) => x.label), ['Настройки Nox AI', 'Озвучка', 'Панель сферы']);
-
-  // У озвучки подпись обновляется вместе с title (включён / выключен / открыть настройки).
-  assert.match(src, /muteBtn\.dataset\.label = muteBtn\.title/);
+  assert.deepEqual(labels.map((x) => x.label), ['Настройки Nox AI', 'Панель сферы']);
 });
 
 test('бренд сверху: знак Nox на 28 px ведёт на «Главную»', () => {
@@ -180,14 +176,14 @@ test('широкий экран: колонка под панель, узкий 
   assert.match(compact, /--rlx-icon:\s*22px/);
 });
 
-test('токены рейки определены для всех 36 тем из IDS', () => {
+test('токены рейки определены для всех 7 тем из IDS и AETHER_IDS', () => {
   const boot = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'theme-boot.js'), 'utf8');
   const readIds = (name) => {
     const block = new RegExp('const ' + name + ' = \\[([\\s\\S]*?)\\];').exec(boot);
     return block ? [...block[1].matchAll(/'([^']+)'/g)].map((match) => match[1]) : [];
   };
   const ids = [...readIds('IDS'), ...readIds('AETHER_IDS')].filter((id) => id !== 'system');
-  assert.equal(ids.length, 36, 'в IDS и AETHER_IDS должно быть 36 настоящих тем');
+  assert.equal(ids.length, 7, 'в IDS и AETHER_IDS должно быть 7 настоящих тем');
   const themes = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'themes.css'), 'utf8');
   const missing = ids.filter((id) => !themes.includes('[data-theme="' + id + '"]'));
   assert.deepEqual(missing, [], 'у каждой темы должны быть токены в themes.css');

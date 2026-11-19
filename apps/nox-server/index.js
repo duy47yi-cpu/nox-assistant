@@ -24,6 +24,10 @@ const { server } = createServer({
   upstreamTimeoutMs: positive('NOX_UPSTREAM_TIMEOUT_MS', 120000),
   trustProxy: env.NOX_TRUST_PROXY === '1',
   trustedProxies: env.NOX_TRUSTED_PROXIES ? env.NOX_TRUSTED_PROXIES : undefined,
+  studyInbox: env.NOX_STUDY_INBOX_BOT_TOKEN ? {
+    file: env.NOX_STUDY_INBOX_FILE || path.join(__dirname, 'study-inbox.json'),
+    token: env.NOX_STUDY_INBOX_BOT_TOKEN, owner: env.NOX_STUDY_INBOX_OWNER_CHAT, key: env.NOX_STUDY_INBOX_KEY,
+  } : null,
 });
 
 const port = num('PORT', 8787);

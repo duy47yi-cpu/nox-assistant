@@ -5,7 +5,7 @@ const { randomUUID } = require('crypto');
 const { Agent } = require('../agent/loop');
 const { ToolRegistry } = require('../tools/registry');
 const { writeFileAtomic } = require('../config/atomic');
-const { studyTool, studyActivity, STUDY_PROMPT } = require('../tools/study');
+const { studyTool, studyActivity, hasStudyExercise, STUDY_PROMPT } = require('../tools/study');
 const { imageTools } = require('../tools/ocr');
 const { writeTarget } = require('../tools/workspace');
 const { parseOffline } = require('../shortcuts/offline');
@@ -67,7 +67,9 @@ function progressText(topics) {
   if (!topics.length) return 'Учебных попыток пока нет.';
   return ['Прогресс по темам', ...topics.slice(0, 12).map((topic) => {
     const counts = `решено ${topic.solved} из ${topic.exercises}, с первой попытки ${topic.firstTry}, с подсказкой или после повторной попытки ${topic.withHelp}`;
-    return `«${topic.topic}» — ${counts}.${topic.difficulty ? ` Стоит повторить: ${topic.difficulty}` : ''}`;
+    const next = topic.review?.due ? ' Пора повторить.'
+      : topic.review ? ` Следующий повтор ${new Intl.DateTimeFormat('ru-RU').format(new Date(topic.review.dueAt))}.` : '';
+    return `«${topic.topic}» — ${counts}.${next}${topic.difficulty ? ` Стоит повторить: ${topic.difficulty}` : ''}`;
   }), ...(topics.length > 12 ? [`Показаны 12 тем из ${topics.length}.`] : [])].join('\n\n');
 }
 
@@ -93,9 +95,14 @@ async function importPhoto({ location, tool, status, text, attachment, readPhoto
   const jpeg = bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255]));
   const png = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
   if (!jpeg && !png) throw new Error('для занятия нужно фото JPG или PNG');
-  const file = `Учебное фото ${randomUUID()}.${jpeg ? 'jpg' : 'png'}`;
+  const inboxId = attachment.studyInboxId;
+  const file = `Учебное фото ${inboxId || randomUUID()}.${jpeg ? 'jpg' : 'png'}`;
   const target = writeTarget(location.index, file, ['.jpg', '.png']);
-  fs.writeFileSync(target, bytes, { flag: 'wx' });
+  let created = false;
+  try { fs.writeFileSync(target, bytes, { flag: 'wx' }); created = true; }
+  catch (err) {
+    if (!inboxId || err.code !== 'EEXIST' || !fs.lstatSync(target).isFile() || !fs.readFileSync(target).equals(bytes)) throw err;
+  }
   let saved;
   try {
     const ocr = await Promise.resolve().then(() => readPhoto(location.index.rootDir, file)).catch(() => null);
@@ -105,10 +112,10 @@ async function importPhoto({ location, tool, status, text, attachment, readPhoto
     saved = tool.run({
       action: 'start', newExercise: true, topic, reference: 'Фото из Telegram',
       exercise: recognized || 'Условие на фотографии.',
-    }, { runId: randomUUID(), ownerText: text, studyPhoto: file, needsTranscription: !recognized });
+    }, { runId: randomUUID(), ownerText: text, studyPhoto: file, needsTranscription: !recognized, studyInboxId: inboxId });
     if (!saved.ok) throw new Error(saved.summary);
   } finally {
-    if (!saved?.ok) fs.rmSync(target, { force: true });
+    if (!saved?.ok && created) fs.rmSync(target, { force: true });
   }
   if (tool.verify({ action: 'start' }, saved).status !== 'confirmed' || !fs.lstatSync(target).isFile()) {
     throw new Error('не удалось подтвердить сохранение фотографии');
@@ -153,6 +160,9 @@ function createTelegramStudy({
     if (!intent) return null;
 
     const candidates = locations();
+    if (photo && media.studyInboxId && candidates.some(({ file }) => hasStudyExercise(file, media.studyInboxId))) {
+      return { imported: true };
+    }
     const pin = intent === 'attempt' ? readPin(pinFile) : null;
     let lookup = candidates;
     const key = (topic) => String(topic).trim().toLowerCase().replace(/ё/g, 'е');
@@ -170,7 +180,7 @@ function createTelegramStudy({
       return intent === 'quick' && !/провер|ошибк/iu.test(text) ? null : 'Сохранённого занятия пока нет. Начните его на ПК в чате Nox AI.';
     }
 
-    const tool = studyTool(location.file, { telegram: true });
+    const tool = studyTool(location.file, { telegram: true, now });
     if (named) {
       const selected = tool.run({ action: 'select', topic: named }, context);
       if (!selected.ok) return `Не удалось открыть тему. ${selected.summary}.`;
@@ -181,6 +191,7 @@ function createTelegramStudy({
     const seed = { current: status.data.current, reviewFocus: status.data.reviewFocus, progress: status.data.progress };
     let exercise = seed.current;
     if (photo) exercise = await importPhoto({ location, tool, status: status.data, text, attachment: media, readPhoto });
+    if (photo && media.studyInboxId) return { imported: true };
     if (!exercise) return 'В этом пространстве пока нет сохранённой задачи.';
 
     if (when) {
@@ -202,7 +213,16 @@ function createTelegramStudy({
 
     let label = photo ? 'Фото сохранено в занятии' : 'Последняя задача';
     const focus = /(?:вчерашней|прошлой) ошибке/iu.test(text) ? seed.reviewFocus : seed.progress?.focus;
-    if ((intent === 'quick' || intent === 'next') && focus && !exercise.needsTranscription) {
+    const practice = (intent === 'quick' || intent === 'next') && !exercise.needsTranscription;
+    const spaced = seed.progress?.next === 'spaced_review';
+    const openReview = seed.progress?.review?.due && exercise.reviewDueAt === seed.progress.review.dueAt && !exercise.attempts.length;
+    if (practice && spaced) {
+      const saved = await work(tool, text, { action: 'start', spacedReview: true, ...(focus ? { reviewOf: focus.id } : {}) }, seed,
+        'Наступил срок повторения. Дай одну новую короткую задачу по текущей теме. Если есть progress.focus, проверь эту ошибку. В поле exercise дай только условие.');
+      if (!saved) return 'Не удалось сохранить задачу для повторения. Напишите «Дай следующую задачу», чтобы попробовать ещё раз.';
+      exercise = saved;
+      label = 'Отложенная проверка';
+    } else if (practice && !openReview && focus) {
       label = 'Короткая проверка';
       if (exercise.reviewOf !== focus.id || exercise.attempts.length) {
         const saved = await work(tool, text, { action: 'start', reviewOf: focus.id }, { ...seed, reviewFocus: focus },
@@ -210,7 +230,7 @@ function createTelegramStudy({
         if (!saved) return 'Не удалось сохранить короткую проверку. Напишите «Продолжим занятие», чтобы открыть текущую задачу.';
         exercise = saved;
       }
-    } else if ((intent === 'quick' || intent === 'next') && exercise.attempts.at(-1)?.outcome === 'correct') {
+    } else if (practice && exercise.attempts.at(-1)?.outcome === 'correct') {
       const difficulty = seed.progress.next === 'next_level' ? 'с одним новым шагом' : 'того же уровня';
       const saved = await work(tool, text, { action: 'start', topic: exercise.topic, newExercise: true }, seed,
         `Дай одну новую короткую задачу по теме current, ${difficulty}. В поле exercise дай только условие, без решения.`);

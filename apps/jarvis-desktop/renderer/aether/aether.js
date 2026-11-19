@@ -69,15 +69,6 @@
       syncAll(store.state);
     });
 
-    const muteBtn = railButton('lxMuteBtn', 'Озвучка', 'volumeOff');
-    muteBtn.addEventListener('click', () => {
-      if (store.state.settings.voiceOutput !== 'cloud') {
-        settingsView.openVoiceSettings('speech');
-        return;
-      }
-      store.setSetting('quiet', !store.state.settings.quiet);
-    });
-
     const stageBtn = railButton('aeStageToggle', 'Панель сферы', 'orb');
     stageBtn.setAttribute('aria-controls', orbStage.el.id);
     let stageCollapsed = false;
@@ -119,7 +110,7 @@
     if (accountTrigger) accountTrigger.dataset.label = 'Аккаунт';
 
     // Порядок элементов служебной рейки; ниже раскладываем их по смысловым группам.
-    rail.append(aiModalBtn, muteBtn, historyDrawer.trigger, stageBtn, accountPanel.el);
+    rail.append(aiModalBtn, historyDrawer.trigger, stageBtn, accountPanel.el);
 
     function railGroup(label, ...children) {
       const group = document.createElement('div');
@@ -147,7 +138,7 @@
       railGroup('История', historyDrawer.trigger),
       railSpacer,
       railSeparator(),
-      railGroup('Озвучка и аккаунт', muteBtn, accountPanel.el)
+      railGroup('Аккаунт', accountPanel.el)
     );
 
     appRoot.replaceChildren(topbar.el, rail, mainContent, toastHost, aiModal.el);
@@ -193,16 +184,6 @@
       stageBtn.dataset.state = stageState;
       stageBtn.title = stageStatus ? `${stageLabel} · ${stageStatus}` : stageLabel;
       stageBtn.setAttribute('aria-label', stageBtn.title);
-      const cloudVoice = st.settings.voiceOutput === 'cloud';
-      const audible = cloudVoice && !st.settings.quiet;
-      const soundIcon = audible ? 'volume' : 'volumeOff';
-      if (muteBtn.dataset.icon !== soundIcon) {
-        muteBtn.dataset.icon = soundIcon;
-        muteBtn.replaceChildren(icon(soundIcon));
-      }
-      muteBtn.title = cloudVoice ? (audible ? 'Выключить звук' : 'Включить звук') : 'Настройки озвучки';
-      muteBtn.setAttribute('aria-label', muteBtn.title);
-      muteBtn.dataset.label = muteBtn.title;
 
       // Рейка: активные состояния и aria у служебных кнопок.
       const brandActive = st.route === 'personal';

@@ -986,4 +986,4 @@ function presentationOpenTool(index, { openPath, probeOpen }) {
   };
 }
 
-module.exports = { documentTools, documentSearchReader, presentationOpenTool, parseCsv, readPdf };
+module.exports = { documentTools, documentSearchReader, presentationOpenTool, parseCsv, readDocx, readPdf };

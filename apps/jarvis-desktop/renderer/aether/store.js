@@ -1387,15 +1387,25 @@
       notify(true);
     }
 
+    let switchingChat = false;
+    function syncChatListFromResponse(res) {
+      if (res && Array.isArray(res.chats)) state.chats = res.chats;
+      if (res && res.activeId) state.activeChatId = res.activeId;
+    }
+
     async function createNewChat() {
-      if (state.trackerBusy || state.sendingLock) {
-        toast('Дождитесь окончания или остановите текущий ход');
+      if (state.trackerBusy || state.sendingLock || switchingChat) {
+        if (!switchingChat) toast('Дождитесь окончания или остановите текущий ход');
         return false;
       }
+      switchingChat = true;
       saveCurrentDraft();
+      state.activeTurn = null;
+      state.feedItems = [];
       try {
         const res = await bridge.call('chatNew');
         if (res && res.ok === false) { toast(res.error || 'Не удалось создать чат', 'error'); return false; }
+        syncChatListFromResponse(res);
         await refreshChats(true);
         restoreDraftFor(state.activeChatId);
         await loadChatHistory();
@@ -1404,19 +1414,25 @@
       } catch (err) {
         toast(`Не удалось создать чат: ${bridge.errText(err)}`, 'error');
         return false;
+      } finally {
+        switchingChat = false;
       }
     }
 
     async function selectChat(chatId) {
       if (!chatId || chatId === state.activeChatId) return true;
-      if (state.trackerBusy || state.sendingLock) {
-        toast('Остановите текущий ход перед сменой чата');
+      if (state.trackerBusy || state.sendingLock || switchingChat) {
+        if (!switchingChat) toast('Остановите текущий ход перед сменой чата');
         return false;
       }
+      switchingChat = true;
       saveCurrentDraft();
+      state.activeTurn = null;
+      state.feedItems = [];
       try {
         const res = await bridge.call('chatSelect', chatId);
         if (res && res.ok === false) { toast(res.error || 'Чат не открылся', 'error'); return false; }
+        syncChatListFromResponse(res);
         await refreshChats(true);
         restoreDraftFor(state.activeChatId);
         await loadChatHistory();
@@ -1425,19 +1441,23 @@
       } catch (err) {
         toast(`Чат не открылся: ${bridge.errText(err)}`, 'error');
         return false;
+      } finally {
+        switchingChat = false;
       }
     }
 
     async function closeChat(chatId) {
-      if (state.trackerBusy || state.sendingLock) {
-        toast('Сначала остановите текущий ход');
+      if (state.trackerBusy || state.sendingLock || switchingChat) {
+        if (!switchingChat) toast('Сначала остановите текущий ход');
         return false;
       }
+      switchingChat = true;
       try {
         const res = await bridge.call('chatClose', chatId);
         if (res && res.ok === false) { toast(res.error || 'Не удалось закрыть чат', 'error'); return false; }
         state.drafts.delete(chatId);
         forgetMessageTimes(chatId);
+        syncChatListFromResponse(res);
         await refreshChats(true);
         restoreDraftFor(state.activeChatId);
         await loadChatHistory();
@@ -1445,6 +1465,8 @@
       } catch (err) {
         toast(`Не удалось закрыть чат: ${bridge.errText(err)}`, 'error');
         return false;
+      } finally {
+        switchingChat = false;
       }
     }
 

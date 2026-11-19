@@ -135,7 +135,7 @@ class ReminderStore {
 
   // Добавляет напоминание. dueAt: строка ISO 8601 или Date; в файл пишется как ISO (UTC).
   // Любая ошибка валидации бросается до записи, файл при этом не меняется.
-  add({ text, dueAt, repeat = null, timeZone, workspaceId = 'default' } = {}) {
+  add({ text, dueAt, repeat = null, timeZone, workspaceId = 'default', studyExam } = {}) {
     const clean = String(text ?? '').trim();
     if (!clean) throw new Error('пустой текст');
     if (typeof dueAt !== 'string' && !(dueAt instanceof Date)) {
@@ -145,6 +145,10 @@ class ReminderStore {
     if (Number.isNaN(dueMs)) throw new Error(`плохая дата: ${String(dueAt)}`);
     validateRepeat(repeat);
     const space = normalizeWorkspaceId(workspaceId);
+    if (studyExam && (repeat || typeof studyExam.topic !== 'string' || !studyExam.topic.trim() ||
+        studyExam.topic.length > 160 || !(Date.parse(studyExam.at) > dueMs))) {
+      throw new Error('неверные данные учебной проверки');
+    }
     const record = {
       id: crypto.randomUUID(),
       // Array.from режет по кодовым точкам, поэтому пара-суррогат (эмодзи) не рвётся.
@@ -155,6 +159,7 @@ class ReminderStore {
       createdAt: new Date().toISOString(),
       firedAt: null,
       ...(space !== 'default' ? { workspaceId: space } : {}),
+      ...(studyExam ? { studyExam: { topic: studyExam.topic, at: toIso(Date.parse(studyExam.at)) } } : {}),
     };
     if (CALENDAR_REPEATS.includes(repeat)) setCalendarSchedule(record, timeZone);
     const data = this._load();
